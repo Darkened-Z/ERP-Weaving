@@ -1,8 +1,12 @@
 import { createClient } from "@libsql/client";
 import path from "path";
 
-const dbPath = path.join(process.cwd(), "data.db");
-const client = createClient({ url: `file:${dbPath}` });
+const isLocal = !process.env.TURSO_DATABASE_URL;
+const client = createClient(
+  isLocal
+    ? { url: `file:${path.join(process.cwd(), "data.db")}` }
+    : { url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }
+);
 
 async function seed() {
   await client.executeMultiple(`
