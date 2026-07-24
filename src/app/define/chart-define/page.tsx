@@ -1,0 +1,42 @@
+import { Shell } from "@/components/shell";
+import { db, schema } from "@/db";
+
+export const dynamic = "force-dynamic";
+
+export default async function ChartDefinePage() {
+  const charts = await db.select().from(schema.chartDefine);
+
+  return (
+    <Shell active="chart-define">
+      <div className="animate-in">
+        <div className="flex items-baseline justify-between mb-8">
+          <h1 className="page-title">
+            Chart Define{" "}
+            <span className="text-[var(--muted)] text-lg font-normal">
+              ({charts.length})
+            </span>
+          </h1>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Description</th>
+              <th>Sr No.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {charts.map((c) => (
+              <tr key={c.id}>
+                <td className="mono text-[13px]">{c.code}</td>
+                <td>{c.description}</td>
+                <td className="mono text-[13px]">{c.srno}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Shell>
+  );
+}
