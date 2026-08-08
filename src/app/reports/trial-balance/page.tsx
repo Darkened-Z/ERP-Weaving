@@ -55,7 +55,7 @@ export default async function TrialBalancePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{rows.length}</div>
             <div className="stat-label">Accounts</div>
@@ -74,6 +74,7 @@ export default async function TrialBalancePage() {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
@@ -105,8 +106,19 @@ export default async function TrialBalancePage() {
                 )}
               </td>
             </tr>
+            {Math.abs(totalDebits - totalCredits) >= 1 && (
+              <tr style={{ fontWeight: 700 }}>
+                <td colSpan={2} className="text-[var(--danger)] text-[12px] uppercase">
+                  Difference (out of balance)
+                </td>
+                <td colSpan={2} className="mono text-right text-[var(--danger)]">
+                  {new Intl.NumberFormat("en-PK").format(Math.round(Math.abs(totalDebits - totalCredits)))}
+                </td>
+              </tr>
+            )}
           </tfoot>
         </table>
+        </div>
       </div>
     </Shell>
   );

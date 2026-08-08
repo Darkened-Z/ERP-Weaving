@@ -4,19 +4,49 @@ import Link from "next/link";
 import { useState } from "react";
 
 type NavItem = { href: string; label: string; key: string };
-type Section = { label: string | null; items: NavItem[] };
+type SubSection = { label: string; items: NavItem[] };
+type Section = {
+  label: string | null;
+  items?: NavItem[];
+  subsections?: SubSection[];
+};
 
-export function SidebarNav({ sections, active }: { sections: Section[]; active?: string }) {
+function totalItems(section: Section): number {
+  if (section.subsections?.length) {
+    return section.subsections.reduce((s, sub) => s + sub.items.length, 0);
+  }
+  return section.items?.length ?? 0;
+}
+
+function findActiveInSection(section: Section, active?: string): boolean {
+  if (section.items?.some((i) => i.key === active)) return true;
+  if (section.subsections?.some((sub) => sub.items.some((i) => i.key === active))) return true;
+  return false;
+}
+
+function findActiveInSub(sub: SubSection, active?: string): boolean {
+  return sub.items.some((i) => i.key === active);
+}
+
+export function SidebarNav({ sections, active, onNavigate }: { sections: Section[]; active?: string; onNavigate?: () => void }) {
   const [open, setOpen] = useState<string[]>(() => {
+    const initial: string[] = [];
     for (const s of sections) {
-      if (s.label && s.items.some((i) => i.key === active)) return [s.label];
+      if (s.label && findActiveInSection(s, active)) {
+        initial.push(s.label);
+        if (s.subsections) {
+          for (const sub of s.subsections) {
+            if (findActiveInSub(sub, active)) initial.push(`${s.label}::${sub.label}`);
+          }
+        }
+      }
     }
-    return [];
+    return initial;
   });
 
-  function toggle(label: string) {
+  function toggle(id: string) {
     setOpen((prev) =>
-      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]
+      prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]
     );
   }
 
@@ -26,10 +56,11 @@ export function SidebarNav({ sections, active }: { sections: Section[]; active?:
         if (!section.label) {
           return (
             <div key={si}>
-              {section.items.map((item) => (
+              {section.items?.map((item) => (
                 <Link
                   key={item.key}
                   href={item.href}
+                  onClick={onNavigate}
                   className={`block px-5 py-2 text-[13px] font-medium transition-colors ${
                     active === item.key
                       ? "bg-white text-black"
@@ -44,7 +75,9 @@ export function SidebarNav({ sections, active }: { sections: Section[]; active?:
         }
 
         const isOpen = open.includes(section.label);
-        const hasActive = section.items.some((i) => i.key === active);
+        const hasActive = findActiveInSection(section, active);
+        const count = totalItems(section);
+        const hasSubsections = Boolean(section.subsections?.length);
 
         return (
           <div key={si} className="border-b border-white/5">
@@ -60,7 +93,7 @@ export function SidebarNav({ sections, active }: { sections: Section[]; active?:
                 {section.label}
               </span>
               <span className="flex items-center gap-2">
-                <span className="text-[10px] text-white/25 font-mono">{section.items.length}</span>
+                <span className="text-[10px] text-white/25 font-mono">{count}</span>
                 <svg
                   width="10"
                   height="10"
@@ -77,32 +110,101 @@ export function SidebarNav({ sections, active }: { sections: Section[]; active?:
 
             <div
               className={`overflow-hidden transition-all duration-200 ${
-                isOpen ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0"
+                isOpen ? "max-h-[4000px] opacity-100" : "max-h-0 opacity-0"
               }`}
             >
-              {section.items.map((item, idx) => {
-                const isActive = active === item.key;
-                return (
-                  <Link
-                    key={item.key}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-5 py-1.5 text-[12px] transition-colors ${
-                      isActive
-                        ? "bg-white text-black font-semibold"
-                        : "text-white/40 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <span
-                      className={`w-5 text-right font-mono text-[10px] shrink-0 ${
-                        isActive ? "text-black/40" : "text-white/20"
+              {hasSubsections ? (
+                section.subsections!.map((sub, sub_i) => {
+                  const subId = `${section.label}::${sub.label}`;
+                  const isSubOpen = open.includes(subId);
+                  const subHasActive = findActiveInSub(sub, active);
+                  return (
+                    <div key={sub_i} className="border-t border-white/5">
+                      <button
+                        onClick={() => toggle(subId)}
+                        className={`w-full flex items-center justify-between pl-8 pr-5 py-2 text-left transition-colors cursor-pointer ${
+                          subHasActive
+                            ? "text-white"
+                            : "text-white/45 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <span className="text-[10px] uppercase tracking-[0.12em] font-semibold">
+                          {sub.label}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-[10px] text-white/20 font-mono">{sub.items.length}</span>
+                          <svg
+                            width="9"
+                            height="9"
+                            viewBox="0 0 10 10"
+                            className={`transition-transform duration-200 ${isSubOpen ? "rotate-180" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                          >
+                            <path d="M2 3.5L5 6.5L8 3.5" />
+                          </svg>
+                        </span>
+                      </button>
+                      <div
+                        className={`overflow-hidden transition-all duration-200 ${
+                          isSubOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+                        }`}
+                      >
+                        {sub.items.map((item, idx) => {
+                          const isActive = active === item.key;
+                          return (
+                            <Link
+                              key={item.key}
+                              href={item.href}
+                              onClick={onNavigate}
+                              className={`flex items-center gap-3 pl-11 pr-5 py-1.5 text-[12px] transition-colors ${
+                                isActive
+                                  ? "bg-white text-black font-semibold"
+                                  : "text-white/40 hover:text-white hover:bg-white/5"
+                              }`}
+                            >
+                              <span
+                                className={`w-4 text-right font-mono text-[10px] shrink-0 ${
+                                  isActive ? "text-black/40" : "text-white/20"
+                                }`}
+                              >
+                                {idx + 1}
+                              </span>
+                              <span>{item.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                section.items?.map((item, idx) => {
+                  const isActive = active === item.key;
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      onClick={onNavigate}
+                      className={`flex items-center gap-3 px-5 py-1.5 text-[12px] transition-colors ${
+                        isActive
+                          ? "bg-white text-black font-semibold"
+                          : "text-white/40 hover:text-white hover:bg-white/5"
                       }`}
                     >
-                      {idx + 1}
-                    </span>
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
+                      <span
+                        className={`w-5 text-right font-mono text-[10px] shrink-0 ${
+                          isActive ? "text-black/40" : "text-white/20"
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })
+              )}
             </div>
           </div>
         );

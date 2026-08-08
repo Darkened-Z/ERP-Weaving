@@ -227,3 +227,39 @@ tr:hover td {
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: var(--border-light);
 }
+
+.no-print {}
+
+@media print {
+  .no-print { display: none !important; }
+  aside { display: none !important; }
+  main { margin-left: 0 !important; }
+  body { background: white !important; color: black !important; }
+  table { page-break-inside: auto; }
+  tr { page-break-inside: avoid; page-break-after: auto; }
+}
+
+@media (max-width: 639px) {
+  .page-title {
+    font-size: 22px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  th {
+    font-size: 10px;
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+
+  td {
+    font-size: 13px;
+    padding: 8px 6px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+}

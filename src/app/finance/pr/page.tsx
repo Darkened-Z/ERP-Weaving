@@ -38,7 +38,7 @@ export default async function PettyCashReceiptPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border-2 border-black mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border-2 border-black mb-8">
           <div className="bg-white p-5">
             <div className="stat-value">{vouchers.length}</div>
             <div className="stat-label">Vouchers</div>
@@ -60,6 +60,7 @@ export default async function PettyCashReceiptPage() {
             No vouchers found.
           </p>
         ) : (
+          <div className="overflow-x-auto">
           <table>
             <thead>
               <tr>
@@ -82,6 +83,7 @@ export default async function PettyCashReceiptPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </Shell>

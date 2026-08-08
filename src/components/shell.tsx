@@ -1,17 +1,23 @@
 import { requireSession, logout } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { SidebarNav } from "./sidebar-nav";
+import { ShellLayout } from "./shell-layout";
 
 const SECTIONS = [
   {
     label: null,
-    items: [{ href: "/", label: "Dashboard", key: "dash" }],
+    items: [
+      { href: "/", label: "Dashboard", key: "dash" },
+      { href: "/owner/dashboard", label: "Executive Overview", key: "owner-dash" },
+      { href: "/production/board", label: "Live Production Board", key: "prod-board" },
+      { href: "/tickets", label: "Tickets", key: "tickets" },
+      { href: "/my-tasks", label: "My Tasks", key: "my-tasks" },
+      { href: "/team/workload", label: "Team Workload", key: "team-workload" },
+    ],
   },
   {
     label: "Define",
     items: [
       { href: "/accounts", label: "Chart of Accounts", key: "accounts" },
-      { href: "/define/chart-define", label: "Chart Define", key: "chart-define" },
       { href: "/define/grey-dsp", label: "Grey Despatch Chart", key: "grey-dsp" },
       { href: "/define/cities", label: "Area-Cities", key: "cities" },
       { href: "/define/beam-status", label: "Beam Status", key: "beam-status" },
@@ -22,15 +28,19 @@ const SECTIONS = [
       { href: "/weaving/looms", label: "Looms", key: "looms" },
       { href: "/define/party-counts", label: "Party Count", key: "party-counts" },
       { href: "/define/yarn-blends", label: "Yarn Blend", key: "yarn-blends" },
-      { href: "/weaving/yarn", label: "Yarn Counts", key: "yarn" },
+      { href: "/define/yarn-counts", label: "Yarn Count", key: "yarn-counts" },
+      { href: "/weaving/yarn", label: "Yarn Counts List", key: "yarn" },
       { href: "/define/yarn-brands", label: "Yarn Brands", key: "yarn-brands" },
-      { href: "/weaving/grey", label: "Grey Construction", key: "grey" },
-      { href: "/define/locations", label: "Despatch Parties Location", key: "locations" },
+      { href: "/define/grey-construction", label: "Grey Construction", key: "grey-construction" },
+      { href: "/weaving/grey", label: "Grey Constructions List", key: "grey" },
+      { href: "/define/locations", label: "Grey Despatch Parties Location", key: "locations-grey" },
+      { href: "/define/yarn-locations", label: "Yarn Parties Location", key: "locations-yarn" },
       { href: "/define/do-parties", label: "DO Party Chart", key: "do-parties" },
       { href: "/define/products", label: "Products Coding", key: "products" },
       { href: "/define/yarn-fibers", label: "Yarn Fiber", key: "yarn-fibers" },
       { href: "/define/inv-opening", label: "Inventory Opening", key: "inv-opening" },
       { href: "/define/branch-opening", label: "New Branch Opening", key: "branch-opening" },
+      { href: "/define/chart-define", label: "Chart Define", key: "chart-define" },
     ],
   },
   {
@@ -52,11 +62,45 @@ const SECTIONS = [
   },
   {
     label: "Inventory External",
-    items: [
-      { href: "/contracts?type=YARN_PUR", label: "Yarn Purchase", key: "yarn-pur" },
-      { href: "/contracts?type=GREY_SALE", label: "Grey Sale", key: "grey-sale" },
-      { href: "/contracts?type=WARPING", label: "Warping", key: "warping" },
-      { href: "/contracts?type=GREY_CONV", label: "Grey Conversion", key: "grey-conv" },
+    subsections: [
+      {
+        label: "Contracts",
+        items: [
+          { href: "/external/contracts/grey-conversion", label: "Grey Conversion Contract", key: "ext-gcc" },
+          { href: "/external/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "ext-ypc" },
+          { href: "/external/contracts/yarn-sales", label: "Yarn Sales Contract", key: "ext-ysc" },
+          { href: "/external/contracts/grey-purchase", label: "Grey Purchase Contract", key: "ext-gpc" },
+          { href: "/external/contracts/grey-sales", label: "Grey Sales Contract", key: "ext-gsc" },
+        ],
+      },
+      {
+        label: "Yarn",
+        items: [
+          { href: "/external/yarn/purchase", label: "Yarn Purchase", key: "ext-yp-vch" },
+          { href: "/external/yarn/sale", label: "Yarn Sale", key: "ext-ys-vch" },
+        ],
+      },
+      {
+        label: "Grey",
+        items: [
+          { href: "/external/grey/godown-stock", label: "Grey Purchase In Stock", key: "ext-godown" },
+          { href: "/external/grey/transfer", label: "Grey Transfer", key: "ext-gt" },
+          { href: "/external/grey/kachi-parchi", label: "Kachi Parchi", key: "ext-kp" },
+          { href: "/external/grey/packi-parchi", label: "Packi Parchi", key: "ext-pp" },
+        ],
+      },
+      {
+        label: "Reports",
+        items: [
+          { href: "/external/reports/kora-pending", label: "Kora Pending Lots", key: "ext-r-kora" },
+          { href: "/external/reports/cloth-register", label: "Cloth Purchase Sale Register", key: "ext-r-cloth" },
+          { href: "/external/reports/grey-register", label: "Grey Register", key: "ext-r-greyreg" },
+          { href: "/external/reports/grey-stock", label: "Grey Stock", key: "ext-r-greystock" },
+          { href: "/external/reports/yarn-register", label: "Yarn Register", key: "ext-r-yarnreg" },
+          { href: "/external/reports/yarn-stock", label: "Yarn Stock", key: "ext-r-yarnstock" },
+          { href: "/external/reports/weaving-counts", label: "Weaving Counts Accounts", key: "ext-r-weaving" },
+        ],
+      },
     ],
   },
   {
@@ -74,6 +118,9 @@ const SECTIONS = [
       { href: "/reports/trial-balance", label: "Trial Balance", key: "trial-balance" },
       { href: "/reports/daily-activity", label: "Daily Activity", key: "daily-activity" },
       { href: "/reports/aging", label: "Aging Analysis", key: "aging" },
+      { href: "/reports/grey-aging", label: "Grey Stock Aging", key: "grey-aging" },
+      { href: "/reports/payroll", label: "Weaver Payroll", key: "payroll" },
+      { href: "/reports/loom-efficiency", label: "Loom Efficiency", key: "loom-eff" },
     ],
   },
   {
@@ -93,6 +140,7 @@ const SECTIONS = [
       { href: "/settings/cost-centers", label: "Cost Centers", key: "cost-centers" },
       { href: "/settings/fiscal-years", label: "Fiscal Years", key: "fiscal-years" },
       { href: "/settings/locking", label: "System Locking", key: "locking" },
+      { href: "/import/excel", label: "Excel Import", key: "excel-import" },
     ],
   },
 ];
@@ -107,38 +155,14 @@ export async function Shell({ children, active }: { children: React.ReactNode; a
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-56 bg-black text-white flex flex-col fixed h-screen overflow-y-auto scrollbar-thin">
-        <div className="p-5 border-b border-white/10">
-          <div className="text-lg font-bold tracking-tight">SK MILLS</div>
-          <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 mt-1">
-            Weaving Management
-          </div>
-        </div>
-
-        <SidebarNav sections={SECTIONS} active={active} />
-
-        <div className="p-5 border-t border-white/10">
-          <div className="text-[12px] font-medium">{session.fullName}</div>
-          <div className="text-[9px] uppercase tracking-[0.1em] text-white/30 mt-0.5">
-            {session.roleName}
-          </div>
-          <form action={handleLogout}>
-            <button
-              type="submit"
-              className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/30 hover:text-white transition-colors cursor-pointer"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      <main className="flex-1 ml-56">
-        <div className="p-8 max-w-6xl">
-          {children}
-        </div>
-      </main>
-    </div>
+    <ShellLayout
+      sections={SECTIONS}
+      active={active}
+      sessionName={session.fullName}
+      sessionRole={session.roleName}
+      logoutAction={handleLogout}
+    >
+      {children}
+    </ShellLayout>
   );
 }

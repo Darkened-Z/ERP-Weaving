@@ -18,13 +18,14 @@ export default async function LedgerPage({
     .where(gte(schema.chartOfAccounts.level, 3))
     .orderBy(schema.chartOfAccounts.code);
 
-  let ledgerEntries: {
+  let entries: {
     vdate: string;
     vtype: string;
     vno: number;
     narration: string | null;
     debit: number;
     credit: number;
+    balance: number;
   }[] = [];
 
   let accountInfo: (typeof schema.chartOfAccounts.$inferSelect) | null = null;
@@ -36,7 +37,7 @@ export default async function LedgerPage({
       .where(eq(schema.chartOfAccounts.code, selectedAccount));
     accountInfo = found ?? null;
 
-    ledgerEntries = await db
+    const raw = await db
       .select({
         vdate: schema.transMain.vdate,
         vtype: schema.transDetail.vtype,
@@ -55,11 +56,17 @@ export default async function LedgerPage({
         )
       )
       .where(eq(schema.transDetail.accCode, selectedAccount))
-      .orderBy(schema.transMain.vdate, schema.transDetail.vno);
+      .orderBy(schema.transMain.vdate, schema.transDetail.vtype, schema.transDetail.vno);
+
+    let running = 0;
+    entries = raw.map((r) => {
+      running += r.debit - r.credit;
+      return { ...r, balance: running };
+    });
   }
 
-  let runningBalance = 0;
   const formatNum = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(Math.abs(n)));
+  const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance : 0;
 
   return (
     <Shell active="ledger">
@@ -87,7 +94,7 @@ export default async function LedgerPage({
         {selectedAccount && accountInfo && (
           <div>
             <div className="border border-black p-6 mb-6">
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <div className="label">Account Code</div>
                   <div className="mono text-lg font-bold mt-1">{accountInfo.code}</div>
@@ -103,9 +110,10 @@ export default async function LedgerPage({
               </div>
             </div>
 
-            {ledgerEntries.length === 0 ? (
+            {entries.length === 0 ? (
               <p className="text-[var(--muted)] text-[14px] py-8">No transactions found for this account.</p>
             ) : (
+              <div className="overflow-x-auto">
               <table>
                 <thead>
                   <tr>
@@ -119,29 +127,26 @@ export default async function LedgerPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {ledgerEntries.map((entry, idx) => {
-                    runningBalance += entry.debit - entry.credit;
-                    return (
-                      <tr key={idx}>
-                        <td className="mono text-[13px]">{entry.vdate}</td>
-                        <td>
-                          <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase">
-                            {entry.vtype}
-                          </span>
-                        </td>
-                        <td className="mono">{entry.vno}</td>
-                        <td className="text-[var(--muted)]">{entry.narration}</td>
-                        <td className="mono text-right">{entry.debit > 0 ? formatNum(entry.debit) : ""}</td>
-                        <td className="mono text-right">{entry.credit > 0 ? formatNum(entry.credit) : ""}</td>
-                        <td className="mono text-right font-semibold">
-                          {formatNum(runningBalance)}{" "}
-                          <span className="text-[11px] text-[var(--muted)]">
-                            {runningBalance >= 0 ? "Dr" : "Cr"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {entries.map((entry, idx) => (
+                    <tr key={idx}>
+                      <td className="mono text-[13px]">{entry.vdate}</td>
+                      <td>
+                        <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase">
+                          {entry.vtype}
+                        </span>
+                      </td>
+                      <td className="mono">{entry.vno}</td>
+                      <td className="text-[var(--muted)]">{entry.narration}</td>
+                      <td className="mono text-right">{entry.debit > 0 ? formatNum(entry.debit) : ""}</td>
+                      <td className="mono text-right">{entry.credit > 0 ? formatNum(entry.credit) : ""}</td>
+                      <td className="mono text-right font-semibold">
+                        {formatNum(entry.balance)}{" "}
+                        <span className="text-[11px] text-[var(--muted)]">
+                          {entry.balance >= 0 ? "Dr" : "Cr"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-black">
@@ -149,18 +154,19 @@ export default async function LedgerPage({
                       Closing Balance
                     </td>
                     <td className="mono text-right font-bold">
-                      {formatNum(ledgerEntries.reduce((s, e) => s + e.debit, 0))}
+                      {formatNum(entries.reduce((s, e) => s + e.debit, 0))}
                     </td>
                     <td className="mono text-right font-bold">
-                      {formatNum(ledgerEntries.reduce((s, e) => s + e.credit, 0))}
+                      {formatNum(entries.reduce((s, e) => s + e.credit, 0))}
                     </td>
                     <td className="mono text-right font-extrabold text-[15px]">
-                      {formatNum(runningBalance)}{" "}
-                      <span className="text-[11px]">{runningBalance >= 0 ? "Dr" : "Cr"}</span>
+                      {formatNum(closingBalance)}{" "}
+                      <span className="text-[11px]">{closingBalance >= 0 ? "Dr" : "Cr"}</span>
                     </td>
                   </tr>
                 </tfoot>
               </table>
+              </div>
             )}
           </div>
         )}

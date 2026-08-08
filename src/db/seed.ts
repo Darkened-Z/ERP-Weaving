@@ -837,7 +837,7 @@ async function seed() {
   }
 
   // Beams
-  const beamData: [string, string, string, string, string, number, number, number, string, number | null, string][] = [
+  const beamData: [string, string, string | null, string | null, string | null, number, number, number, string, number | null, string][] = [
     ["BM-001", "WARP", "00122", "GC-001", "20/1", 3200, 1200, 380, "RUNNING", 1, "2022-07-20"],
     ["BM-002", "WARP", "00122", "GC-001", "20/1", 3200, 1150, 365, "RUNNING", 2, "2022-07-21"],
     ["BM-003", "WARP", "00222", "GC-003", "40/1", 5200, 800, 185, "RUNNING", 11, "2022-07-22"],
@@ -1185,7 +1185,7 @@ async function seed() {
   }
 
   // Yarn Transactions
-  const yarnTxns: [string, string, number, string, string, number, number, number, number, string | null, string | null, string | null, string | null][] = [
+  const yarnTxns: [string, string, number, string | null, string, number, number, number, number, string | null, string | null, string | null, string | null][] = [
     ["RECEIPT", "2022-07-18", 1, "Al-Hamd Yarn Traders", "20/1", 50, 5000, 280, 1400000, "LEV-2234", "BL-4421", null, null],
     ["RECEIPT", "2022-07-25", 2, "Crescent Textile Mills", "30/1", 30, 3000, 320, 960000, "LEW-5567", "BL-4455", null, null],
     ["RECEIPT", "2022-08-05", 3, "Diamond Fibre Ltd", "40/1", 20, 2000, 410, 820000, "LEX-8890", null, null, null],
@@ -1349,7 +1349,7 @@ async function seed() {
   }
 
   // Grey Paki Parchi — delivery receipts
-  const pakiParchis: [number, string, string, string, number, number, number, number, number, number, number, string, string][] = [
+  const pakiParchis: [number, string, string, string, number, number, number, number, number, number, number, number, string][] = [
     [1, "2022-08-10", "AL-KARAM TEXTILE", "3.01.01.01.0012", 101, 18, 1250, 1220, 52, 63.5, 78, 85.50, "CNT-001"],
     [2, "2022-08-15", "NISHAT MILLS", "3.01.01.01.0015", 102, 24, 1680, 1650, 56, 63.0, 92, 88.00, "CNT-002"],
     [3, "2022-08-22", "GULL AHMED TEXTILE", "3.01.01.01.0018", 103, 12, 840, 825, 48, 44.0, 72, 110.50, "CNT-003"],

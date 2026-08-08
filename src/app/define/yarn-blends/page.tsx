@@ -1,44 +1,155 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function YarnBlendsPage() {
-  const blends = await db.select().from(schema.yarnBlends).orderBy(schema.yarnBlends.id);
+export default async function YarnBlendsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string; find?: string }>;
+}) {
+  const params = await searchParams;
+  const allBlends = await db
+    .select()
+    .from(schema.yarnBlends)
+    .orderBy(schema.yarnBlends.id);
+
+  const blends = params.find
+    ? allBlends.filter((b) =>
+        b.description.toLowerCase().includes(params.find!.toLowerCase())
+      )
+    : allBlends;
+
+  const selected = params.id
+    ? allBlends.find((b) => b.id === Number(params.id)) ?? null
+    : null;
+
+  async function saveBlend(formData: FormData) {
+    "use server";
+    const description = (formData.get("description") as string)?.trim();
+    if (!description) return;
+
+    const editId = formData.get("id") as string;
+
+    if (editId) {
+      await db
+        .update(schema.yarnBlends)
+        .set({ description })
+        .where(eq(schema.yarnBlends.id, Number(editId)));
+    } else {
+      await db.insert(schema.yarnBlends).values({ description });
+    }
+
+    revalidatePath("/define/yarn-blends");
+    redirect("/define/yarn-blends");
+  }
+
+  async function deleteBlend(formData: FormData) {
+    "use server";
+    const id = formData.get("id") as string;
+    if (!id) return;
+    await db
+      .delete(schema.yarnBlends)
+      .where(eq(schema.yarnBlends.id, Number(id)));
+    revalidatePath("/define/yarn-blends");
+    redirect("/define/yarn-blends");
+  }
 
   return (
     <Shell active="yarn-blends">
       <div className="animate-in">
-        <div className="mb-8">
-          <h1 className="page-title">Yarn Blends</h1>
-          <p className="text-[13px] text-[var(--muted)] mt-2">
-            {blends.length} yarn blends
-          </p>
-        </div>
+        <h1 className="page-title mb-8">Yarn Blend (WVG)</h1>
 
-        <div className="grid grid-cols-1 gap-px bg-black border border-black mb-10">
-          <div className="bg-white p-6">
-            <div className="stat-value">{blends.length}</div>
-            <div className="stat-label">Yarn Blends</div>
+        <div className="border border-black p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
+              {selected ? "Edit Blend" : "New Blend"}
+            </div>
+            <div className="flex gap-2">
+              <a href="/define/yarn-blends" className="btn btn-outline btn-sm">New</a>
+              {selected && (
+                <form action={deleteBlend} className="inline">
+                  <input type="hidden" name="id" value={selected.id} />
+                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                </form>
+              )}
+            </div>
           </div>
+
+          <form action={saveBlend}>
+            {selected && <input type="hidden" name="id" value={selected.id} />}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              <div>
+                <label className="label block mb-1">Description</label>
+                <input
+                  name="description"
+                  className="input-box"
+                  defaultValue={selected?.description ?? ""}
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button type="submit" className="btn btn-sm">Save</button>
+            </div>
+          </form>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Blend Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {blends.map((b, i) => (
-              <tr key={b.id}>
-                <td className="mono text-[13px]">{i + 1}</td>
-                <td>{b.description}</td>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">Find</div>
+          <form method="GET" className="flex-1 flex gap-2">
+            <input
+              name="find"
+              className="input-box flex-1 text-[13px]"
+              placeholder="Search blend..."
+              defaultValue={params.find ?? ""}
+            />
+          </form>
+        </div>
+
+        <div className="overflow-x-auto" style={{ maxHeight: "60vh", overflowY: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Blend Description</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {blends.map((b, i) => {
+                const isSelected = b.id === selected?.id;
+                return (
+                  <tr
+                    key={b.id}
+                    className={isSelected ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
+                  >
+                    <td className="mono text-[13px]">
+                      <a
+                        href={`/define/yarn-blends?id=${b.id}`}
+                        className="no-underline"
+                        style={{ color: isSelected ? "white" : "inherit" }}
+                      >
+                        {i + 1}
+                      </a>
+                    </td>
+                    <td>
+                      <a
+                        href={`/define/yarn-blends?id=${b.id}`}
+                        className="no-underline"
+                        style={{ color: isSelected ? "white" : "inherit" }}
+                      >
+                        {b.description}
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </Shell>
   );

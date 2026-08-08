@@ -14,7 +14,7 @@ export default async function FiscalYearsPage() {
   return (
     <Shell active="fiscal-years">
       <div className="animate-in">
-        <div className="flex items-baseline justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <h1 className="page-title">Fiscal Years</h1>
         </div>
 

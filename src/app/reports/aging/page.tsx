@@ -16,7 +16,6 @@ export default async function AgingPage() {
 
   const accounts = await db.select().from(schema.chartOfAccounts);
 
-  const accountMap = new Map(accounts.map((a) => [a.code, a]));
   const balanceMap = new Map(balances.map((b) => [b.accCode, b]));
 
   const creditors = accounts
@@ -90,7 +89,7 @@ export default async function AgingPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-4 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{creditors.length}</div>
             <div className="stat-label">Creditors</div>
@@ -111,6 +110,7 @@ export default async function AgingPage() {
 
         <div className="mb-12">
           <div className="section-title">Creditor Aging</div>
+          <div className="overflow-x-auto">
           <table>
             <thead>
               <tr>
@@ -163,10 +163,12 @@ export default async function AgingPage() {
               </tfoot>
             )}
           </table>
+          </div>
         </div>
 
         <div className="mb-12">
           <div className="section-title">Debtor Aging</div>
+          <div className="overflow-x-auto">
           <table>
             <thead>
               <tr>
@@ -220,6 +222,7 @@ export default async function AgingPage() {
               </tfoot>
             )}
           </table>
+          </div>
         </div>
       </div>
     </Shell>

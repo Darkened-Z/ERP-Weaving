@@ -12,7 +12,7 @@ export default async function LockingPage() {
   return (
     <Shell active="locking">
       <div className="animate-in">
-        <div className="flex items-baseline justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <div>
             <h1 className="page-title">System Locking</h1>
             <p className="text-[var(--muted)] text-sm mt-1">

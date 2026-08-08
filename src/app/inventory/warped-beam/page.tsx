@@ -27,7 +27,7 @@ export default async function WarpedBeamPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{rows.length}</div>
             <div className="stat-label">Total Received</div>
@@ -42,6 +42,7 @@ export default async function WarpedBeamPage() {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
@@ -70,6 +71,7 @@ export default async function WarpedBeamPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </Shell>
   );

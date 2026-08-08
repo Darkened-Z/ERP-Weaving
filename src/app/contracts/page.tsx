@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { sql, eq } from "drizzle-orm";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,16 @@ const TYPES = [
   "WARPING",
   "KNOTTING",
 ] as const;
+
+const TYPE_TO_NAV_KEY: Record<string, string> = {
+  ALL: "contracts",
+  YARN_PUR: "yarn-pur",
+  YARN_SALE: "contracts",
+  GREY_SALE: "grey-sale",
+  GREY_CONV: "grey-conv",
+  WARPING: "warping",
+  KNOTTING: "contracts",
+};
 
 export default async function ContractsPage({
   searchParams,
@@ -34,10 +45,8 @@ export default async function ContractsPage({
           .where(eq(schema.contracts.type, activeType))
           .orderBy(sql`contract_date desc`);
 
-  const allContracts = await db.select().from(schema.contracts);
-  const totalCount = allContracts.length;
-  const activeCount = allContracts.filter((c) => c.status === "A").length;
-  const totalValue = allContracts.reduce((s, c) => s + (c.amount ?? 0), 0);
+  const activeCount = contracts.filter((c) => c.status === "A").length;
+  const totalValue = contracts.reduce((s, c) => s + (c.amount ?? 0), 0);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-PK").format(Math.round(n));
@@ -84,20 +93,22 @@ export default async function ContractsPage({
     );
   };
 
+  const navKey = TYPE_TO_NAV_KEY[activeType] ?? "contracts";
+
   return (
-    <Shell active="contracts">
+    <Shell active={navKey}>
       <div className="animate-in">
         <div className="mb-8">
           <h1 className="page-title">Contracts</h1>
           <p className="text-[13px] text-[var(--muted)] mt-2">
-            {totalCount} contracts &middot; Total value{" "}
+            {contracts.length} contracts &middot; Total value{" "}
             <span className="mono">{fmt(totalValue)}</span>
           </p>
         </div>
 
         <div className="flex gap-2 mb-8 flex-wrap">
           {TYPES.map((t) => (
-            <a
+            <Link
               key={t}
               href={t === "ALL" ? "/contracts" : `/contracts?type=${t}`}
               className="inline-block text-[11px] px-3 py-1 uppercase no-underline"
@@ -109,11 +120,11 @@ export default async function ContractsPage({
               }}
             >
               {t.replace(/_/g, " ")}
-            </a>
+            </Link>
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{contracts.length}</div>
             <div className="stat-label">
@@ -131,6 +142,7 @@ export default async function ContractsPage({
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
@@ -182,6 +194,7 @@ export default async function ContractsPage({
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </Shell>
   );

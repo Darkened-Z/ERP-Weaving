@@ -54,7 +54,7 @@ export default async function VouchersPage({
   return (
     <Shell active="vouchers">
       <div className="animate-in">
-        <div className="flex items-baseline justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <div>
             <h1 className="page-title">Vouchers</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">

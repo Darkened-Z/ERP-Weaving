@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { sql } from "drizzle-orm";
+import { WhatsAppModal } from "@/components/whatsapp-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ export default async function GreyDespatchPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{rows.length}</div>
             <div className="stat-label">Total Despatches</div>
@@ -41,6 +43,7 @@ export default async function GreyDespatchPage() {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
@@ -53,6 +56,9 @@ export default async function GreyDespatchPage() {
               <th>Vehicle</th>
               <th>Bilty No.</th>
               <th>Gate Pass</th>
+              <th className="text-right">Chalan</th>
+              <th className="text-right">Notify</th>
+              <th className="text-right">Issue</th>
             </tr>
           </thead>
           <tbody>
@@ -67,10 +73,39 @@ export default async function GreyDespatchPage() {
                 <td className="mono text-[13px]">{r.vehicleNo ?? "-"}</td>
                 <td className="mono text-[13px]">{r.biltyNo ?? "-"}</td>
                 <td className="mono text-[13px]">{r.gatePassNo ?? "-"}</td>
+                <td className="text-right">
+                  <Link
+                    href={`/inventory/grey-despatch/${r.id}/chalan`}
+                    target="_blank"
+                    className="btn btn-outline btn-sm"
+                  >
+                    Print
+                  </Link>
+                </td>
+                <td className="text-right">
+                  <WhatsAppModal
+                    party={r.party}
+                    despatchNo={r.despatchNo}
+                    date={r.despatchDate}
+                    vehicleNo={r.vehicleNo}
+                    biltyNo={r.biltyNo}
+                    meters={r.meters}
+                    rolls={r.rolls}
+                  />
+                </td>
+                <td className="text-right">
+                  <Link
+                    href={`/tickets/new?party=${encodeURIComponent(String(r.partyCode ?? r.party))}`}
+                    className="btn btn-outline btn-sm"
+                  >
+                    Report Issue
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </Shell>
   );

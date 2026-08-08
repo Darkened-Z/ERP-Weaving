@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -39,10 +39,22 @@ export const chartOfAccounts = sqliteTable("chart_of_accounts", {
   city: text("city"),
   phone: text("phone"),
   mobile: text("mobile"),
+  fax: text("fax"),
   email: text("email"),
   gstNo: text("gst_no"),
   ntn: text("ntn"),
+  nic: text("nic"),
   creditLimit: real("credit_limit"),
+  remarks: text("remarks"),
+  contactPerson1: text("contact_person_1"),
+  contactDesig1: text("contact_desig_1"),
+  contactNo1: text("contact_no_1"),
+  contactPerson2: text("contact_person_2"),
+  contactDesig2: text("contact_desig_2"),
+  contactNo2: text("contact_no_2"),
+  contactPerson3: text("contact_person_3"),
+  contactDesig3: text("contact_desig_3"),
+  contactNo3: text("contact_no_3"),
   bsCode: integer("bs_code"),
   plCode: integer("pl_code"),
   status: text("status").notNull().default("R"),
@@ -72,7 +84,9 @@ export const transMain = sqliteTable("trans_main", {
   term: text("term"),
   utCode: integer("ut_code"),
   narration: text("narration"),
-});
+}, (t) => ({
+  uxFyVtypeVno: uniqueIndex("ux_trans_main_fy_vtype_vno").on(t.fyCode, t.vtype, t.vno),
+}));
 
 export const transDetail = sqliteTable("trans_detail", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -88,7 +102,10 @@ export const transDetail = sqliteTable("trans_detail", {
   credit: real("credit").notNull().default(0),
   chqNo: text("chq_no"),
   chqDate: text("chq_date"),
-});
+}, (t) => ({
+  uxFyVtypeVnoSrno: uniqueIndex("ux_trans_detail_fy_vtype_vno_srno").on(t.fyCode, t.vtype, t.vno, t.srno),
+  ixAccCode: index("ix_trans_detail_acc").on(t.accCode),
+}));
 
 export const yarnCounts = sqliteTable("yarn_counts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -108,7 +125,11 @@ export const looms = sqliteTable("looms", {
   make: text("make"),
   width: real("width"),
   rpm: integer("rpm"),
-  status: text("status").notNull().default("RUNNING"),
+  actRpm: integer("act_rpm"),
+  weaverName: text("weaver_name"),
+  group: text("group"),
+  status: text("status").notNull().default("A"),
+  statusWrk: text("status_wrk"),
   currentContract: text("current_contract"),
   currentProduct: text("current_product"),
   currentBeam: text("current_beam"),
@@ -122,9 +143,24 @@ export const greyConstruction = sqliteTable("grey_construction", {
   pick: real("pick"),
   width: real("width"),
   warpCount: text("warp_count"),
+  warp2: text("warp_2"),
+  warp3: text("warp_3"),
+  warp4: text("warp_4"),
+  warp5: text("warp_5"),
+  warp6: text("warp_6"),
+  warp7: text("warp_7"),
+  warp8: text("warp_8"),
   weftCount: text("weft_count"),
+  weft2: text("weft_2"),
+  weft3: text("weft_3"),
+  weft4: text("weft_4"),
+  weft5: text("weft_5"),
+  weft6: text("weft_6"),
+  weft7: text("weft_7"),
+  weft8: text("weft_8"),
   weaveType: text("weave_type").notNull().default("PLAIN"),
   selvage: text("selvage"),
+  blend: text("blend"),
   gsm: real("gsm"),
   status: text("status").notNull().default("A"),
 });
@@ -145,7 +181,10 @@ export const contracts = sqliteTable("contracts", {
   deliveryDate: text("delivery_date"),
   status: text("status").notNull().default("A"),
   remarks: text("remarks"),
-});
+}, (t) => ({
+  uxContractNoFy: uniqueIndex("ux_contracts_no_fy").on(t.contractNo, t.fyCode),
+  ixType: index("ix_contracts_type").on(t.type),
+}));
 
 export const dailyProduction = sqliteTable("daily_production", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -164,7 +203,11 @@ export const dailyProduction = sqliteTable("daily_production", {
   rpm: integer("rpm"),
   efficiency: real("efficiency"),
   weaverName: text("weaver_name"),
-});
+}, (t) => ({
+  uxDateShedShiftLoom: uniqueIndex("ux_daily_prod_date_shed_shift_loom").on(t.productionDate, t.shed, t.shift, t.loomNo),
+  ixDate: index("ix_daily_prod_date").on(t.productionDate),
+  ixLoom: index("ix_daily_prod_loom").on(t.loomNo),
+}));
 
 export const chartParts = sqliteTable("chart_parts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -183,14 +226,25 @@ export const beams = sqliteTable("beams", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   beamNo: text("beam_no").notNull().unique(),
   type: text("type").notNull(),
+  partyTrade: text("party_trade"),
+  codeConv: text("code_conv"),
+  statusLoc: text("status_loc"),
+  szgParty: text("szg_party"),
   contractNo: text("contract_no"),
   product: text("product"),
   yarnCount: text("yarn_count"),
   ends: integer("ends"),
   length: real("length"),
   weight: real("weight"),
-  status: text("status").notNull().default("RUNNING"),
+  shed: text("shed"),
   loomNo: integer("loom_no"),
+  beamSetNo: text("beam_set_no"),
+  setStatus: text("set_status"),
+  brVno: text("br_vno"),
+  brDate: text("br_date"),
+  knVno: text("kn_vno"),
+  knDate: text("kn_date"),
+  statusWrk: text("status_wrk").notNull().default("RUNNING"),
   receivedDate: text("received_date"),
 });
 
@@ -267,14 +321,16 @@ export const doPartyChart = sqliteTable("do_party_chart", {
 
 export const locations = sqliteTable("locations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  code: integer("code").notNull().unique(),
+  code: integer("code").notNull(),
   description: text("description").notNull(),
   type: text("type").notNull().default("GREY"),
-});
+}, (t) => ({
+  uxCodeType: uniqueIndex("ux_locations_code_type").on(t.code, t.type),
+}));
 
 export const productionStaff = sqliteTable("production_staff", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  code: integer("code").notNull(),
+  code: integer("code").notNull().unique(),
   level: integer("level").notNull().default(1),
   name: text("name").notNull(),
   nameShort: text("name_short"),
@@ -295,7 +351,9 @@ export const partyCounts = sqliteTable("party_counts", {
   status: text("status"),
   trnType: text("trn_type"),
   countGroup: text("count_group"),
-});
+}, (t) => ({
+  uxPartyCount: uniqueIndex("ux_party_counts_party_count").on(t.partyCode, t.countCode),
+}));
 
 export const products = sqliteTable("products", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -455,7 +513,30 @@ export const inventoryOpening = sqliteTable("inventory_opening", {
   location: text("location"),
   entryDate: text("entry_date"),
   status: text("status").notNull().default("A"),
-});
+  voucherNo: text("voucher_no"),
+  doDate: text("do_date"),
+  purContNo: text("pur_cont_no"),
+  opnParty: text("opn_party"),
+  convContNo: text("conv_cont_no"),
+  ratio: text("ratio"),
+  qtyWarp: real("qty_warp"),
+  qtyWeft: real("qty_weft"),
+  qtyBags: real("qty_bags"),
+  brand: text("brand"),
+  remarks: text("remarks"),
+  grayWidth: real("gray_width"),
+  weave: text("weave"),
+  designNo: text("design_no"),
+  loomType: text("loom_type"),
+  lvNo: text("lv_no"),
+  grayConstruction: text("gray_construction"),
+  productName: text("product_name"),
+  blend: text("blend"),
+}, (t) => ({
+  ixItemType: index("ix_inv_opening_item_type").on(t.itemType),
+  ixFyCode: index("ix_inv_opening_fy_code").on(t.fyCode),
+  ixEntryDate: index("ix_inv_opening_entry_date").on(t.entryDate),
+}));
 
 export const branchOpening = sqliteTable("branch_opening", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -468,6 +549,57 @@ export const branchOpening = sqliteTable("branch_opening", {
   openingDate: text("opening_date").notNull(),
   status: text("status").notNull().default("A"),
 });
+
+export const tickets = sqliteTable("tickets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticketNo: text("ticket_no").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull(),
+  priority: text("priority").notNull().default("P3_NORMAL"),
+  status: text("status").notNull().default("OPEN"),
+  assigneeUserId: integer("assignee_user_id"),
+  reporterUserId: integer("reporter_user_id").notNull(),
+  loomNo: integer("loom_no"),
+  contractNo: text("contract_no"),
+  partyCode: text("party_code"),
+  greyCode: text("grey_code"),
+  beamNo: text("beam_no"),
+  labels: text("labels"),
+  dueDate: text("due_date"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  resolvedAt: text("resolved_at"),
+}, (t) => ({
+  ixStatus: index("ix_tickets_status").on(t.status),
+  ixAssignee: index("ix_tickets_assignee").on(t.assigneeUserId),
+  ixReporter: index("ix_tickets_reporter").on(t.reporterUserId),
+  ixLoom: index("ix_tickets_loom").on(t.loomNo),
+  ixType: index("ix_tickets_type").on(t.type),
+  ixPriority: index("ix_tickets_priority").on(t.priority),
+}));
+
+export const ticketComments = sqliteTable("ticket_comments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticketId: integer("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  authorUserId: integer("author_user_id").notNull(),
+  body: text("body").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  ixTicket: index("ix_ticket_comments_ticket").on(t.ticketId),
+}));
+
+export const ticketHistory = sqliteTable("ticket_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticketId: integer("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  actorUserId: integer("actor_user_id").notNull(),
+  action: text("action").notNull(),
+  fromValue: text("from_value"),
+  toValue: text("to_value"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  ixTicket: index("ix_ticket_history_ticket").on(t.ticketId),
+}));
 
 export const greyPakiParchi = sqliteTable("grey_paki_parchi", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -489,3 +621,613 @@ export const greyPakiParchi = sqliteTable("grey_paki_parchi", {
   remarks: text("remarks"),
   status: text("status").notNull().default("A"),
 });
+
+// ============================================================
+// INVENTORY EXTERNAL — Contracts, Yarn/Grey Transactions, Reports
+// Mirrors Oracle Forms 6i modules exactly. All ext_* tables.
+// ============================================================
+
+// --- CONTRACTS ---
+
+export const extYarnPurContract = sqliteTable("ext_yarn_pur_contract", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contNo: text("cont_no").notNull().unique(),
+  lContNo: integer("l_cont_no"),
+  contDate: text("cont_date").notNull(),
+  expdDate: text("expd_date"),
+  refno: text("refno"),
+  partyCode: text("party_code"),
+  broker: text("broker"),
+  agePercent: real("age_percent"),
+  brokagePerBag: real("brokage_per_bag"),
+  countCode: text("count_code"),
+  ratio: text("ratio"),
+  brand: text("brand"),
+  qtyBags: real("qty_bags"),
+  ratePerLbs: real("rate_per_lbs"),
+  amount: real("amount"),
+  days: integer("days"),
+  remarks: text("remarks"),
+  img: text("img"),
+  status: text("status").notNull().default("R"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_ypc_party").on(t.partyCode),
+  ixStatus: index("ix_ext_ypc_status").on(t.status),
+}));
+
+export const extYarnPurContractDelivery = sqliteTable("ext_yarn_pur_contract_delivery", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extYarnPurContract.id, { onDelete: "cascade" }),
+  deliveryDate: text("delivery_date"),
+  doNo: text("do_no"),
+  bags: real("bags"),
+  ycdDlvLoc: text("ycd_dlv_loc"),
+}, (t) => ({
+  ixContract: index("ix_ext_ypcd_contract").on(t.contractId),
+}));
+
+export const extYarnSalContract = sqliteTable("ext_yarn_sal_contract", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contNo: text("cont_no").notNull().unique(),
+  lContNo: integer("l_cont_no"),
+  contDate: text("cont_date").notNull(),
+  expdDate: text("expd_date"),
+  refno: text("refno"),
+  partyCode: text("party_code"),
+  broker: text("broker"),
+  brokagePercentage: real("brokage_percentage"),
+  agePercent: real("age_percent"),
+  countCode: text("count_code"),
+  ratio: text("ratio"),
+  brand: text("brand"),
+  qtyBags: real("qty_bags"),
+  ratePerLbs: real("rate_per_lbs"),
+  amount: real("amount"),
+  days: integer("days"),
+  remarks: text("remarks"),
+  img: text("img"),
+  status: text("status").notNull().default("R"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_ysc_party").on(t.partyCode),
+  ixStatus: index("ix_ext_ysc_status").on(t.status),
+}));
+
+export const extYarnSalContractDelivery = sqliteTable("ext_yarn_sal_contract_delivery", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extYarnSalContract.id, { onDelete: "cascade" }),
+  deliveryDate: text("delivery_date"),
+  bags: real("bags"),
+  ycdDlvLoc: text("ycd_dlv_loc"),
+}, (t) => ({
+  ixContract: index("ix_ext_yscd_contract").on(t.contractId),
+}));
+
+export const extGreyPurContract = sqliteTable("ext_grey_pur_contract", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractNo: text("contract_no").notNull().unique(),
+  lContNo: integer("l_cont_no"),
+  contractDate: text("contract_date").notNull(),
+  expDate: text("exp_date"),
+  partyRefNo: text("party_ref_no"),
+  party: text("party"),
+  broker: text("broker"),
+  brokagPercentage: real("brokag_percentage"),
+  perMtr: real("per_mtr"),
+  greyCode: text("grey_code"),
+  weave: text("weave"),
+  salvage: text("salvage"),
+  quantityMtr: real("quantity_mtr"),
+  ratePerMtr: real("rate_per_mtr"),
+  amount: real("amount"),
+  specialInst: text("special_inst"),
+  paymentTerm: text("payment_term"),
+  deliveryTerm: text("delivery_term"),
+  remarks: text("remarks"),
+  extMtr: real("ext_mtr"),
+  extDate: text("ext_date"),
+  gstRate: real("gst_rate"),
+  status: text("status").notNull().default("R"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_gpc_party").on(t.party),
+  ixStatus: index("ix_ext_gpc_status").on(t.status),
+}));
+
+export const extGreyPurContractDelivery = sqliteTable("ext_grey_pur_contract_delivery", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extGreyPurContract.id, { onDelete: "cascade" }),
+  deliveryDate: text("delivery_date"),
+  meters: real("meters"),
+  location: text("location"),
+}, (t) => ({
+  ixContract: index("ix_ext_gpcd_contract").on(t.contractId),
+}));
+
+export const extGreySalContract = sqliteTable("ext_grey_sal_contract", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractNo: text("contract_no").notNull().unique(),
+  lContNo: integer("l_cont_no"),
+  contractDate: text("contract_date").notNull(),
+  expDate: text("exp_date"),
+  partyRefNo: text("party_ref_no"),
+  party: text("party"),
+  broker: text("broker"),
+  brokagPerBag: real("brokag_per_bag"),
+  perMtr: real("per_mtr"),
+  greyCode: text("grey_code"),
+  weave: text("weave"),
+  salvage: text("salvage"),
+  quantityMtr: real("quantity_mtr"),
+  ratePerMtr: real("rate_per_mtr"),
+  amount: real("amount"),
+  days: integer("days"),
+  specialInst: text("special_inst"),
+  paymentTerm: text("payment_term"),
+  deliveryTerm: text("delivery_term"),
+  remarks: text("remarks"),
+  extMtr: real("ext_mtr"),
+  extDate: text("ext_date"),
+  gstRate: real("gst_rate"),
+  img: text("img"),
+  status: text("status").notNull().default("R"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_gsc_party").on(t.party),
+  ixStatus: index("ix_ext_gsc_status").on(t.status),
+}));
+
+export const extGreySalContractDelivery = sqliteTable("ext_grey_sal_contract_delivery", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extGreySalContract.id, { onDelete: "cascade" }),
+  deliveryDate: text("delivery_date"),
+  meters: real("meters"),
+  location: text("location"),
+}, (t) => ({
+  ixContract: index("ix_ext_gscd_contract").on(t.contractId),
+}));
+
+export const extGreyConvContract = sqliteTable("ext_grey_conv_contract", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contNo: text("cont_no").notNull().unique(),
+  lContNo: integer("l_cont_no"),
+  contDate: text("cont_date").notNull(),
+  expDate: text("exp_date"),
+  status: text("status").notNull().default("R"),
+  type: text("type").notNull().default("CONV"),
+  party: text("party"),
+  weaveFrame: text("weave_frame"),
+  selvType: text("selv_type"),
+  slvName: text("slv_name"),
+  qtyMtr: real("qty_mtr"),
+  costLakhaiBorderMtr: real("cost_lakhai_border_mtr"),
+  ratePerPick: real("rate_per_pick"),
+  rateMtr: real("rate_mtr"),
+  loomType: text("loom_type"),
+  broker: text("broker"),
+  ratePick: real("rate_pick"),
+  designNo: text("design_no"),
+  grayQltyCode: text("gray_qlty_code"),
+  img: text("img"),
+  wrpWt40: real("wrp_wt_40"),
+  wftWt40: real("wft_wt_40"),
+  weight40: real("weight_40"),
+  remarks: text("remarks"),
+  read: real("read"),
+  pick: real("pick"),
+  width: real("width"),
+  findDesign: text("find_design"),
+  grayCode: text("gray_code"),
+  findContract: text("find_contract"),
+  warpWtPerMtr: real("warp_wt_per_mtr"),
+  weftWtPerMtr: real("weft_wt_per_mtr"),
+  wtPerMtr: real("wt_per_mtr"),
+  warpCostPerMtr: real("warp_cost_per_mtr"),
+  weftCostPerMtr: real("weft_cost_per_mtr"),
+  costPerMtr: real("cost_per_mtr"),
+  ratePerMtr1: real("rate_per_mtr_1"),
+  ratePerMtr2: real("rate_per_mtr_2"),
+  productName: text("product_name"),
+  productQuality: text("product_quality"),
+  seasonType: text("season_type"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_gcc_party").on(t.party),
+  ixStatus: index("ix_ext_gcc_status").on(t.status),
+}));
+
+export const extGreyConvWarp = sqliteTable("ext_grey_conv_warp", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extGreyConvContract.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  count: text("count"),
+  descr: text("descr"),
+  brand: text("brand"),
+  calCount: real("cal_count"),
+  ends: integer("ends"),
+  wtPerMtr: real("wt_per_mtr"),
+  ratePerLbs: real("rate_per_lbs"),
+  costPerMtr: real("cost_per_mtr"),
+}, (t) => ({
+  ixContract: index("ix_ext_gcw_contract").on(t.contractId),
+}));
+
+export const extGreyConvWeft = sqliteTable("ext_grey_conv_weft", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extGreyConvContract.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  count: text("count"),
+  descr: text("descr"),
+  brand: text("brand"),
+  calCount: real("cal_count"),
+  ends: integer("ends"),
+  wtPerMtr: real("wt_per_mtr"),
+  ratePerLbs: real("rate_per_lbs"),
+  costPerMtr: real("cost_per_mtr"),
+}, (t) => ({
+  ixContract: index("ix_ext_gcwft_contract").on(t.contractId),
+}));
+
+// --- YARN TRANSACTIONS (Vouchers with line items) ---
+
+export const extYarnPurVoucher = sqliteTable("ext_yarn_pur_voucher", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  vNo: text("v_no").notNull().unique(),
+  lvNo: integer("lv_no"),
+  vDate: text("v_date").notNull(),
+  type: text("type").notNull().default("PUR"),
+  posting: text("posting").notNull().default("N"),
+  loomType: text("loom_type"),
+  bmParty: text("bm_party"),
+  party: text("party"),
+  broker: text("broker"),
+  term: text("term").notNull().default("CASH"),
+  img: text("img"),
+  cont: text("cont"),
+  pur: real("pur"),
+  bal: real("bal"),
+  salAvgRate: real("sal_avg_rate"),
+  purAvgRate: real("pur_avg_rate"),
+  percent: real("percent"),
+  perBag: real("per_bag"),
+  rkd: real("rkd"),
+  lotNo: text("lot_no"),
+  pendingFinance: text("pending_finance"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_ypv_party").on(t.party),
+  ixDate: index("ix_ext_ypv_date").on(t.vDate),
+}));
+
+export const extYarnPurVoucherLine = sqliteTable("ext_yarn_pur_voucher_line", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  voucherId: integer("voucher_id").notNull().references(() => extYarnPurVoucher.id, { onDelete: "cascade" }),
+  contNo: text("cont_no"),
+  count: text("count"),
+  partyCount: text("party_count"),
+  bld: text("bld"),
+  pack: text("pack"),
+  brand: text("brand"),
+  doNo: text("do_no"),
+  qty: real("qty"),
+  bag: real("bag"),
+  con: real("con"),
+  lbs: real("lbs"),
+  unit: text("unit"),
+  despatchParty: text("despatch_party"),
+  rate: real("rate"),
+  rateSv: real("rate_sv"),
+}, (t) => ({
+  ixVoucher: index("ix_ext_ypvl_voucher").on(t.voucherId),
+}));
+
+export const extYarnSalVoucher = sqliteTable("ext_yarn_sal_voucher", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  vNo: text("v_no").notNull().unique(),
+  lvNo: integer("lv_no"),
+  vDate: text("v_date").notNull(),
+  type: text("type").notNull().default("SAL"),
+  posting: text("posting").notNull().default("N"),
+  loomType: text("loom_type"),
+  party: text("party"),
+  term: text("term").notNull().default("CASH"),
+  img: text("img"),
+  cont: text("cont"),
+  pur: real("pur"),
+  bal: real("bal"),
+  stockBag: real("stock_bag"),
+  stockCon: real("stock_con"),
+  stockLbs: real("stock_lbs"),
+  ratePv: real("rate_pv"),
+  amtPv: real("amt_pv"),
+  pl: real("pl"),
+  avgRate: real("avg_rate"),
+  remarks: text("remarks"),
+  pendingFinance: text("pending_finance"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_ysv_party").on(t.party),
+  ixDate: index("ix_ext_ysv_date").on(t.vDate),
+}));
+
+export const extYarnSalVoucherLine = sqliteTable("ext_yarn_sal_voucher_line", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  voucherId: integer("voucher_id").notNull().references(() => extYarnSalVoucher.id, { onDelete: "cascade" }),
+  contNo: text("cont_no"),
+  count: text("count"),
+  bld: text("bld"),
+  pack: text("pack"),
+  brand: text("brand"),
+  doNo: text("do_no"),
+  qty: real("qty"),
+  bag: real("bag"),
+  cons: real("cons"),
+  lbs: real("lbs"),
+  unit: text("unit"),
+  despatchParty: text("despatch_party"),
+  rate: real("rate"),
+  amt: real("amt"),
+  remarks: text("remarks"),
+}, (t) => ({
+  ixVoucher: index("ix_ext_ysvl_voucher").on(t.voucherId),
+}));
+
+// --- GREY TRANSACTIONS ---
+
+export const extGodownStock = sqliteTable("ext_godown_stock", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  vNo: text("v_no").notNull().unique(),
+  lvNo: integer("lv_no"),
+  vDate: text("v_date").notNull(),
+  kpNo: text("kp_no"),
+  type: text("type").notNull().default("STOCK"),
+  purchaseParty: text("purchase_party"),
+  gdnParty: text("gdn_party"),
+  contNo: text("cont_no"),
+  purContNo: text("pur_cont_no"),
+  contactQuality: text("contact_quality"),
+  dspQuality: text("dsp_quality"),
+  than: integer("than"),
+  meter: real("meter"),
+  elCumiNum: integer("el_cumi_num"),
+  elCumiDen: integer("el_cumi_den"),
+  kamiMtr: real("kami_mtr"),
+  rateConversion: real("rate_conversion"),
+  term: text("term"),
+  days: integer("days"),
+  rateSal: real("rate_sal"),
+  salContNo: text("sal_cont_no"),
+  greySaleCont: text("grey_sale_cont"),
+  kaatPercent: real("kaat_percent"),
+  elMeter: real("el_meter"),
+  elMeterMode: text("el_meter_mode"),
+  netMeter: real("net_meter"),
+  checkery: real("checkery"),
+  commission: real("commission"),
+  total: real("total"),
+  balance: real("balance"),
+  printingName: text("printing_name"),
+  brokerName: text("broker_name"),
+  remarks: text("remarks"),
+  imgHash: text("img_hash"),
+  convGreyType: text("conv_grey_type"),
+  rate: real("rate"),
+  salAvgRate: real("sal_avg_rate"),
+  pendingFinance: text("pending_finance"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_gs_party").on(t.purchaseParty),
+  ixDate: index("ix_ext_gs_date").on(t.vDate),
+}));
+
+export const extGodownStockLine = sqliteTable("ext_godown_stock_line", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  stockId: integer("stock_id").notNull().references(() => extGodownStock.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  than: integer("than"),
+  mtr: real("mtr"),
+  status: text("status"),
+}, (t) => ({
+  ixStock: index("ix_ext_gsl_stock").on(t.stockId),
+}));
+
+export const extGodownStockCount = sqliteTable("ext_godown_stock_count", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  stockId: integer("stock_id").notNull().references(() => extGodownStock.id, { onDelete: "cascade" }),
+  code: text("code"),
+  type: text("type"),
+  calCount: real("cal_count"),
+  ends: integer("ends"),
+  ratePerLbs: real("rate_per_lbs"),
+  wtPerMtr: real("wt_per_mtr"),
+  costPerMtr: real("cost_per_mtr"),
+  totLbs: real("tot_lbs"),
+}, (t) => ({
+  ixStock: index("ix_ext_gsc_stock").on(t.stockId),
+}));
+
+export const extGreyTransfer = sqliteTable("ext_grey_transfer", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  vNo: text("v_no").notNull().unique(),
+  lvNo: integer("lv_no"),
+  vDate: text("v_date").notNull(),
+  greyType: text("grey_type").notNull().default("FRS"),
+  partyFrom: text("party_from"),
+  qualityFrom: text("quality_from"),
+  than: integer("than"),
+  meters: real("meters"),
+  stockThan: integer("stock_than"),
+  stockMtr: real("stock_mtr"),
+  partyTo: text("party_to"),
+  qualityTo: text("quality_to"),
+  remarks: text("remarks"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixDate: index("ix_ext_gt_date").on(t.vDate),
+  ixFrom: index("ix_ext_gt_from").on(t.partyFrom),
+  ixTo: index("ix_ext_gt_to").on(t.partyTo),
+}));
+
+export const extKachiParchi = sqliteTable("ext_kachi_parchi", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  vNo: text("v_no").notNull().unique(),
+  lvNo: integer("lv_no"),
+  vDate: text("v_date").notNull(),
+  kpNo: text("kp_no"),
+  type: text("type").notNull().default("STOCK"),
+  purchaseParty: text("purchase_party"),
+  contNo: text("cont_no"),
+  salDate: text("sal_date"),
+  saleParty: text("sale_party"),
+  dspQuality: text("dsp_quality"),
+  qualityPrint: text("quality_print"),
+  than: integer("than"),
+  meter: real("meter"),
+  convRate: real("conv_rate"),
+  greyRate: real("grey_rate"),
+  stockThan: integer("stock_than"),
+  stockMtr: real("stock_mtr"),
+  avg: real("avg"),
+  ratePur: real("rate_pur"),
+  rateSal: real("rate_sal"),
+  elCumiNum: integer("el_cumi_num"),
+  elCumiDen: integer("el_cumi_den"),
+  badCumiNum: integer("bad_cumi_num"),
+  badCumiDen: integer("bad_cumi_den"),
+  elMeter: real("el_meter"),
+  baadMeter: real("baad_meter"),
+  totalElBadMtrs: real("total_el_bad_mtrs"),
+  printingName: text("printing_name"),
+  brokerName: text("broker_name"),
+  remarks: text("remarks"),
+  term: text("term"),
+  imgNo: text("img_no"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_kp_party").on(t.purchaseParty),
+  ixDate: index("ix_ext_kp_date").on(t.vDate),
+}));
+
+export const extKachiParchiLine = sqliteTable("ext_kachi_parchi_line", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  parchiId: integer("parchi_id").notNull().references(() => extKachiParchi.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  than: integer("than"),
+  mtr: real("mtr"),
+}, (t) => ({
+  ixParchi: index("ix_ext_kpl_parchi").on(t.parchiId),
+}));
+
+export const extKachiParchiCount = sqliteTable("ext_kachi_parchi_count", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  parchiId: integer("parchi_id").notNull().references(() => extKachiParchi.id, { onDelete: "cascade" }),
+  code: text("code"),
+  type: text("type"),
+  calCount: real("cal_count"),
+  ends: integer("ends"),
+  ratePerLbs: real("rate_per_lbs"),
+  wtPerMtr: real("wt_per_mtr"),
+  costPerMtr: real("cost_per_mtr"),
+  totLbs: real("tot_lbs"),
+}, (t) => ({
+  ixParchi: index("ix_ext_kpc_parchi").on(t.parchiId),
+}));
+
+export const extPackiParchi = sqliteTable("ext_packi_parchi", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  vNo: text("v_no").notNull().unique(),
+  vDate: text("v_date").notNull(),
+  purchaseParty: text("purchase_party"),
+  kpNo: text("kp_no"),
+  kpAll: text("kp_all"),
+  ppNo: text("pp_no"),
+  ppDate: text("pp_date"),
+  quality: text("quality"),
+  qualityPrint: text("quality_print"),
+  meterRe: real("meter_re"),
+  meterKam: real("meter_kam"),
+  meterNet: real("meter_net"),
+  than: integer("than"),
+  kpMeter: real("kp_meter"),
+  brokerName: text("broker_name"),
+  brokerPercent: real("broker_percent"),
+  meterFineNum: integer("meter_fine_num"),
+  meterFineDen: integer("meter_fine_den"),
+  greyRate: real("grey_rate"),
+  wokc: real("wokc"),
+  wkcBrk: real("wkc_brk"),
+  elCumiNum: integer("el_cumi_num"),
+  elCumiDen: integer("el_cumi_den"),
+  elMeter: real("el_meter"),
+  elMeterMode: text("el_meter_mode"),
+  type: text("type"),
+  kaatPercent: real("kaat_percent"),
+  checkery: real("checkery"),
+  commission: real("commission"),
+  convContNo: text("conv_cont_no"),
+  saleParty: text("sale_party"),
+  convContNoSale: text("conv_cont_no_sale"),
+  commissionSale: real("commission_sale"),
+  greyRateKp: real("grey_rate_kp"),
+  kaatPercentSale: real("kaat_percent_sale"),
+  checkerySale: real("checkery_sale"),
+  brokerNameSale: text("broker_name_sale"),
+  brokerPercentSale: real("broker_percent_sale"),
+  remarks: text("remarks"),
+  salAmtDiff: real("sal_amt_diff"),
+  woc: real("woc"),
+  wc: real("wc"),
+  wck: real("wck"),
+  printingName: text("printing_name"),
+  commissionTotal: real("commission_total"),
+  diff: real("diff"),
+  termSal: text("term_sal"),
+  typeRej: text("type_rej"),
+  imgNo: text("img_no"),
+  pendingFinance: text("pending_finance"),
+  postedDate: text("posted_date"),
+  modifiedDate: text("modified_date"),
+}, (t) => ({
+  ixParty: index("ix_ext_pp_party").on(t.purchaseParty),
+  ixDate: index("ix_ext_pp_date").on(t.vDate),
+  ixKpNo: index("ix_ext_pp_kpno").on(t.kpNo),
+}));
+
+export const extPackiParchiBag = sqliteTable("ext_packi_parchi_bag", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  parchiId: integer("parchi_id").notNull().references(() => extPackiParchi.id, { onDelete: "cascade" }),
+  section: text("section").notNull(),
+  quality: text("quality"),
+  wtPerMeter: real("wt_per_meter"),
+  bags: real("bags"),
+  rate: real("rate"),
+  amount: real("amount"),
+}, (t) => ({
+  ixParchi: index("ix_ext_ppb_parchi").on(t.parchiId),
+}));
+
+export const extPackiParchiCount = sqliteTable("ext_packi_parchi_count", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  parchiId: integer("parchi_id").notNull().references(() => extPackiParchi.id, { onDelete: "cascade" }),
+  code: text("code"),
+  type: text("type"),
+  calCount: real("cal_count"),
+  ends: integer("ends"),
+  ratePerLbs: real("rate_per_lbs"),
+  wtPerMtr: real("wt_per_mtr"),
+  costPerMtr: real("cost_per_mtr"),
+  totLbs: real("tot_lbs"),
+}, (t) => ({
+  ixParchi: index("ix_ext_ppc_parchi").on(t.parchiId),
+}));

@@ -10,7 +10,7 @@ export default async function ProductionPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date: dateParam } = await searchParams;
-  const date = dateParam || "2022-08-15";
+  const date = dateParam || new Date().toISOString().split("T")[0];
 
   const rows = await db
     .select()
@@ -36,7 +36,7 @@ export default async function ProductionPage({
   return (
     <Shell active="production">
       <div className="animate-in">
-        <div className="flex items-baseline justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <div>
             <h1 className="page-title">Daily Production</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -55,7 +55,7 @@ export default async function ProductionPage({
           </form>
         </div>
 
-        <div className="grid grid-cols-6 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-5">
             <div className="stat-value">{formatNum(totalMeters)}</div>
             <div className="stat-label">Total Meters</div>
@@ -82,6 +82,7 @@ export default async function ProductionPage({
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
@@ -132,6 +133,7 @@ export default async function ProductionPage({
             </tfoot>
           )}
         </table>
+        </div>
       </div>
     </Shell>
   );

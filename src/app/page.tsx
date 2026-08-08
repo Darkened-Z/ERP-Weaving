@@ -49,11 +49,11 @@ export default async function Dashboard() {
     { label: "Production", items: [
       { label: "Looms", value: `${runningRow?.count ?? 0}/${loomRow?.count ?? 0}`, unit: "running / total", href: "/weaving/looms" },
       { label: "Output", value: formatNum(prodRow?.total ?? 0), unit: "meters produced", href: "/weaving/production" },
-      { label: "Grey Specs", value: greyRow?.count ?? 0, unit: "construction types", href: "/weaving/grey" },
+      { label: "Grey Specs", value: greyRow?.count ?? 0, unit: "construction types", href: "/define/grey-construction" },
     ]},
     { label: "Supply Chain", items: [
       { label: "Contracts", value: `${activeContractRow?.count ?? 0}/${contractRow?.count ?? 0}`, unit: "active / total", href: "/contracts" },
-      { label: "Yarn", value: yarnRow?.count ?? 0, unit: "yarn counts", href: "/weaving/yarn" },
+      { label: "Yarn", value: yarnRow?.count ?? 0, unit: "yarn counts", href: "/define/yarn-counts" },
       { label: "Beams", value: beamRow?.count ?? 0, unit: "tracked beams", href: "/weaving/beams" },
     ]},
     { label: "Operations", items: [
@@ -66,7 +66,7 @@ export default async function Dashboard() {
   return (
     <Shell active="dash">
       <div className="animate-in">
-        <div className="flex items-baseline justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <div>
             <h1 className="page-title">{company?.name ?? "SK Weaving Mills"}</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -79,7 +79,7 @@ export default async function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-px bg-black border-2 border-black mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border-2 border-black mb-10">
           <div className="bg-white p-5">
             <div className="stat-value">{formatNum(totalDebit)}</div>
             <div className="stat-label">Total Debits</div>
@@ -101,7 +101,7 @@ export default async function Dashboard() {
         {modules.map((group) => (
           <div key={group.label} className="mb-8">
             <div className="section-title">{group.label}</div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {group.items.map((m) => (
                 <Link key={m.href} href={m.href} className="card group transition-colors block">
                   <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--muted)] mb-2">
@@ -120,6 +120,7 @@ export default async function Dashboard() {
 
         <div>
           <div className="section-title">Recent Vouchers</div>
+          <div className="overflow-x-auto">
           <table>
             <thead>
               <tr>
@@ -144,6 +145,7 @@ export default async function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </Shell>

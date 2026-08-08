@@ -28,7 +28,7 @@ export default async function PartsPage() {
   return (
     <Shell active="parts">
       <div className="animate-in">
-        <div className="flex items-baseline justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <h1 className="page-title">
             Parts Catalog{" "}
             <span className="text-[var(--muted)] text-lg font-normal">
@@ -37,7 +37,7 @@ export default async function PartsPage() {
           </h1>
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-8">
           <div className="bg-white p-4">
             <div className="stat-value">{total}</div>
             <div className="stat-label">Total Parts</div>
@@ -55,6 +55,7 @@ export default async function PartsPage() {
         {Object.entries(grouped).map(([category, items]) => (
           <div key={category} className="mb-8">
             <div className="section-title">{category}</div>
+            <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
@@ -96,6 +97,7 @@ export default async function PartsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         ))}
       </div>

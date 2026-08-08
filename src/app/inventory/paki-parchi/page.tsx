@@ -28,7 +28,7 @@ export default async function PakiParchiPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-4 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{rows.length}</div>
             <div className="stat-label">Receipts</div>

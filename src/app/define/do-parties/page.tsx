@@ -1,50 +1,199 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function DoPartiesPage() {
-  const parties = await db.select().from(schema.doPartyChart).orderBy(schema.doPartyChart.code);
+export default async function DoPartiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
+  const params = await searchParams;
+  const parties = await db
+    .select()
+    .from(schema.doPartyChart)
+    .orderBy(schema.doPartyChart.code);
+
+  const selected = params.id
+    ? parties.find((p) => String(p.id) === params.id) ?? null
+    : null;
+
+  async function save(formData: FormData) {
+    "use server";
+    const id = formData.get("id") as string;
+    const code = parseInt(formData.get("code") as string);
+    const name = (formData.get("name") as string)?.trim();
+    if (!code || !name) return;
+    const nameShort = (formData.get("nameShort") as string)?.trim() || null;
+    const cell = (formData.get("cell") as string)?.trim() || null;
+    const phone = (formData.get("phone") as string)?.trim() || null;
+
+    if (id) {
+      await db
+        .update(schema.doPartyChart)
+        .set({ code, name, nameShort, cell, phone })
+        .where(eq(schema.doPartyChart.id, parseInt(id)));
+      revalidatePath("/define/do-parties");
+      redirect(`/define/do-parties?id=${id}`);
+    } else {
+      const [row] = await db
+        .insert(schema.doPartyChart)
+        .values({ code, name, nameShort, cell, phone })
+        .returning();
+      revalidatePath("/define/do-parties");
+      redirect(`/define/do-parties?id=${row.id}`);
+    }
+  }
+
+  async function remove(formData: FormData) {
+    "use server";
+    const id = formData.get("id") as string;
+    if (!id) return;
+    await db
+      .delete(schema.doPartyChart)
+      .where(eq(schema.doPartyChart.id, parseInt(id)));
+    revalidatePath("/define/do-parties");
+    redirect("/define/do-parties");
+  }
 
   return (
     <Shell active="do-parties">
       <div className="animate-in">
-        <div className="mb-8">
-          <h1 className="page-title">DO Party Chart</h1>
-          <p className="text-[13px] text-[var(--muted)] mt-2">
-            {parties.length} DO parties
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
+          <h1 className="page-title">
+            DO Party Chart{" "}
+            <span className="text-[var(--muted)] text-lg font-normal">
+              ({parties.length})
+            </span>
+          </h1>
         </div>
 
-        <div className="grid grid-cols-1 gap-px bg-black border border-black mb-10">
-          <div className="bg-white p-6">
-            <div className="stat-value">{parties.length}</div>
-            <div className="stat-label">DO Parties</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div>
+            <div className="border border-black p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
+                  {selected ? "Edit Record" : "New Record"}
+                </div>
+                <div className="flex gap-2">
+                  <a href="/define/do-parties" className="btn btn-outline btn-sm">New</a>
+                  {selected && (
+                    <form action={remove} className="inline">
+                      <input type="hidden" name="id" value={selected.id} />
+                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                    </form>
+                  )}
+                </div>
+              </div>
+
+              <form action={save}>
+                {selected && <input type="hidden" name="id" value={selected.id} />}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  <div>
+                    <label className="label block mb-1">Code</label>
+                    <input
+                      name="code"
+                      type="number"
+                      className="input-box mono"
+                      defaultValue={selected?.code ?? ""}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Name</label>
+                    <input
+                      name="name"
+                      className="input-box"
+                      defaultValue={selected?.name ?? ""}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Short Name</label>
+                    <input
+                      name="nameShort"
+                      className="input-box"
+                      defaultValue={selected?.nameShort ?? ""}
+                    />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Cell No</label>
+                    <input
+                      name="cell"
+                      className="input-box mono"
+                      defaultValue={selected?.cell ?? ""}
+                    />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Phone</label>
+                    <input
+                      name="phone"
+                      className="input-box mono"
+                      defaultValue={selected?.phone ?? ""}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-6">
+                  <button type="submit" className="btn btn-sm">Save</button>
+                  <a href="/define/do-parties" className="btn btn-outline btn-sm">Cancel</a>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div>
+            <div className="overflow-x-auto" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Short Name</th>
+                    <th>Cell No</th>
+                    <th>Phone</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parties.map((p) => {
+                    const isSelected = selected?.id === p.id;
+                    return (
+                      <tr
+                        key={p.id}
+                        className={isSelected ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
+                      >
+                        <td className="mono text-[13px]">
+                          <a
+                            href={`/define/do-parties?id=${p.id}`}
+                            className="no-underline"
+                            style={{ color: isSelected ? "white" : "inherit" }}
+                          >
+                            {p.code}
+                          </a>
+                        </td>
+                        <td>
+                          <a
+                            href={`/define/do-parties?id=${p.id}`}
+                            className="no-underline"
+                            style={{ color: isSelected ? "white" : "inherit" }}
+                          >
+                            {p.name}
+                          </a>
+                        </td>
+                        <td>{p.nameShort || <span className="text-[var(--muted)]">&mdash;</span>}</td>
+                        <td className="mono text-[13px]">{p.cell || <span className="text-[var(--muted)]">&mdash;</span>}</td>
+                        <td className="mono text-[13px]">{p.phone || <span className="text-[var(--muted)]">&mdash;</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Party Name</th>
-              <th>Short Name</th>
-              <th>Cell No.</th>
-              <th>Phone</th>
-            </tr>
-          </thead>
-          <tbody>
-            {parties.map((p) => (
-              <tr key={p.id}>
-                <td className="mono text-[13px]">{p.code}</td>
-                <td>{p.name}</td>
-                <td>{p.nameShort || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                <td className="mono text-[13px]">{p.cell || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                <td className="mono text-[13px]">{p.phone || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </Shell>
   );

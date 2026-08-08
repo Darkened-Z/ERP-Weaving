@@ -2,6 +2,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
+import { createHmac } from "crypto";
+
+const SECRET = process.env.SESSION_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("SESSION_SECRET must be set in production"); })() : "dev-secret-change-in-production");
+
+function sign(payload: string): string {
+  return createHmac("sha256", SECRET).update(payload).digest("hex");
+}
 
 export type Session = {
   userId: number;
@@ -15,7 +22,10 @@ export async function getSession(): Promise<Session | null> {
   const raw = cookieStore.get("session")?.value;
   if (!raw) return null;
   try {
-    return JSON.parse(Buffer.from(raw, "base64").toString("utf-8"));
+    const [payload, sig] = raw.split(".");
+    if (!payload || !sig) return null;
+    if (sign(payload) !== sig) return null;
+    return JSON.parse(Buffer.from(payload, "base64").toString("utf-8"));
   } catch {
     return null;
   }
@@ -43,10 +53,15 @@ export async function login(loginId: string, password: string): Promise<Session 
     roleName: user.roleName,
   };
 
+  const payload = Buffer.from(JSON.stringify(session)).toString("base64");
+  const signed = `${payload}.${sign(payload)}`;
+
+  const isProd = process.env.NODE_ENV === "production";
   const cookieStore = await cookies();
-  cookieStore.set("session", Buffer.from(JSON.stringify(session)).toString("base64"), {
+  cookieStore.set("session", signed, {
     httpOnly: true,
     sameSite: "lax",
+    secure: isProd,
     path: "/",
     maxAge: 60 * 60 * 24,
   });

@@ -29,7 +29,7 @@ export default async function YarnReceiptPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-4 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{receipts.length}</div>
             <div className="stat-label">Receipts</div>
@@ -48,6 +48,7 @@ export default async function YarnReceiptPage() {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
@@ -84,6 +85,7 @@ export default async function YarnReceiptPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </Shell>
   );

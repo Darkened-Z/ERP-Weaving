@@ -27,7 +27,7 @@ export default async function YarnTransferPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{rows.length}</div>
             <div className="stat-label">Total Transfers</div>
@@ -42,6 +42,7 @@ export default async function YarnTransferPage() {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
@@ -68,6 +69,7 @@ export default async function YarnTransferPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </Shell>
   );

@@ -24,7 +24,7 @@ export default async function LoginPage({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
+    <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm">
         <div className="mb-12">
           <h1 className="text-4xl font-extrabold tracking-tighter">SK MILLS</h1>
@@ -70,11 +70,13 @@ export default async function LoginPage({
           </div>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-[var(--border-light)]">
-          <p className="text-[11px] text-[var(--muted)]">
-            Demo credentials: <span className="mono">admin / admin123</span>
-          </p>
-        </div>
+        {process.env.NODE_ENV !== "production" && (
+          <div className="mt-8 pt-6 border-t border-[var(--border-light)]">
+            <p className="text-[11px] text-[var(--muted)]">
+              Demo credentials: <span className="mono">admin / admin123</span>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,35 +10,44 @@ export default async function DailyActivityPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const params = await searchParams;
-  const date = params.date ?? "2022-08-15";
+  const date = params.date || new Date().toISOString().split("T")[0];
 
   const vouchers = await db
     .select({
       vtype: schema.transMain.vtype,
       vno: schema.transMain.vno,
+      fyCode: schema.transMain.fyCode,
       narration: schema.transMain.narration,
     })
     .from(schema.transMain)
     .where(eq(schema.transMain.vdate, date))
     .orderBy(schema.transMain.vtype, schema.transMain.vno);
 
-  const details = await db
-    .select({
-      vtype: schema.transDetail.vtype,
-      vno: schema.transDetail.vno,
-      totalDebit: sql<number>`sum(debit)`,
-      totalCredit: sql<number>`sum(credit)`,
-    })
-    .from(schema.transDetail)
-    .where(eq(schema.transDetail.fyCode, sql`(SELECT fy_code FROM trans_main WHERE vdate = ${date} LIMIT 1)`))
-    .groupBy(schema.transDetail.vtype, schema.transDetail.vno);
+  const detailRows = vouchers.length > 0
+    ? await db
+        .select({
+          vtype: schema.transDetail.vtype,
+          vno: schema.transDetail.vno,
+          fyCode: schema.transDetail.fyCode,
+          totalDebit: sql<number>`sum(debit)`,
+          totalCredit: sql<number>`sum(credit)`,
+        })
+        .from(schema.transDetail)
+        .where(
+          eq(
+            schema.transDetail.fyCode,
+            vouchers[0].fyCode
+          )
+        )
+        .groupBy(schema.transDetail.fyCode, schema.transDetail.vtype, schema.transDetail.vno)
+    : [];
 
   const detailMap = new Map(
-    details.map((d) => [`${d.vtype}-${d.vno}`, d])
+    detailRows.map((d) => [`${d.fyCode}-${d.vtype}-${d.vno}`, d])
   );
 
   const rows = vouchers.map((v) => {
-    const d = detailMap.get(`${v.vtype}-${v.vno}`);
+    const d = detailMap.get(`${v.fyCode}-${v.vtype}-${v.vno}`);
     return {
       ...v,
       totalDebit: d?.totalDebit ?? 0,
@@ -84,7 +93,7 @@ export default async function DailyActivityPage({
           </button>
         </form>
 
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">
             <div className="stat-value">{rows.length}</div>
             <div className="stat-label">Vouchers</div>
@@ -102,6 +111,7 @@ export default async function DailyActivityPage({
         {[...grouped.entries()].map(([type, items]) => (
           <div key={type} className="mb-10">
             <div className="section-title">{type}</div>
+            <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
@@ -131,6 +141,7 @@ export default async function DailyActivityPage({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         ))}
 
