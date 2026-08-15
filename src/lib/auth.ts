@@ -4,7 +4,11 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { createHmac } from "crypto";
 
-const SECRET = process.env.SESSION_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("SESSION_SECRET must be set in production"); })() : "dev-secret-change-in-production");
+const SECRET =
+  process.env.SESSION_SECRET ||
+  (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build"
+    ? (() => { throw new Error("SESSION_SECRET must be set in production"); })()
+    : "dev-secret-change-in-production");
 
 function sign(payload: string): string {
   return createHmac("sha256", SECRET).update(payload).digest("hex");

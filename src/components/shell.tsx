@@ -45,19 +45,39 @@ const SECTIONS = [
   },
   {
     label: "Inventory",
-    items: [
-      { href: "/contracts", label: "Contracts", key: "contracts" },
-      { href: "/inventory/yarn-receipt", label: "Yarn Receipt / Return", key: "yarn-receipt" },
-      { href: "/inventory/yarn-transfer", label: "Yarn Internal Transfer", key: "yarn-transfer" },
-      { href: "/inventory/beam-issue", label: "Empty Beam Issue", key: "beam-issue" },
-      { href: "/inventory/beam-return", label: "Empty Beam Return", key: "beam-return" },
-      { href: "/inventory/warped-beam", label: "Warped Beam Receiving", key: "warped-beam" },
-      { href: "/inventory/knotting", label: "Knotting / Sarning", key: "knotting" },
-      { href: "/inventory/hours-schedule", label: "Production Hours", key: "hours-schedule" },
-      { href: "/weaving/production", label: "Daily Production", key: "production" },
-      { href: "/inventory/grey-despatch", label: "Grey Cloth Despatch", key: "grey-despatch" },
-      { href: "/inventory/paki-parchi", label: "Grey Paki Parchi", key: "paki-parchi" },
-      { href: "/inventory/reports", label: "Inventory Reports", key: "inv-reports" },
+    subsections: [
+      {
+        label: "Contracts",
+        items: [
+          { href: "/inventory/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "int-c-ypc" },
+          { href: "/inventory/contracts/beam-ext-ws", label: "Beam Contract External Warping/Sizing", key: "int-c-bews" },
+          { href: "/inventory/contracts/grey-conversion", label: "Grey Conversion Contract", key: "int-c-gcc" },
+          { href: "/inventory/contracts/knotting", label: "Knotting/Sarning/Maroori Contract", key: "int-c-knt" },
+          { href: "/inventory/contracts/conversion-calc", label: "Grey Conversion Calculator", key: "int-c-calc" },
+        ],
+      },
+      {
+        label: "Main",
+        items: [
+          { href: "/inventory/yarn-receipt", label: "Yarn Receipt / Return", key: "yarn-receipt" },
+          { href: "/inventory/yarn-transfer", label: "Yarn Internal Transfer", key: "yarn-transfer" },
+          { href: "/inventory/beam-issue", label: "Empty Beam Issue", key: "beam-issue" },
+          { href: "/inventory/beam-return", label: "Empty Beam Return", key: "beam-return" },
+          { href: "/inventory/warped-beam", label: "Warped Beam Receiving", key: "warped-beam" },
+          { href: "/inventory/knotting", label: "Knotting / Sarning / Maroori", key: "knotting" },
+          { href: "/inventory/hours-schedule", label: "Production Hours Schedual", key: "hours-schedule" },
+          { href: "/inventory/daily-production", label: "Daily Production Entries", key: "production" },
+          { href: "/inventory/grey-despatch", label: "Grey Cloth Despatch", key: "grey-despatch" },
+          { href: "/inventory/grey-despatch-dami", label: "Grey Cloth Despatch Dami", key: "grey-despatch-dami" },
+          { href: "/inventory/paki-parchi", label: "Grey Paki Parchi", key: "paki-parchi" },
+        ],
+      },
+      {
+        label: "Reports",
+        items: [
+          { href: "/inventory/reports", label: "Inventory Reports", key: "inv-reports" },
+        ],
+      },
     ],
   },
   {
