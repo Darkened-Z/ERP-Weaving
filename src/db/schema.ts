@@ -601,8 +601,8 @@ export const tickets = sqliteTable("tickets", {
   type: text("type").notNull(),
   priority: text("priority").notNull().default("P3_NORMAL"),
   status: text("status").notNull().default("OPEN"),
-  assigneeUserId: integer("assignee_user_id"),
-  reporterUserId: integer("reporter_user_id").notNull(),
+  assigneeUserId: integer("assignee_user_id").references(() => users.id, { onDelete: "set null" }),
+  reporterUserId: integer("reporter_user_id").notNull().references(() => users.id),
   loomNo: integer("loom_no"),
   contractNo: text("contract_no"),
   partyCode: text("party_code"),
@@ -625,7 +625,7 @@ export const tickets = sqliteTable("tickets", {
 export const ticketComments = sqliteTable("ticket_comments", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ticketId: integer("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
-  authorUserId: integer("author_user_id").notNull(),
+  authorUserId: integer("author_user_id").notNull().references(() => users.id),
   body: text("body").notNull(),
   createdAt: text("created_at").notNull(),
 }, (t) => ({
@@ -635,7 +635,7 @@ export const ticketComments = sqliteTable("ticket_comments", {
 export const ticketHistory = sqliteTable("ticket_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ticketId: integer("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
-  actorUserId: integer("actor_user_id").notNull(),
+  actorUserId: integer("actor_user_id").notNull().references(() => users.id),
   action: text("action").notNull(),
   fromValue: text("from_value"),
   toValue: text("to_value"),
@@ -1282,43 +1282,6 @@ export const extPackiParchiCount = sqliteTable("ext_packi_parchi_count", {
 // ============================================================
 
 // --- CONTRACTS ---
-
-export const intYarnContract = sqliteTable("int_yarn_contract", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  contNo: text("cont_no").notNull().unique(),
-  contDate: text("cont_date").notNull(),
-  expdDate: text("expd_date"),
-  refNo: text("ref_no"),
-  party: text("party"),
-  broker: text("broker"),
-  brokagePerBag: real("brokage_per_bag"),
-  agePercent: real("age_percent"),
-  countCode: text("count_code"),
-  ratio: text("ratio"),
-  brand: text("brand"),
-  qtyBags: real("qty_bags"),
-  qtyLbs: real("qty_lbs"),
-  ratePerLbs: real("rate_per_lbs"),
-  deliveryPlace: text("delivery_place"),
-  remarks: text("remarks"),
-  status: text("status").notNull().default("R"),
-  lContNo: integer("l_cont_no"),
-  postedDate: text("posted_date"),
-  modifiedDate: text("modified_date"),
-}, (t) => ({
-  ixParty: index("ix_int_yc_party").on(t.party),
-  ixStatus: index("ix_int_yc_status").on(t.status),
-  ixDate: index("ix_int_yc_date").on(t.contDate),
-}));
-
-export const intYarnContractDelivery = sqliteTable("int_yarn_contract_delivery", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  contractId: integer("contract_id").notNull().references(() => intYarnContract.id, { onDelete: "cascade" }),
-  deliveryDate: text("delivery_date"),
-  bags: real("bags"),
-}, (t) => ({
-  ixContract: index("ix_int_ycd_contract").on(t.contractId),
-}));
 
 export const intYarnPurchaseContract = sqliteTable("int_yarn_purchase_contract", {
   id: integer("id").primaryKey({ autoIncrement: true }),

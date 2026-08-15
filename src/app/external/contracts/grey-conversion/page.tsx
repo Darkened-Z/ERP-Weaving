@@ -40,7 +40,6 @@ export default async function GreyConvContractPage({
   const findFilter = params.find?.trim();
 
   const parties = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.description);
-  const looms = await db.select().from(schema.looms);
 
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = `%${escFind}%`;

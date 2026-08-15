@@ -14,7 +14,6 @@ export default async function PakiParchiPage() {
     new Intl.NumberFormat("en-PK").format(Math.round(n));
 
   const totalThan = rows.reduce((s, r) => s + (r.qtyThan ?? 0), 0);
-  const totalMtrs = rows.reduce((s, r) => s + (r.qtyMtrs ?? 0), 0);
   const totalNet = rows.reduce((s, r) => s + (r.qtyMtrsNet ?? 0), 0);
   const totalAmt = rows.reduce((s, r) => s + (r.amount ?? 0), 0);
 

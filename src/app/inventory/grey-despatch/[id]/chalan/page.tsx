@@ -20,16 +20,31 @@ export default async function GreyDespatchChalanPage({
 
   const [despatch] = await db
     .select()
-    .from(schema.greyDespatch)
-    .where(eq(schema.greyDespatch.id, despatchId))
+    .from(schema.intGreyDespatch)
+    .where(eq(schema.intGreyDespatch.id, despatchId))
     .limit(1);
 
   if (!despatch) notFound();
 
+  const lines = await db
+    .select()
+    .from(schema.intGreyDespatchLine)
+    .where(eq(schema.intGreyDespatchLine.despatchId, despatchId))
+    .orderBy(schema.intGreyDespatchLine.srNo);
+
   const [company] = await db.select().from(schema.companyProfile).limit(1);
 
   const formatNum = (n: number) =>
-    new Intl.NumberFormat("en-PK").format(Math.round(n));
+    new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
+
+  const totalMeters = lines.reduce((s, l) => s + (l.lengthMtrs ?? 0), 0);
+  const lineThan = (l: (typeof lines)[number]) =>
+    (l.a ?? 0) + (l.b ?? 0) + (l.c ?? 0) + (l.cp ?? l.cpRej ?? 0) + (l.rej ?? 0);
+  const totalThan =
+    despatch.thanQty ?? (lines.length ? lines.reduce((s, l) => s + lineThan(l), 0) : null);
+
+  const partyName = despatch.party ?? despatch.doParty ?? despatch.despatchTo ?? "—";
+  const blankRows = Math.max(0, 3 - lines.length);
 
   return (
     <>
@@ -155,6 +170,10 @@ export default async function GreyDespatchChalanPage({
           font-weight: 700;
           margin-top: 2px;
         }
+        .chalan-page .party-sub {
+          font-size: 10.5pt;
+          margin-top: 4px;
+        }
         .chalan-page table.items {
           width: 100%;
           border-collapse: collapse;
@@ -232,6 +251,10 @@ export default async function GreyDespatchChalanPage({
           letter-spacing: 0.14em;
           text-transform: uppercase;
         }
+        .chalan-page .notes-body {
+          margin-top: 4px;
+          font-size: 10.5pt;
+        }
         .chalan-page .signatures {
           margin-top: 42px;
           display: grid;
@@ -288,102 +311,137 @@ export default async function GreyDespatchChalanPage({
           <div className="meta-grid">
             <div className="meta-row">
               <span className="meta-label">Chalan No</span>
-              <span className="meta-value">{despatch.despatchNo}</span>
+              <span className="meta-value">{despatch.vNo}</span>
             </div>
             <div className="meta-row">
               <span className="meta-label">Date</span>
-              <span className="meta-value">{despatch.despatchDate}</span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">FY Code</span>
-              <span className="meta-value">{despatch.fyCode}</span>
+              <span className="meta-value">{despatch.vDate}</span>
             </div>
             <div className="meta-row">
               <span className="meta-label">Vehicle No</span>
               <span className="meta-value">{despatch.vehicleNo ?? "—"}</span>
             </div>
             <div className="meta-row">
-              <span className="meta-label">Bilty No</span>
-              <span className="meta-value">{despatch.biltyNo ?? "—"}</span>
+              <span className="meta-label">Gate Pass</span>
+              <span className="meta-value">{despatch.gpNo ?? "—"}</span>
             </div>
             <div className="meta-row">
-              <span className="meta-label">Gate Pass</span>
-              <span className="meta-value">{despatch.gatePassNo ?? "—"}</span>
+              <span className="meta-label">GP Date</span>
+              <span className="meta-value">{despatch.gpDate ?? "—"}</span>
+            </div>
+            <div className="meta-row">
+              <span className="meta-label">Supervisor</span>
+              <span className="meta-value">{despatch.supervisor ?? "—"}</span>
             </div>
           </div>
 
           <div className="party-block">
             <div className="party-label">M/s.</div>
-            <div className="party-name">{despatch.party}</div>
+            <div className="party-name">{partyName}</div>
+            {despatch.doParty && despatch.doParty !== partyName ? (
+              <div className="party-sub">DO Party: {despatch.doParty}</div>
+            ) : null}
           </div>
 
           <table className="items">
             <thead>
               <tr>
                 <th style={{ width: "36px" }}>#</th>
-                <th>Description</th>
-                <th className="num" style={{ width: "90px" }}>
-                  Rolls
-                </th>
-                <th className="num" style={{ width: "110px" }}>
-                  Meters
-                </th>
-                <th style={{ width: "150px" }}>Remarks</th>
+                {lines.length > 0 ? (
+                  <>
+                    <th className="num" style={{ width: "70px" }}>
+                      T.Sr#
+                    </th>
+                    <th className="num">A</th>
+                    <th className="num">B</th>
+                    <th className="num">C</th>
+                    <th className="num">CP</th>
+                    <th className="num">Rej</th>
+                    <th className="num" style={{ width: "120px" }}>
+                      Length (Mtrs)
+                    </th>
+                  </>
+                ) : (
+                  <>
+                    <th>Description</th>
+                    <th className="num" style={{ width: "90px" }}>
+                      Than
+                    </th>
+                    <th className="num" style={{ width: "110px" }}>
+                      Meters
+                    </th>
+                    <th style={{ width: "150px" }}>Remarks</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td className="sr">1</td>
-                <td>{despatch.product ?? "Grey Cloth"}</td>
-                <td className="num">
-                  {despatch.rolls != null ? formatNum(despatch.rolls) : "—"}
-                </td>
-                <td className="num">
-                  {despatch.meters != null ? formatNum(despatch.meters) : "—"}
-                </td>
-                <td></td>
-              </tr>
-              <tr className="blank">
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-              </tr>
-              <tr className="blank">
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-              </tr>
-              <tr className="blank">
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-                <td>.</td>
-              </tr>
+              {lines.length > 0 ? (
+                lines.map((l, idx) => (
+                  <tr key={l.id}>
+                    <td className="sr">{idx + 1}</td>
+                    <td className="num">{l.tSrNo ?? "—"}</td>
+                    <td className="num">{l.a != null ? formatNum(l.a) : "—"}</td>
+                    <td className="num">{l.b != null ? formatNum(l.b) : "—"}</td>
+                    <td className="num">{l.c != null ? formatNum(l.c) : "—"}</td>
+                    <td className="num">
+                      {l.cp != null
+                        ? formatNum(l.cp)
+                        : l.cpRej != null && l.rej == null
+                        ? formatNum(l.cpRej)
+                        : "—"}
+                    </td>
+                    <td className="num">
+                      {l.rej != null ? formatNum(l.rej) : "—"}
+                    </td>
+                    <td className="num">
+                      {l.lengthMtrs != null ? formatNum(l.lengthMtrs) : "—"}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="sr">1</td>
+                  <td>{despatch.productBrand ?? despatch.greyCode ?? "Grey Cloth"}</td>
+                  <td className="num">
+                    {despatch.thanQty != null ? formatNum(despatch.thanQty) : "—"}
+                  </td>
+                  <td className="num">—</td>
+                  <td></td>
+                </tr>
+              )}
+              {Array.from({ length: blankRows }).map((_, i) => (
+                <tr className="blank" key={`blank-${i}`}>
+                  {Array.from({ length: lines.length > 0 ? 8 : 5 }).map(
+                    (_, j) => (
+                      <td key={j}>.</td>
+                    )
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
 
           <div className="totals">
             <div className="total-item">
-              <span className="total-label">Total Rolls</span>
+              <span className="total-label">Total Than</span>
               <span className="total-value">
-                {despatch.rolls != null ? formatNum(despatch.rolls) : "—"}
+                {totalThan != null ? formatNum(totalThan) : "—"}
               </span>
             </div>
             <div className="total-item">
               <span className="total-label">Total Meters</span>
               <span className="total-value">
-                {despatch.meters != null ? formatNum(despatch.meters) : "—"}
+                {lines.length > 0 ? formatNum(totalMeters) : "—"}
               </span>
             </div>
           </div>
 
           <div className="notes">
             <div className="notes-label">Remarks</div>
+            {despatch.remarks ? (
+              <div className="notes-body">{despatch.remarks}</div>
+            ) : null}
           </div>
 
           <div className="signatures">

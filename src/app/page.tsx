@@ -19,6 +19,29 @@ export default async function Dashboard() {
   const [runningRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms).where(sql`status = 'RUNNING'`);
   const [contractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts);
   const [activeContractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts).where(sql`status = 'A'`);
+  const oracleContracts = await db.get<{ total: number; running: number }>(sql`
+    select
+      (select count(*) from ext_yarn_pur_contract) +
+      (select count(*) from ext_yarn_sal_contract) +
+      (select count(*) from ext_grey_pur_contract) +
+      (select count(*) from ext_grey_sal_contract) +
+      (select count(*) from ext_grey_conv_contract) +
+      (select count(*) from int_yarn_purchase_contract) +
+      (select count(*) from int_grey_conversion_contract) +
+      (select count(*) from int_beam_contract_ext_ws) +
+      (select count(*) from int_knotting_contract) as total,
+      (select count(*) from ext_yarn_pur_contract where status = 'R') +
+      (select count(*) from ext_yarn_sal_contract where status = 'R') +
+      (select count(*) from ext_grey_pur_contract where status = 'R') +
+      (select count(*) from ext_grey_sal_contract where status = 'R') +
+      (select count(*) from ext_grey_conv_contract where status = 'R') +
+      (select count(*) from int_yarn_purchase_contract where status = 'R') +
+      (select count(*) from int_grey_conversion_contract where status = 'R') +
+      (select count(*) from int_beam_contract_ext_ws where status = 'R') +
+      (select count(*) from int_knotting_contract where status = 'R') as running
+  `);
+  const contractsTotal = (contractRow?.count ?? 0) + (oracleContracts?.total ?? 0);
+  const contractsActive = (activeContractRow?.count ?? 0) + (oracleContracts?.running ?? 0);
   const [greyRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.greyConstruction);
   const [yarnRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.yarnCounts);
   const [partsRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.chartParts);
@@ -52,7 +75,7 @@ export default async function Dashboard() {
       { label: "Grey Specs", value: greyRow?.count ?? 0, unit: "construction types", href: "/define/grey-construction" },
     ]},
     { label: "Supply Chain", items: [
-      { label: "Contracts", value: `${activeContractRow?.count ?? 0}/${contractRow?.count ?? 0}`, unit: "active / total", href: "/contracts" },
+      { label: "Contracts", value: `${contractsActive}/${contractsTotal}`, unit: "active / total", href: "/contracts" },
       { label: "Yarn", value: yarnRow?.count ?? 0, unit: "yarn counts", href: "/define/yarn-counts" },
       { label: "Beams", value: beamRow?.count ?? 0, unit: "tracked beams", href: "/weaving/beams" },
     ]},

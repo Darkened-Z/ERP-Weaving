@@ -14,7 +14,6 @@ export default async function BeamsPage() {
   }));
 
   const total = rows.length;
-  const running = rows.filter((r) => r.statusWrk === "RUNNING").length;
 
   return (
     <Shell active="beams">

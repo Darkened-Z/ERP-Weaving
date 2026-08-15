@@ -46,20 +46,38 @@ export default async function OwnerDashboardPage() {
     .from(schema.looms);
   const totalLooms = totalLoomsRow?.c ?? 0;
 
-  const recentDespatch = await db
+  const legacyDespatch = await db
     .select({
       id: schema.greyDespatch.id,
-      despatchNo: schema.greyDespatch.despatchNo,
-      despatchDate: schema.greyDespatch.despatchDate,
+      date: schema.greyDespatch.despatchDate,
       party: schema.greyDespatch.party,
       meters: schema.greyDespatch.meters,
-      rolls: schema.greyDespatch.rolls,
+      rolls: sql<number | null>`${schema.greyDespatch.rolls}`,
     })
     .from(schema.greyDespatch)
     .orderBy(desc(schema.greyDespatch.despatchDate), desc(schema.greyDespatch.id))
     .limit(5);
 
-  const contractsBreakdown = await db
+  const oracleDespatch = await db
+    .select({
+      id: schema.intGreyDespatch.id,
+      date: schema.intGreyDespatch.vDate,
+      party: schema.intGreyDespatch.party,
+      meters: sql<number | null>`(select sum(l.length_mtrs) from int_grey_despatch_line l where l.despatch_id = ${schema.intGreyDespatch.id})`,
+      rolls: schema.intGreyDespatch.thanQty,
+    })
+    .from(schema.intGreyDespatch)
+    .orderBy(desc(schema.intGreyDespatch.vDate), desc(schema.intGreyDespatch.id))
+    .limit(5);
+
+  const recentDespatch = [
+    ...legacyDespatch.map((d) => ({ ...d, party: d.party ?? "-", src: "GD" })),
+    ...oracleDespatch.map((d) => ({ ...d, party: d.party ?? "-", src: "IGD" })),
+  ]
+    .sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1))
+    .slice(0, 5);
+
+  const legacyBreakdown = await db
     .select({
       type: schema.contracts.type,
       c: sql<number>`count(*)`,
@@ -68,6 +86,32 @@ export default async function OwnerDashboardPage() {
     .from(schema.contracts)
     .where(eq(schema.contracts.status, "A"))
     .groupBy(schema.contracts.type);
+
+  const oracleContracts = await db.get<{ c: number; amount: number }>(sql`
+    select
+      (select count(*) from ext_yarn_pur_contract where status = 'R') +
+      (select count(*) from ext_yarn_sal_contract where status = 'R') +
+      (select count(*) from ext_grey_pur_contract where status = 'R') +
+      (select count(*) from ext_grey_sal_contract where status = 'R') +
+      (select count(*) from ext_grey_conv_contract where status = 'R') +
+      (select count(*) from int_yarn_purchase_contract where status = 'R') +
+      (select count(*) from int_grey_conversion_contract where status = 'R') +
+      (select count(*) from int_beam_contract_ext_ws where status = 'R') +
+      (select count(*) from int_knotting_contract where status = 'R') as c,
+      (select coalesce(sum(amount), 0) from ext_yarn_pur_contract where status = 'R') +
+      (select coalesce(sum(amount), 0) from ext_yarn_sal_contract where status = 'R') +
+      (select coalesce(sum(amount), 0) from ext_grey_pur_contract where status = 'R') +
+      (select coalesce(sum(amount), 0) from ext_grey_sal_contract where status = 'R') +
+      (select coalesce(sum(amount), 0) from int_yarn_purchase_contract where status = 'R') as amount
+  `);
+
+  const oracleCount = oracleContracts?.c ?? 0;
+  const oracleAmount = oracleContracts?.amount ?? 0;
+
+  const contractsBreakdown =
+    oracleCount > 0
+      ? [...legacyBreakdown, { type: "ORACLE", c: oracleCount, amount: oracleAmount }]
+      : legacyBreakdown;
 
   const inventoryValue = await db
     .select({
@@ -149,11 +193,11 @@ export default async function OwnerDashboardPage() {
                     </tr>
                   ) : (
                     recentDespatch.map((d) => (
-                      <tr key={d.id}>
-                        <td className="mono text-[12px]">{d.despatchDate}</td>
+                      <tr key={`${d.src}-${d.id}`}>
+                        <td className="mono text-[12px]">{d.date}</td>
                         <td className="text-[13px]">{d.party}</td>
                         <td className="mono text-right">{fmt(d.meters ?? 0)}</td>
-                        <td className="mono text-right">{d.rolls ?? 0}</td>
+                        <td className="mono text-right">{fmt(d.rolls ?? 0)}</td>
                       </tr>
                     ))
                   )}

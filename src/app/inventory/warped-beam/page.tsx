@@ -91,7 +91,6 @@ export default async function WarpedBeamReceivingPage({
       freightCharges: num(formData.get("freightCharges")),
       totalAmount: num(formData.get("totalAmount")),
       unPostedBills: txt(formData.get("unPostedBills")),
-      delBill: txt(formData.get("delBill")),
       billNo: txt(formData.get("billNo")),
       billDate: txt(formData.get("billDate")),
       billingStatus: txt(formData.get("billingStatus")),

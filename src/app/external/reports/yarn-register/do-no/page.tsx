@@ -1,5 +1,5 @@
 import { db, schema } from "@/db";
-import { and, gte, lte, sql, eq } from "drizzle-orm";
+import { and, sql, eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
 

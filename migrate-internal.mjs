@@ -30,37 +30,6 @@ await client.execute("PRAGMA foreign_keys = ON");
 
 // --- CONTRACTS ---
 
-await run(`CREATE TABLE IF NOT EXISTS int_yarn_contract (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  cont_no TEXT NOT NULL UNIQUE,
-  cont_date TEXT NOT NULL,
-  expd_date TEXT,
-  ref_no TEXT,
-  party TEXT,
-  broker TEXT,
-  brokage_per_bag REAL,
-  age_percent REAL,
-  count_code TEXT,
-  ratio TEXT,
-  brand TEXT,
-  qty_bags REAL,
-  qty_lbs REAL,
-  rate_per_lbs REAL,
-  delivery_place TEXT,
-  remarks TEXT,
-  status TEXT NOT NULL DEFAULT 'R',
-  l_cont_no INTEGER,
-  posted_date TEXT,
-  modified_date TEXT
-)`);
-
-await run(`CREATE TABLE IF NOT EXISTS int_yarn_contract_delivery (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  contract_id INTEGER NOT NULL REFERENCES int_yarn_contract(id) ON DELETE CASCADE,
-  delivery_date TEXT,
-  bags REAL
-)`);
-
 await run(`CREATE TABLE IF NOT EXISTS int_yarn_purchase_contract (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   cont_no TEXT NOT NULL UNIQUE,
@@ -610,10 +579,6 @@ for (const sql of alterDailyProduction) {
 // --- INDEXES ---
 
 const indexes = [
-  "CREATE INDEX IF NOT EXISTS ix_int_yc_party ON int_yarn_contract(party)",
-  "CREATE INDEX IF NOT EXISTS ix_int_yc_status ON int_yarn_contract(status)",
-  "CREATE INDEX IF NOT EXISTS ix_int_yc_date ON int_yarn_contract(cont_date)",
-  "CREATE INDEX IF NOT EXISTS ix_int_ycd_contract ON int_yarn_contract_delivery(contract_id)",
   "CREATE INDEX IF NOT EXISTS ix_int_ypc_party ON int_yarn_purchase_contract(party_code)",
   "CREATE INDEX IF NOT EXISTS ix_int_ypc_status ON int_yarn_purchase_contract(status)",
   "CREATE INDEX IF NOT EXISTS ix_int_ypcd_contract ON int_yarn_purchase_contract_delivery(contract_id)",

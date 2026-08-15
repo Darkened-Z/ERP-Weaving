@@ -15,16 +15,6 @@ const TYPES = [
   "KNOTTING",
 ] as const;
 
-const TYPE_TO_NAV_KEY: Record<string, string> = {
-  ALL: "contracts",
-  YARN_PUR: "yarn-pur",
-  YARN_SALE: "contracts",
-  GREY_SALE: "grey-sale",
-  GREY_CONV: "grey-conv",
-  WARPING: "warping",
-  KNOTTING: "contracts",
-};
-
 export default async function ContractsPage({
   searchParams,
 }: {
@@ -93,10 +83,8 @@ export default async function ContractsPage({
     );
   };
 
-  const navKey = TYPE_TO_NAV_KEY[activeType] ?? "contracts";
-
   return (
-    <Shell active={navKey}>
+    <Shell>
       <div className="animate-in">
         <div className="mb-8">
           <h1 className="page-title">Contracts</h1>

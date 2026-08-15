@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { WhatsAppModal } from "@/components/whatsapp-modal";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -92,6 +93,15 @@ export default async function GreyDespatchPage({
 
   const lineGrid = Array.from({ length: LINE_ROWS }, (_, i) => lineRows[i] ?? null);
   const countGrid = Array.from({ length: COUNT_ROWS }, (_, i) => countRows[i] ?? null);
+
+  const meterSums = await db
+    .select({
+      despatchId: schema.intGreyDespatchLine.despatchId,
+      meters: sql<number>`coalesce(sum(${schema.intGreyDespatchLine.lengthMtrs}), 0)`,
+    })
+    .from(schema.intGreyDespatchLine)
+    .groupBy(schema.intGreyDespatchLine.despatchId);
+  const metersById = new Map(meterSums.map((m) => [m.despatchId, m.meters]));
 
   const upcomingVNo = nextVNoFromRows(despatches, "IGD");
   const upcomingLNo = despatches.length + 1;
@@ -778,6 +788,8 @@ export default async function GreyDespatchPage({
                   <th className="text-right">Amt Tot</th>
                   <th>GP No</th>
                   <th>Vehicle</th>
+                  <th className="text-right">Chalan</th>
+                  <th className="text-right">Notify</th>
                 </tr>
               </thead>
               <tbody>
@@ -797,12 +809,31 @@ export default async function GreyDespatchPage({
                       <td className="text-right mono text-[13px] font-bold"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(d.amtTot)}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.gpNo ?? "-"}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.vehicleNo ?? "-"}</a></td>
+                      <td className="text-right">
+                        <a
+                          href={`/inventory/grey-despatch/${d.id}/chalan`}
+                          target="_blank"
+                          className="btn btn-outline btn-sm"
+                        >
+                          Chalan
+                        </a>
+                      </td>
+                      <td className="text-right">
+                        <WhatsAppModal
+                          party={d.party ?? d.doParty ?? "-"}
+                          despatchNo={d.vNo}
+                          date={d.vDate}
+                          vehicleNo={d.vehicleNo}
+                          meters={metersById.get(d.id) ?? null}
+                          rolls={d.thanQty}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
                 {despatches.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="text-center text-[13px] text-[var(--muted)] py-6">
+                    <td colSpan={12} className="text-center text-[13px] text-[var(--muted)] py-6">
                       No despatches. Click <b>New</b> to create one.
                     </td>
                   </tr>

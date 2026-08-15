@@ -14,12 +14,6 @@ const num = (v: FormDataEntryValue | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-
 const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;

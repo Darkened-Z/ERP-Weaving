@@ -543,10 +543,6 @@ async function seed() {
       remarks TEXT,
       status TEXT NOT NULL DEFAULT 'A'
     );
-
-    CREATE UNIQUE INDEX idx_trans_main_key ON trans_main(fy_code, vtype, vno);
-    CREATE INDEX idx_trans_detail_key ON trans_detail(fy_code, vtype, vno);
-    CREATE INDEX idx_trans_detail_acc ON trans_detail(acc_code);
   `);
 
   // Users — 16 roles from original system

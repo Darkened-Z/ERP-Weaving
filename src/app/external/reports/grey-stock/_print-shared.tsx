@@ -10,17 +10,17 @@ export const fmt2 = (n: number) =>
     maximumFractionDigits: 2,
   }).format(n);
 
-export function escLike(s: string): string {
+function escLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => "\\" + m);
 }
 
-export function sixMonthsAgo(): string {
+function sixMonthsAgo(): string {
   const d = new Date();
   d.setMonth(d.getMonth() - 6);
   return d.toISOString().slice(0, 10);
 }
 
-export function todayIso(): string {
+function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 

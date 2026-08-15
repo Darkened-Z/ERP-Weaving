@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { sql, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
