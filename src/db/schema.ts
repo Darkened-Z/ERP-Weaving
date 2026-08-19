@@ -84,6 +84,13 @@ export const transMain = sqliteTable("trans_main", {
   term: text("term"),
   utCode: integer("ut_code"),
   narration: text("narration"),
+  vtime: text("vtime"),
+  dueDate: text("due_date"),
+  expDate: text("exp_date"),
+  trnType: text("trn_type"),
+  img: text("img"),
+  splitting: text("splitting"),
+  balanceAmount: real("balance_amount"),
 }, (t) => ({
   uxFyVtypeVno: uniqueIndex("ux_trans_main_fy_vtype_vno").on(t.fyCode, t.vtype, t.vno),
 }));
@@ -102,6 +109,8 @@ export const transDetail = sqliteTable("trans_detail", {
   credit: real("credit").notNull().default(0),
   chqNo: text("chq_no"),
   chqDate: text("chq_date"),
+  yarnCount: text("yarn_count"),
+  contNo: text("cont_no"),
 }, (t) => ({
   uxFyVtypeVnoSrno: uniqueIndex("ux_trans_detail_fy_vtype_vno_srno").on(t.fyCode, t.vtype, t.vno, t.srno),
   ixAccCode: index("ix_trans_detail_acc").on(t.accCode),
