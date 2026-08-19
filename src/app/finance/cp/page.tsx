@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { RowClearButton } from "@/components/row-clear-button";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const VTYPE = "CP";
 const BASE = "/finance/cp";
-const TITLE = "CASH PAYMENTS (WVG)";
+const TITLE = "CASH\u00A0\u00A0PAYMENTS (WVG)";
 const LINE_ROWS = 12;
 const TRN_TYPES = ["CASH", "CHEQUE", "ONLINE", "ADJUSTMENT"];
 
@@ -600,18 +601,20 @@ export default async function CashPaymentPage({
                 Payment Lines — each line is DEBITED; Cash A/C is credited for the total
               </div>
               <div className="overflow-x-auto border border-black">
-                <table className="mono text-[12px]" style={{ minWidth: 1320 }}>
+                <table className="mono text-[12px]" style={{ minWidth: 1400 }}>
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}>Sr#</th>
                       <th style={{ width: 130 }}>Short Name</th>
                       <th style={{ width: 220 }}>Tittle</th>
+                      <th style={{ width: 34 }}>OK</th>
                       <th style={{ width: 110 }}>Yarn Count</th>
                       <th style={{ width: 200 }}>Narr</th>
                       <th style={{ width: 110 }}>Chq.No</th>
                       <th style={{ width: 130 }}>Chq.Date</th>
                       <th style={{ width: 120 }}>Dr</th>
                       <th style={{ width: 180 }}>Cost Center / Jobs (F9)</th>
+                      <th style={{ width: 40 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -637,6 +640,7 @@ export default async function CashPaymentPage({
                               defaultValue={acc?.description ?? ""}
                             />
                           </td>
+                          <td className="text-center text-[10px] text-[var(--muted)]">OK</td>
                           <td>
                             <input
                               name="line_yarn"
@@ -682,6 +686,9 @@ export default async function CashPaymentPage({
                               className="input-box mono text-[12px]"
                               defaultValue={l && l.ccCode != null ? ccCodeToDesc.get(l.ccCode) ?? "" : ""}
                             />
+                          </td>
+                          <td className="text-center">
+                            <RowClearButton />
                           </td>
                         </tr>
                       );

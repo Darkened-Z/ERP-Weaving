@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { RowClearButton } from "@/components/row-clear-button";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const VTYPE = "PR";
 const BASE = "/finance/pr";
-const TITLE = "PETTY CASH RECEIPTS (WVG)";
+const TITLE = "PETTY\u00A0\u00A0CASH RECEIPTS (WVG)";
 const AMOUNT_LABEL = "Cr";
 const IS_RECEIPT = true;
 const GRID_ROWS = 18;
@@ -516,7 +517,7 @@ export default async function PettyCashReceiptPage({
                   Line Items
                 </div>
                 <div className="overflow-x-auto border border-black">
-                  <table className="mono text-[12px]" style={{ minWidth: 1100 }}>
+                  <table className="mono text-[12px]" style={{ minWidth: 1150 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
@@ -527,6 +528,7 @@ export default async function PettyCashReceiptPage({
                         <th style={{ width: 110 }}>Chq.No</th>
                         <th style={{ width: 130 }}>Chq.Date</th>
                         <th style={{ width: 120 }}>{AMOUNT_LABEL}</th>
+                        <th style={{ width: 40 }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -584,6 +586,9 @@ export default async function PettyCashReceiptPage({
                                   l ? (IS_RECEIPT ? l.credit ?? "" : l.debit ?? "") : ""
                                 }
                               />
+                            </td>
+                            <td className="text-center">
+                              <RowClearButton />
                             </td>
                           </tr>
                         );

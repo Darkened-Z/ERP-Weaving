@@ -475,6 +475,9 @@ export default async function BankPaymentPage({
             </div>
             <div className="flex gap-2 no-print flex-wrap">
               <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
+                Clear-OK
+              </a>
+              <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
                 New
               </a>
               {showForm && (
@@ -602,7 +605,7 @@ export default async function BankPaymentPage({
                   />
                 </div>
                 <div className="lg:col-span-3">
-                  <label className="label block mb-1">Exp Date</label>
+                  <label className="label block mb-1">Exp.Date</label>
                   <input
                     name="exp_date"
                     type="date"
@@ -641,12 +644,13 @@ export default async function BankPaymentPage({
                   Line Items
                 </div>
                 <div className="overflow-x-auto border border-black">
-                  <table className="mono text-[12px]" style={{ minWidth: 1300 }}>
+                  <table className="mono text-[12px]" style={{ minWidth: 1440 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 150 }}>Short Name</th>
                         <th style={{ width: 220 }}>Tittle</th>
+                        <th style={{ width: 34 }}>OK</th>
                         <th style={{ width: 150 }}>Yarn Count - (List - F9)</th>
                         <th style={{ width: 240 }}>Narr</th>
                         <th style={{ width: 120 }}>Chq.No</th>
@@ -682,6 +686,7 @@ export default async function BankPaymentPage({
                                 tabIndex={-1}
                               />
                             </td>
+                            <td className="text-center text-[10px] text-[var(--muted)]">OK</td>
                             <td>
                               <input
                                 name="line_yarn"

@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { RowClearButton } from "@/components/row-clear-button";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const VTYPE = "CR";
 const BASE = "/finance/cr";
-const TITLE = "CASH RECEIPTS (WVG)";
+const TITLE = "CASH\u00A0\u00A0RECEIPTS (WVG)";
 const LINE_ROWS = 12;
 const TRN_TYPES = ["CASH", "CHEQUE", "ONLINE", "ADJUSTMENT"];
 
@@ -102,6 +103,7 @@ async function saveVoucher(formData: FormData) {
 
   const shorts = formData.getAll("line_short") as string[];
   const titles = formData.getAll("line_title") as string[];
+  const yarns = formData.getAll("line_yarn") as string[];
   const narrs = formData.getAll("line_narr") as string[];
   const chqNos = formData.getAll("line_chq_no") as string[];
   const chqDates = formData.getAll("line_chq_date") as string[];
@@ -115,6 +117,7 @@ async function saveVoucher(formData: FormData) {
     chqNo: string | null;
     chqDate: string | null;
     ccCode: number | null;
+    yarn: string | null;
     amount: number;
   };
   const rows: Row[] = [];
@@ -135,6 +138,7 @@ async function saveVoucher(formData: FormData) {
       chqNo: (chqNos[i] ?? "").trim() || null,
       chqDate: (chqDates[i] ?? "").trim() || null,
       ccCode: resolveCc(ccIn[i] ?? null),
+      yarn: (yarns[i] ?? "").trim() || null,
       amount,
     });
   }
@@ -161,6 +165,7 @@ async function saveVoucher(formData: FormData) {
         credit: r.amount,
         chqNo: r.chqNo,
         chqDate: r.chqDate,
+        yarnCount: r.yarn,
       });
     }
     details.push({
@@ -608,17 +613,20 @@ export default async function CashReceiptPage({
                 Receipt Lines — each line is CREDITED; Cash A/C is debited for the total
               </div>
               <div className="overflow-x-auto border border-black">
-                <table className="mono text-[12px]" style={{ minWidth: 1200 }}>
+                <table className="mono text-[12px]" style={{ minWidth: 1400 }}>
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}>Sr#</th>
                       <th style={{ width: 130 }}>Short Name</th>
                       <th style={{ width: 240 }}>Tittle</th>
+                      <th style={{ width: 34 }}>OK</th>
+                      <th style={{ width: 110 }}>Yarn Count</th>
                       <th style={{ width: 220 }}>Narr</th>
                       <th style={{ width: 110 }}>Chq.No</th>
                       <th style={{ width: 130 }}>Chq.Date</th>
                       <th style={{ width: 120 }}>Cr</th>
                       <th style={{ width: 180 }}>Cost Center - F9</th>
+                      <th style={{ width: 40 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -642,6 +650,14 @@ export default async function CashReceiptPage({
                               list="coa-title"
                               className="input-box mono text-[12px]"
                               defaultValue={acc?.description ?? ""}
+                            />
+                          </td>
+                          <td className="text-center text-[10px] text-[var(--muted)]">OK</td>
+                          <td>
+                            <input
+                              name="line_yarn"
+                              className="input-box mono text-[12px]"
+                              defaultValue={l?.yarnCount ?? ""}
                             />
                           </td>
                           <td>
@@ -682,6 +698,9 @@ export default async function CashReceiptPage({
                               className="input-box mono text-[12px]"
                               defaultValue={l && l.ccCode != null ? ccCodeToDesc.get(l.ccCode) ?? "" : ""}
                             />
+                          </td>
+                          <td className="text-center">
+                            <RowClearButton />
                           </td>
                         </tr>
                       );

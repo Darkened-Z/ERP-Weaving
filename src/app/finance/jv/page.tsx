@@ -669,7 +669,7 @@ export default async function JournalVoucherPage({
                   />
                 </div>
                 <div className="lg:col-span-2">
-                  <label className="label block mb-1">Exp. Date</label>
+                  <label className="label block mb-1">Exp.Date</label>
                   <input
                     name="exp_date"
                     type="date"
@@ -678,7 +678,7 @@ export default async function JournalVoucherPage({
                   />
                 </div>
                 <div className="lg:col-span-2">
-                  <label className="label block mb-1">Trn. Type</label>
+                  <label className="label block mb-1">Trn.Type</label>
                   <select
                     name="trn_type"
                     className="input-box mono"
