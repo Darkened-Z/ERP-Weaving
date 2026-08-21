@@ -1,4 +1,5 @@
 import { createClient } from "@libsql/client";
+import bcrypt from "bcryptjs";
 import path from "path";
 
 const isLocal = !process.env.TURSO_DATABASE_URL;
@@ -561,7 +562,8 @@ async function seed() {
     ["it", "it123", "Waqas Ali", "IT"],
   ];
   for (const [login, pw, name, role] of users) {
-    await client.execute({ sql: "INSERT INTO users (login, password, full_name, role_name) VALUES (?, ?, ?, ?)", args: [login, pw, name, role] });
+    const hash = await bcrypt.hash(pw, 10);
+    await client.execute({ sql: "INSERT INTO users (login, password, full_name, role_name) VALUES (?, ?, ?, ?)", args: [login, hash, name, role] });
   }
 
   // Company

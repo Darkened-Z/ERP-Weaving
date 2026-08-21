@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { createHmac } from "crypto";
+import bcrypt from "bcryptjs";
 
 const SECRET =
   process.env.SESSION_SECRET ||
@@ -48,7 +49,13 @@ export async function login(loginId: string, password: string): Promise<Session 
     .where(eq(schema.users.login, loginId));
 
   const user = rows[0];
-  if (!user || user.password !== password || user.status !== "A") return null;
+  if (!user || user.status !== "A") return null;
+
+  // bcrypt hashes start with "$2"; plaintext rows are legacy pre-migration credentials.
+  const ok = user.password.startsWith("$2")
+    ? await bcrypt.compare(password, user.password)
+    : user.password === password;
+  if (!ok) return null;
 
   const session: Session = {
     userId: user.id,
