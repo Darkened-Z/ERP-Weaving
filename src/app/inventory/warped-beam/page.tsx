@@ -451,7 +451,7 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 80 }}>Beam Set No</th>
                         <th style={{ width: 70 }}>Beam No</th>
                         <th style={{ width: 80 }}>Beam Status</th>
-                        <th style={{ width: 90 }} className="text-right">Beam Loaded (Hnk)</th>
+                        <th style={{ width: 90 }} className="text-right">Beam Loadd (HR)</th>
                         <th style={{ width: 80 }} className="text-right">Empty (KG)</th>
                         <th style={{ width: 90 }} className="text-right">Yarn Bms Net LBS</th>
                         <th style={{ width: 90 }} className="text-right">Beam Length</th>

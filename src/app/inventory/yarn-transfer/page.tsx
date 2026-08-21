@@ -374,7 +374,7 @@ export default async function YarnTransferPage({
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">COUNT-DETAIL</div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Stock Bags</label>
+                        <label className="label block mb-1">Stock Bage</label>
                         <input name="stockBag" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.stockBag ?? ""} readOnly />
                       </div>
                       <div className="md:col-span-6">

@@ -185,7 +185,11 @@ export default async function ProductsPage({
                     />
                   </div>
                 </div>
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-3 items-center">
+                  <div className="flex items-center gap-1 mr-2">
+                    <label className="label">Pasward</label>
+                    <input type="password" name="pswd" className="input-box mono w-28" tabIndex={-1} />
+                  </div>
                   <button type="submit" className="btn btn-sm">Save</button>
                 </div>
               </form>

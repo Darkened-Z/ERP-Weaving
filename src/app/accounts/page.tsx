@@ -376,6 +376,10 @@ export default async function ChartOfAccountPage({
                 </div>
 
                 <div className="flex gap-2 mt-6">
+                  <div className="flex items-center gap-1 mr-2">
+                    <label className="label">Password</label>
+                    <input type="password" name="pswd" className="input-box mono w-28" tabIndex={-1} />
+                  </div>
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href="/accounts" className="btn btn-outline btn-sm">Cancel</a>
                 </div>

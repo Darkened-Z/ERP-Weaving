@@ -45,6 +45,9 @@ input, select, textarea {
 
 input:focus, select:focus, textarea:focus {
   border-color: var(--fg) !important;
+  box-shadow: 0 0 0 2px var(--fg);
+  position: relative;
+  z-index: 2;
 }
 
 table {
@@ -157,6 +160,9 @@ tr:hover td {
 
 .input-box:focus {
   border-color: var(--fg) !important;
+  box-shadow: 0 0 0 2px var(--fg);
+  position: relative;
+  z-index: 2;
 }
 
 .card {

@@ -138,6 +138,7 @@ export default async function DailyProductionPage({
     const aCountArr = formData.getAll("aCount") as string[];
     const bCountArr = formData.getAll("bCount") as string[];
     const cCountArr = formData.getAll("cCount") as string[];
+    const cpCountArr = formData.getAll("cpCount") as string[];
     const ppcCountArr = formData.getAll("ppcCount") as string[];
     const totalCountArr = formData.getAll("totalCount") as string[];
     const rejCountArr = formData.getAll("rejCount") as string[];
@@ -160,6 +161,7 @@ export default async function DailyProductionPage({
       aCount: number | null;
       bCount: number | null;
       cCount: number | null;
+      cpCount: number | null;
       ppcCount: number | null;
       totalCount: number | null;
       rejCount: number | null;
@@ -181,6 +183,7 @@ export default async function DailyProductionPage({
       const aC = num(aCountArr[i]);
       const bC = num(bCountArr[i]);
       const cC = num(cCountArr[i]);
+      const cpC = num(cpCountArr[i]);
       const ppc = num(ppcCountArr[i]);
       const tc = num(totalCountArr[i]);
       const rc = num(rejCountArr[i]);
@@ -195,7 +198,7 @@ export default async function DailyProductionPage({
       const rm = num(rcvdMtrArr[i]);
       const df = num(diffArr[i]);
       const sh = num(shrinkageArr[i]);
-      if (!setHash && !mmThanSrNo && aC == null && bC == null && cC == null && ppc == null && tc == null && rc == null && !bsn && !kt && !kd && !bs && ww == null && !bn && en == null && bl == null && rm == null && df == null && sh == null) continue;
+      if (!setHash && !mmThanSrNo && aC == null && bC == null && cC == null && cpC == null && ppc == null && tc == null && rc == null && !bsn && !kt && !kd && !bs && ww == null && !bn && en == null && bl == null && rm == null && df == null && sh == null) continue;
       validSets.push({
         srNo: validSets.length + 1,
         setHash: setHash || null,
@@ -203,6 +206,7 @@ export default async function DailyProductionPage({
         aCount: aC,
         bCount: bC,
         cCount: cC,
+        cpCount: cpC,
         ppcCount: ppc,
         totalCount: tc,
         rejCount: rc,
@@ -504,6 +508,7 @@ export default async function DailyProductionPage({
                         <th className="text-right">A</th>
                         <th className="text-right">B</th>
                         <th className="text-right">C</th>
+                        <th className="text-right">CP</th>
                         <th className="text-right">PPC</th>
                         <th className="text-right">Total</th>
                         <th className="text-right">Rej</th>
@@ -511,7 +516,7 @@ export default async function DailyProductionPage({
                         <th>Type</th>
                         <th>K/S/M Date</th>
                         <th>Beam Status</th>
-                        <th className="text-right">Waste WT KG</th>
+                        <th className="text-right">Wast WT KG</th>
                         <th>Beam #</th>
                         <th className="text-right">Ends</th>
                         <th className="text-right">B.Length</th>
@@ -531,6 +536,7 @@ export default async function DailyProductionPage({
                             <td><input name="aCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.aCount ?? ""} /></td>
                             <td><input name="bCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bCount ?? ""} /></td>
                             <td><input name="cCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cCount ?? ""} /></td>
+                            <td><input name="cpCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cpCount ?? ""} /></td>
                             <td><input name="ppcCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.ppcCount ?? ""} /></td>
                             <td><input name="totalCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.totalCount ?? ""} /></td>
                             <td><input name="rejCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.rejCount ?? ""} /></td>

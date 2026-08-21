@@ -139,9 +139,11 @@ export default async function GreyDespatchPage({
       amtTot: num(formData.get("amt_tot")),
       ftWeave: txt(formData.get("ft_weave")),
       designNo: txt(formData.get("design_no")),
+      lbMtr: num(formData.get("lb_mtr")),
       encCode: txt(formData.get("enc_code")),
       supervisor: txt(formData.get("supervisor")),
       vehicleNo: txt(formData.get("vehicle_no")),
+      driver: txt(formData.get("driver")),
       transAdda: txt(formData.get("trans_adda")),
       silvagQuality: txt(formData.get("silvag_quality")),
       brkgPerMtr: num(formData.get("brkg_per_mtr")),
@@ -228,6 +230,7 @@ export default async function GreyDespatchPage({
           const ends = intVal(formData.get(`uc_ends_${i}`));
           const ratePerLbs = num(formData.get(`uc_rate_${i}`));
           const wtPerMtr = num(formData.get(`uc_wt_${i}`));
+          const costPerMtr = num(formData.get(`uc_cost_${i}`));
           const totLbs = num(formData.get(`uc_tot_${i}`));
           const amount = num(formData.get(`uc_amt_${i}`));
           const typeRej = txt(formData.get(`uc_typerej_${i}`));
@@ -239,6 +242,7 @@ export default async function GreyDespatchPage({
             ends !== null ||
             ratePerLbs !== null ||
             wtPerMtr !== null ||
+            costPerMtr !== null ||
             totLbs !== null ||
             amount !== null ||
             typeRej
@@ -252,6 +256,7 @@ export default async function GreyDespatchPage({
               ends,
               ratePerLbs,
               wtPerMtr,
+              costPerMtr,
               totLbs,
               amount,
               typeRej,
@@ -620,8 +625,12 @@ export default async function GreyDespatchPage({
                 <input name="design_no" className="input-box mono text-[12px]" defaultValue={formItem?.designNo ?? ""} />
               </div>
               <div className="col-span-2">
+                <label className="label block mb-1">L.B/Mtr</label>
+                <input name="lb_mtr" type="number" step="any" className="input-box mono text-[12px] text-right" defaultValue={formItem?.lbMtr ?? ""} />
+              </div>
+              <div className="col-span-2">
                 <label className="label block mb-1">
-                  Enc Code <span className="text-[9px] text-[var(--muted)]">F9</span>
+                  Brk Code <span className="text-[9px] text-[var(--muted)]">F9</span>
                 </label>
                 <input name="enc_code" className="input-box mono text-[12px]" defaultValue={formItem?.encCode ?? ""} />
               </div>
@@ -632,6 +641,10 @@ export default async function GreyDespatchPage({
               <div className="col-span-2">
                 <label className="label block mb-1">Vehicle No</label>
                 <input name="vehicle_no" className="input-box mono text-[12px]" defaultValue={formItem?.vehicleNo ?? ""} />
+              </div>
+              <div className="col-span-2">
+                <label className="label block mb-1">Driver</label>
+                <input name="driver" className="input-box mono text-[12px]" defaultValue={formItem?.driver ?? ""} />
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Trans Adda</label>
@@ -701,6 +714,7 @@ export default async function GreyDespatchPage({
                       <th className="px-1 py-1 border-b border-black text-right">Ends</th>
                       <th className="px-1 py-1 border-b border-black text-right">Rate Per Lbs</th>
                       <th className="px-1 py-1 border-b border-black text-right">WT Per Mtr</th>
+                      <th className="px-1 py-1 border-b border-black text-right">Cost Per Mtr</th>
                       <th className="px-1 py-1 border-b border-black text-right">TOT Lbs</th>
                       <th className="px-1 py-1 border-b border-black text-right">Amount</th>
                       <th className="px-1 py-1 border-b border-black">Type Rej</th>
@@ -731,6 +745,9 @@ export default async function GreyDespatchPage({
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                             <input name={`uc_wt_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.wtPerMtr ?? ""} />
+                          </td>
+                          <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                            <input name={`uc_cost_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.costPerMtr ?? ""} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                             <input name={`uc_tot_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.totLbs ?? ""} />

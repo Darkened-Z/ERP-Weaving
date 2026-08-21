@@ -172,6 +172,10 @@ export default async function LoomsPage({
               </div>
             </div>
             <div className="flex gap-2 mt-4">
+              <div className="flex items-center gap-1 mr-2">
+                <label className="label">Password</label>
+                <input type="password" name="pswd" className="input-box mono w-28" tabIndex={-1} />
+              </div>
               <button type="submit" className="btn btn-sm">Save</button>
               <a href="/weaving/looms" className="btn btn-outline btn-sm">Exit</a>
             </div>

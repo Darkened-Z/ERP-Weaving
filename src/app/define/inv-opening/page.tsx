@@ -85,12 +85,22 @@ export default async function InventoryOpeningPage({
     const grayConstruction = (formData.get("gray_construction") as string)?.trim() || null;
     const blend = (formData.get("blend") as string)?.trim() || null;
     const productName = itemType === "GREY" ? description : null;
+    const than = num(formData.get("than"));
+    const rejection = num(formData.get("rejection"));
+    const netMtr = num(formData.get("net_mtr"));
+    const setNo = (formData.get("set_no") as string)?.trim() || null;
+    const beamSetNo = (formData.get("beam_set_no") as string)?.trim() || null;
+    const beamNo = (formData.get("beam_no") as string)?.trim() || null;
+    const wrpCont = (formData.get("wrp_cont") as string)?.trim() || null;
+    const warpSizingParty = (formData.get("warp_sizing_party") as string)?.trim() || null;
+    const convParty = (formData.get("conv_party") as string)?.trim() || null;
 
     const data = {
       itemType, itemCode, description, fyCode, openingQty, openingRate, openingAmount,
       unit, location, entryDate, doDate, status, voucherNo, purContNo, opnParty, convContNo,
       ratio, qtyWarp, qtyWeft, qtyBags, brand, remarks, grayWidth, weave, designNo,
       loomType, lvNo, grayConstruction, blend, productName,
+      than, rejection, netMtr, setNo, beamSetNo, beamNo, wrpCont, warpSizingParty, convParty,
     };
 
     const targetTab = TAB_MAP[itemType] || "yarn";
@@ -464,6 +474,20 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
+                <div className="grid grid-cols-4 gap-x-4">
+                  <div>
+                    <label className="label block mb-1">Than</label>
+                    <input name="than" type="number" step="any" className="input-box mono" defaultValue={formItem?.than ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Rejection</label>
+                    <input name="rejection" type="number" step="any" className="input-box mono" defaultValue={formItem?.rejection ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Net Mtr.</label>
+                    <input name="net_mtr" type="number" step="any" className="input-box mono" defaultValue={formItem?.netMtr ?? ""} />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -530,6 +554,32 @@ export default async function InventoryOpeningPage({
                       <option value="R">Reject</option>
                       <option value="C">Closed</option>
                     </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-x-4">
+                  <div>
+                    <label className="label block mb-1">Set #</label>
+                    <input name="set_no" className="input-box mono" defaultValue={formItem?.setNo ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Beam Set #</label>
+                    <input name="beam_set_no" className="input-box mono" defaultValue={formItem?.beamSetNo ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Beam #</label>
+                    <input name="beam_no" className="input-box mono" defaultValue={formItem?.beamNo ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Wrp Cont</label>
+                    <input name="wrp_cont" className="input-box mono" defaultValue={formItem?.wrpCont ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Warp/Sizing Party</label>
+                    <input name="warp_sizing_party" className="input-box mono" defaultValue={formItem?.warpSizingParty ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Conversion Party</label>
+                    <input name="conv_party" className="input-box mono" defaultValue={formItem?.convParty ?? ""} />
                   </div>
                 </div>
               </div>

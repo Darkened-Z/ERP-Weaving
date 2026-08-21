@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SidebarNav } from "./sidebar-nav";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
+import { FormKeyboard } from "./form-keyboard";
 
 type NavItem = { href: string; label: string; key: string };
 type SubSection = { label: string; items: NavItem[] };
@@ -97,6 +98,7 @@ export function ShellLayout({
       </main>
 
       <CommandPalette sections={sections} />
+      <FormKeyboard />
     </div>
   );
 }

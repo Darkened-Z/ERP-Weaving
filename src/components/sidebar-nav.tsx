@@ -44,7 +44,17 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
     return initial;
   });
 
-  function toggle(id: string) {
+  // Top-level sections are an accordion: opening one closes the others (and their sub-tabs).
+  function toggleSection(label: string) {
+    setOpen((prev) =>
+      prev.includes(label)
+        ? prev.filter((l) => l !== label && !l.startsWith(`${label}::`))
+        : [label]
+    );
+  }
+
+  // Sub-tabs toggle independently within their (single) open section.
+  function toggleSub(id: string) {
     setOpen((prev) =>
       prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]
     );
@@ -82,7 +92,7 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
         return (
           <div key={si} className="border-b border-white/5">
             <button
-              onClick={() => toggle(section.label!)}
+              onClick={() => toggleSection(section.label!)}
               className={`w-full flex items-center justify-between px-5 py-3 text-left transition-colors cursor-pointer ${
                 hasActive
                   ? "text-white"
@@ -121,7 +131,7 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                   return (
                     <div key={sub_i} className="border-t border-white/5">
                       <button
-                        onClick={() => toggle(subId)}
+                        onClick={() => toggleSub(subId)}
                         className={`w-full flex items-center justify-between pl-8 pr-5 py-2 text-left transition-colors cursor-pointer ${
                           subHasActive
                             ? "text-white"

@@ -135,7 +135,7 @@ export default async function GreyConstructionPage({
       <div className="animate-in">
         <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <h1 className="page-title">
-            Grey Construction (WVG){" "}
+            GRAY CONSTRUCTION (WVG){" "}
             <span className="text-[var(--muted)] text-lg font-normal">({rows.length})</span>
           </h1>
           <ExcelExportButton
@@ -143,7 +143,7 @@ export default async function GreyConstructionPage({
             columns={[
               { key: "code", label: "Code" },
               { key: "description", label: "Description" },
-              { key: "reed", label: "Reed" },
+              { key: "reed", label: "Read" },
               { key: "pick", label: "Pick" },
               { key: "warpCount", label: "Warp Count" },
               { key: "weftCount", label: "Weft Count" },
@@ -166,7 +166,7 @@ export default async function GreyConstructionPage({
 
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
-                <label className="label block mb-1">Reed</label>
+                <label className="label block mb-1">Read</label>
                 <input name="reed" type="number" step="any" className="input-box mono" defaultValue={formItem?.reed ?? ""} />
               </div>
               <div>
@@ -228,6 +228,10 @@ export default async function GreyConstructionPage({
             </div>
 
             <div className="flex gap-2">
+              <div className="flex items-center gap-1 mr-2">
+                <label className="label">Pasward</label>
+                <input type="password" name="pswd" className="input-box mono w-28" tabIndex={-1} />
+              </div>
               <button type="submit" className="btn btn-sm">Save</button>
               <a href="/define/grey-construction?adding=1" className="btn btn-outline btn-sm">New</a>
               <a href="/define/grey-construction" className="btn btn-outline btn-sm">Exit</a>
@@ -245,7 +249,7 @@ export default async function GreyConstructionPage({
           <table>
             <thead>
               <tr>
-                <th>Reed</th>
+                <th>Read</th>
                 <th>Pick</th>
                 <th>Warp</th>
                 <th>Gray Code</th>

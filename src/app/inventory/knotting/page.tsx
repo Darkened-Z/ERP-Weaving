@@ -65,6 +65,8 @@ async function saveKnotting(formData: FormData) {
   };
 
   const beamSetNos = formData.getAll("beam_set_no") as string[];
+  const setNos = formData.getAll("set_no") as string[];
+  const beamNos = formData.getAll("beam_no") as string[];
   const noOfBeams = formData.getAll("no_of_beam_hash") as string[];
   const beamLengths = formData.getAll("beam_length") as string[];
   const issueDates = formData.getAll("issue_date") as string[];
@@ -92,6 +94,8 @@ async function saveKnotting(formData: FormData) {
   );
   for (let i = 0; i < rowCount; i++) {
     const beamSetNo = (beamSetNos[i] ?? "").trim();
+    const setNo = (setNos[i] ?? "").trim();
+    const beamNo = (beamNos[i] ?? "").trim();
     const noOfBeam = intVal(noOfBeams[i]);
     const beamLength = num(beamLengths[i]);
     const issueDate = (issueDates[i] ?? "").trim();
@@ -113,6 +117,8 @@ async function saveKnotting(formData: FormData) {
 
     const hasAny =
       beamSetNo ||
+      setNo ||
+      beamNo ||
       noOfBeam !== null ||
       beamLength !== null ||
       issueDate ||
@@ -137,7 +143,9 @@ async function saveKnotting(formData: FormData) {
       knottingId: 0,
       srNo: lines.length + 1,
       beamSetNo: beamSetNo || null,
+      setNo: setNo || null,
       noOfBeamHash: noOfBeam,
+      beamNo: beamNo || null,
       beamLength,
       issueDate: issueDate || null,
       kDate: kDate || null,
@@ -602,14 +610,16 @@ export default async function KnottingPage({
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 110 }}>Beam Set No</th>
-                        <th style={{ width: 80 }}>No Of Beam#</th>
+                        <th style={{ width: 90 }}>Set No</th>
+                        <th style={{ width: 80 }}>No Of Width</th>
+                        <th style={{ width: 70 }}>Beam #</th>
                         <th style={{ width: 90 }}>Beam Length</th>
                         <th style={{ width: 130 }}>Issue Date</th>
                         <th style={{ width: 130 }}>K-Date</th>
                         <th style={{ width: 60 }}>Shd#</th>
                         <th style={{ width: 60 }}>Lm#</th>
                         <th style={{ width: 90 }}>Ext Shr.Age</th>
-                        <th style={{ width: 90 }}>Dsp Type</th>
+                        <th style={{ width: 90 }}>Dsg Type</th>
                         <th style={{ width: 110 }}>Kn.Cont.No</th>
                         <th style={{ width: 70 }}>Ends</th>
                         <th style={{ width: 90 }}>Amount</th>
@@ -640,11 +650,25 @@ export default async function KnottingPage({
                             </td>
                             <td>
                               <input
+                                name="set_no"
+                                className="input-box mono text-[12px]"
+                                defaultValue={l?.setNo ?? ""}
+                              />
+                            </td>
+                            <td>
+                              <input
                                 name="no_of_beam_hash"
                                 type="number"
                                 step="1"
                                 className="input-box mono text-[12px]"
                                 defaultValue={l?.noOfBeamHash ?? ""}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                name="beam_no"
+                                className="input-box mono text-[12px]"
+                                defaultValue={l?.beamNo ?? ""}
                               />
                             </td>
                             <td>

@@ -11,7 +11,7 @@ const LOCAL_PATH = process.env.LOCAL_DB_PATH || path.resolve(__dirname, "data.db
 
 if (!TURSO_URL || !TURSO_TOKEN) {
   console.error("ERR: Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN before running this script.");
-  console.error("     TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... node push-to-turso.mjs");
+  console.error("     node --env-file=.env.turso push-to-turso.mjs");
   process.exit(1);
 }
 
@@ -32,9 +32,37 @@ const { rows: tableRows } = await local.execute(
 );
 const tables = tableRows.map((r) => r.name);
 
-console.log(`Found ${tables.length} tables to sync.`);
+// Build FK dependency graph so we insert parents before children (and drop in reverse).
+const deps = new Map(tables.map((t) => [t, new Set()]));
+for (const t of tables) {
+  const { rows } = await local.execute(`PRAGMA foreign_key_list(${t})`);
+  for (const r of rows) {
+    if (r.table !== t && deps.has(r.table)) deps.get(t).add(r.table); // ignore self-refs
+  }
+}
 
-for (const table of tables) {
+// Topological sort (parents first). Falls back to append order if a cycle is hit.
+const ordered = [];
+const seen = new Set();
+const visit = (t, stack = new Set()) => {
+  if (seen.has(t) || stack.has(t)) return;
+  stack.add(t);
+  for (const p of deps.get(t)) visit(p, stack);
+  stack.delete(t);
+  seen.add(t);
+  ordered.push(t);
+};
+for (const t of tables) visit(t);
+
+console.log(`Found ${tables.length} tables. Syncing parents-first.`);
+
+// Drop children-first (reverse of insert order) with FK off, so recreation is clean.
+await remote.execute("PRAGMA foreign_keys=OFF");
+for (const table of [...ordered].reverse()) {
+  await remote.execute(`DROP TABLE IF EXISTS ${table}`);
+}
+
+for (const table of ordered) {
   process.stdout.write(`  ${table} ... `);
 
   const createRow = await local.execute({
@@ -48,7 +76,7 @@ for (const table of tables) {
   }
 
   try {
-    await remote.execute(`DROP TABLE IF EXISTS ${table}`);
+    await remote.execute("PRAGMA foreign_keys=OFF");
     await remote.execute(createSql);
   } catch (e) {
     console.log("ERR schema:", e.message);
@@ -95,6 +123,16 @@ for (const r of indexRows) {
   }
 }
 
+// Verify row counts match local.
+console.log("\nVerifying...");
+let mismatches = 0;
+for (const table of tables) {
+  const l = (await local.execute(`SELECT COUNT(*) n FROM ${table}`)).rows[0].n;
+  let rc;
+  try { rc = (await remote.execute(`SELECT COUNT(*) n FROM ${table}`)).rows[0].n; } catch { rc = "MISSING"; }
+  if (l !== rc) { console.log(`  MISMATCH ${table}: local ${l} vs remote ${rc}`); mismatches++; }
+}
+console.log(mismatches === 0 ? "✓ FULLY IN SYNC" : `✗ ${mismatches} mismatch(es) — re-run`);
 console.log("\nDone. Verify at:", TURSO_URL.replace("libsql://", "https://"));
 local.close();
 remote.close();

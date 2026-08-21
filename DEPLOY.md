@@ -4,30 +4,23 @@ Ships to Vercel + Turso. All commands run from `app/`.
 
 ## 1 · Turso database
 
-Install CLI (once):
-```bash
-curl -sSfL https://get.tur.so/install.sh | bash
-```
+No CLI needed (the Turso CLI has no native Windows build). Use the dashboard:
 
-Create DB:
-```bash
-turso auth login
-turso db create sk-mills
-turso db show sk-mills --url          # → TURSO_DATABASE_URL
-turso db tokens create sk-mills       # → TURSO_AUTH_TOKEN
-```
+1. [app.turso.tech](https://app.turso.tech) → **Create Database** → name `sk-mills`, pick a region near users (we use `aws-ap-south-1`, matching Vercel `bom1`).
+2. Copy the **URL** (`libsql://sk-mills-<org>.turso.io`) → `TURSO_DATABASE_URL`.
+3. **Create Token** → `TURSO_AUTH_TOKEN`.
+
+Put both in `app/.env.turso` (gitignored). Keep them out of `.env.local` so local `npm run dev` stays on the local SQLite file.
 
 ## 2 · Push local data to Turso
 
 ```bash
-export TURSO_DATABASE_URL=libsql://sk-mills-<org>.turso.io
-export TURSO_AUTH_TOKEN=<token>
-node push-to-turso.mjs
+node --env-file=.env.turso push-to-turso.mjs
 ```
 
-Script drops-and-recreates every table (schema + data + indexes). Takes ~30–60s for our seeded DB.
+Topologically drops and recreates every table parents-first (schema + data + indexes), then verifies row counts match local. Re-push-safe. Takes ~1–2 min against a Mumbai DB.
 
-Verify at `https://<db-url>` in the Turso dashboard.
+Live DB: `libsql://sk-mills-darkened-z.aws-ap-south-1.turso.io`
 
 ## 3 · Vercel project
 
