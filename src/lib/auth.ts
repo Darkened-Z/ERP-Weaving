@@ -50,12 +50,7 @@ export async function login(loginId: string, password: string): Promise<Session 
 
   const user = rows[0];
   if (!user || user.status !== "A") return null;
-
-  // bcrypt hashes start with "$2"; plaintext rows are legacy pre-migration credentials.
-  const ok = user.password.startsWith("$2")
-    ? await bcrypt.compare(password, user.password)
-    : user.password === password;
-  if (!ok) return null;
+  if (!(await bcrypt.compare(password, user.password))) return null;
 
   const session: Session = {
     userId: user.id,
