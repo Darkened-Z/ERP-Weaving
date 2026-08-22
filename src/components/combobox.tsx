@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Opt = { value: string; label: string };
+type Opt = { value: string; label: string; desc?: string };
 
 /**
  * Editable searchable dropdown. Submits `value` via a hidden field named `name`,
@@ -17,13 +17,20 @@ export function Combobox({
   defaultValue = "",
   placeholder,
   className = "input-box mono",
+  descTargetId,
 }: {
   name: string;
   options: Opt[];
   defaultValue?: string;
   placeholder?: string;
   className?: string;
+  descTargetId?: string;
 }) {
+  const mirrorDesc = (v: string) => {
+    if (!descTargetId) return;
+    const t = document.getElementById(descTargetId) as HTMLInputElement | null;
+    if (t) t.value = options.find((o) => o.value === v)?.desc ?? "";
+  };
   const [val, setVal] = useState(defaultValue); // submitted value
   const [typed, setTyped] = useState<string | null>(null); // non-null while the user is editing
   const [open, setOpen] = useState(false);
@@ -50,10 +57,16 @@ export function Combobox({
     setSel(0);
   }, [typed, open]);
 
+  useEffect(() => {
+    mirrorDesc(val);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const choose = (o: Opt) => {
     setVal(o.value);
     setTyped(null);
     setOpen(false);
+    mirrorDesc(o.value);
     inputRef.current?.focus();
   };
 

@@ -21,6 +21,13 @@ export default async function GreyConstructionPage({
   const params = await searchParams;
   const rows = await db.select().from(schema.greyConstruction).orderBy(schema.greyConstruction.code);
   const yarnBlends = await db.select().from(schema.yarnBlends);
+  const nextCode = "GC-" + String(
+    rows.reduce((max, r) => {
+      const m = (r.code ?? "").match(/(\d+)$/);
+      const n = m ? parseInt(m[1], 10) : 0;
+      return n > max ? n : max;
+    }, 0) + 1
+  ).padStart(3, "0");
 
   const selected = params.id
     ? rows.find((r) => r.id === parseInt(params.id!, 10)) ?? null
@@ -113,8 +120,6 @@ export default async function GreyConstructionPage({
     { name: "warp_4", label: "RPT 4", value: formItem?.warp4 },
     { name: "warp_5", label: "RPT 5", value: formItem?.warp5 },
     { name: "warp_6", label: "RPT 6", value: formItem?.warp6 },
-    { name: "warp_7", label: "RPT 7", value: formItem?.warp7 },
-    { name: "warp_8", label: "RPT 8", value: formItem?.warp8 },
   ];
 
   const weftFields = [
@@ -124,8 +129,6 @@ export default async function GreyConstructionPage({
     { name: "weft_4", label: "RPT 4", value: formItem?.weft4 },
     { name: "weft_5", label: "RPT 5", value: formItem?.weft5 },
     { name: "weft_6", label: "RPT 6", value: formItem?.weft6 },
-    { name: "weft_7", label: "RPT 7", value: formItem?.weft7 },
-    { name: "weft_8", label: "RPT 8", value: formItem?.weft8 },
   ];
 
   const rowHref = (id: number) => `/define/grey-construction?id=${id}`;
@@ -175,7 +178,7 @@ export default async function GreyConstructionPage({
               </div>
               <div>
                 <label className="label block mb-1">Gray Code</label>
-                <input name="gray_code" className="input-box mono" defaultValue={formItem?.code ?? ""} required />
+                <input name="gray_code" className="input-box mono bg-gray-100" value={formItem?.code ?? nextCode} readOnly tabIndex={-1} />
               </div>
             </div>
 

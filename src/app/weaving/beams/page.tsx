@@ -1,12 +1,46 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function BeamsPage() {
+export default async function BeamsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
+  const params = await searchParams;
   const rows = await db.select().from(schema.beams).orderBy(schema.beams.beamNo);
   const beamStatuses = await db.select().from(schema.beamStatuses);
+  const selected = params.id ? rows.find((r) => r.id === parseInt(params.id!)) ?? null : null;
+
+  async function saveBeam(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string);
+    if (!id) return;
+    const txt = (k: string) => ((formData.get(k) as string) || "").trim() || null;
+    const int = (k: string) => {
+      const n = parseInt(formData.get(k) as string);
+      return Number.isFinite(n) ? n : null;
+    };
+    await db.update(schema.beams).set({
+      type: txt("type") ?? "WARP",
+      partyTrade: txt("party_trade"),
+      codeConv: txt("code_conv"),
+      statusLoc: txt("status_loc"),
+      szgParty: txt("szg_party"),
+      shed: txt("shed"),
+      loomNo: int("loom_no"),
+      beamSetNo: txt("beam_set_no"),
+      setStatus: txt("set_status"),
+      statusWrk: txt("status_wrk") ?? "RUNNING",
+    }).where(eq(schema.beams.id, id));
+    revalidatePath("/weaving/beams");
+    redirect(`/weaving/beams?id=${id}`);
+  }
 
   const exportRows = rows.map((r) => ({
     ...r,
@@ -98,6 +132,46 @@ export default async function BeamsPage() {
           </div>
         </div>
 
+        {selected && (
+          <div className="border border-black p-6 mb-6">
+            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4 flex justify-between items-center">
+              <span>Edit Beam — {selected.beamNo}</span>
+              <a href="/weaving/beams" className="text-[var(--muted)] hover:text-[var(--fg)] no-underline">✕ Close</a>
+            </div>
+            <form action={saveBeam}>
+              <input type="hidden" name="id" value={selected.id} />
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue={selected.type ?? ""} /></div>
+                <div><label className="label block mb-1">Party/Trade</label><input name="party_trade" className="input-box" defaultValue={selected.partyTrade ?? ""} /></div>
+                <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" defaultValue={selected.codeConv ?? ""} /></div>
+                <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" defaultValue={selected.statusLoc ?? ""} /></div>
+                <div><label className="label block mb-1">Szg Party</label><input name="szg_party" className="input-box" defaultValue={selected.szgParty ?? ""} /></div>
+                <div><label className="label block mb-1">Shed</label><input name="shed" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
+                <div><label className="label block mb-1">Loom No</label><input name="loom_no" type="number" className="input-box mono" defaultValue={selected.loomNo ?? ""} /></div>
+                <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" defaultValue={selected.beamSetNo ?? ""} /></div>
+                <div><label className="label block mb-1">Set Status</label><input name="set_status" className="input-box" defaultValue={selected.setStatus ?? ""} /></div>
+                <div>
+                  <label className="label block mb-1">Status Wrk</label>
+                  <select name="status_wrk" className="input-box" defaultValue={selected.statusWrk ?? "RUNNING"}>
+                    <option value="RUNNING">RUNNING</option>
+                    <option value="STOP">STOP</option>
+                    {beamStatuses.filter((s) => !["RUNNING", "STOP"].includes(s.status)).map((s) => (
+                      <option key={s.id} value={s.status}>{s.status}</option>
+                    ))}
+                    {selected.statusWrk && !["RUNNING", "STOP"].includes(selected.statusWrk) && !beamStatuses.some((s) => s.status === selected.statusWrk) && (
+                      <option value={selected.statusWrk}>{selected.statusWrk}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button type="submit" className="btn btn-sm">Save</button>
+                <a href="/weaving/beams" className="btn btn-outline btn-sm">Cancel</a>
+              </div>
+            </form>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table>
             <thead>
@@ -119,9 +193,13 @@ export default async function BeamsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td className="mono font-bold">{r.beamNo}</td>
+              {rows.map((r) => {
+                const isSel = r.id === selected?.id;
+                return (
+                <tr key={r.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
+                  <td className="mono font-bold">
+                    <a href={`/weaving/beams?id=${r.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>{r.beamNo}</a>
+                  </td>
                   <td className="text-[13px]">{r.partyTrade ?? "-"}</td>
                   <td className="mono text-[13px]">{r.codeConv ?? "-"}</td>
                   <td className="text-[13px]">{r.statusLoc ?? "-"}</td>
@@ -147,7 +225,8 @@ export default async function BeamsPage() {
                     </span>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

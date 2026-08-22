@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -24,6 +25,13 @@ export default async function PartyCountsPage({
 
   const partyDesc = formItem ? accounts.find((a) => a.code === formItem.partyCode)?.description ?? "" : "";
   const countDesc = formItem ? yarnCounts.find((y) => y.id === formItem.countCode)?.description ?? "" : "";
+
+  // Detail/postable accounts (level >= 3) — the client's F9 party lookup lists accounts at
+  // levels 3-4 (their real chart goes to 5). Top-2 category levels are excluded.
+  const partyOpts = accounts
+    .filter((a) => a.level >= 3)
+    .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}`, desc: a.description }));
+  const countOpts = yarnCounts.map((y) => ({ value: String(y.id), label: `${y.countCode} — ${y.description}`, desc: y.description }));
 
   async function savePartyCount(formData: FormData) {
     "use server";
@@ -102,19 +110,19 @@ export default async function PartyCountsPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Party</label>
-                    <input name="party" className="input-box mono" defaultValue={formItem?.partyCode ?? ""} required placeholder="Party Code (F9)" />
+                    <Combobox name="party" options={partyOpts} defaultValue={formItem?.partyCode ?? ""} placeholder="Party Code (F9)" descTargetId="pc-party-desc" />
                   </div>
                   <div>
                     <label className="label block mb-1">PartyDesc</label>
-                    <input className="input-box bg-gray-50" value={partyDesc} readOnly tabIndex={-1} />
+                    <input id="pc-party-desc" className="input-box bg-gray-50" defaultValue={partyDesc} readOnly tabIndex={-1} />
                   </div>
                   <div>
                     <label className="label block mb-1">Count</label>
-                    <input name="count" type="number" className="input-box mono" defaultValue={formItem?.countCode ?? ""} required placeholder="Count Code (F9)" />
+                    <Combobox name="count" options={countOpts} defaultValue={String(formItem?.countCode ?? "")} placeholder="Count Code (F9)" descTargetId="pc-count-desc" />
                   </div>
                   <div>
                     <label className="label block mb-1">Count Desc</label>
-                    <input className="input-box bg-gray-50" value={countDesc} readOnly tabIndex={-1} />
+                    <input id="pc-count-desc" className="input-box bg-gray-50" defaultValue={countDesc} readOnly tabIndex={-1} />
                   </div>
                   <div>
                     <label className="label block mb-1">Group</label>

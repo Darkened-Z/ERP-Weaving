@@ -14,6 +14,12 @@ export default async function YarnCountsPage({
   const params = await searchParams;
   const counts = await db.select().from(schema.yarnCounts).orderBy(schema.yarnCounts.countCode);
   const blends = await db.select().from(schema.yarnBlends);
+  const nextCode = String(
+    counts.reduce((max, c) => {
+      const n = parseInt(c.countCode ?? "", 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0) + 1
+  );
 
   const selected = params.id
     ? counts.find((c) => c.id === parseInt(params.id!)) ?? null
@@ -25,19 +31,24 @@ export default async function YarnCountsPage({
     "use server";
     const id = formData.get("id") as string;
     const description = (formData.get("desc") as string)?.trim();
-    const countCode = (formData.get("code") as string)?.trim();
-    if (!description || !countCode) return;
+    if (!description) return;
 
     const type = (formData.get("blend") as string)?.trim() || "COTTON";
     const status = (formData.get("status") as string)?.trim() || "A";
 
     if (id) {
+      // code is locked — never changed after creation
       await db.update(schema.yarnCounts).set({
-        countCode, description, type, status,
+        description, type, status,
       }).where(eq(schema.yarnCounts.id, parseInt(id)));
     } else {
+      const existing = await db.select({ code: schema.yarnCounts.countCode }).from(schema.yarnCounts);
+      const nextN = existing.reduce((m, r) => {
+        const n = parseInt(r.code ?? "", 10);
+        return Number.isFinite(n) && n > m ? n : m;
+      }, 0) + 1;
       await db.insert(schema.yarnCounts).values({
-        countCode, description, type, status,
+        countCode: String(nextN), description, type, status,
       });
     }
     revalidatePath("/define/yarn-counts");
@@ -85,8 +96,12 @@ export default async function YarnCountsPage({
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
                 <div className="grid grid-cols-1 gap-y-3">
                   <div>
-                    <label className="label block mb-1">Desc</label>
-                    <input name="desc" className="input-box" defaultValue={formItem?.description ?? ""} required />
+                    <label className="label block mb-1">Code</label>
+                    <input name="code" className="input-box mono bg-gray-100" value={formItem?.countCode ?? nextCode} readOnly tabIndex={-1} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Code Desc</label>
+                    <input name="desc" className="input-box" defaultValue={formItem?.description ?? ""} required autoFocus />
                   </div>
                   <div>
                     <label className="label block mb-1">Blend</label>
@@ -98,16 +113,16 @@ export default async function YarnCountsPage({
                     </select>
                   </div>
                   <div>
-                    <label className="label block mb-1">Code</label>
-                    <input name="code" className="input-box mono" defaultValue={formItem?.countCode ?? ""} required />
-                  </div>
-                  <div>
                     <label className="label block mb-1">Status</label>
-                    <select name="status" className="input-box" defaultValue={formItem?.status ?? "R"}>
-                      <option value="R">R</option>
+                    <select name="status" className="input-box" defaultValue={formItem?.status ?? "A"}>
                       <option value="A">A</option>
+                      <option value="R">R</option>
                       <option value="C">C</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Password</label>
+                    <input type="password" name="pswd" className="input-box mono" tabIndex={-1} />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">

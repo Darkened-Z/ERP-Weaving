@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function LoomsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const looms = await db.select().from(schema.looms).orderBy(schema.looms.loomNo);
@@ -38,16 +38,22 @@ export default async function LoomsPage({
     const make = (formData.get("lm_allocation") as string)?.trim() || null;
     const statusWrk = (formData.get("status_wrk") as string)?.trim() || null;
 
-    if (id) {
-      await db.update(schema.looms).set({
-        shed, loomNo, type, rpm, actRpm, weaverName, group, status, make, statusWrk,
-      }).where(eq(schema.looms.id, parseInt(id)));
-    } else {
-      await db.insert(schema.looms).values({
-        shed, loomNo, type, rpm, actRpm, weaverName, group, status, make, statusWrk,
-      });
+    let ok = true;
+    try {
+      if (id) {
+        await db.update(schema.looms).set({
+          shed, loomNo, type, rpm, actRpm, weaverName, group, status, make, statusWrk,
+        }).where(eq(schema.looms.id, parseInt(id)));
+      } else {
+        await db.insert(schema.looms).values({
+          shed, loomNo, type, rpm, actRpm, weaverName, group, status, make, statusWrk,
+        });
+      }
+    } catch {
+      ok = false; // e.g. loom number already used — surface a message instead of a 500
     }
     revalidatePath("/weaving/looms");
+    if (!ok) redirect("/weaving/looms?error=dup" + (id ? `&id=${id}` : ""));
     redirect("/weaving/looms?id=" + (id || ""));
   }
 
@@ -114,9 +120,18 @@ export default async function LoomsPage({
             </div>
           </div>
 
+          {params.error === "dup" && (
+            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold">
+              That loom number is already in use — pick a different one. The Code stays fixed.
+            </div>
+          )}
           <form action={saveLoom}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-3">
+              <div>
+                <label className="label block mb-1">Code</label>
+                <input className="input-box mono bg-gray-100" value={formItem ? String(formItem.id) : "auto"} readOnly tabIndex={-1} />
+              </div>
               <div>
                 <label className="label block mb-1">Shed No</label>
                 <input name="shed" className="input-box" defaultValue={formItem?.shed ?? ""} required />
@@ -191,6 +206,7 @@ export default async function LoomsPage({
           <table>
             <thead>
               <tr>
+                <th>Code</th>
                 <th>Loom</th>
                 <th>Shed No</th>
                 <th>Loom Desc</th>
@@ -209,9 +225,10 @@ export default async function LoomsPage({
                   <tr key={l.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                     <td className="mono font-bold">
                       <a href={`/weaving/looms?id=${l.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
-                        {l.loomNo}
+                        {l.id}
                       </a>
                     </td>
+                    <td className="mono text-[13px]">{l.loomNo}</td>
                     <td className="mono text-[13px]">{l.shed}</td>
                     <td>{l.type}</td>
                     <td className="text-right mono">{l.rpm ?? "-"}</td>
