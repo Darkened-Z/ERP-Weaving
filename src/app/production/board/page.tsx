@@ -32,7 +32,7 @@ function nf(n: number) {
 }
 
 function effTone(eff: number | null): { bar: string; track: string; text: string } {
-  if (eff == null) return { bar: "bg-neutral-700", track: "bg-neutral-800", text: "text-neutral-500" };
+  if (eff == null) return { bar: "bg-neutral-700", track: "bg-neutral-800", text: "text-neutral-400" };
   if (eff >= 90) return { bar: "bg-green-500", track: "bg-green-900/30", text: "text-green-400" };
   if (eff >= 75) return { bar: "bg-yellow-500", track: "bg-yellow-900/30", text: "text-yellow-400" };
   return { bar: "bg-red-500", track: "bg-red-900/30", text: "text-red-400" };
@@ -172,7 +172,7 @@ export default async function ProductionBoardPage() {
   for (const k of shedKeys) bySheds.get(k)!.sort((a, b) => a.loomNo - b.loomNo);
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono">
+    <div className="min-h-screen bg-[#0c1220] text-white font-mono">
       <AutoRefresh intervalMs={30000} />
       <FullscreenToggle />
 
@@ -190,7 +190,7 @@ export default async function ProductionBoardPage() {
               </div>
             )}
             <div className="text-sm uppercase tracking-[0.2em] text-neutral-400"><Timestamp /></div>
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.15em] text-neutral-500">
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.15em] text-neutral-400">
               <span className="w-2 h-2 bg-green-500 animate-pulse"></span>
               Refreshes every 30s
             </div>
@@ -241,7 +241,7 @@ export default async function ProductionBoardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-[70px_1fr_140px_120px_100px_80px_1fr] gap-x-4 gap-y-0 text-[11px] uppercase tracking-[0.15em] text-neutral-500 pb-2 border-b border-neutral-800">
+              <div className="grid grid-cols-[70px_1fr_140px_120px_100px_80px_1fr] gap-x-4 gap-y-0 text-[11px] uppercase tracking-[0.15em] text-neutral-400 pb-2 border-b border-neutral-800">
                 <div>Loom</div>
                 <div>Weaver</div>
                 <div>Contract</div>
@@ -281,11 +281,11 @@ export default async function ProductionBoardPage() {
         })}
 
         {shedKeys.length === 0 && (
-          <div className="py-24 text-center text-neutral-600 uppercase tracking-[0.3em]">No production data</div>
+          <div className="py-24 text-center text-neutral-400 uppercase tracking-[0.3em]">No production data</div>
         )}
       </div>
 
-      <div className="px-8 py-4 border-t border-neutral-900 flex justify-between items-center text-[11px] uppercase tracking-[0.2em] text-neutral-600">
+      <div className="px-8 py-4 border-t border-neutral-900 flex justify-between items-center text-[11px] uppercase tracking-[0.2em] text-neutral-400">
         <div>Picks {nf(totalPicks)} · Grade C {nf(totalGradeC)}</div>
         <div>Board · {useDate}</div>
       </div>
@@ -316,10 +316,10 @@ function StatCard({
       : "text-white";
   const valueSize = size === "lg" ? "text-6xl" : "text-4xl";
   return (
-    <div className="bg-black p-6">
-      <div className="text-[11px] uppercase tracking-[0.25em] text-neutral-500 mb-3">{label}</div>
+    <div className="bg-[#0c1220] p-6">
+      <div className="text-[11px] uppercase tracking-[0.25em] text-neutral-400 mb-3">{label}</div>
       <div className={`${valueSize} font-bold tabular-nums ${toneCls}`}>{value}</div>
-      {sub && <div className="text-[11px] uppercase tracking-[0.15em] text-neutral-500 mt-2">{sub}</div>}
+      {sub && <div className="text-[11px] uppercase tracking-[0.15em] text-neutral-400 mt-2">{sub}</div>}
     </div>
   );
 }
