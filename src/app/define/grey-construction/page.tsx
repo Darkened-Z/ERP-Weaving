@@ -1,5 +1,6 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -21,6 +22,8 @@ export default async function GreyConstructionPage({
   const params = await searchParams;
   const rows = await db.select().from(schema.greyConstruction).orderBy(schema.greyConstruction.code);
   const yarnBlends = await db.select().from(schema.yarnBlends);
+  const yarnCounts = await db.select().from(schema.yarnCounts).orderBy(schema.yarnCounts.countCode);
+  const countOpts = yarnCounts.map((y) => ({ value: y.countCode, label: `${y.countCode} — ${y.description}` }));
   const nextCode = "GC-" + String(
     rows.reduce((max, r) => {
       const m = (r.code ?? "").match(/(\d+)$/);
@@ -189,7 +192,7 @@ export default async function GreyConstructionPage({
                   {warpFields.map((f) => (
                     <div key={f.name} className="flex items-center gap-2">
                       <label className="label w-12 text-[11px] shrink-0">{f.label}</label>
-                      <input name={f.name} className="input-box mono text-[13px] flex-1" defaultValue={f.value ?? ""} />
+                      <div className="flex-1"><Combobox name={f.name} options={countOpts} defaultValue={f.value ?? ""} className="input-box mono text-[13px]" /></div>
                     </div>
                   ))}
                 </div>
@@ -200,7 +203,7 @@ export default async function GreyConstructionPage({
                   {weftFields.map((f) => (
                     <div key={f.name} className="flex items-center gap-2">
                       <label className="label w-12 text-[11px] shrink-0">{f.label}</label>
-                      <input name={f.name} className="input-box mono text-[13px] flex-1" defaultValue={f.value ?? ""} />
+                      <div className="flex-1"><Combobox name={f.name} options={countOpts} defaultValue={f.value ?? ""} className="input-box mono text-[13px]" /></div>
                     </div>
                   ))}
                 </div>
