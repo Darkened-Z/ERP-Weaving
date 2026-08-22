@@ -1,6 +1,8 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { AutoAmount } from "@/components/auto-amount";
+import { ImageAttach } from "@/components/image-attach";
 import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -30,7 +32,7 @@ const STATUS_OPTIONS = [
 ];
 
 const DELIVERY_PARSE_MAX = 50;
-const DELIVERY_EMPTY_MIN = 8;
+const DELIVERY_EMPTY_MIN = 4;
 
 export default async function GreySalesContractPage({
   searchParams,
@@ -90,6 +92,15 @@ export default async function GreySalesContractPage({
     (max, c) => (c.lContNo && c.lContNo > max ? c.lContNo : max),
     0
   ) + 1;
+
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .orderBy(schema.chartOfAccounts.description);
+  const greyList = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.code);
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -444,6 +455,7 @@ export default async function GreySalesContractPage({
                   <label className="label block mb-1">Party</label>
                   <input
                     name="party"
+                    list="gsc-parties"
                     className="input-box"
                     defaultValue={formItem?.party ?? ""}
                   />
@@ -457,6 +469,7 @@ export default async function GreySalesContractPage({
                   </label>
                   <input
                     name="broker"
+                    list="gsc-parties"
                     className="input-box"
                     defaultValue={formItem?.broker ?? ""}
                   />
@@ -491,6 +504,7 @@ export default async function GreySalesContractPage({
                   <label className="label block mb-1">Grey Code</label>
                   <input
                     name="grey_code"
+                    list="gsc-grey"
                     className="input-box mono"
                     defaultValue={formItem?.greyCode ?? ""}
                   />
@@ -551,6 +565,17 @@ export default async function GreySalesContractPage({
                   />
                 </div>
               </div>
+              <AutoAmount qty="quantity_mtr" rate="rate_per_mtr" target="amount" />
+              <datalist id="gsc-parties">
+                {parties.map((p) => (
+                  <option key={p.code} value={p.description}>{p.code}</option>
+                ))}
+              </datalist>
+              <datalist id="gsc-grey">
+                {greyList.map((g) => (
+                  <option key={g.code} value={g.code}>{g.code} — {g.description}</option>
+                ))}
+              </datalist>
 
               <div className="grid grid-cols-4 gap-3 mb-3">
                 <div>
@@ -622,12 +647,8 @@ export default async function GreySalesContractPage({
               </div>
 
               <div className="mb-3">
-                <label className="label block mb-1">Img</label>
-                <input
-                  name="img"
-                  className="input-box mono"
-                  defaultValue={formItem?.img ?? ""}
-                />
+                <label className="label block mb-1">Evidence Photo</label>
+                <ImageAttach name="img" defaultValue={formItem?.img} />
               </div>
 
               <div className="mb-4">

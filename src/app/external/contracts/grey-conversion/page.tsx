@@ -40,6 +40,10 @@ export default async function GreyConvContractPage({
   const findFilter = params.find?.trim();
 
   const parties = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.description);
+  const greyList = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.code);
 
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = `%${escFind}%`;
@@ -82,8 +86,8 @@ export default async function GreyConvContractPage({
         .orderBy(schema.extGreyConvWeft.srNo)
     : [];
 
-  const warpGrid = Array.from({ length: 6 }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
-  const weftGrid = Array.from({ length: 6 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
+  const warpGrid = Array.from({ length: 4 }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
+  const weftGrid = Array.from({ length: 4 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
 
   const today = new Date().toISOString().slice(0, 10);
   const lContCount = contracts.length;
@@ -420,7 +424,7 @@ export default async function GreyConvContractPage({
                 <div className="grid grid-cols-4 gap-3 mb-3">
                   <div className="col-span-2">
                     <label className="label block mb-1">Gray Qlty Code (Const)</label>
-                    <input name="gray_qlty_code" className="input-box mono" defaultValue={formItem?.grayQltyCode ?? ""} />
+                    <input name="gray_qlty_code" list="gc-grey" className="input-box mono" defaultValue={formItem?.grayQltyCode ?? ""} />
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">Img</label>
@@ -472,7 +476,7 @@ export default async function GreyConvContractPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Grey Code</label>
-                  <input name="gray_code" className={yellowCls} style={{ background: "#FFF8B7" }} defaultValue={formItem?.grayCode ?? ""} />
+                  <input name="gray_code" list="gc-grey" className={yellowCls} style={{ background: "#FFF8B7" }} defaultValue={formItem?.grayCode ?? ""} />
                 </div>
                 <div>
                   <label className="label block mb-1">Find Contract#</label>
@@ -655,6 +659,11 @@ export default async function GreyConvContractPage({
           <datalist id="parties-list">
             {parties.map((p) => (
               <option key={p.code} value={p.description} />
+            ))}
+          </datalist>
+          <datalist id="gc-grey">
+            {greyList.map((g) => (
+              <option key={g.code} value={g.code}>{g.code} — {g.description}</option>
             ))}
           </datalist>
         </div>

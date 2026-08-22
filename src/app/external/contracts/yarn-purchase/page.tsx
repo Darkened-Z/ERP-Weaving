@@ -78,6 +78,19 @@ export default async function YarnPurchaseContractPage({
   const upcomingContNo = nextContNoFromRows(contracts, "YPC");
   const upcomingLContNo = contracts.length + 1;
 
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .orderBy(schema.chartOfAccounts.description);
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
+  const brandList = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
+
   async function saveContract(formData: FormData) {
     "use server";
     const idRaw = formData.get("id") as string | null;
@@ -220,7 +233,7 @@ export default async function YarnPurchaseContractPage({
     { v: "X", l: "X - Cancelled" },
   ];
 
-  const emptySlotCount = Math.max(8 - deliveries.length, 3);
+  const emptySlotCount = Math.max(4 - deliveries.length, 2);
   const emptySlots = Array.from({ length: emptySlotCount }, (_, i) => i);
 
   const formatNum = (n?: number | null) =>
@@ -435,6 +448,7 @@ export default async function YarnPurchaseContractPage({
                 <label className="label block mb-1">Party Code</label>
                 <input
                   name="party_code"
+                  list="ypc-parties"
                   className="input-box mono"
                   defaultValue={formContract?.partyCode ?? ""}
                 />
@@ -448,6 +462,7 @@ export default async function YarnPurchaseContractPage({
                 </label>
                 <input
                   name="broker"
+                  list="ypc-parties"
                   className="input-box mono"
                   defaultValue={formContract?.broker ?? ""}
                 />
@@ -478,6 +493,7 @@ export default async function YarnPurchaseContractPage({
                 <label className="label block mb-1">Count Code</label>
                 <input
                   name="count_code"
+                  list="ypc-counts"
                   className="input-box mono"
                   defaultValue={formContract?.countCode ?? ""}
                 />
@@ -494,6 +510,7 @@ export default async function YarnPurchaseContractPage({
                 <label className="label block mb-1">Brand</label>
                 <input
                   name="brand"
+                  list="ypc-brands"
                   className="input-box mono"
                   defaultValue={formContract?.brand ?? ""}
                 />
@@ -768,6 +785,21 @@ export default async function YarnPurchaseContractPage({
           </div>
         </div>
       </div>
+      <datalist id="ypc-parties">
+        {parties.map((p) => (
+          <option key={p.code} value={p.code}>{p.code} — {p.description}</option>
+        ))}
+      </datalist>
+      <datalist id="ypc-counts">
+        {countList.map((c) => (
+          <option key={c.code} value={c.code}>{c.code} — {c.description}</option>
+        ))}
+      </datalist>
+      <datalist id="ypc-brands">
+        {brandList.map((b) => (
+          <option key={b.name} value={b.name} />
+        ))}
+      </datalist>
     </Shell>
   );
 }
