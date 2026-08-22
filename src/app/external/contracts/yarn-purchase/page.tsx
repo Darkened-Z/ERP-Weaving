@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -90,6 +91,10 @@ export default async function YarnPurchaseContractPage({
     .select({ name: schema.yarnBrands.name })
     .from(schema.yarnBrands)
     .orderBy(schema.yarnBrands.name);
+
+  const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
+  const countOpts = countList.map((c) => ({ value: String(c.code), label: `${c.code} — ${c.description}` }));
+  const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -446,12 +451,7 @@ export default async function YarnPurchaseContractPage({
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Party Code</label>
-                <input
-                  name="party_code"
-                  list="ypc-parties"
-                  className="input-box mono"
-                  defaultValue={formContract?.partyCode ?? ""}
-                />
+                <Combobox name="party_code" options={partyOpts} defaultValue={String(formContract?.partyCode ?? "")} placeholder="Select party" />
               </div>
               <div className="lg:col-span-5">
                 <label className="label block mb-1">
@@ -460,12 +460,7 @@ export default async function YarnPurchaseContractPage({
                     F9
                   </span>
                 </label>
-                <input
-                  name="broker"
-                  list="ypc-parties"
-                  className="input-box mono"
-                  defaultValue={formContract?.broker ?? ""}
-                />
+                <Combobox name="broker" options={partyOpts} defaultValue={formContract?.broker ?? ""} placeholder="Select broker" />
               </div>
 
               <div className="lg:col-span-3">
@@ -491,12 +486,7 @@ export default async function YarnPurchaseContractPage({
 
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Count Code</label>
-                <input
-                  name="count_code"
-                  list="ypc-counts"
-                  className="input-box mono"
-                  defaultValue={formContract?.countCode ?? ""}
-                />
+                <Combobox name="count_code" options={countOpts} defaultValue={String(formContract?.countCode ?? "")} placeholder="Select count" />
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Ratio</label>
@@ -508,12 +498,7 @@ export default async function YarnPurchaseContractPage({
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Brand</label>
-                <input
-                  name="brand"
-                  list="ypc-brands"
-                  className="input-box mono"
-                  defaultValue={formContract?.brand ?? ""}
-                />
+                <Combobox name="brand" options={brandOpts} defaultValue={formContract?.brand ?? ""} placeholder="Select brand" />
               </div>
 
               <div className="lg:col-span-4">
@@ -785,21 +770,6 @@ export default async function YarnPurchaseContractPage({
           </div>
         </div>
       </div>
-      <datalist id="ypc-parties">
-        {parties.map((p) => (
-          <option key={p.code} value={p.code}>{p.code} — {p.description}</option>
-        ))}
-      </datalist>
-      <datalist id="ypc-counts">
-        {countList.map((c) => (
-          <option key={c.code} value={c.code}>{c.code} — {c.description}</option>
-        ))}
-      </datalist>
-      <datalist id="ypc-brands">
-        {brandList.map((b) => (
-          <option key={b.name} value={b.name} />
-        ))}
-      </datalist>
     </Shell>
   );
 }
