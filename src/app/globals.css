@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #ffffff;
-  --fg: #262b33;
-  --muted: #7a828c;
-  --border: #3a414b;
-  --border-light: #e7e9ec;
-  --surface: #f6f7f9;
-  --accent: #2f3742;
+  --bg: #f6f8fc;
+  --fg: #3b4557;
+  --muted: #8793a6;
+  --border: #c2ccdd;
+  --border-light: #e3e8f1;
+  --surface: #eaeff7;
+  --accent: #5b6b8c;
   --accent-fg: #ffffff;
-  --danger: #cc0000;
+  --danger: #c86b6b;
 }
 
 /* Remap hard-coded black/white utilities to the softened palette so the whole app lightens consistently. */
