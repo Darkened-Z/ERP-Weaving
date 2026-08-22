@@ -158,8 +158,8 @@ tr:hover td {
   width: 100%;
   padding: 10px 12px;
   font-size: 14px;
-  border: 1px solid var(--border-light);
-  background: transparent;
+  border: 1px solid var(--border);
+  background: #ffffff;
   transition: border-color 0.15s;
 }
 
