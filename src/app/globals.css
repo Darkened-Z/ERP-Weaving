@@ -10,6 +10,16 @@
   --accent: #445d8a;
   --accent-fg: #ffffff;
   --danger: #bd5252;
+  /* soft module / semantic hues */
+  --h1: #6a5fb0; /* violet  — Define        */
+  --h2: #2f9a91; /* teal    — Inventory     */
+  --h3: #3d82ad; /* blue    — Ext / Supply  */
+  --h4: #4f9d69; /* green   — Finance       */
+  --h5: #c0883c; /* amber   — Store / Ops   */
+  --h6: #b5607a; /* rose    — Admin         */
+  --success: #4f9d69;
+  --warning: #c0883c;
+  --info: #3d82ad;
 }
 
 /* Remap hard-coded black/white utilities to the softened palette so the whole app lightens consistently. */

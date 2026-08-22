@@ -140,7 +140,10 @@ export default async function QuickContractPage({
               <div key={c.id} className="border border-[var(--border-light)] px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-semibold text-[14px] truncate">{c.party}</div>
-                  <span className={`text-[9px] uppercase tracking-[0.1em] font-semibold shrink-0 border px-1.5 py-0.5 ${c.status === "PROCESSED" ? "border-[var(--border-light)] text-[var(--muted)]" : "bg-[var(--accent)] text-white border-transparent"}`}>
+                  <span
+                    className="text-[9px] uppercase tracking-[0.1em] font-semibold shrink-0 border border-transparent px-1.5 py-0.5 text-white"
+                    style={{ background: c.status === "PROCESSED" ? "var(--success)" : "var(--warning)" }}
+                  >
                     {c.status}
                   </span>
                 </div>
