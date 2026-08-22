@@ -1952,3 +1952,20 @@ export const intDailyProductionDetail = sqliteTable("int_daily_production_detail
 }, (t) => ({
   ixProduction: index("ix_int_dpd_production").on(t.productionId),
 }));
+
+// --- QUICK CONTRACT (mobile capture -> accounts formalizes) ---
+
+export const quickContracts = sqliteTable("quick_contracts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  party: text("party").notNull(),
+  greyQuality: text("grey_quality"),
+  quantity: real("quantity"),
+  rate: real("rate"),
+  notes: text("notes"),
+  status: text("status").notNull().default("PENDING"),
+  createdBy: text("created_by"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  ixStatus: index("ix_quick_contract_status").on(t.status),
+  ixCreated: index("ix_quick_contract_created").on(t.createdAt),
+}));

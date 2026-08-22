@@ -7,6 +7,7 @@ const SECTIONS = [
     label: null,
     items: [
       { href: "/", label: "Dashboard", key: "dash" },
+      { href: "/quick-contract", label: "Quick Contract", key: "quick-contract" },
       { href: "/owner/dashboard", label: "Executive Overview", key: "owner-dash" },
       { href: "/production/board", label: "Live Production Board", key: "prod-board" },
       { href: "/tickets", label: "Tickets", key: "tickets" },

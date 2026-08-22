@@ -2,15 +2,20 @@
 
 :root {
   --bg: #ffffff;
-  --fg: #000000;
-  --muted: #666666;
-  --border: #000000;
-  --border-light: #e0e0e0;
-  --surface: #f5f5f5;
-  --accent: #000000;
+  --fg: #262b33;
+  --muted: #7a828c;
+  --border: #3a414b;
+  --border-light: #e7e9ec;
+  --surface: #f6f7f9;
+  --accent: #2f3742;
   --accent-fg: #ffffff;
   --danger: #cc0000;
 }
+
+/* Remap hard-coded black/white utilities to the softened palette so the whole app lightens consistently. */
+.bg-black { background-color: var(--accent) !important; }
+.border-black { border-color: var(--border) !important; }
+.text-black { color: var(--fg) !important; }
 
 @theme inline {
   --color-background: var(--bg);

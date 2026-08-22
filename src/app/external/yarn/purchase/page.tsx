@@ -25,7 +25,7 @@ const LOOM_TYPES = ["SULZER", "RAPIER", "AIRJET", "PROJECTILE"];
 const TERM_OPTIONS = ["CASH", "CREDIT"];
 const POSTING_OPTIONS = ["Y", "N"];
 
-const LINE_ROWS = 12;
+const LINE_ROWS = 6;
 
 function nextVNo(rows: { vNo: string }[], prefix: string): string {
   const nums = rows
@@ -84,6 +84,16 @@ export default async function YarnPurchaseVoucherPage({
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
+
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
+
+  const purContracts = await db
+    .select({ contNo: schema.extYarnPurContract.contNo })
+    .from(schema.extYarnPurContract)
+    .orderBy(desc(schema.extYarnPurContract.contNo));
 
   const nextVNoVal = await db
     .select({
@@ -363,6 +373,20 @@ export default async function YarnPurchaseVoucherPage({
           {parties.map((p) => (
             <option key={p.code} value={p.description}>
               {p.code}
+            </option>
+          ))}
+        </datalist>
+        <datalist id="ypv-counts">
+          {countList.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} — {c.description}
+            </option>
+          ))}
+        </datalist>
+        <datalist id="ypv-contracts">
+          {purContracts.map((c) => (
+            <option key={c.contNo} value={c.contNo}>
+              {c.contNo}
             </option>
           ))}
         </datalist>
@@ -716,6 +740,7 @@ export default async function YarnPurchaseVoucherPage({
                             <td>
                               <input
                                 name="line_cont_no"
+                                list="ypv-contracts"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.contNo ?? ""}
                               />
@@ -723,6 +748,7 @@ export default async function YarnPurchaseVoucherPage({
                             <td>
                               <input
                                 name="line_count"
+                                list="ypv-counts"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.count ?? ""}
                               />

@@ -82,8 +82,8 @@ export default async function GreyConvContractPage({
         .orderBy(schema.extGreyConvWeft.srNo)
     : [];
 
-  const warpGrid = Array.from({ length: 9 }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
-  const weftGrid = Array.from({ length: 9 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
+  const warpGrid = Array.from({ length: 6 }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
+  const weftGrid = Array.from({ length: 6 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
 
   const today = new Date().toISOString().slice(0, 10);
   const lContCount = contracts.length;
