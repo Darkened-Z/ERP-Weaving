@@ -544,7 +544,7 @@ export default async function CashPaymentPage({
                 <label className="label block mb-1">LV.No</label>
                 <input
                   className="input-box mono bg-gray-100 text-center"
-                  value={formVoucher ? lvCount : lvCount + 1}
+                  value={lvCount}
                   readOnly
                   tabIndex={-1}
                 />

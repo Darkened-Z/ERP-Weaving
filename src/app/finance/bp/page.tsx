@@ -538,7 +538,7 @@ export default async function BankPaymentPage({
                   <label className="label block mb-1">LV.No</label>
                   <input
                     className="input-box mono bg-gray-100 text-center"
-                    defaultValue={formVoucher ? totalCount : totalCount + 1}
+                    defaultValue={totalCount}
                     readOnly
                     tabIndex={-1}
                   />
