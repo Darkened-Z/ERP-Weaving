@@ -23,7 +23,6 @@ export default async function GreyPage() {
               <th>Description</th>
               <th className="text-right">Reed</th>
               <th className="text-right">Pick</th>
-              <th className="text-right">Width</th>
               <th>Warp Count</th>
               <th>Weft Count</th>
               <th>Weave</th>
@@ -38,7 +37,6 @@ export default async function GreyPage() {
                 <td>{r.description}</td>
                 <td className="text-right mono">{r.reed ?? "-"}</td>
                 <td className="text-right mono">{r.pick ?? "-"}</td>
-                <td className="text-right mono">{r.width ?? "-"}</td>
                 <td className="mono text-[13px]">{r.warpCount ?? "-"}</td>
                 <td className="mono text-[13px]">{r.weftCount ?? "-"}</td>
                 <td>{r.weaveType}</td>
