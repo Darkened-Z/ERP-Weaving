@@ -62,7 +62,6 @@ const SECTIONS = [
         items: [
           { href: "/inventory/yarn-receipt", label: "Yarn Receipt / Return", key: "yarn-receipt" },
           { href: "/inventory/yarn-transfer", label: "Yarn Internal Transfer", key: "yarn-transfer" },
-          { href: "/inventory/beam-return", label: "Empty Beam Return", key: "beam-return" },
           { href: "/inventory/warped-beam", label: "Warped Beam Receiving", key: "warped-beam" },
           { href: "/inventory/knotting", label: "Knotting / Sarning / Maroori", key: "knotting" },
           { href: "/inventory/hours-schedule", label: "Production Hours Schedual", key: "hours-schedule" },

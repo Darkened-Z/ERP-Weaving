@@ -26,10 +26,10 @@ export default async function PartyCountsPage({
   const partyDesc = formItem ? accounts.find((a) => a.code === formItem.partyCode)?.description ?? "" : "";
   const countDesc = formItem ? yarnCounts.find((y) => y.id === formItem.countCode)?.description ?? "" : "";
 
-  // Detail/postable accounts (level >= 3) — the client's F9 party lookup lists accounts at
-  // levels 3-4 (their real chart goes to 5). Top-2 category levels are excluded.
+  // Only level 4 & 5 accounts = the actual weaving parties (e.g. 3.03.20.01.0003).
+  // Excludes the level-3 GL accounts (cash, stock, land) that are not parties.
   const partyOpts = accounts
-    .filter((a) => a.level >= 3)
+    .filter((a) => a.level >= 4)
     .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}`, desc: a.description }));
   const countOpts = yarnCounts.map((y) => ({ value: String(y.id), label: `${y.countCode} — ${y.description}`, desc: y.description }));
 
