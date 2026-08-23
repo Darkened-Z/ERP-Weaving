@@ -30,10 +30,12 @@ export default async function BeamsPage({
       type: txt("type") ?? "WARP",
       partyTrade: txt("party_trade"),
       codeConv: txt("code_conv"),
+      contractNo: txt("contract_no"),
       statusLoc: txt("status_loc"),
       szgParty: txt("szg_party"),
       shed: txt("shed"),
       loomNo: int("loom_no"),
+      setNo: txt("set_no"),
       beamSetNo: txt("beam_set_no"),
       setStatus: txt("set_status"),
       statusWrk: txt("status_wrk") ?? "RUNNING",
@@ -144,10 +146,12 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue={selected.type ?? ""} /></div>
                 <div><label className="label block mb-1">Party/Trade</label><input name="party_trade" className="input-box" defaultValue={selected.partyTrade ?? ""} /></div>
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" defaultValue={selected.codeConv ?? ""} /></div>
+                <div><label className="label block mb-1">Conv Cont</label><input name="contract_no" className="input-box mono" defaultValue={selected.contractNo ?? ""} /></div>
                 <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" defaultValue={selected.statusLoc ?? ""} /></div>
                 <div><label className="label block mb-1">Szg Party</label><input name="szg_party" className="input-box" defaultValue={selected.szgParty ?? ""} /></div>
-                <div><label className="label block mb-1">Shed</label><input name="shed" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
+                <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
                 <div><label className="label block mb-1">Loom No</label><input name="loom_no" type="number" className="input-box mono" defaultValue={selected.loomNo ?? ""} /></div>
+                <div><label className="label block mb-1">Set#</label><input name="set_no" className="input-box mono" defaultValue={selected.setNo ?? ""} /></div>
                 <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" defaultValue={selected.beamSetNo ?? ""} /></div>
                 <div><label className="label block mb-1">Set Status</label><input name="set_status" className="input-box" defaultValue={selected.setStatus ?? ""} /></div>
                 <div>
@@ -179,9 +183,12 @@ export default async function BeamsPage({
                 <th>Beams No</th>
                 <th>Party/Trade</th>
                 <th>Code Conv</th>
+                <th>Conv Cont</th>
                 <th>Status Loc</th>
                 <th>Szg Party</th>
-                <th>Shed Loom No</th>
+                <th>Shed No</th>
+                <th>Loom No</th>
+                <th>Set#</th>
                 <th>Beam Set No</th>
                 <th>Set Status</th>
                 <th>Type</th>
@@ -202,9 +209,12 @@ export default async function BeamsPage({
                   </td>
                   <td className="text-[13px]">{r.partyTrade ?? "-"}</td>
                   <td className="mono text-[13px]">{r.codeConv ?? "-"}</td>
+                  <td className="mono text-[13px]">{r.contractNo ?? "-"}</td>
                   <td className="text-[13px]">{r.statusLoc ?? "-"}</td>
                   <td className="text-[13px]">{r.szgParty ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.loomNo ? `${r.shed ?? ""}${r.shed ? "-" : ""}${r.loomNo}` : "-"}</td>
+                  <td className="mono text-[13px]">{r.shed ?? "-"}</td>
+                  <td className="mono text-[13px]">{r.loomNo ?? "-"}</td>
+                  <td className="mono text-[13px]">{r.setNo ?? "-"}</td>
                   <td className="mono text-[13px]">{r.beamSetNo ?? "-"}</td>
                   <td className="text-[13px]">{r.setStatus ?? "-"}</td>
                   <td>{r.type}</td>

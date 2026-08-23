@@ -290,6 +290,7 @@ export const beams = sqliteTable("beams", {
   weight: real("weight"),
   shed: text("shed"),
   loomNo: integer("loom_no"),
+  setNo: text("set_no"),
   beamSetNo: text("beam_set_no"),
   setStatus: text("set_status"),
   brVno: text("br_vno"),
