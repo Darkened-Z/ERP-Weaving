@@ -1,5 +1,6 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -37,6 +38,17 @@ export default async function ChartOfAccountPage({
 
   const cities = await db.select().from(schema.cities);
 
+  // All accounts as potential parent "Acc. Head" options; each carries the next auto code
+  // it would generate for a child (mirrored into the Code field on select).
+  const allAccounts = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.code);
+  const headOpts = allAccounts.map((a) => {
+    const depth = a.code.split(".").length;
+    const kids = allAccounts.filter((x) => x.code.startsWith(a.code + ".") && x.code.split(".").length === depth + 1);
+    const maxN = kids.reduce((m, c) => { const n = parseInt(c.code.split(".").pop() || "0", 10); return Number.isFinite(n) && n > m ? n : m; }, 0);
+    const width = kids.length ? Math.max(...kids.map((c) => (c.code.split(".").pop() || "").length)) : 4;
+    return { value: a.code, label: `${a.code} — ${a.description}`, desc: `${a.code}.${String(maxN + 1).padStart(width, "0")}` };
+  });
+
   const selected = params.code
     ? accounts.find((a) => a.code === params.code) ?? null
     : null;
@@ -53,13 +65,10 @@ export default async function ChartOfAccountPage({
 
   async function saveAccount(formData: FormData) {
     "use server";
-    const code = (formData.get("code") as string)?.trim();
+    const submittedCode = (formData.get("code") as string)?.trim();
+    const accHead = (formData.get("acc_head") as string)?.trim();
     const description = (formData.get("tittle") as string)?.trim();
-    if (!code || !description) return;
-
-    const parts = code.split(".");
-    const level = parts.length;
-    const codeHead = parts[0];
+    if (!description) return;
     const descShort = (formData.get("tittle_short") as string)?.trim() || null;
     const address = (formData.get("address") as string)?.trim() || null;
     const city = (formData.get("area") as string)?.trim() || null;
@@ -83,10 +92,9 @@ export default async function ChartOfAccountPage({
     const contactNo3 = (formData.get("contact_no_3") as string)?.trim() || null;
     const status = (formData.get("status") as string)?.trim() || "R";
 
-    const existing = await db
-      .select()
-      .from(schema.chartOfAccounts)
-      .where(eq(schema.chartOfAccounts.code, code));
+    const existing = submittedCode
+      ? await db.select().from(schema.chartOfAccounts).where(eq(schema.chartOfAccounts.code, submittedCode))
+      : [];
 
     if (existing.length > 0) {
       await db
@@ -99,20 +107,33 @@ export default async function ChartOfAccountPage({
           contactPerson3, contactDesig3, contactNo3,
           status,
         })
-        .where(eq(schema.chartOfAccounts.code, code));
-    } else {
-      await db.insert(schema.chartOfAccounts).values({
-        code, codeHead, level, description, descShort, address, city,
-        phone, mobile, fax, email, gstNo, ntn, nic, creditLimit, remarks,
-        contactPerson1, contactDesig1, contactNo1,
-        contactPerson2, contactDesig2, contactNo2,
-        contactPerson3, contactDesig3, contactNo3,
-        status,
-      });
+        .where(eq(schema.chartOfAccounts.code, submittedCode));
+      revalidatePath("/accounts");
+      redirect(`/accounts?code=${submittedCode}`);
     }
 
+    // New account — auto-generate the code under the selected Acc. Head (parent).
+    if (!accHead) return;
+    const parentRows = await db.select().from(schema.chartOfAccounts).where(eq(schema.chartOfAccounts.code, accHead)).limit(1);
+    if (!parentRows.length) return;
+    const parentCode = parentRows[0].code;
+    const all = await db.select({ code: schema.chartOfAccounts.code }).from(schema.chartOfAccounts);
+    const depth = parentCode.split(".").length;
+    const children = all.filter((a) => a.code.startsWith(parentCode + ".") && a.code.split(".").length === depth + 1);
+    const maxN = children.reduce((m, c) => { const n = parseInt(c.code.split(".").pop() || "0", 10); return Number.isFinite(n) && n > m ? n : m; }, 0);
+    const width = children.length ? Math.max(...children.map((c) => (c.code.split(".").pop() || "").length)) : 4;
+    const newCode = `${parentCode}.${String(maxN + 1).padStart(width, "0")}`;
+    const level = newCode.split(".").length;
+    await db.insert(schema.chartOfAccounts).values({
+      code: newCode, codeHead: parentCode, level, description, descShort, address, city,
+      phone, mobile, fax, email, gstNo, ntn, nic, creditLimit, remarks,
+      contactPerson1, contactDesig1, contactNo1,
+      contactPerson2, contactDesig2, contactNo2,
+      contactPerson3, contactDesig3, contactNo3,
+      status,
+    });
     revalidatePath("/accounts");
-    redirect(`/accounts?code=${code}`);
+    redirect(`/accounts?code=${newCode}`);
   }
 
   async function deleteAccount(formData: FormData) {
@@ -208,14 +229,25 @@ export default async function ChartOfAccountPage({
                   </div>
 
                   <div>
+                    <label className="label block mb-1">
+                      Acc. Head <span className="text-[9px] font-normal">(F9)</span>
+                    </label>
+                    {formAccount ? (
+                      <input className="input-box mono bg-gray-100" value={formAccount.codeHead ?? ""} readOnly tabIndex={-1} />
+                    ) : (
+                      <Combobox name="acc_head" options={headOpts} placeholder="Select parent head" descTargetId="acct-code" />
+                    )}
+                  </div>
+                  <div>
                     <label className="label block mb-1">Code</label>
                     <input
+                      id="acct-code"
                       name="code"
-                      className="input-box mono"
+                      className="input-box mono bg-gray-100"
                       defaultValue={formAccount?.code ?? ""}
-                      placeholder="e.g. 7.02.04"
-                      required
-                      readOnly={!!formAccount}
+                      placeholder="auto"
+                      readOnly
+                      tabIndex={-1}
                     />
                   </div>
                   <div>
