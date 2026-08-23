@@ -120,18 +120,12 @@ export default async function GreyConstructionPage({
     { name: "warp_count", label: "Warp", value: formItem?.warpCount },
     { name: "warp_2", label: "RPT 2", value: formItem?.warp2 },
     { name: "warp_3", label: "RPT 3", value: formItem?.warp3 },
-    { name: "warp_4", label: "RPT 4", value: formItem?.warp4 },
-    { name: "warp_5", label: "RPT 5", value: formItem?.warp5 },
-    { name: "warp_6", label: "RPT 6", value: formItem?.warp6 },
   ];
 
   const weftFields = [
     { name: "weft_count", label: "Weft", value: formItem?.weftCount },
     { name: "weft_2", label: "RPT 2", value: formItem?.weft2 },
     { name: "weft_3", label: "RPT 3", value: formItem?.weft3 },
-    { name: "weft_4", label: "RPT 4", value: formItem?.weft4 },
-    { name: "weft_5", label: "RPT 5", value: formItem?.weft5 },
-    { name: "weft_6", label: "RPT 6", value: formItem?.weft6 },
   ];
 
   const rowHref = (id: number) => `/define/grey-construction?id=${id}`;
