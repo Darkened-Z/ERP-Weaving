@@ -6,6 +6,7 @@ import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -42,7 +43,7 @@ function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
 export default async function WarpedBeamReceivingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -125,8 +126,10 @@ export default async function WarpedBeamReceivingPage({
 
   async function saveAction(formData: FormData) {
     "use server";
+    try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    await assertPeriodOpen(txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10), "INVENTORY");
 
     const header = {
       vDate: txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10),
@@ -337,6 +340,13 @@ export default async function WarpedBeamReceivingPage({
       }
       throw e;
     }
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/warped-beam?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteAction(formData: FormData) {
@@ -418,6 +428,15 @@ export default async function WarpedBeamReceivingPage({
         {params.error === "beam_length_required" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Total beam length must be greater than zero.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period is locked. Cannot save for this date
+            {params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
+            .
           </div>
         )}
 

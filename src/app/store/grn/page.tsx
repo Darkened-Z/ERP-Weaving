@@ -4,6 +4,7 @@ import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, inArray, sql } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -29,12 +30,14 @@ const LINE_ROWS = 8;
 
 async function saveGrn(formData: FormData) {
   "use server";
+  try {
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   const isNew = !Number.isFinite(id);
   const back = isNew ? "?adding=1" : `?id=${id}`;
 
   const grnDate = txt(formData.get("grn_date")) ?? today();
+  await assertPeriodOpen(grnDate, "STORE");
   const supplierRaw = txt(formData.get("supplier")) ?? "";
   const invoiceNo = txt(formData.get("invoice_no"));
   if (!supplierRaw) redirect(`/store/grn${back}`);
@@ -197,6 +200,13 @@ async function saveGrn(formData: FormData) {
   revalidatePath("/store/parts");
   revalidatePath("/store/stock");
   redirect(`/store/grn?id=${savedId}`);
+  } catch (e) {
+    const err = e as { message?: string; digest?: string };
+    if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+    const thru = parseLockedThroughFromError(err.message ?? "");
+    if (thru) redirect(`/store/grn?error=period_locked&thru=${thru}`);
+    throw e;
+  }
 }
 
 async function deleteGrn(formData: FormData) {
@@ -228,7 +238,7 @@ async function deleteGrn(formData: FormData) {
 export default async function GrnPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
@@ -326,6 +336,15 @@ export default async function GrnPage({
         {params.error === "bad_part" && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             One or more part codes do not exist in the parts catalog.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Period is locked. Cannot save for this date
+            {params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
+            .
           </div>
         )}
 

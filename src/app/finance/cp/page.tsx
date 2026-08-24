@@ -9,6 +9,7 @@ import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
 import { and, eq, gte, sql, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -37,6 +38,7 @@ const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
 async function saveVoucher(formData: FormData) {
   "use server";
+  try {
   const session = await getSession();
   const utCode = session?.userId ?? null;
   const idRaw = formData.get("id") as string | null;
@@ -44,6 +46,7 @@ async function saveVoucher(formData: FormData) {
   const editing = Number.isFinite(idParsed) && idParsed > 0;
   const id = editing ? idParsed : 0;
   const back = editing ? `&id=${id}` : "&adding=1";
+  await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "FINANCE");
 
   const [company] = await db
     .select({ currentFy: schema.companyProfile.currentFy })
@@ -278,6 +281,13 @@ async function saveVoucher(formData: FormData) {
     revalidatePath(BASE);
     redirect(`${BASE}?id=${newId}`);
   }
+  } catch (e) {
+    const err = e as { message?: string; digest?: string };
+    if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+    const thru = parseLockedThroughFromError(err.message ?? "");
+    if (thru) redirect(`${BASE}?error=period_locked&thru=${thru}`);
+    throw e;
+  }
 }
 
 async function deleteVoucher(formData: FormData) {
@@ -340,12 +350,13 @@ const ERR_MSG: Record<string, string> = {
   bad_total: "Total must be greater than zero.",
   bad_account: "A line has an account name that does not match the Chart of Accounts.",
   admin_only: "Only ADMIN can delete vouchers.",
+  period_locked: "Period is locked. Cannot save vouchers for this date.",
 };
 
 export default async function CashPaymentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -500,6 +511,9 @@ export default async function CashPaymentPage({
         {params.error && ERR_MSG[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             {ERR_MSG[params.error]}
+            {params.error === "period_locked" && params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
           </div>
         )}
 

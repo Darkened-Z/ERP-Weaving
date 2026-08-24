@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -56,6 +57,7 @@ const formatNum = (n?: number | null) =>
 
 async function saveVoucher(formData: FormData) {
   "use server";
+  try {
   const session = await getSession();
   const utCode = session?.userId ?? null;
 
@@ -68,6 +70,7 @@ async function saveVoucher(formData: FormData) {
   const trnType = txt(formData.get("trn_type"));
   const img = txt(formData.get("img"));
   const vdate = txt(formData.get("v_date")) ?? today();
+  await assertPeriodOpen(vdate, "FINANCE");
   const vtime = txt(formData.get("v_time")) ?? nowTime();
   const dueDate = txt(formData.get("due_date"));
   const expDate = txt(formData.get("exp_date"));
@@ -304,6 +307,13 @@ async function saveVoucher(formData: FormData) {
   }
   revalidatePath(BASE);
   redirect(`${BASE}?id=${newId}`);
+  } catch (e) {
+    const err = e as { message?: string; digest?: string };
+    if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+    const thru = parseLockedThroughFromError(err.message ?? "");
+    if (thru) redirect(`${BASE}?error=period_locked&thru=${thru}`);
+    throw e;
+  }
 }
 
 async function deleteVoucher(formData: FormData) {
@@ -376,6 +386,7 @@ export default async function BankReceiptPage({
     adding?: string;
     error?: string;
     find?: string;
+    thru?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -517,6 +528,7 @@ export default async function BankReceiptPage({
     dup_chq: "Cheque number already used on another voucher of this type. Change it and save again.",
     bad_account: "One or more account codes are unknown or not a detail (level 4+) account.",
     forbidden: "Only ADMIN can delete vouchers.",
+    period_locked: "Period is locked. Cannot save vouchers for this date.",
   };
   const errorMsg = params.error ? ERROR_MESSAGES[params.error] ?? "" : "";
 
@@ -556,6 +568,9 @@ export default async function BankReceiptPage({
         {errorMsg && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             {errorMsg}
+            {params.error === "period_locked" && params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
           </div>
         )}
 

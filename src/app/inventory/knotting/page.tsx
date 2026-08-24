@@ -6,6 +6,7 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -47,8 +48,10 @@ const LINE_ROWS = 15;
 
 async function saveKnotting(formData: FormData) {
   "use server";
+  try {
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
+  await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "INVENTORY");
 
   const header = {
     vDate: txt(formData.get("v_date")) ?? today(),
@@ -261,6 +264,13 @@ async function saveKnotting(formData: FormData) {
     revalidatePath("/inventory/knotting");
     redirect(`/inventory/knotting?id=${newId}`);
   }
+  } catch (e) {
+    const err = e as { message?: string; digest?: string };
+    if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+    const thru = parseLockedThroughFromError(err.message ?? "");
+    if (thru) redirect(`/inventory/knotting?error=period_locked&thru=${thru}`);
+    throw e;
+  }
 }
 
 async function deleteKnotting(formData: FormData) {
@@ -354,6 +364,7 @@ export default async function KnottingPage({
     adding?: string;
     error?: string;
     find?: string;
+    thru?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -513,6 +524,15 @@ export default async function KnottingPage({
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             V.No already exists. Try again.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period is locked. Cannot save for this date
+            {params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
+            .
           </div>
         )}
 

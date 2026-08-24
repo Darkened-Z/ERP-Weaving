@@ -8,6 +8,7 @@ import { AutoAmount } from "@/components/auto-amount";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -42,12 +43,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   qty_required: "Enter Bags or Qty (Lbs) greater than zero.",
   purcont_required: "Pur.Cont No is required.",
   lbs_mismatch: "Header Qty Lbs does not match the carton total. Clear it to auto-fill, or fix the cartons.",
+  period_locked: "Period is locked. Cannot save for this date.",
 };
 
 export default async function YarnReceiptPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -181,12 +183,14 @@ export default async function YarnReceiptPage({
 
   async function saveAction(formData: FormData) {
     "use server";
+    try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
     const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
 
     const vDate = txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10);
+    await assertPeriodOpen(vDate, "INVENTORY");
     const purContNo = txt(formData.get("purContNo"));
     if (!purContNo) {
       redirect(`/inventory/yarn-receipt${backQ}&error=purcont_required`);
@@ -339,6 +343,13 @@ export default async function YarnReceiptPage({
       }
       throw e;
     }
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/yarn-receipt?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteAction(formData: FormData) {
@@ -411,6 +422,9 @@ export default async function YarnReceiptPage({
         {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             {ERROR_MESSAGES[params.error]}
+            {params.error === "period_locked" && params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
           </div>
         )}
 

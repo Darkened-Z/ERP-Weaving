@@ -7,6 +7,7 @@ import { ProductionSetCalc } from "@/components/production-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -40,7 +41,7 @@ const MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP
 export default async function DailyProductionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -207,6 +208,7 @@ export default async function DailyProductionPage({
 
   async function saveAction(formData: FormData) {
     "use server";
+    try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
 
@@ -236,6 +238,7 @@ export default async function DailyProductionPage({
       shiftInchargeB: txt(formData.get("shiftInchargeB")),
       shiftInchargeC: txt(formData.get("shiftInchargeC")),
     };
+    await assertPeriodOpen(header.vDate, "INVENTORY");
 
     const setHashArr = formData.getAll("setHash") as string[];
     const mmThanSrNoArr = formData.getAll("mmThanSrNo") as string[];
@@ -519,6 +522,13 @@ export default async function DailyProductionPage({
       }
       throw e;
     }
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/daily-production?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteAction(formData: FormData) {
@@ -590,6 +600,15 @@ export default async function DailyProductionPage({
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Voucher number already exists. Try again.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period is locked. Cannot save vouchers for this date
+            {params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
+            .
           </div>
         )}
         {params.error === "dup_than" && (

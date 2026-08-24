@@ -19,6 +19,7 @@ const SECTIONS = [
     label: "Define",
     items: [
       { href: "/accounts", label: "Chart of Accounts", key: "accounts" },
+      { href: "/accounts/print", label: "Chart of Accounts (Print)", key: "accounts-print" },
       { href: "/define/grey-dsp", label: "Grey Despatch Chart", key: "grey-dsp" },
       { href: "/define/cities", label: "Area-Cities", key: "cities" },
       { href: "/define/beam-status", label: "Beam Status", key: "beam-status" },
@@ -42,6 +43,12 @@ const SECTIONS = [
       { href: "/define/inv-opening", label: "Inventory Opening", key: "inv-opening" },
       { href: "/define/branch-opening", label: "New Branch Opening", key: "branch-opening" },
       { href: "/define/chart-define", label: "Chart Define", key: "chart-define" },
+    ],
+  },
+  {
+    label: "Calculator",
+    items: [
+      { href: "/inventory/contracts/conversion-calc", label: "Grey Conversion Calculator", key: "calc-conv" },
     ],
   },
   {
@@ -123,6 +130,31 @@ const SECTIONS = [
     ],
   },
   {
+    label: "Reports",
+    subsections: [
+      {
+        label: "Grey",
+        items: [
+          { href: "/reports/grey/stock-ledger", label: "Grey Stock Ledger", key: "rpt-grey-stock-ledger" },
+          { href: "/reports/grey/shrinkage", label: "Grey Shrinkage", key: "rpt-grey-shrinkage" },
+          { href: "/reports/grey/bill-kp-pp", label: "Grey Bill KP-PP", key: "rpt-grey-bill-kp-pp" },
+          { href: "/reports/grey/delivery-order", label: "Grey Delivery Order", key: "rpt-grey-delivery-order" },
+          { href: "/reports/grey/despatch-detail-srno", label: "Despatch Detail by Sr No", key: "rpt-grey-despatch-srno" },
+        ],
+      },
+      {
+        label: "Yarn",
+        items: [
+          { href: "/reports/yarn/stock", label: "Yarn Stock (Count)", key: "rpt-yarn-stock" },
+          { href: "/reports/yarn/stock-ledger-godown", label: "Yarn Stock Ledger by Godown", key: "rpt-yarn-stock-godown" },
+          { href: "/reports/yarn/count-balance", label: "Yarn Count Balance", key: "rpt-yarn-count-balance" },
+          { href: "/reports/yarn/count-avg-rate", label: "Yarn Count Avg Rate", key: "rpt-yarn-count-avg-rate" },
+          { href: "/reports/yarn/pur-contract-history", label: "Purchase Contract History", key: "rpt-yarn-pur-cont-history" },
+        ],
+      },
+    ],
+  },
+  {
     label: "Finance",
     items: [
       { href: "/finance/cr", label: "Cash Receipt Voucher", key: "fin-cr" },
@@ -132,11 +164,22 @@ const SECTIONS = [
       { href: "/finance/jv", label: "Journal Voucher", key: "fin-jv" },
       { href: "/finance/pr", label: "Petty Cash Receipt", key: "fin-pr" },
       { href: "/finance/pc", label: "Petty Cash Payment", key: "fin-pc" },
+      { href: "/finance/finding", label: "Find Voucher", key: "finding" },
+      { href: "/finance/eod-images", label: "EOD Images", key: "eod-images" },
+      { href: "/finance/images", label: "Images", key: "images" },
       { href: "/vouchers", label: "All Vouchers", key: "vouchers" },
       { href: "/ledger", label: "General Ledger", key: "ledger" },
       { href: "/reports/trial-balance", label: "Trial Balance", key: "trial-balance" },
       { href: "/reports/daily-activity", label: "Daily Activity", key: "daily-activity" },
       { href: "/reports/aging", label: "Aging Analysis", key: "aging" },
+      { href: "/reports/aging-cr", label: "Creditors Aging (Buckets)", key: "fin-aging-cr" },
+      { href: "/reports/aging-db", label: "Debtors Aging (Buckets)", key: "fin-aging-db" },
+      { href: "/reports/aging-db-date-wise", label: "Debtors Aging Date-wise", key: "fin-aging-db-dw" },
+      { href: "/reports/cash-book", label: "Cash & Bank Book", key: "fin-cashbook" },
+      { href: "/reports/cheque-status", label: "Cheque Status", key: "fin-cheque" },
+      { href: "/reports/pl-accounts", label: "Profit & Loss", key: "fin-pl" },
+      { href: "/reports/voucher-daybook", label: "Voucher Daybook", key: "fin-daybook" },
+      { href: "/reports/gpv", label: "Print Voucher (GPV)", key: "fin-gpv" },
       { href: "/reports/grey-aging", label: "Grey Stock Aging", key: "grey-aging" },
       { href: "/reports/payroll", label: "Weaver Payroll", key: "payroll" },
       { href: "/reports/loom-efficiency", label: "Loom Efficiency", key: "loom-eff" },
@@ -144,12 +187,43 @@ const SECTIONS = [
   },
   {
     label: "Store",
+    subsections: [
+      {
+        label: "Main",
+        items: [
+          { href: "/store/parts", label: "Parts Catalog", key: "parts" },
+          { href: "/store/stock", label: "Stock Inquiry", key: "stock" },
+          { href: "/store/demand", label: "Demand Notes", key: "demand" },
+          { href: "/store/grn", label: "Goods Received", key: "grn" },
+          { href: "/store/adjustment", label: "Parts Adjustment", key: "adjustment" },
+          { href: "/store/gatepass", label: "Gate Pass", key: "gatepass" },
+        ],
+      },
+      {
+        label: "Reports",
+        items: [
+          { href: "/reports/store/parts-issues-register", label: "Parts Issues Register", key: "s-issues" },
+          { href: "/reports/store/parts-purchase-register", label: "Parts Purchase Register", key: "s-purchase" },
+          { href: "/reports/store/parts-ledger", label: "Parts Ledger", key: "s-ledger" },
+          { href: "/reports/store/cost-center-consumption", label: "Cost Center Consumption", key: "s-cc" },
+          { href: "/reports/store/cost-center-consumption-loom", label: "Loom-wise Consumption", key: "s-cc-loom" },
+          { href: "/reports/store/department-wise", label: "Department-wise", key: "s-dept" },
+          { href: "/reports/store/grn-note", label: "GRN Note (Print)", key: "s-grn-note" },
+          { href: "/reports/store/demand-print", label: "Demand (Print)", key: "s-dmd-print" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Weaving Reports",
     items: [
-      { href: "/store/parts", label: "Parts Catalog", key: "parts" },
-      { href: "/store/stock", label: "Stock Inquiry", key: "stock" },
-      { href: "/store/demand", label: "Demand Notes", key: "demand" },
-      { href: "/store/grn", label: "Goods Received", key: "grn" },
-      { href: "/store/gatepass", label: "Gate Pass", key: "gatepass" },
+      { href: "/reports/weaving/counts-accounts", label: "Counts Accounts", key: "w-counts" },
+      { href: "/reports/weaving/counts-accounts-design", label: "Counts Accounts by Design", key: "w-counts-design" },
+      { href: "/reports/weaving/counts-accounts-summary", label: "Counts Accounts Summary", key: "w-counts-sum" },
+      { href: "/reports/weaving/daily-folding", label: "Daily Folding", key: "w-daily-folding" },
+      { href: "/reports/weaving/folding-fabric", label: "Folding by Fabric Quality", key: "w-folding-fabric" },
+      { href: "/reports/weaving/folding-foreman", label: "Folding by Foreman", key: "w-folding-foreman" },
+      { href: "/reports/weaving/sizing-warping-consumption", label: "Sizing/Warping Consumption", key: "w-szg-wrp" },
     ],
   },
   {

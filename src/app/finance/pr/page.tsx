@@ -9,6 +9,7 @@ import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
 import { and, eq, gte, sql, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -104,6 +105,7 @@ function buildDetails(fyCode: string, vno: number, pettyAcc: string, lines: Grid
 
 async function saveVoucher(formData: FormData) {
   "use server";
+  try {
   const session = await getSession();
   const utCode = session?.userId ?? null;
   const idRaw = formData.get("id") as string | null;
@@ -113,6 +115,7 @@ async function saveVoucher(formData: FormData) {
 
   const pettyAcc = txt(formData.get("acc_code"));
   const vdate = ((formData.get("v_date") as string) || "").trim() || today();
+  await assertPeriodOpen(vdate, "FINANCE");
   const vtime = txt(formData.get("v_time")) ?? nowTime();
   const narration = txt(formData.get("narration")) ?? "PETTY CASH RECEIPT";
 
@@ -229,6 +232,13 @@ async function saveVoucher(formData: FormData) {
   }
   revalidatePath(BASE);
   redirect(`${BASE}?id=${newId}`);
+  } catch (e) {
+    const err = e as { message?: string; digest?: string };
+    if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+    const thru = parseLockedThroughFromError(err.message ?? "");
+    if (thru) redirect(`${BASE}?error=period_locked&thru=${thru}`);
+    throw e;
+  }
 }
 
 async function deleteVoucher(formData: FormData) {
@@ -287,7 +297,7 @@ async function setOkStatus(formData: FormData) {
 export default async function PettyCashReceiptPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -406,6 +416,8 @@ export default async function PettyCashReceiptPage({
       ? "No current fiscal year is set in Company Profile."
       : params.error === "admin_only"
       ? "Only ADMIN can delete vouchers."
+      : params.error === "period_locked"
+      ? `Period is locked. Cannot save vouchers for this date${params.thru ? ` — locked through ${params.thru}` : ""}.`
       : null;
 
   return (

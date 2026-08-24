@@ -312,6 +312,57 @@ export const systemLocking = sqliteTable("system_locking", {
   lockedBy: text("locked_by"),
 });
 
+export const endOfDayImages = sqliteTable("end_of_day_images", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  imgDate: text("img_date").notNull(),
+  category: text("category"),
+  img: text("img").notNull(),
+  remarks: text("remarks"),
+  uploadedBy: integer("uploaded_by"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  ixDate: index("ix_eod_img_date").on(t.imgDate),
+}));
+
+export const storeAdjustments = sqliteTable("store_adjustments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  adjNo: integer("adj_no").notNull(),
+  fyCode: text("fy_code").notNull(),
+  adjDate: text("adj_date").notNull(),
+  type: text("type").notNull().default("ADJ"),
+  remarks: text("remarks"),
+  itemCount: integer("item_count"),
+  totalValue: real("total_value"),
+}, (t) => ({
+  uxFyAdj: uniqueIndex("ux_store_adj_fy_no").on(t.fyCode, t.adjNo),
+}));
+
+export const storeAdjustmentDetail = sqliteTable("store_adjustment_detail", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  adjId: integer("adj_id").notNull().references(() => storeAdjustments.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  partCode: text("part_code").notNull(),
+  qty: real("qty").notNull(),
+  rate: real("rate").notNull(),
+  amount: real("amount").notNull(),
+  reason: text("reason"),
+}, (t) => ({
+  ixAdj: index("ix_store_adj_detail_adj").on(t.adjId),
+  ixPart: index("ix_store_adj_detail_part").on(t.partCode),
+}));
+
+export const periodLocks = sqliteTable("period_locks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  fyCode: text("fy_code").notNull(),
+  module: text("module").notNull(),
+  lockedThrough: text("locked_through").notNull(),
+  lockedBy: integer("locked_by"),
+  lockedAt: text("locked_at").notNull(),
+  remarks: text("remarks"),
+}, (t) => ({
+  uxFyModule: uniqueIndex("ux_period_locks_fy_module").on(t.fyCode, t.module),
+}));
+
 export const cities = sqliteTable("cities", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),

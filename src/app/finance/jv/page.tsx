@@ -8,6 +8,7 @@ import { JvBalanceBar } from "./balance-bar";
 import { db, schema } from "@/db";
 import { eq, and, sql, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -55,7 +56,7 @@ type ParsedLine = {
 
 async function saveVoucher(formData: FormData) {
   "use server";
-
+  try {
   const session = await getSession();
   const utCode = session?.userId ?? null;
 
@@ -63,6 +64,7 @@ async function saveVoucher(formData: FormData) {
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   const editing = Number.isFinite(id) && id > 0;
   const ctx = editing ? `id=${id}` : "adding=1";
+  await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "FINANCE");
 
   const profile = await db
     .select({ currentFy: schema.companyProfile.currentFy })
@@ -309,6 +311,13 @@ async function saveVoucher(formData: FormData) {
 
   revalidatePath("/finance/jv");
   redirect(`/finance/jv?id=${newId}`);
+  } catch (e) {
+    const err = e as { message?: string; digest?: string };
+    if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+    const thru = parseLockedThroughFromError(err.message ?? "");
+    if (thru) redirect(`/finance/jv?error=period_locked&thru=${thru}`);
+    throw e;
+  }
 }
 
 async function deleteVoucher(formData: FormData) {
@@ -388,6 +397,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Need at least two lines, every line with an amount must have an account, and totals must be greater than zero.",
   no_fy: "No current fiscal year set in Company Profile. Cannot save vouchers.",
   forbidden: "Only ADMIN can delete vouchers.",
+  period_locked: "Period is locked. Cannot save vouchers for this date.",
 };
 
 export default async function JournalVoucherPage({
@@ -398,6 +408,7 @@ export default async function JournalVoucherPage({
     adding?: string;
     error?: string;
     find?: string;
+    thru?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -586,6 +597,9 @@ export default async function JournalVoucherPage({
         {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             {ERROR_MESSAGES[params.error]}
+            {params.error === "period_locked" && params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
           </div>
         )}
 
