@@ -950,6 +950,7 @@ export const extYarnPurVoucher = sqliteTable("ext_yarn_pur_voucher", {
   party: text("party"),
   broker: text("broker"),
   term: text("term").notNull().default("CASH"),
+  dueDate: text("due_date"),
   img: text("img"),
   cont: text("cont"),
   pur: real("pur"),

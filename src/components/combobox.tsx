@@ -67,8 +67,25 @@ export function Combobox({
     setTyped(null);
     setOpen(false);
     mirrorDesc(o.value);
+    document.dispatchEvent(
+      new CustomEvent("combobox:change", { detail: { name, value: o.value } })
+    );
     inputRef.current?.focus();
   };
+
+  // Allow another component (e.g. a contract auto-fill) to push a value in.
+  useEffect(() => {
+    const onSet = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string };
+      if (d?.name !== name) return;
+      setVal(d.value ?? "");
+      setTyped(null);
+      mirrorDesc(d.value ?? "");
+    };
+    document.addEventListener("combobox:set", onSet);
+    return () => document.removeEventListener("combobox:set", onSet);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, options]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {

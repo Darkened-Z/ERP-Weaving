@@ -1,6 +1,9 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -22,7 +25,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const today = () => new Date().toISOString().slice(0, 10);
 
 const LOOM_TYPES = ["SULZER", "RAPIER", "AIRJET", "PROJECTILE"];
-const TERM_OPTIONS = ["CASH", "CREDIT"];
 const POSTING_OPTIONS = ["Y", "N"];
 
 const LINE_ROWS = 6;
@@ -81,9 +83,23 @@ export default async function YarnPurchaseVoucherPage({
     : [];
 
   const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
+
+  // Only leaf/party accounts (level 4+) are selectable as party / broker.
+  const partyAccounts = parties.filter((p) => p.level >= 4);
+  const partyOpts = partyAccounts.map((p) => ({
+    value: p.description,
+    label: `${p.code} — ${p.description}`,
+    desc: p.code,
+  }));
+  const descByCode: Record<string, string> = {};
+  for (const p of parties) descByCode[p.code] = p.description;
 
   const countList = await db
     .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
@@ -91,9 +107,39 @@ export default async function YarnPurchaseVoucherPage({
     .orderBy(schema.yarnCounts.countCode);
 
   const purContracts = await db
-    .select({ contNo: schema.extYarnPurContract.contNo })
+    .select()
     .from(schema.extYarnPurContract)
     .orderBy(desc(schema.extYarnPurContract.contNo));
+
+  const contractOpts = purContracts.map((c) => ({
+    value: c.contNo,
+    label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
+  }));
+  // Picking a contract in the header auto-fills the party/broker (comboboxes),
+  // the brokerage %/bag, and the read-only contract-info strip.
+  const contractMap: Record<string, Record<string, string | number>> = {};
+  for (const c of purContracts) {
+    contractMap[c.contNo] = {
+      party: c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "",
+      broker: c.broker ? descByCode[c.broker] ?? c.broker : "",
+      per_bag: c.brokagePerBag ?? "",
+      ci_rate: c.ratePerLbs ?? "",
+      ci_age: c.agePercent ?? "",
+      ci_days: c.days ?? "",
+      ci_qty: c.qtyBags ?? "",
+      ci_date: c.contDate ?? "",
+      ci_remarks: c.remarks ?? "",
+    };
+  }
+  // Line-grid fills: picking a contract # in a row fills that row's count/brand/rate.
+  const lineContractMap: Record<string, Record<string, string | number>> = {};
+  for (const c of purContracts) {
+    lineContractMap[c.contNo] = {
+      line_count: c.countCode ?? "",
+      line_brand: c.brand ?? "",
+      line_rate: c.ratePerLbs ?? "",
+    };
+  }
 
   const nextVNoVal = await db
     .select({
@@ -113,7 +159,9 @@ export default async function YarnPurchaseVoucherPage({
     const bmParty = txt(formData.get("bm_party"));
     const party = txt(formData.get("party"));
     const broker = txt(formData.get("broker"));
+    const type = txt(formData.get("type")) ?? "PUR";
     const term = txt(formData.get("term")) ?? "CASH";
+    const dueDate = term === "DUE" ? txt(formData.get("due_date")) : null;
     const posting = txt(formData.get("posting")) ?? "N";
     const img = txt(formData.get("img"));
     const cont = txt(formData.get("cont"));
@@ -214,7 +262,7 @@ export default async function YarnPurchaseVoucherPage({
         await tx
           .update(schema.extYarnPurVoucher)
           .set({
-            vDate, loomType, bmParty, party, broker, term, posting, img, cont, pur, bal,
+            vDate, type, loomType, bmParty, party, broker, term, dueDate, posting, img, cont, pur, bal,
             salAvgRate, purAvgRate, percent, perBag, rkd, lotNo, pendingFinance,
             modifiedDate: nowIso,
           })
@@ -247,8 +295,8 @@ export default async function YarnPurchaseVoucherPage({
           const inserted = await tx
             .insert(schema.extYarnPurVoucher)
             .values({
-              vNo, lvNo: nextL, vDate, type: "PUR", posting, loomType, bmParty, party, broker,
-              term, img, cont, pur, bal, salAvgRate, purAvgRate, percent, perBag, rkd, lotNo,
+              vNo, lvNo: nextL, vDate, type, posting, loomType, bmParty, party, broker,
+              term, dueDate, img, cont, pur, bal, salAvgRate, purAvgRate, percent, perBag, rkd, lotNo,
               pendingFinance, postedDate: nowIso,
             })
             .returning({ id: schema.extYarnPurVoucher.id });
@@ -370,7 +418,7 @@ export default async function YarnPurchaseVoucherPage({
         )}
 
         <datalist id="ypv-parties">
-          {parties.map((p) => (
+          {partyAccounts.map((p) => (
             <option key={p.code} value={p.description}>
               {p.code}
             </option>
@@ -470,12 +518,14 @@ export default async function YarnPurchaseVoucherPage({
                   </div>
                   <div className="lg:col-span-1">
                     <label className="label block mb-1">Type</label>
-                    <input
-                      className="input-box mono bg-gray-100 text-center"
-                      defaultValue="PUR"
-                      readOnly
-                      tabIndex={-1}
-                    />
+                    <select
+                      name="type"
+                      className="input-box mono"
+                      defaultValue={formVoucher?.type ?? "PUR"}
+                    >
+                      <option value="PUR">PURCHASE</option>
+                      <option value="RET">RETURN</option>
+                    </select>
                   </div>
                   <div className="lg:col-span-1">
                     <label className="label block mb-1">LV.No</label>
@@ -567,38 +617,29 @@ export default async function YarnPurchaseVoucherPage({
                   </div>
                   <div className="lg:col-span-10">
                     <label className="label block mb-1">Party</label>
-                    <input
+                    <Combobox
                       name="party"
-                      list="ypv-parties"
-                      className="input-box mono"
+                      options={partyOpts}
                       defaultValue={formVoucher?.party ?? ""}
+                      placeholder="Select party…"
                     />
                   </div>
 
                   <div className="lg:col-span-12">
                     <label className="label block mb-1">Broaker</label>
-                    <input
+                    <Combobox
                       name="broker"
-                      className="input-box mono"
+                      options={partyOpts}
                       defaultValue={formVoucher?.broker ?? ""}
+                      placeholder="Select broker…"
                     />
                   </div>
 
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">Term</label>
-                    <select
-                      name="term"
-                      className="input-box mono"
-                      defaultValue={formVoucher?.term ?? "CASH"}
-                    >
-                      {TERM_OPTIONS.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="lg:col-span-10">
+                  <TermSelect
+                    defaultTerm={formVoucher?.term ?? "CASH"}
+                    defaultDate={formVoucher?.dueDate ?? ""}
+                  />
+                  <div className="lg:col-span-8">
                     <label className="label block mb-1">Img</label>
                     <input
                       name="img"
@@ -609,10 +650,17 @@ export default async function YarnPurchaseVoucherPage({
 
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Cont</label>
-                    <input
+                    <Combobox
                       name="cont"
-                      className="input-box mono"
+                      options={contractOpts}
                       defaultValue={formVoucher?.cont ?? ""}
+                      placeholder="Contract #…"
+                    />
+                    <AutoFill
+                      watch="cont"
+                      map={contractMap}
+                      combos={["party", "broker"]}
+                      inputs={["per_bag", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                     />
                   </div>
                   <div className="lg:col-span-2">
@@ -705,7 +753,45 @@ export default async function YarnPurchaseVoucherPage({
                   </div>
                 </div>
 
+                {(() => {
+                  const ci = formVoucher?.cont ? contractMap[formVoucher.cont] : null;
+                  return (
+                <div className="mt-4 border border-[var(--border-light)] bg-[var(--surface)] p-3">
+                  <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2 text-[var(--muted)]">
+                    Contract Info (auto — pick a contract above)
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2">
+                    <div>
+                      <label className="label block mb-1">Cont Date</label>
+                      <input name="ci_date" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_date ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Rate/Lbs</label>
+                      <input name="ci_rate" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_rate ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Qty Bags</label>
+                      <input name="ci_qty" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_qty ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Age %</label>
+                      <input name="ci_age" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_age ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Days</label>
+                      <input name="ci_days" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_days ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Remarks</label>
+                      <input name="ci_remarks" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_remarks ?? ""} />
+                    </div>
+                  </div>
+                </div>
+                  );
+                })()}
+
                 <div className="mt-6">
+                  <RowAutoFill watch="line_cont_no" map={lineContractMap} />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
                   </div>

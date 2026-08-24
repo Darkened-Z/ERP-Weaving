@@ -80,8 +80,13 @@ export default async function YarnPurchaseContractPage({
   const upcomingLContNo = contracts.length + 1;
 
   const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
     .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
     .orderBy(schema.chartOfAccounts.description);
   const countList = await db
     .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
