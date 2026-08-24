@@ -1,8 +1,13 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { TermSelect } from "@/components/term-select";
+import { ConfirmButton } from "@/components/confirm-button";
+import { KachiCalc } from "@/components/kachi-calc";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -82,9 +87,52 @@ export default async function KachiParchiPage({
     : [];
 
   const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
+
+  const partyAccounts = parties.filter((p) => p.level >= 4);
+  const partyOpts = partyAccounts.map((p) => ({
+    value: p.description,
+    label: `${p.code} — ${p.description}`,
+    desc: p.code,
+  }));
+  const godownParty =
+    partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+
+  const convContracts = await db
+    .select()
+    .from(schema.extGreyConvContract)
+    .orderBy(desc(schema.extGreyConvContract.id));
+  const constructions = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.description);
+  const qualityByCode: Record<string, string> = Object.fromEntries(
+    constructions.map((c) => [c.code, c.description])
+  );
+  const qualityOpts = constructions.map((c) => ({
+    value: c.description,
+    label: `${c.code} — ${c.description}`,
+  }));
+  const contractOpts = convContracts.map((c) => ({
+    value: c.contNo,
+    label: `${c.contNo} — ${c.party ?? ""}`,
+  }));
+  const contractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    convContracts.map((c) => [
+      c.contNo,
+      {
+        conv_rate: c.rateMtr ?? c.convRatePerMtr,
+        grey_rate: c.grayRatePerMtr,
+        dsp_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
+      },
+    ])
+  );
 
   const nextVNoRow = await db
     .select({
@@ -92,7 +140,85 @@ export default async function KachiParchiPage({
     })
     .from(schema.extKachiParchi);
   const upcomingVNo = "KP-" + String((nextVNoRow[0]?.m ?? 0) + 1).padStart(4, "0");
-  const upcomingLvNo = parchis.length + 1;
+  const upcomingKpNo = String((nextVNoRow[0]?.m ?? 0) + 1);
+
+  const lastLvRow = await db
+    .select({ m: sql<number>`coalesce(max(${schema.extKachiParchi.lvNo}), 0)` })
+    .from(schema.extKachiParchi);
+  const lastLvNo = lastLvRow[0]?.m ?? 0;
+
+  let stockThanCalc: number | null = null;
+  let stockMtrCalc: number | null = null;
+  let avgCalc: number | null = null;
+  if (formItem?.purchaseParty && formItem?.dspQuality) {
+    const [inAgg] = await db
+      .select({
+        t: sql<number>`coalesce(sum(${schema.extGodownStock.than}), 0)`,
+        m: sql<number>`coalesce(sum(${schema.extGodownStock.meter}), 0)`,
+        amt: sql<number>`coalesce(sum(${schema.extGodownStock.meter} * coalesce(${schema.extGodownStock.rate}, 0)), 0)`,
+      })
+      .from(schema.extGodownStock)
+      .where(
+        and(
+          eq(schema.extGodownStock.gdnParty, formItem.purchaseParty),
+          eq(schema.extGodownStock.dspQuality, formItem.dspQuality),
+          eq(schema.extGodownStock.type, "STOCK")
+        )
+      );
+    const [outAgg] = await db
+      .select({
+        t: sql<number>`coalesce(sum(${schema.extKachiParchi.than}), 0)`,
+        m: sql<number>`coalesce(sum(${schema.extKachiParchi.meter}), 0)`,
+      })
+      .from(schema.extKachiParchi)
+      .where(
+        and(
+          eq(schema.extKachiParchi.purchaseParty, formItem.purchaseParty),
+          eq(schema.extKachiParchi.dspQuality, formItem.dspQuality),
+          sql`${schema.extKachiParchi.id} != ${formItem.id}`
+        )
+      );
+    stockThanCalc = (inAgg?.t ?? 0) - (outAgg?.t ?? 0);
+    stockMtrCalc = Math.round(((inAgg?.m ?? 0) - (outAgg?.m ?? 0)) * 100) / 100;
+    avgCalc =
+      (inAgg?.m ?? 0) > 0 ? Math.round(((inAgg?.amt ?? 0) / (inAgg?.m ?? 1)) * 100) / 100 : null;
+  }
+
+  const gdnLineParty = formItem?.purchaseParty ?? (isAdding ? godownParty : "");
+  let gdnLineOpts: { id: number; than: number | null; mtr: number | null; label: string }[] = [];
+  if (gdnLineParty) {
+    const lineConds = [
+      eq(schema.extGodownStock.gdnParty, gdnLineParty),
+      eq(schema.extGodownStock.type, "STOCK"),
+    ];
+    if (formItem?.dspQuality) {
+      lineConds.push(eq(schema.extGodownStock.dspQuality, formItem.dspQuality));
+    }
+    const gdnLines = await db
+      .select({
+        id: schema.extGodownStockLine.id,
+        than: schema.extGodownStockLine.than,
+        mtr: schema.extGodownStockLine.mtr,
+        status: schema.extGodownStockLine.status,
+        vNo: schema.extGodownStock.vNo,
+      })
+      .from(schema.extGodownStockLine)
+      .innerJoin(schema.extGodownStock, eq(schema.extGodownStockLine.stockId, schema.extGodownStock.id))
+      .where(and(...lineConds))
+      .orderBy(schema.extGodownStock.id, schema.extGodownStockLine.srNo);
+    const usedByThis = new Set(lines.map((l) => l.gdnLineId).filter((g): g is number => g != null));
+    gdnLineOpts = gdnLines
+      .filter((r) => r.status !== "Y" || usedByThis.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        than: r.than,
+        mtr: r.mtr,
+        label: `${r.than ?? 0} than / ${r.mtr ?? 0} mtr (V#${r.vNo})`,
+      }));
+  }
+  const gdnLineFillMap = Object.fromEntries(
+    gdnLineOpts.map((o) => [String(o.id), { line_than: o.than, line_mtr: o.mtr }])
+  );
 
   async function saveParchi(formData: FormData) {
     "use server";
@@ -112,9 +238,6 @@ export default async function KachiParchiPage({
     const meter = num(formData.get("meter"));
     const convRate = num(formData.get("conv_rate"));
     const greyRate = num(formData.get("grey_rate"));
-    const stockThan = intVal(formData.get("stock_than"));
-    const stockMtr = num(formData.get("stock_mtr"));
-    const avg = num(formData.get("avg"));
     const ratePur = num(formData.get("rate_pur"));
     const rateSal = num(formData.get("rate_sal"));
     const elCumiNum = intVal(formData.get("el_cumi_num"));
@@ -128,20 +251,28 @@ export default async function KachiParchiPage({
     const brokerName = txt(formData.get("broker_name"));
     const remarks = txt(formData.get("remarks"));
     const term = txt(formData.get("term"));
+    const dueDate = term === "DUE" ? txt(formData.get("due_date")) : null;
     const imgNo = txt(formData.get("img_no"));
+
+    if (!than || !meter) {
+      redirect(`/external/grey/kachi-parchi?error=qty_required`);
+    }
 
     const lineThan = formData.getAll("line_than") as string[];
     const lineMtr = formData.getAll("line_mtr") as string[];
+    const lineGdn = formData.getAll("line_gdn_id") as string[];
 
-    const validLines: { srNo: number; than: number | null; mtr: number | null }[] = [];
-    const lineRowCount = Math.max(lineThan.length, lineMtr.length);
+    const validLines: { srNo: number; than: number | null; mtr: number | null; gdnLineId: number | null }[] = [];
+    const lineRowCount = Math.max(lineThan.length, lineMtr.length, lineGdn.length);
     let srCounter = 1;
     for (let i = 0; i < lineRowCount; i++) {
       const t = intVal(lineThan[i] ?? null);
       const m = num(lineMtr[i] ?? null);
-      if (t == null && m == null) continue;
-      validLines.push({ srNo: srCounter++, than: t, mtr: m });
+      const g = intVal(lineGdn[i] ?? null);
+      if (t == null && m == null && g == null) continue;
+      validLines.push({ srNo: srCounter++, than: t, mtr: m, gdnLineId: g });
     }
+    const newGdnIds = [...new Set(validLines.map((l) => l.gdnLineId).filter((g): g is number => g != null))];
 
     const countCode = formData.getAll("count_code") as string[];
     const countType = formData.getAll("count_type") as string[];
@@ -192,13 +323,25 @@ export default async function KachiParchiPage({
 
     if (Number.isFinite(id) && id > 0) {
       await db.transaction(async (tx) => {
+        const prevLines = await tx
+          .select({ g: schema.extKachiParchiLine.gdnLineId })
+          .from(schema.extKachiParchiLine)
+          .where(eq(schema.extKachiParchiLine.parchiId, id));
+        const prevGdnIds = prevLines.map((l) => l.g).filter((g): g is number => g != null);
+        if (prevGdnIds.length) {
+          await tx
+            .update(schema.extGodownStockLine)
+            .set({ status: "N" })
+            .where(inArray(schema.extGodownStockLine.id, prevGdnIds));
+        }
+
         await tx
           .update(schema.extKachiParchi)
           .set({
             vDate, kpNo, type, purchaseParty, contNo, salDate, saleParty, dspQuality,
-            qualityPrint, than, meter, convRate, greyRate, stockThan, stockMtr, avg,
+            qualityPrint, than, meter, convRate, greyRate,
             ratePur, rateSal, elCumiNum, elCumiDen, badCumiNum, badCumiDen, elMeter,
-            baadMeter, totalElBadMtrs, printingName, brokerName, remarks, term, imgNo,
+            baadMeter, totalElBadMtrs, printingName, brokerName, remarks, term, dueDate, imgNo,
             modifiedDate: nowIso,
           })
           .where(eq(schema.extKachiParchi.id, id));
@@ -211,6 +354,12 @@ export default async function KachiParchiPage({
         }
         if (validCounts.length) {
           await tx.insert(schema.extKachiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: id })));
+        }
+        if (newGdnIds.length) {
+          await tx
+            .update(schema.extGodownStockLine)
+            .set({ status: "Y" })
+            .where(inArray(schema.extGodownStockLine.id, newGdnIds));
         }
       });
 
@@ -229,16 +378,18 @@ export default async function KachiParchiPage({
             })
             .from(schema.extKachiParchi);
           const vNo = providedVNo || "KP-" + String((existingRows[0]?.m ?? 0) + 1).padStart(4, "0");
-          const countRow = await tx.select({ c: sql<number>`count(*)` }).from(schema.extKachiParchi);
-          const nextL = (countRow[0]?.c ?? 0) + 1;
+          const lvRow = await tx
+            .select({ m: sql<number>`coalesce(max(${schema.extKachiParchi.lvNo}), 0)` })
+            .from(schema.extKachiParchi);
+          const nextL = (lvRow[0]?.m ?? 0) + 1;
 
           const inserted = await tx
             .insert(schema.extKachiParchi)
             .values({
               vNo, lvNo: nextL, vDate, kpNo, type, purchaseParty, contNo, salDate, saleParty,
-              dspQuality, qualityPrint, than, meter, convRate, greyRate, stockThan, stockMtr,
-              avg, ratePur, rateSal, elCumiNum, elCumiDen, badCumiNum, badCumiDen, elMeter,
-              baadMeter, totalElBadMtrs, printingName, brokerName, remarks, term, imgNo,
+              dspQuality, qualityPrint, than, meter, convRate, greyRate,
+              ratePur, rateSal, elCumiNum, elCumiDen, badCumiNum, badCumiDen, elMeter,
+              baadMeter, totalElBadMtrs, printingName, brokerName, remarks, term, dueDate, imgNo,
               postedDate: nowIso,
             })
             .returning({ id: schema.extKachiParchi.id });
@@ -249,6 +400,12 @@ export default async function KachiParchiPage({
           }
           if (validCounts.length) {
             await tx.insert(schema.extKachiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: insertedId })));
+          }
+          if (newGdnIds.length) {
+            await tx
+              .update(schema.extGodownStockLine)
+              .set({ status: "Y" })
+              .where(inArray(schema.extGodownStockLine.id, newGdnIds));
           }
           return insertedId;
         });
@@ -275,6 +432,17 @@ export default async function KachiParchiPage({
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
+      const prevLines = await tx
+        .select({ g: schema.extKachiParchiLine.gdnLineId })
+        .from(schema.extKachiParchiLine)
+        .where(eq(schema.extKachiParchiLine.parchiId, id));
+      const prevGdnIds = prevLines.map((l) => l.g).filter((g): g is number => g != null);
+      if (prevGdnIds.length) {
+        await tx
+          .update(schema.extGodownStockLine)
+          .set({ status: "N" })
+          .where(inArray(schema.extGodownStockLine.id, prevGdnIds));
+      }
       await tx.delete(schema.extKachiParchiCount).where(eq(schema.extKachiParchiCount.parchiId, id));
       await tx.delete(schema.extKachiParchiLine).where(eq(schema.extKachiParchiLine.parchiId, id));
       await tx.delete(schema.extKachiParchi).where(eq(schema.extKachiParchi.id, id));
@@ -340,14 +508,11 @@ export default async function KachiParchiPage({
             V.No already exists. Try again.
           </div>
         )}
-
-        <datalist id="kp-parties">
-          {parties.map((p) => (
-            <option key={p.code} value={p.description}>
-              {p.code}
-            </option>
-          ))}
-        </datalist>
+        {params.error === "qty_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Than and Meter are required.
+          </div>
+        )}
 
         <form id="kp-find-form" method="GET" action="/external/grey/kachi-parchi" className="hidden"></form>
 
@@ -370,7 +535,7 @@ export default async function KachiParchiPage({
                   {formItem && (
                     <form action={deleteParchi} className="inline">
                       <input type="hidden" name="id" value={formItem.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Del</button>
+                      <ConfirmButton>Del</ConfirmButton>
                     </form>
                   )}
                 </div>
@@ -403,7 +568,7 @@ export default async function KachiParchiPage({
                     <label className="label block mb-1">LV.No</label>
                     <input
                       className={roCls + " text-center"}
-                      defaultValue={formItem?.lvNo ?? upcomingLvNo}
+                      defaultValue={formItem?.lvNo ?? lastLvNo}
                       readOnly
                       tabIndex={-1}
                     />
@@ -432,7 +597,7 @@ export default async function KachiParchiPage({
                     <input
                       name="kp_no"
                       className="input-box mono"
-                      defaultValue={formItem?.kpNo ?? ""}
+                      defaultValue={formItem?.kpNo ?? (isAdding ? upcomingKpNo : "")}
                     />
                   </div>
                   <div className="lg:col-span-2">
@@ -448,24 +613,27 @@ export default async function KachiParchiPage({
                   </div>
                   <div className="lg:col-span-7">
                     <label className="label block mb-1">Purchase Party</label>
-                    <div className="grid grid-cols-[100px_1fr] gap-2">
-                      <input name="purchase_party_code" className="input-box mono" placeholder="Code" />
-                      <input
-                        name="purchase_party"
-                        list="kp-parties"
-                        className="input-box mono"
-                        placeholder="Description"
-                        defaultValue={formItem?.purchaseParty ?? ""}
-                      />
-                    </div>
+                    <Combobox
+                      name="purchase_party"
+                      options={partyOpts}
+                      defaultValue={formItem?.purchaseParty ?? (isAdding ? godownParty : "")}
+                      placeholder="Select party…"
+                    />
                   </div>
 
                   <div className="lg:col-span-4">
                     <label className="label block mb-1">Cont #</label>
-                    <input
+                    <Combobox
                       name="cont_no"
-                      className="input-box mono"
+                      options={contractOpts}
                       defaultValue={formItem?.contNo ?? ""}
+                      placeholder="Contract #…"
+                    />
+                    <AutoFill
+                      watch="cont_no"
+                      map={contractMap}
+                      combos={["dsp_quality"]}
+                      inputs={["conv_rate", "grey_rate"]}
                     />
                   </div>
                   <div className="lg:col-span-3">
@@ -474,29 +642,26 @@ export default async function KachiParchiPage({
                       name="sal_date"
                       type="date"
                       className="input-box mono"
-                      defaultValue={formItem?.salDate ?? ""}
+                      defaultValue={formItem?.salDate ?? (isAdding ? today() : "")}
                     />
                   </div>
                   <div className="lg:col-span-5">
                     <label className="label block mb-1">Sale Party</label>
-                    <div className="grid grid-cols-[100px_1fr] gap-2">
-                      <input name="sale_party_code" className="input-box mono" placeholder="Code" />
-                      <input
-                        name="sale_party"
-                        list="kp-parties"
-                        className="input-box mono"
-                        placeholder="Description"
-                        defaultValue={formItem?.saleParty ?? ""}
-                      />
-                    </div>
+                    <Combobox
+                      name="sale_party"
+                      options={partyOpts}
+                      defaultValue={formItem?.saleParty ?? ""}
+                      placeholder="Select party…"
+                    />
                   </div>
 
                   <div className="lg:col-span-6">
                     <label className="label block mb-1">Dsp. Quality</label>
-                    <input
+                    <Combobox
                       name="dsp_quality"
-                      className="input-box mono"
+                      options={qualityOpts}
                       defaultValue={formItem?.dspQuality ?? ""}
+                      placeholder="Quality…"
                     />
                   </div>
                   <div className="lg:col-span-6">
@@ -572,34 +737,56 @@ export default async function KachiParchiPage({
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Stock Than</label>
                     <input
-                      name="stock_than"
                       type="number"
                       step="1"
                       className={roCls + " text-right"}
-                      defaultValue={formItem?.stockThan ?? ""}
+                      defaultValue={stockThanCalc ?? ""}
                       readOnly
+                      tabIndex={-1}
                     />
                   </div>
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Stock Mtr</label>
                     <input
-                      name="stock_mtr"
                       type="number"
                       step="any"
                       className={roCls + " text-right"}
-                      defaultValue={formItem?.stockMtr ?? ""}
+                      defaultValue={stockMtrCalc ?? ""}
                       readOnly
+                      tabIndex={-1}
                     />
                   </div>
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Avg</label>
                     <input
-                      name="avg"
                       type="number"
                       step="any"
                       className={roCls + " text-right"}
-                      defaultValue={formItem?.avg ?? ""}
+                      defaultValue={avgCalc ?? ""}
                       readOnly
+                      tabIndex={-1}
+                    />
+                  </div>
+                  <div className="lg:col-span-3">
+                    <label className="label block mb-1">Amt Pur</label>
+                    <input
+                      name="amt_pur_disp"
+                      type="number"
+                      step="any"
+                      className={roCls + " text-right"}
+                      readOnly
+                      tabIndex={-1}
+                    />
+                  </div>
+                  <div className="lg:col-span-3">
+                    <label className="label block mb-1">Conv Amt</label>
+                    <input
+                      name="conv_amt_disp"
+                      type="number"
+                      step="any"
+                      className={roCls + " text-right"}
+                      readOnly
+                      tabIndex={-1}
                     />
                   </div>
 
@@ -649,8 +836,10 @@ export default async function KachiParchiPage({
                       name="el_meter"
                       type="number"
                       step="any"
-                      className="input-box mono text-right"
+                      className={roCls + " text-right"}
                       defaultValue={formItem?.elMeter ?? ""}
+                      readOnly
+                      tabIndex={-1}
                     />
                   </div>
                   <div className="lg:col-span-2">
@@ -659,8 +848,10 @@ export default async function KachiParchiPage({
                       name="baad_meter"
                       type="number"
                       step="any"
-                      className="input-box mono text-right"
+                      className={roCls + " text-right"}
                       defaultValue={formItem?.baadMeter ?? ""}
+                      readOnly
+                      tabIndex={-1}
                     />
                   </div>
                   <div className="lg:col-span-2">
@@ -669,25 +860,29 @@ export default async function KachiParchiPage({
                       name="total_el_bad_mtrs"
                       type="number"
                       step="any"
-                      className="input-box mono text-right"
+                      className={roCls + " text-right"}
                       defaultValue={formItem?.totalElBadMtrs ?? ""}
+                      readOnly
+                      tabIndex={-1}
                     />
                   </div>
 
                   <div className="lg:col-span-4">
                     <label className="label block mb-1">Printing Name</label>
-                    <input
+                    <Combobox
                       name="printing_name"
-                      className="input-box mono"
+                      options={partyOpts}
                       defaultValue={formItem?.printingName ?? ""}
+                      placeholder="Party or free text…"
                     />
                   </div>
                   <div className="lg:col-span-4">
                     <label className="label block mb-1">Broker Name</label>
-                    <input
+                    <Combobox
                       name="broker_name"
-                      className="input-box mono"
+                      options={partyOpts}
                       defaultValue={formItem?.brokerName ?? ""}
+                      placeholder="Broker or free text…"
                     />
                   </div>
                   <div className="lg:col-span-4">
@@ -699,15 +894,11 @@ export default async function KachiParchiPage({
                     />
                   </div>
 
-                  <div className="lg:col-span-3">
-                    <label className="label block mb-1">Term</label>
-                    <input
-                      name="term"
-                      className="input-box mono"
-                      defaultValue={formItem?.term ?? ""}
-                    />
-                  </div>
-                  <div className="lg:col-span-3">
+                  <TermSelect
+                    defaultTerm={formItem?.term ?? "CASH"}
+                    defaultDate={formItem?.dueDate ?? ""}
+                  />
+                  <div className="lg:col-span-2">
                     <label className="label block mb-1">Img #</label>
                     <input
                       name="img_no"
@@ -769,6 +960,8 @@ export default async function KachiParchiPage({
                   </div>
                 </div>
 
+                <KachiCalc />
+
                 <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
                   <a href="/external/grey/kachi-parchi?adding=1" className="btn btn-outline btn-sm">New</a>
                   <button type="submit" className="btn btn-sm">Save</button>
@@ -782,7 +975,7 @@ export default async function KachiParchiPage({
                     {formItem && (
                       <form action={deleteParchi} className="inline">
                         <input type="hidden" name="id" value={formItem.id} />
-                        <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                        <ConfirmButton>Delete</ConfirmButton>
                       </form>
                     )}
                   </div>
@@ -797,12 +990,14 @@ export default async function KachiParchiPage({
                 <span>Line Items ({LINE_ROWS})</span>
               </div>
               <div className="overflow-x-auto" style={{ maxHeight: "780px", overflowY: "auto" }}>
-                <table className="w-full text-[11px]">
+                <RowAutoFill watch="line_gdn_id" map={gdnLineFillMap} />
+                <table className="w-full text-[11px]" style={{ minWidth: "320px" }}>
                   <thead>
                     <tr className="bg-gray-50">
                       <th className="px-1 py-1 border-b border-black" style={{ width: 30 }}>Sr#</th>
                       <th className="px-1 py-1 border-b border-black text-right">Than</th>
                       <th className="px-1 py-1 border-b border-black text-right">Mtr</th>
+                      <th className="px-1 py-1 border-b border-black">Gdn Line</th>
                       <th className="px-1 py-1 border-b border-black" style={{ width: 22 }}></th>
                     </tr>
                   </thead>
@@ -831,6 +1026,22 @@ export default async function KachiParchiPage({
                               className={gridCellNumCls}
                               defaultValue={r?.mtr ?? ""}
                             />
+                          </td>
+                          <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                            <select
+                              form="kp-save-form"
+                              name="line_gdn_id"
+                              className={gridCellCls}
+                              defaultValue={r?.gdnLineId ?? ""}
+                            >
+                              <option value="">—</option>
+                              {r?.gdnLineId != null && !gdnLineOpts.some((o) => o.id === r.gdnLineId) && (
+                                <option value={r.gdnLineId}>#{r.gdnLineId}</option>
+                              )}
+                              {gdnLineOpts.map((o) => (
+                                <option key={o.id} value={o.id}>{o.label}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
                         </tr>

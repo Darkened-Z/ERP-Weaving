@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function YarnCountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; q?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const counts = await db.select().from(schema.yarnCounts).orderBy(schema.yarnCounts.countCode);
@@ -27,6 +28,16 @@ export default async function YarnCountsPage({
   const isAdding = params.adding === "1";
   const formItem = isAdding ? null : selected;
 
+  const q = (params.q ?? "").trim();
+  const ql = q.toLowerCase();
+  const listed = !q
+    ? counts
+    : counts.filter(
+        (c) =>
+          (c.countCode ?? "").toLowerCase().includes(ql) ||
+          c.description.toLowerCase().includes(ql)
+      );
+
   async function saveCount(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
@@ -36,15 +47,26 @@ export default async function YarnCountsPage({
     const type = (formData.get("blend") as string)?.trim() || "COTTON";
     const status = (formData.get("status") as string)?.trim() || "A";
 
+    const existing = await db.select().from(schema.yarnCounts);
+    const ownId = id ? parseInt(id) : null;
+    const dup = existing.some(
+      (c) =>
+        c.id !== ownId &&
+        c.description.trim().toLowerCase() === description.toLowerCase() &&
+        c.type === type
+    );
+    if (dup) {
+      redirect("/define/yarn-counts?" + (id ? `id=${id}&` : "adding=1&") + "error=dup_desc_blend");
+    }
+
     if (id) {
       // code is locked — never changed after creation
       await db.update(schema.yarnCounts).set({
         description, type, status,
       }).where(eq(schema.yarnCounts.id, parseInt(id)));
     } else {
-      const existing = await db.select({ code: schema.yarnCounts.countCode }).from(schema.yarnCounts);
       const nextN = existing.reduce((m, r) => {
-        const n = parseInt(r.code ?? "", 10);
+        const n = parseInt(r.countCode ?? "", 10);
         return Number.isFinite(n) && n > m ? n : m;
       }, 0) + 1;
       await db.insert(schema.yarnCounts).values({
@@ -86,12 +108,17 @@ export default async function YarnCountsPage({
                   {formItem && (
                     <form action={deleteCount} className="inline">
                       <input type="hidden" name="id" value={formItem.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                      <ConfirmButton>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>
               </div>
 
+              {params.error === "dup_desc_blend" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  A count with this description and blend already exists.
+                </div>
+              )}
               <form action={saveCount}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
                 <div className="grid grid-cols-1 gap-y-3">
@@ -134,10 +161,12 @@ export default async function YarnCountsPage({
           </div>
 
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <form method="get" className="flex items-center gap-2 mb-3">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">Find</div>
-              <input className="input-box flex-1 text-[13px]" placeholder="Search by Desc or Code..." />
-            </div>
+              <input name="q" defaultValue={q} className="input-box flex-1 text-[13px]" placeholder="Search by Desc or Code..." />
+              <button type="submit" className="btn btn-outline btn-sm">Find</button>
+              {q && <a href="/define/yarn-counts" className="btn btn-outline btn-sm">Clear</a>}
+            </form>
             <div className="overflow-x-auto" style={{ maxHeight: "70vh", overflowY: "auto" }}>
               <table>
                 <thead>
@@ -148,12 +177,12 @@ export default async function YarnCountsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {counts.map((c) => {
+                  {listed.map((c) => {
                     const isSel = c.id === selected?.id;
                     return (
                       <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                         <td>
-                          <a href={`/define/yarn-counts?id=${c.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
+                          <a href={`/define/yarn-counts?id=${c.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
                             {c.description}
                           </a>
                         </td>

@@ -2,8 +2,13 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
+import { Combobox } from "@/components/combobox";
+import { RowAutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
+import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, gte, sql, desc } from "drizzle-orm";
+import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -32,6 +37,8 @@ const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
 async function saveVoucher(formData: FormData) {
   "use server";
+  const session = await getSession();
+  const utCode = session?.userId ?? null;
   const idRaw = formData.get("id") as string | null;
   const idParsed = idRaw ? parseInt(idRaw, 10) : NaN;
   const editing = Number.isFinite(idParsed) && idParsed > 0;
@@ -51,7 +58,8 @@ async function saveVoucher(formData: FormData) {
       description: schema.chartOfAccounts.description,
       descShort: schema.chartOfAccounts.descShort,
     })
-    .from(schema.chartOfAccounts);
+    .from(schema.chartOfAccounts)
+    .where(gte(schema.chartOfAccounts.level, 4));
   const codeSet = new Set(accts.map((a) => a.code));
   const shortToCode = new Map<string, string>();
   const descToCode = new Map<string, string>();
@@ -100,7 +108,7 @@ async function saveVoucher(formData: FormData) {
   const cashRaw = txt(formData.get("cash_acc")) ?? "";
   const cashCode = resolveAcc(cashRaw, cashRaw);
 
-  const shorts = formData.getAll("line_short") as string[];
+  const accs = formData.getAll("line_acc") as string[];
   const titles = formData.getAll("line_title") as string[];
   const yarns = formData.getAll("line_yarn") as string[];
   const narrs = formData.getAll("line_narr") as string[];
@@ -109,7 +117,7 @@ async function saveVoucher(formData: FormData) {
   const amounts = formData.getAll("line_amount") as string[];
   const ccIn = formData.getAll("line_cc") as string[];
 
-  const rowCount = Math.max(shorts.length, titles.length, amounts.length);
+  const rowCount = Math.max(accs.length, titles.length, amounts.length);
   type Row = {
     accCode: string;
     narr: string | null;
@@ -122,11 +130,11 @@ async function saveVoucher(formData: FormData) {
   const rows: Row[] = [];
   let badAccount = false;
   for (let i = 0; i < rowCount; i++) {
-    const short = (shorts[i] ?? "").trim();
+    const acc = (accs[i] ?? "").trim();
     const title = (titles[i] ?? "").trim();
     const amount = num(amounts[i]);
     if (amount == null || amount <= 0) continue;
-    const accCode = resolveAcc(short, title);
+    const accCode = resolveAcc(acc, title);
     if (!accCode) {
       badAccount = true;
       continue;
@@ -150,14 +158,14 @@ async function saveVoucher(formData: FormData) {
 
   const buildDetails = (vno: number): (typeof schema.transDetail.$inferInsert)[] => {
     const details: (typeof schema.transDetail.$inferInsert)[] = [];
-    let srno = 1;
-    for (const r of rows) {
+    rows.forEach((r, i) => {
       details.push({
         fyCode,
         vtype: VTYPE,
         vno,
-        srno: srno++,
+        srno: i + 1,
         accCode: r.accCode,
+        partyCode: cashCode,
         ccCode: r.ccCode,
         narration: r.narr,
         debit: r.amount,
@@ -166,16 +174,20 @@ async function saveVoucher(formData: FormData) {
         chqDate: r.chqDate,
         yarnCount: r.yarn,
       });
-    }
-    details.push({
-      fyCode,
-      vtype: VTYPE,
-      vno,
-      srno: srno++,
-      accCode: cashCode!,
-      narration: headNarr ?? "Cash paid",
-      debit: 0,
-      credit: total,
+    });
+    rows.forEach((r, i) => {
+      const chq = r.chqNo ? ` CHQ.#: ${r.chqNo}${r.chqDate ? " DT." + r.chqDate : ""}` : "";
+      details.push({
+        fyCode,
+        vtype: VTYPE,
+        vno,
+        srno: 100 + i,
+        accCode: cashCode!,
+        partyCode: cashCode,
+        narration: ((r.narr ?? "") + chq).trim() || null,
+        debit: 0,
+        credit: r.amount,
+      });
     });
     return details;
   };
@@ -206,6 +218,7 @@ async function saveVoucher(formData: FormData) {
           img,
           balanceAmount: total,
           vtime: main.vtime ?? nowTime(),
+          utCode,
         })
         .where(eq(schema.transMain.id, id));
       await tx
@@ -247,6 +260,7 @@ async function saveVoucher(formData: FormData) {
             trnType,
             img,
             balanceAmount: total,
+            utCode,
           })
           .returning({ id: schema.transMain.id });
         const insertedId = inserted[0].id;
@@ -268,6 +282,8 @@ async function saveVoucher(formData: FormData) {
 
 async function deleteVoucher(formData: FormData) {
   "use server";
+  const session = await getSession();
+  if (session?.roleName !== "ADMIN") redirect(`${BASE}?error=admin_only`);
   const id = num(formData.get("id"));
   if (id === null) return;
   const [main] = await db
@@ -292,6 +308,30 @@ async function deleteVoucher(formData: FormData) {
   redirect(BASE);
 }
 
+async function setOkStatus(formData: FormData) {
+  "use server";
+  const id = num(formData.get("id"));
+  if (id === null) return;
+  const [main] = await db
+    .select()
+    .from(schema.transMain)
+    .where(eq(schema.transMain.id, id))
+    .limit(1);
+  if (!main) redirect(BASE);
+  await db
+    .update(schema.transDetail)
+    .set({ statusOk: formData.get("ok") ? "OK" : null })
+    .where(
+      and(
+        eq(schema.transDetail.fyCode, main.fyCode),
+        eq(schema.transDetail.vtype, VTYPE),
+        eq(schema.transDetail.vno, main.vno)
+      )
+    );
+  revalidatePath(BASE);
+  redirect(`${BASE}?id=${id}`);
+}
+
 const ERR_MSG: Record<string, string> = {
   code_exists: "Voucher number already exists. Try again.",
   no_fy: "Company profile has no current fiscal year configured.",
@@ -299,6 +339,7 @@ const ERR_MSG: Record<string, string> = {
   no_cash: "Set a valid Cash A/C (contra account) before saving.",
   bad_total: "Total must be greater than zero.",
   bad_account: "A line has an account name that does not match the Chart of Accounts.",
+  admin_only: "Only ADMIN can delete vouchers.",
 };
 
 export default async function CashPaymentPage({
@@ -319,23 +360,29 @@ export default async function CashPaymentPage({
   const fyCode = company?.currentFy ?? "";
 
   const pat = findFilter ? `%${escapeLike(findFilter)}%` : "";
-  const vouchers = findFilter
-    ? await db
-        .select()
-        .from(schema.transMain)
-        .where(
-          sql`${schema.transMain.vtype} = ${VTYPE} AND (${schema.transMain.narration} LIKE ${pat} ESCAPE '\\' OR CAST(${schema.transMain.vno} AS TEXT) LIKE ${pat} ESCAPE '\\')`
-        )
-        .orderBy(desc(schema.transMain.id))
-        .limit(200)
-    : await db
-        .select()
-        .from(schema.transMain)
-        .where(eq(schema.transMain.vtype, VTYPE))
-        .orderBy(desc(schema.transMain.id))
-        .limit(200);
+  const listWhere = and(
+    eq(schema.transMain.vtype, VTYPE),
+    fyCode ? eq(schema.transMain.fyCode, fyCode) : undefined,
+    findFilter
+      ? sql`(${schema.transMain.narration} LIKE ${pat} ESCAPE '\\' OR CAST(${schema.transMain.vno} AS TEXT) LIKE ${pat} ESCAPE '\\')`
+      : undefined
+  );
+  const vouchers = await db
+    .select()
+    .from(schema.transMain)
+    .where(listWhere)
+    .orderBy(desc(schema.transMain.id))
+    .limit(200);
 
-  const selected = isEditing ? vouchers.find((v) => v.id === idParam) ?? null : null;
+  let selected = isEditing ? vouchers.find((v) => v.id === idParam) ?? null : null;
+  if (isEditing && !selected) {
+    const [row] = await db
+      .select()
+      .from(schema.transMain)
+      .where(and(eq(schema.transMain.id, idParam), eq(schema.transMain.vtype, VTYPE)))
+      .limit(1);
+    selected = row ?? null;
+  }
   const formVoucher = isAdding ? null : selected;
 
   const detailLines = formVoucher
@@ -351,7 +398,7 @@ export default async function CashPaymentPage({
         )
         .orderBy(schema.transDetail.srno)
     : [];
-  const gridLines = detailLines.filter((l) => (l.debit ?? 0) > 0);
+  const gridLines = detailLines.filter((l) => l.srno < 50 && (l.debit ?? 0) > 0);
 
   const accounts = await db
     .select({
@@ -360,13 +407,26 @@ export default async function CashPaymentPage({
       descShort: schema.chartOfAccounts.descShort,
     })
     .from(schema.chartOfAccounts)
+    .where(gte(schema.chartOfAccounts.level, 4))
     .orderBy(schema.chartOfAccounts.code);
+  const yarnList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
   const costCenters = await db
     .select({ code: schema.costCenters.code, description: schema.costCenters.description })
     .from(schema.costCenters)
     .orderBy(schema.costCenters.code);
 
   const codeToAcc = new Map(accounts.map((a) => [a.code, a]));
+  const accOpts = accounts.map((a) => ({
+    value: a.code,
+    label: `${a.code} — ${a.description}`,
+    desc: a.description,
+  }));
+  const accDescMap = Object.fromEntries(
+    accounts.map((a) => [a.code, { line_title: a.description }])
+  );
   const ccCodeToDesc = new Map(costCenters.map((c) => [c.code, c.description]));
   const defaultCash =
     accounts.find((a) => (a.descShort ?? "").trim().toUpperCase() === "CASH") ??
@@ -390,15 +450,13 @@ export default async function CashPaymentPage({
     .groupBy(schema.transDetail.fyCode, schema.transDetail.vno);
   const totalMap = new Map(totalsRows.map((r) => [`${r.fy}|${r.vno}`, r.total]));
 
-  const lvCount = vouchers.length;
-  const gridSum = gridLines.reduce((s, l) => s + (l.debit ?? 0), 0);
+  const lastVno = maxRow?.max ?? 0;
   const rowsToShow = Math.max(LINE_ROWS, gridLines.length + 2);
   const formatNum = (n?: number | null) =>
     n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
-  const cashDefaultValue = formVoucher
-    ? codeToAcc.get(formVoucher.accCode ?? "")?.description ?? formVoucher.accCode ?? ""
-    : defaultCash?.description ?? "";
+  const cashDefaultValue = formVoucher ? formVoucher.accCode ?? "" : defaultCash?.code ?? "";
+  const cashTitleDefault = codeToAcc.get(cashDefaultValue)?.description ?? "";
 
   return (
     <Shell active="fin-cp">
@@ -445,19 +503,10 @@ export default async function CashPaymentPage({
           </div>
         )}
 
-        <datalist id="coa-short">
-          {accounts
-            .filter((a) => a.descShort)
-            .map((a) => (
-              <option key={a.code} value={a.descShort!}>
-                {a.code} — {a.description}
-              </option>
-            ))}
-        </datalist>
-        <datalist id="coa-title">
-          {accounts.map((a) => (
-            <option key={a.code} value={a.description}>
-              {a.code}
+        <datalist id="fin-yarns">
+          {yarnList.map((y) => (
+            <option key={y.countCode} value={y.countCode}>
+              {y.description ? `${y.countCode} — ${y.description}` : y.countCode}
             </option>
           ))}
         </datalist>
@@ -481,9 +530,23 @@ export default async function CashPaymentPage({
                 : TITLE}
             </div>
             <div className="flex gap-2 no-print flex-wrap">
-              <button type="button" className="btn btn-outline btn-sm cursor-default" title="Clear-OK (Oracle)">
-                Clear-OK
-              </button>
+              {formVoucher && (
+                <>
+                  <form action={setOkStatus} className="inline">
+                    <input type="hidden" name="id" value={formVoucher.id} />
+                    <input type="hidden" name="ok" value="1" />
+                    <button type="submit" className="btn btn-outline btn-sm">
+                      OK
+                    </button>
+                  </form>
+                  <form action={setOkStatus} className="inline">
+                    <input type="hidden" name="id" value={formVoucher.id} />
+                    <button type="submit" className="btn btn-outline btn-sm">
+                      Clear-OK
+                    </button>
+                  </form>
+                </>
+              )}
               <button type="button" className="btn btn-outline btn-sm cursor-default" title="Brows (Oracle)">
                 Brows …
               </button>
@@ -497,9 +560,9 @@ export default async function CashPaymentPage({
               {formVoucher && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formVoucher.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
+                  <ConfirmButton message="Delete this voucher? This cannot be undone.">
                     Del
-                  </button>
+                  </ConfirmButton>
                 </form>
               )}
               <a href={BASE} className="btn btn-outline btn-sm">
@@ -544,7 +607,7 @@ export default async function CashPaymentPage({
                 <label className="label block mb-1">LV.No</label>
                 <input
                   className="input-box mono bg-gray-100 text-center"
-                  value={lvCount}
+                  value={lastVno}
                   readOnly
                   tabIndex={-1}
                 />
@@ -576,14 +639,24 @@ export default async function CashPaymentPage({
                   defaultValue={formVoucher?.expDate ?? ""}
                 />
               </div>
-              <div className="lg:col-span-5">
+              <div className="lg:col-span-4">
                 <label className="label block mb-1">Cash A/C (contra — credited)</label>
-                <input
+                <Combobox
                   name="cash_acc"
-                  list="coa-title"
-                  className="input-box mono"
+                  options={accOpts}
                   defaultValue={cashDefaultValue}
                   placeholder="F9 — Chart of Accounts"
+                  descTargetId="cp-cash-title"
+                />
+              </div>
+              <div className="lg:col-span-4">
+                <label className="label block mb-1">Tittle</label>
+                <input
+                  id="cp-cash-title"
+                  className="input-box mono bg-gray-100"
+                  defaultValue={cashTitleDefault}
+                  readOnly
+                  tabIndex={-1}
                 />
               </div>
               <div className="lg:col-span-5">
@@ -598,14 +671,15 @@ export default async function CashPaymentPage({
 
             <div className="mt-6">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
-                Payment Lines — each line is DEBITED; Cash A/C is credited for the total
+                Payment Lines — each line is DEBITED; Cash A/C is credited per line
               </div>
+              <RowAutoFill watch="line_acc" map={accDescMap} />
               <div className="overflow-x-auto border border-black">
                 <table className="mono text-[12px]" style={{ minWidth: 1400 }}>
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}>Sr#</th>
-                      <th style={{ width: 130 }}>Short Name</th>
+                      <th style={{ width: 200 }}>Account (F9)</th>
                       <th style={{ width: 220 }}>Tittle</th>
                       <th style={{ width: 34 }}>OK</th>
                       <th style={{ width: 110 }}>Yarn Count</th>
@@ -625,25 +699,29 @@ export default async function CashPaymentPage({
                         <tr key={i}>
                           <td className="text-center text-[var(--muted)]">{i + 1}</td>
                           <td>
-                            <input
-                              name="line_short"
-                              list="coa-short"
+                            <Combobox
+                              name="line_acc"
+                              options={accOpts}
+                              defaultValue={l?.accCode ?? ""}
                               className="input-box mono text-[12px]"
-                              defaultValue={acc?.descShort ?? ""}
                             />
                           </td>
                           <td>
                             <input
                               name="line_title"
-                              list="coa-title"
-                              className="input-box mono text-[12px]"
+                              className="input-box mono text-[12px] bg-gray-50"
                               defaultValue={acc?.description ?? ""}
+                              readOnly
+                              tabIndex={-1}
                             />
                           </td>
-                          <td className="text-center text-[10px] text-[var(--muted)]">OK</td>
+                          <td className="text-center text-[10px] text-[var(--muted)]">
+                            {l?.statusOk === "OK" ? "OK" : ""}
+                          </td>
                           <td>
                             <input
                               name="line_yarn"
+                              list="fin-yarns"
                               className="input-box mono text-[12px]"
                               defaultValue={l?.yarnCount ?? ""}
                             />
@@ -697,7 +775,7 @@ export default async function CashPaymentPage({
                 </table>
               </div>
               <div className="text-[10px] text-[var(--muted)] mt-2">
-                Empty rows (no amount) are ignored. Short Name or Tittle must match an account. On update all lines are replaced.
+                Empty rows (no amount) are ignored. Account must match a level 4+ account. On update all lines are replaced.
               </div>
             </div>
 
@@ -712,23 +790,16 @@ export default async function CashPaymentPage({
               <a href={BASE} className="btn btn-outline btn-sm">
                 Exit
               </a>
-              {formVoucher && (
-                <button type="submit" formAction={deleteVoucher} className="btn btn-outline btn-sm">
-                  Del
-                </button>
-              )}
               <div className="ml-auto flex items-end gap-3">
                 <div>
                   <label className="label block mb-1">Password</label>
                   <input type="password" name="pswd" className="input-box mono w-36" tabIndex={-1} />
                 </div>
-                <div>
+                <div className="w-44">
                   <label className="label block mb-1 text-right">Balance Amount</label>
-                  <input
-                    className="input-box mono bg-gray-100 text-right w-44 font-bold"
-                    value={formatNum(formVoucher ? formVoucher.balanceAmount ?? gridSum : 0)}
-                    readOnly
-                    tabIndex={-1}
+                  <VoucherBalance
+                    initial={formVoucher?.balanceAmount ?? 0}
+                    fieldName="line_amount"
                   />
                 </div>
               </div>

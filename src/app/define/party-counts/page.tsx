@@ -1,5 +1,7 @@
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
+import { AutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -10,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function PartyCountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; q?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const counts = await db.select().from(schema.partyCounts).orderBy(schema.partyCounts.partyCode);
@@ -31,7 +33,24 @@ export default async function PartyCountsPage({
   const partyOpts = accounts
     .filter((a) => a.level >= 4)
     .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}`, desc: a.description }));
-  const countOpts = yarnCounts.map((y) => ({ value: String(y.id), label: `${y.countCode} — ${y.description}`, desc: y.description }));
+  const countOpts = yarnCounts
+    .filter((y) => y.status === "A")
+    .map((y) => ({ value: String(y.id), label: `${y.countCode} — ${y.description}`, desc: y.description }));
+
+  const q = (params.q ?? "").trim();
+  const ql = q.toLowerCase();
+  const listed = !q
+    ? counts
+    : counts.filter((c) => {
+        const cRow = yarnCounts.find((y) => y.id === c.countCode);
+        const pDesc = accounts.find((a) => a.code === c.partyCode)?.description ?? "";
+        return (
+          c.partyCode.toLowerCase().includes(ql) ||
+          pDesc.toLowerCase().includes(ql) ||
+          (cRow?.countCode ?? "").toLowerCase().includes(ql) ||
+          (cRow?.description ?? "").toLowerCase().includes(ql)
+        );
+      });
 
   async function savePartyCount(formData: FormData) {
     "use server";
@@ -47,14 +66,28 @@ export default async function PartyCountsPage({
     const calCountWeft = parseFloat(formData.get("weft_cal") as string) || null;
     const ratePerLbs = parseFloat(formData.get("rate_lbs") as string) || null;
 
-    if (id) {
-      await db.update(schema.partyCounts).set({
-        partyCode, countCode, trnType, countGroup, status, calCountWarp, calCountWeft, ratePerLbs,
-      }).where(eq(schema.partyCounts.id, parseInt(id)));
-    } else {
-      await db.insert(schema.partyCounts).values({
-        partyCode, countCode, trnType, countGroup, status, calCountWarp, calCountWeft, ratePerLbs,
-      });
+    let dup = false;
+    try {
+      if (id) {
+        await db.update(schema.partyCounts).set({
+          partyCode, countCode, trnType, countGroup, status, calCountWarp, calCountWeft, ratePerLbs,
+        }).where(eq(schema.partyCounts.id, parseInt(id)));
+      } else {
+        await db.insert(schema.partyCounts).values({
+          partyCode, countCode, trnType, countGroup, status, calCountWarp, calCountWeft, ratePerLbs,
+        });
+      }
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message ?? "");
+      const code = String((e as { code?: string })?.code ?? "");
+      if (msg.includes("UNIQUE") || code === "SQLITE_CONSTRAINT_UNIQUE") {
+        dup = true;
+      } else {
+        throw e;
+      }
+    }
+    if (dup) {
+      redirect("/define/party-counts?" + (id ? `id=${id}&` : "adding=1&") + "error=dup");
     }
     revalidatePath("/define/party-counts");
     redirect("/define/party-counts" + (id ? `?id=${id}` : ""));
@@ -91,22 +124,39 @@ export default async function PartyCountsPage({
                   {formItem && (
                     <form action={deletePartyCount} className="inline">
                       <input type="hidden" name="id" value={formItem.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                      <ConfirmButton>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>
               </div>
 
+              {params.error === "dup" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  This party + count combination already exists.
+                </div>
+              )}
               <form action={savePartyCount}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
+                <AutoFill
+                  watch="trn_type"
+                  map={{ WVG: { party: "" }, WRP: { party: "" }, RWD: { party: "" }, DBF: { party: "" } }}
+                  combos={["party"]}
+                />
                 <div className="grid grid-cols-1 gap-y-3">
                   <div>
                     <label className="label block mb-1">Trn. Type</label>
-                    <select name="trn_type" className="input-box" defaultValue={formItem?.trnType ?? ""}>
-                      <option value="">--</option>
-                      <option value="WVG">WVG</option>
-                      <option value="WRP">WRP</option>
-                    </select>
+                    <Combobox
+                      name="trn_type"
+                      options={[
+                        { value: "WVG", label: "WVG" },
+                        { value: "WRP", label: "WRP" },
+                        { value: "RWD", label: "RWD" },
+                        { value: "DBF", label: "DBF" },
+                      ]}
+                      defaultValue={formItem?.trnType ?? ""}
+                      placeholder="--"
+                      className="input-box"
+                    />
                   </div>
                   <div>
                     <label className="label block mb-1">Party</label>
@@ -170,10 +220,12 @@ export default async function PartyCountsPage({
           </div>
 
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <form method="get" className="flex items-center gap-2 mb-3">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">Find</div>
-              <input className="input-box flex-1 text-[13px]" placeholder="Find Count Cal.Count, Code..." />
-            </div>
+              <input name="q" defaultValue={q} className="input-box flex-1 text-[13px]" placeholder="Find Count Cal.Count, Code..." />
+              <button type="submit" className="btn btn-outline btn-sm">Find</button>
+              {q && <a href="/define/party-counts" className="btn btn-outline btn-sm">Clear</a>}
+            </form>
             <div className="overflow-x-auto" style={{ maxHeight: "70vh", overflowY: "auto" }}>
               <table>
                 <thead>
@@ -189,14 +241,14 @@ export default async function PartyCountsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {counts.map((c) => {
+                  {listed.map((c) => {
                     const isSel = c.id === selected?.id;
                     const cDesc = yarnCounts.find((y) => y.id === c.countCode)?.description ?? "";
                     const pDesc = accounts.find((a) => a.code === c.partyCode)?.description ?? "";
                     return (
                       <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                         <td className="mono text-[12px]">
-                          <a href={`/define/party-counts?id=${c.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
+                          <a href={`/define/party-counts?id=${c.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
                             {c.partyCode}
                           </a>
                         </td>

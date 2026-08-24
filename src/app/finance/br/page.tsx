@@ -3,8 +3,11 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { VoucherBalance } from "@/components/voucher-balance";
+import { Combobox } from "@/components/combobox";
+import { RowAutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -17,6 +20,7 @@ const TITLE = "BANK\u00A0\u00A0RECEIPTS (WVG)";
 const IS_RECEIPT = true;
 const AMOUNT_LABEL = "Cr";
 const LINE_ROWS = 12;
+const CONTRA_BASE = 50;
 
 const TRN_TYPES = [
   "CHEQUE",
@@ -104,8 +108,41 @@ async function saveVoucher(formData: FormData) {
 
   const total = postable.reduce((s, l) => s + l.amount, 0);
 
+  const ctx = isEdit ? `id=${id}` : "adding=1";
+
   if (!bankAcc || postable.length < 1 || total <= 0) {
-    redirect(`${BASE}?error=invalid${isEdit ? `&id=${id}` : "&adding=1"}`);
+    redirect(`${BASE}?error=invalid&${ctx}`);
+  }
+
+  const codes = Array.from(new Set([bankAcc as string, ...postable.map((l) => l.accCode)]));
+  const validCodes = await db
+    .select({ code: schema.chartOfAccounts.code })
+    .from(schema.chartOfAccounts)
+    .where(and(inArray(schema.chartOfAccounts.code, codes), gte(schema.chartOfAccounts.level, 4)));
+  if (validCodes.length !== codes.length) {
+    redirect(`${BASE}?error=bad_account&${ctx}`);
+  }
+
+  let editMain: { fyCode: string; vno: number } | null = null;
+  if (isEdit) {
+    const rows = await db
+      .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })
+      .from(schema.transMain)
+      .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)));
+    editMain = rows[0] ?? null;
+    if (!editMain) redirect(BASE);
+  }
+
+  const chqList = postable.map((l) => l.chqNo).filter((c): c is string => !!c);
+  if (chqList.length) {
+    const dupRows = await db
+      .select({ fyCode: schema.transDetail.fyCode, vno: schema.transDetail.vno })
+      .from(schema.transDetail)
+      .where(and(eq(schema.transDetail.vtype, VTYPE), inArray(schema.transDetail.chqNo, chqList)));
+    const clash = dupRows.some(
+      (d) => !editMain || d.fyCode !== editMain.fyCode || d.vno !== editMain.vno,
+    );
+    if (clash) redirect(`${BASE}?error=dup_chq&${ctx}`);
   }
 
   const nowIso = new Date().toISOString();
@@ -120,6 +157,7 @@ async function saveVoucher(formData: FormData) {
       vno,
       srno: i + 1,
       accCode: l.accCode,
+      partyCode: bankAcc,
       ccCode: l.ccCode,
       narration: l.narration,
       debit: IS_RECEIPT ? 0 : l.amount,
@@ -128,16 +166,40 @@ async function saveVoucher(formData: FormData) {
       chqDate: l.chqDate,
       yarnCount: l.yarnCount,
     }));
-    rows.push({
-      fyCode,
-      vtype: VTYPE,
-      vno,
-      srno: postable.length + 1,
-      accCode: bankAcc as string,
-      debit: IS_RECEIPT ? total : 0,
-      credit: IS_RECEIPT ? 0 : total,
-      narration: null,
-    });
+    if (splitting === "Y") {
+      const narr = postable
+        .filter((l) => l.chqNo)
+        .map((l) => `CHQ.#:${l.chqNo}${l.chqDate ? ` DT:${l.chqDate}` : ""}`)
+        .join(" ");
+      rows.push({
+        fyCode,
+        vtype: VTYPE,
+        vno,
+        srno: CONTRA_BASE + 1,
+        accCode: bankAcc as string,
+        partyCode: bankAcc,
+        debit: IS_RECEIPT ? total : 0,
+        credit: IS_RECEIPT ? 0 : total,
+        narration: narr || null,
+      });
+    } else {
+      postable.forEach((l, i) => {
+        const narr = `${l.narration ?? ""}${
+          l.chqNo ? ` CHQ.#: ${l.chqNo}${l.chqDate ? ` DT.${l.chqDate}` : ""}` : ""
+        }`.trim();
+        rows.push({
+          fyCode,
+          vtype: VTYPE,
+          vno,
+          srno: CONTRA_BASE + i + 1,
+          accCode: bankAcc as string,
+          partyCode: bankAcc,
+          debit: IS_RECEIPT ? l.amount : 0,
+          credit: IS_RECEIPT ? 0 : l.amount,
+          narration: narr || null,
+        });
+      });
+    }
     return rows;
   };
 
@@ -149,12 +211,7 @@ async function saveVoucher(formData: FormData) {
 
   if (isEdit) {
     await db.transaction(async (tx) => {
-      const existing = await tx
-        .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })
-        .from(schema.transMain)
-        .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)));
-      const ex = existing[0];
-      if (!ex) return;
+      const ex = editMain!;
       await tx
         .update(schema.transMain)
         .set({
@@ -253,6 +310,10 @@ async function deleteVoucher(formData: FormData) {
   "use server";
   const id = intVal(formData.get("id"));
   if (id === null) return;
+  const session = await getSession();
+  if (session?.roleName !== "ADMIN") {
+    redirect(`${BASE}?error=forbidden&id=${id}`);
+  }
   await db.transaction(async (tx) => {
     const existing = await tx
       .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })
@@ -275,6 +336,38 @@ async function deleteVoucher(formData: FormData) {
   redirect(BASE);
 }
 
+async function setOkStatus(formData: FormData, value: string | null) {
+  const id = intVal(formData.get("id"));
+  if (id === null) return;
+  const [main] = await db
+    .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })
+    .from(schema.transMain)
+    .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)));
+  if (!main) redirect(BASE);
+  await db
+    .update(schema.transDetail)
+    .set({ statusOk: value })
+    .where(
+      and(
+        eq(schema.transDetail.fyCode, main.fyCode),
+        eq(schema.transDetail.vtype, VTYPE),
+        eq(schema.transDetail.vno, main.vno),
+      ),
+    );
+  revalidatePath(BASE);
+  redirect(`${BASE}?id=${id}`);
+}
+
+async function markOk(formData: FormData) {
+  "use server";
+  await setOkStatus(formData, "Y");
+}
+
+async function clearOk(formData: FormData) {
+  "use server";
+  await setOkStatus(formData, null);
+}
+
 export default async function BankReceiptPage({
   searchParams,
 }: {
@@ -291,6 +384,8 @@ export default async function BankReceiptPage({
   const isAdding = params.adding === "1";
   const findFilter = params.find?.trim() ?? "";
 
+  const session = await getSession();
+
   const [company] = await db
     .select({ currentFy: schema.companyProfile.currentFy })
     .from(schema.companyProfile)
@@ -302,10 +397,20 @@ export default async function BankReceiptPage({
       code: schema.chartOfAccounts.code,
       description: schema.chartOfAccounts.description,
       descShort: schema.chartOfAccounts.descShort,
+      level: schema.chartOfAccounts.level,
     })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.code);
   const descMap = new Map(accounts.map((a) => [a.code, a.description]));
+  const pickerAccounts = accounts.filter((a) => a.level >= 4);
+  const bankOpts = pickerAccounts.map((a) => ({
+    value: a.code,
+    label: `${a.code} — ${a.description}`,
+    desc: a.description,
+  }));
+  const lineTitleMap = Object.fromEntries(
+    pickerAccounts.map((a) => [a.code, { line_title: a.description }]),
+  );
 
   const centers = await db
     .select({ code: schema.costCenters.code, description: schema.costCenters.description })
@@ -318,40 +423,27 @@ export default async function BankReceiptPage({
     .orderBy(schema.yarnCounts.countCode);
 
   const filt = "%" + escapeLike(findFilter) + "%";
-  const vouchers = findFilter
-    ? await db
-        .select({
-          id: schema.transMain.id,
-          vno: schema.transMain.vno,
-          vdate: schema.transMain.vdate,
-          vtime: schema.transMain.vtime,
-          accCode: schema.transMain.accCode,
-          trnType: schema.transMain.trnType,
-          balanceAmount: schema.transMain.balanceAmount,
-        })
-        .from(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            sql`(CAST(${schema.transMain.vno} AS TEXT) LIKE ${filt} ESCAPE '\\' OR ${schema.transMain.accCode} LIKE ${filt} ESCAPE '\\')`,
-          ),
-        )
-        .orderBy(desc(schema.transMain.vno))
-        .limit(200)
-    : await db
-        .select({
-          id: schema.transMain.id,
-          vno: schema.transMain.vno,
-          vdate: schema.transMain.vdate,
-          vtime: schema.transMain.vtime,
-          accCode: schema.transMain.accCode,
-          trnType: schema.transMain.trnType,
-          balanceAmount: schema.transMain.balanceAmount,
-        })
-        .from(schema.transMain)
-        .where(eq(schema.transMain.vtype, VTYPE))
-        .orderBy(desc(schema.transMain.vno))
-        .limit(200);
+  const listConds = [eq(schema.transMain.vtype, VTYPE)];
+  if (fyCode) listConds.push(eq(schema.transMain.fyCode, fyCode));
+  if (findFilter) {
+    listConds.push(
+      sql`(CAST(${schema.transMain.vno} AS TEXT) LIKE ${filt} ESCAPE '\\' OR ${schema.transMain.accCode} LIKE ${filt} ESCAPE '\\')`,
+    );
+  }
+  const vouchers = await db
+    .select({
+      id: schema.transMain.id,
+      vno: schema.transMain.vno,
+      vdate: schema.transMain.vdate,
+      vtime: schema.transMain.vtime,
+      accCode: schema.transMain.accCode,
+      trnType: schema.transMain.trnType,
+      balanceAmount: schema.transMain.balanceAmount,
+    })
+    .from(schema.transMain)
+    .where(and(...listConds))
+    .orderBy(desc(schema.transMain.vno))
+    .limit(200);
 
   let selected = isEditing ? vouchers.find((v) => v.id === idParam) ?? null : null;
   if (isEditing && !selected) {
@@ -393,20 +485,24 @@ export default async function BankReceiptPage({
         .orderBy(schema.transDetail.srno)
     : [];
 
-  const gridDetail = detailLines.filter((l) =>
-    IS_RECEIPT ? (l.credit ?? 0) > 0 : (l.debit ?? 0) > 0,
+  const gridDetail = detailLines.filter(
+    (l) =>
+      (IS_RECEIPT ? (l.credit ?? 0) > 0 : (l.debit ?? 0) > 0) && l.srno < CONTRA_BASE,
   );
 
   const [maxRow] = await db
     .select({ max: sql<number>`coalesce(max(vno), 0)` })
     .from(schema.transMain)
     .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.fyCode, fyCode)));
-  const upcomingVno = (maxRow?.max ?? 0) + 1;
+  const lastVno = maxRow?.max ?? 0;
+  const upcomingVno = lastVno + 1;
 
+  const countConds = [eq(schema.transMain.vtype, VTYPE)];
+  if (fyCode) countConds.push(eq(schema.transMain.fyCode, fyCode));
   const [countRow] = await db
     .select({ c: sql<number>`count(*)` })
     .from(schema.transMain)
-    .where(eq(schema.transMain.vtype, VTYPE));
+    .where(and(...countConds));
   const totalCount = countRow?.c ?? 0;
 
   const showForm = !!formVoucher || isAdding;
@@ -414,14 +510,15 @@ export default async function BankReceiptPage({
 
   const bankTitle = headVoucher?.accCode ? descMap.get(headVoucher.accCode) ?? "" : "";
 
-  const errorMsg =
-    params.error === "code_exists"
-      ? "V.No already exists. Try again."
-      : params.error === "invalid"
-        ? "Bank account, at least one line, and a positive amount are required."
-        : params.error === "no_fy"
-          ? "Company fiscal year is not configured."
-          : "";
+  const ERROR_MESSAGES: Record<string, string> = {
+    code_exists: "V.No already exists. Try again.",
+    invalid: "Bank account, at least one line, and a positive amount are required.",
+    no_fy: "Company fiscal year is not configured.",
+    dup_chq: "Cheque number already used on another voucher of this type. Change it and save again.",
+    bad_account: "One or more account codes are unknown or not a detail (level 4+) account.",
+    forbidden: "Only ADMIN can delete vouchers.",
+  };
+  const errorMsg = params.error ? ERROR_MESSAGES[params.error] ?? "" : "";
 
   return (
     <Shell active="fin-br">
@@ -474,9 +571,22 @@ export default async function BankReceiptPage({
                   : TITLE}
             </div>
             <div className="flex gap-2 no-print flex-wrap">
-              <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
-                Clear-OK
-              </a>
+              {formVoucher && (
+                <>
+                  <form action={markOk} className="inline">
+                    <input type="hidden" name="id" value={formVoucher.id} />
+                    <button type="submit" className="btn btn-outline btn-sm">
+                      OK
+                    </button>
+                  </form>
+                  <form action={clearOk} className="inline">
+                    <input type="hidden" name="id" value={formVoucher.id} />
+                    <button type="submit" className="btn btn-outline btn-sm">
+                      Clear-OK
+                    </button>
+                  </form>
+                </>
+              )}
               <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
                 New
               </a>
@@ -486,12 +596,12 @@ export default async function BankReceiptPage({
                 </button>
               )}
               <PrintButton label="Print" />
-              {formVoucher && (
+              {formVoucher && session?.roleName === "ADMIN" && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formVoucher.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
+                  <ConfirmButton message="Delete this voucher? This cannot be undone.">
                     Delete
-                  </button>
+                  </ConfirmButton>
                 </form>
               )}
               <a href={BASE} className="btn btn-outline btn-sm">
@@ -538,7 +648,7 @@ export default async function BankReceiptPage({
                   <label className="label block mb-1">LV.No</label>
                   <input
                     className="input-box mono bg-gray-100 text-center"
-                    defaultValue={totalCount}
+                    defaultValue={lastVno}
                     readOnly
                     tabIndex={-1}
                   />
@@ -576,18 +686,18 @@ export default async function BankReceiptPage({
 
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Acc.Code (Bank)</label>
-                  <input
+                  <Combobox
                     name="bank_acc"
-                    list="fin-accts"
-                    className="input-box mono"
+                    options={bankOpts}
                     defaultValue={headVoucher?.accCode ?? ""}
                     placeholder="Bank account"
-                    required
+                    descTargetId="br-bank-title"
                   />
                 </div>
                 <div className="lg:col-span-4">
                   <label className="label block mb-1">Tittle</label>
                   <input
+                    id="br-bank-title"
                     className="input-box bg-gray-100"
                     defaultValue={bankTitle}
                     readOnly
@@ -680,13 +790,16 @@ export default async function BankReceiptPage({
                             </td>
                             <td>
                               <input
+                                name="line_title"
                                 className="input-box mono text-[12px] bg-gray-50"
                                 defaultValue={title}
                                 readOnly
                                 tabIndex={-1}
                               />
                             </td>
-                            <td className="text-center text-[10px] text-[var(--muted)]">OK</td>
+                            <td className="text-center text-[10px] text-[var(--muted)]">
+                              {l?.statusOk === "Y" ? "✓" : ""}
+                            </td>
                             <td>
                               <input
                                 name="line_yarn"
@@ -769,8 +882,9 @@ export default async function BankReceiptPage({
                 </div>
               </div>
 
+              <RowAutoFill watch="line_acc" map={lineTitleMap} />
               <datalist id="fin-accts">
-                {accounts.map((a) => (
+                {pickerAccounts.map((a) => (
                   <option key={a.code} value={a.code}>
                     {a.descShort ? `${a.descShort} — ` : ""}
                     {a.description}

@@ -1,16 +1,298 @@
 import { Shell } from "@/components/shell";
+import { Combobox } from "@/components/combobox";
+import { RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 const fmt = new Intl.NumberFormat("en-PK");
 
-export default async function GrnPage() {
+const num = (v: FormDataEntryValue | null): number | null => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = parseFloat(v as string);
+  return Number.isFinite(n) ? n : null;
+};
+
+const txt = (v: FormDataEntryValue | null): string | null => {
+  const s = (v as string)?.trim();
+  return s ? s : null;
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+const LINE_ROWS = 8;
+
+async function saveGrn(formData: FormData) {
+  "use server";
+  const idRaw = formData.get("id") as string | null;
+  const id = idRaw ? parseInt(idRaw, 10) : NaN;
+  const isNew = !Number.isFinite(id);
+  const back = isNew ? "?adding=1" : `?id=${id}`;
+
+  const grnDate = txt(formData.get("grn_date")) ?? today();
+  const supplierRaw = txt(formData.get("supplier")) ?? "";
+  const invoiceNo = txt(formData.get("invoice_no"));
+  if (!supplierRaw) redirect(`/store/grn${back}`);
+
+  const [acct] = await db
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+    })
+    .from(schema.chartOfAccounts)
+    .where(eq(schema.chartOfAccounts.code, supplierRaw))
+    .limit(1);
+  const supplier = acct?.description ?? supplierRaw;
+  const supplierCode = acct?.code ?? null;
+
+  const partCodes = formData.getAll("line_part") as string[];
+  const qtys = formData.getAll("line_qty") as string[];
+  const rateBills = formData.getAll("line_rate_bill") as string[];
+  const discPers = formData.getAll("line_disc_per") as string[];
+  const taxPers = formData.getAll("line_tax_per") as string[];
+  const rates = formData.getAll("line_rate") as string[];
+
+  const lines: {
+    partCode: string;
+    qty: number;
+    rateBill: number | null;
+    discPer: number | null;
+    taxPer: number | null;
+    rate: number;
+    amount: number;
+  }[] = [];
+  for (let i = 0; i < partCodes.length; i++) {
+    const partCode = (partCodes[i] ?? "").trim();
+    const qty = num(qtys[i]);
+    if (!partCode || qty === null || qty <= 0) continue;
+    const rateBill = num(rateBills[i]);
+    const discPer = num(discPers[i]);
+    const taxPer = num(taxPers[i]);
+    // Oracle adds discount as a charge; discount-subtracts is the sensible reading
+    const rate =
+      rateBill !== null
+        ? r2(rateBill * (1 - (discPer ?? 0) / 100) * (1 + (taxPer ?? 0) / 100))
+        : num(rates[i]) ?? 0;
+    lines.push({
+      partCode,
+      qty,
+      rateBill,
+      discPer,
+      taxPer,
+      rate,
+      amount: r2(qty * rate),
+    });
+  }
+
+  const codes = lines.map((l) => l.partCode);
+  if (new Set(codes).size !== codes.length)
+    redirect(`/store/grn${back}&error=dup_part`);
+
+  if (codes.length > 0) {
+    const known = await db
+      .select({ code: schema.chartParts.code })
+      .from(schema.chartParts)
+      .where(inArray(schema.chartParts.code, codes));
+    if (known.length !== codes.length) redirect(`/store/grn${back}&error=bad_part`);
+  }
+
+  const itemCount = lines.length;
+  const totalAmount = r2(lines.reduce((s, l) => s + l.amount, 0));
+
+  const [company] = await db
+    .select({ fy: schema.companyProfile.currentFy })
+    .from(schema.companyProfile)
+    .limit(1);
+  const fyCode = company?.fy ?? "";
+
+  let savedId = isNew ? 0 : id;
+  let codeExists = false;
+  try {
+    savedId = await db.transaction(async (tx) => {
+      let gid: number;
+      if (isNew) {
+        const [{ maxN }] = await tx
+          .select({ maxN: sql<number>`coalesce(max(grn_no), 0)` })
+          .from(schema.storeGrn)
+          .where(eq(schema.storeGrn.fyCode, fyCode));
+        const [inserted] = await tx
+          .insert(schema.storeGrn)
+          .values({
+            grnNo: (maxN ?? 0) + 1,
+            fyCode,
+            grnDate,
+            supplier,
+            supplierCode,
+            invoiceNo,
+            itemCount,
+            totalAmount,
+          })
+          .returning({ id: schema.storeGrn.id });
+        gid = inserted.id;
+      } else {
+        const oldLines = await tx
+          .select()
+          .from(schema.storeGrnDetail)
+          .where(eq(schema.storeGrnDetail.grnId, id));
+        for (const ol of oldLines) {
+          await tx
+            .update(schema.chartParts)
+            .set({ currentStock: sql`current_stock - ${ol.qty}` })
+            .where(eq(schema.chartParts.code, ol.partCode));
+        }
+        await tx
+          .delete(schema.storeGrnDetail)
+          .where(eq(schema.storeGrnDetail.grnId, id));
+        await tx
+          .update(schema.storeGrn)
+          .set({ grnDate, supplier, supplierCode, invoiceNo, itemCount, totalAmount })
+          .where(eq(schema.storeGrn.id, id));
+        gid = id;
+      }
+
+      if (lines.length > 0) {
+        await tx.insert(schema.storeGrnDetail).values(
+          lines.map((l, i) => ({ ...l, grnId: gid, srNo: i + 1 }))
+        );
+      }
+
+      for (const l of lines) {
+        const [p] = await tx
+          .select()
+          .from(schema.chartParts)
+          .where(eq(schema.chartParts.code, l.partCode))
+          .limit(1);
+        if (!p) throw new Error("BAD_PART");
+        const newStock = p.currentStock + l.qty;
+        const newAvg =
+          newStock > 0
+            ? (p.currentStock * p.avgCost + l.qty * l.rate) / newStock
+            : l.rate;
+        await tx
+          .update(schema.chartParts)
+          .set({
+            currentStock: newStock,
+            avgCost: newAvg,
+            lastPurchaseDate: grnDate,
+          })
+          .where(eq(schema.chartParts.id, p.id));
+      }
+
+      return gid;
+    });
+  } catch (e: unknown) {
+    const msg = String((e as { message?: string })?.message ?? "");
+    if (/UNIQUE/i.test(msg)) codeExists = true;
+    else throw e;
+  }
+
+  if (codeExists) redirect(`/store/grn${back}&error=code_exists`);
+
+  revalidatePath("/store/grn");
+  revalidatePath("/store/parts");
+  revalidatePath("/store/stock");
+  redirect(`/store/grn?id=${savedId}`);
+}
+
+async function deleteGrn(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (!Number.isFinite(id)) return;
+
+  await db.transaction(async (tx) => {
+    const oldLines = await tx
+      .select()
+      .from(schema.storeGrnDetail)
+      .where(eq(schema.storeGrnDetail.grnId, id));
+    for (const ol of oldLines) {
+      await tx
+        .update(schema.chartParts)
+        .set({ currentStock: sql`current_stock - ${ol.qty}` })
+        .where(eq(schema.chartParts.code, ol.partCode));
+    }
+    await tx.delete(schema.storeGrnDetail).where(eq(schema.storeGrnDetail.grnId, id));
+    await tx.delete(schema.storeGrn).where(eq(schema.storeGrn.id, id));
+  });
+
+  revalidatePath("/store/grn");
+  revalidatePath("/store/parts");
+  revalidatePath("/store/stock");
+  redirect("/store/grn");
+}
+
+export default async function GrnPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
+}) {
+  const params = await searchParams;
+  const isAdding = params.adding === "1";
+
   const rows = await db
     .select()
     .from(schema.storeGrn)
-    .orderBy(sql`grn_date DESC`);
+    .orderBy(sql`grn_date DESC, id DESC`);
+
+  const selectedId = params.id ? parseInt(params.id, 10) : NaN;
+  const selected = Number.isFinite(selectedId)
+    ? rows.find((r) => r.id === selectedId) ?? null
+    : null;
+  const formItem = isAdding ? null : selected;
+  const showForm = isAdding || !!formItem;
+
+  const details = formItem
+    ? await db
+        .select()
+        .from(schema.storeGrnDetail)
+        .where(eq(schema.storeGrnDetail.grnId, formItem.id))
+        .orderBy(schema.storeGrnDetail.srNo)
+    : [];
+
+  const [company] = await db
+    .select({ fy: schema.companyProfile.currentFy })
+    .from(schema.companyProfile)
+    .limit(1);
+  const fyCode = company?.fy ?? "";
+
+  const [{ maxN }] = await db
+    .select({ maxN: sql<number>`coalesce(max(grn_no), 0)` })
+    .from(schema.storeGrn)
+    .where(eq(schema.storeGrn.fyCode, fyCode));
+  const nextGrnNo = (maxN ?? 0) + 1;
+
+  const suppliers = await db
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+    })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const supplierOpts = suppliers.map((s) => ({
+    value: s.code,
+    label: `${s.code} — ${s.description}`,
+  }));
+
+  const parts = await db
+    .select()
+    .from(schema.chartParts)
+    .orderBy(schema.chartParts.code);
+  const partMap: Record<string, Record<string, string | number>> = {};
+  for (const p of parts) {
+    partMap[p.code] = {
+      line_desc: p.description,
+      line_unit: p.unit,
+      line_stock: p.currentStock,
+    };
+  }
+  const partDescByCode = new Map(parts.map((p) => [p.code, p]));
+
+  const rowsToShow = Math.max(LINE_ROWS, details.length + 2);
 
   const total = rows.length;
   const totalItems = rows.reduce((s, r) => s + (r.itemCount ?? 0), 0);
@@ -26,7 +308,248 @@ export default async function GrnPage() {
               ({total})
             </span>
           </h1>
+          <a href="/store/grn?adding=1" className="btn btn-sm">
+            New GRN
+          </a>
         </div>
+
+        {params.error === "code_exists" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            GRN No already exists. Try saving again.
+          </div>
+        )}
+        {params.error === "dup_part" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            The same part appears on more than one line. Combine into a single line.
+          </div>
+        )}
+        {params.error === "bad_part" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            One or more part codes do not exist in the parts catalog.
+          </div>
+        )}
+
+        {showForm && (
+          <div className="border border-black p-4 mb-8">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-black">
+              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
+                {formItem ? `Edit GRN — ${formItem.grnNo}/${formItem.fyCode}` : "New GRN"}
+              </div>
+              <div className="flex gap-2">
+                <a href="/store/grn?adding=1" className="btn btn-outline btn-sm">
+                  New
+                </a>
+                {formItem && (
+                  <form action={deleteGrn} className="inline">
+                    <input type="hidden" name="id" value={formItem.id} />
+                    <ConfirmButton message="Delete this GRN? Stock received on it will be reversed.">
+                      Del
+                    </ConfirmButton>
+                  </form>
+                )}
+              </div>
+            </div>
+
+            <form action={saveGrn}>
+              {formItem && <input type="hidden" name="id" value={formItem.id} />}
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+                <div>
+                  <label className="label block mb-1">GRN No</label>
+                  <input
+                    className="input-box mono bg-gray-100"
+                    defaultValue={formItem?.grnNo ?? nextGrnNo}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+                <div>
+                  <label className="label block mb-1">FY</label>
+                  <input
+                    className="input-box mono bg-gray-100"
+                    defaultValue={formItem?.fyCode ?? fyCode}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+                <div>
+                  <label className="label block mb-1">Date</label>
+                  <input
+                    name="grn_date"
+                    type="date"
+                    className="input-box mono"
+                    defaultValue={formItem?.grnDate ?? today()}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label block mb-1">Supplier</label>
+                  <Combobox
+                    name="supplier"
+                    options={supplierOpts}
+                    defaultValue={formItem?.supplierCode ?? formItem?.supplier ?? ""}
+                    placeholder="Supplier"
+                  />
+                </div>
+                <div>
+                  <label className="label block mb-1">Invoice No</label>
+                  <input
+                    name="invoice_no"
+                    className="input-box mono"
+                    defaultValue={formItem?.invoiceNo ?? ""}
+                  />
+                </div>
+              </div>
+
+              <RowAutoFill watch="line_part" map={partMap} />
+              <RowCalc target="line_amount" a="line_qty" b="line_rate" />
+              <datalist id="grn-parts">
+                {parts.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {`${p.code} — ${p.description}`}
+                  </option>
+                ))}
+              </datalist>
+
+              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
+                Line Items
+              </div>
+              <div className="overflow-x-auto border border-black mb-4">
+                <table className="mono text-[12px]" style={{ minWidth: 1100 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 36 }}>#</th>
+                      <th style={{ width: 110 }}>Part</th>
+                      <th>Description</th>
+                      <th style={{ width: 70 }}>Unit</th>
+                      <th style={{ width: 80 }}>In Stock</th>
+                      <th style={{ width: 90 }}>Qty</th>
+                      <th style={{ width: 90 }}>Rate Bill</th>
+                      <th style={{ width: 70 }}>Disc %</th>
+                      <th style={{ width: 70 }}>Tax %</th>
+                      <th style={{ width: 90 }}>Rate</th>
+                      <th style={{ width: 110 }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: rowsToShow }).map((_, i) => {
+                      const l = details[i];
+                      const p = l ? partDescByCode.get(l.partCode) : undefined;
+                      return (
+                        <tr key={l?.id ?? `e-${i}`}>
+                          <td className="text-center text-[var(--muted)]">{i + 1}</td>
+                          <td>
+                            <input
+                              name="line_part"
+                              list="grn-parts"
+                              className="input-box mono text-[12px]"
+                              defaultValue={l?.partCode ?? ""}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_desc"
+                              className="input-box text-[12px] bg-gray-100"
+                              defaultValue={p?.description ?? ""}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_unit"
+                              className="input-box mono text-[12px] bg-gray-100"
+                              defaultValue={p?.unit ?? ""}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_stock"
+                              className="input-box mono text-[12px] bg-gray-100 text-right"
+                              defaultValue={p?.currentStock ?? ""}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_qty"
+                              type="number"
+                              step="any"
+                              className="input-box mono text-[12px]"
+                              defaultValue={l?.qty ?? ""}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_rate_bill"
+                              type="number"
+                              step="any"
+                              className="input-box mono text-[12px]"
+                              defaultValue={l?.rateBill ?? ""}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_disc_per"
+                              type="number"
+                              step="any"
+                              className="input-box mono text-[12px]"
+                              defaultValue={l?.discPer ?? ""}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_tax_per"
+                              type="number"
+                              step="any"
+                              className="input-box mono text-[12px]"
+                              defaultValue={l?.taxPer ?? ""}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_rate"
+                              type="number"
+                              step="any"
+                              className="input-box mono text-[12px]"
+                              defaultValue={l?.rate ?? ""}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              name="line_amount"
+                              type="number"
+                              step="any"
+                              className="input-box mono text-[12px] bg-gray-100 text-right"
+                              defaultValue={l?.amount ?? ""}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-[10px] text-[var(--muted)] mb-4">
+                Rate = Rate Bill × (1 − Disc%/100) × (1 + Tax%/100); recomputed on save. Leave Rate Bill empty to enter Rate directly.
+              </div>
+
+              <div className="flex gap-2">
+                <button type="submit" className="btn btn-sm">
+                  Save
+                </button>
+                <a href="/store/grn" className="btn btn-outline btn-sm">
+                  Exit
+                </a>
+              </div>
+            </form>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-8">
           <div className="bg-white p-4">
@@ -63,20 +586,40 @@ export default async function GrnPage() {
                 </td>
               </tr>
             ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  <td className="mono text-[13px]">{r.grnDate}</td>
-                  <td className="mono text-[13px]">{r.grnNo}</td>
-                  <td>{r.supplier}</td>
-                  <td className="mono text-[13px]">{r.invoiceNo ?? ""}</td>
-                  <td className="mono text-[13px] text-right">
-                    {r.itemCount ?? 0}
-                  </td>
-                  <td className="mono text-[13px] text-right">
-                    {fmt.format(Math.round(r.totalAmount ?? 0))}
-                  </td>
-                </tr>
-              ))
+              rows.map((r) => {
+                const isSel = r.id === selected?.id;
+                const href = `/store/grn?id=${r.id}`;
+                const linkStyle = { color: isSel ? "white" : "inherit" };
+                return (
+                  <tr
+                    key={r.id}
+                    className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
+                  >
+                    <td className="mono text-[13px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>
+                        {r.grnDate}
+                      </a>
+                    </td>
+                    <td className="mono text-[13px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>
+                        {r.grnNo}
+                      </a>
+                    </td>
+                    <td>
+                      <a href={href} className="no-underline block" style={linkStyle}>
+                        {r.supplier}
+                      </a>
+                    </td>
+                    <td className="mono text-[13px]">{r.invoiceNo ?? ""}</td>
+                    <td className="mono text-[13px] text-right">
+                      {r.itemCount ?? 0}
+                    </td>
+                    <td className="mono text-[13px] text-right">
+                      {fmt.format(Math.round(r.totalAmount ?? 0))}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

@@ -1,8 +1,11 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -21,8 +24,9 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 const LOOM_TYPES = ["SULZER", "RAPIER", "AIRJET", "PROJECTILE"];
-const TERM_OPTIONS = ["CASH", "CREDIT"];
 const POSTING_OPTIONS = ["Y", "N"];
 
 const LINE_ROWS = 12;
@@ -80,9 +84,146 @@ export default async function YarnSaleVoucherPage({
     : [];
 
   const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
+
+  const partyAccounts = parties.filter((p) => p.level >= 4);
+  const partyOpts = partyAccounts.map((p) => ({
+    value: p.description,
+    label: `${p.code} — ${p.description}`,
+    desc: p.code,
+  }));
+  const descByCode: Record<string, string> = {};
+  for (const p of parties) descByCode[p.code] = p.description;
+
+  const salContracts = await db
+    .select()
+    .from(schema.extYarnSalContract)
+    .orderBy(desc(schema.extYarnSalContract.contNo));
+
+  // Bags already delivered per contract (all vouchers except the one being edited).
+  const salAggByCont = await db
+    .select({
+      contNo: schema.extYarnSalVoucherLine.contNo,
+      bags: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+    })
+    .from(schema.extYarnSalVoucherLine)
+    .where(formVoucher ? ne(schema.extYarnSalVoucherLine.voucherId, formVoucher.id) : undefined)
+    .groupBy(schema.extYarnSalVoucherLine.contNo);
+  const salBagsByCont: Record<string, number> = {};
+  for (const r of salAggByCont) if (r.contNo) salBagsByCont[r.contNo] = r.bags;
+
+  const contractOpts = salContracts
+    .filter((c) => c.status === "R")
+    .map((c) => ({
+      value: c.contNo,
+      label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
+    }));
+  const contractMap: Record<string, Record<string, string | number>> = {};
+  for (const c of salContracts) {
+    const delivered = salBagsByCont[c.contNo] ?? 0;
+    contractMap[c.contNo] = {
+      party: c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "",
+      broker: c.broker ? descByCode[c.broker] ?? c.broker : "",
+      pur: delivered,
+      bal: (c.qtyBags ?? 0) - delivered,
+      ci_rate: c.ratePerLbs ?? "",
+      ci_age: c.agePercent ?? "",
+      ci_days: c.days ?? "",
+      ci_qty: c.qtyBags ?? "",
+      ci_date: c.contDate ?? "",
+      ci_remarks: c.remarks ?? "",
+    };
+  }
+  const lineContractMap: Record<string, Record<string, string | number>> = {};
+  for (const c of salContracts) {
+    lineContractMap[c.contNo] = {
+      line_count: c.countCode ?? "",
+      line_brand: c.brand ?? "",
+      line_rate: c.ratePerLbs ?? "",
+    };
+  }
+
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
+  const countDefaultMap: Record<string, Record<string, string | number>> = {};
+  for (const c of countList) countDefaultMap[String(c.code)] = { line_pack: 24 };
+  // Party-specific rates only apply once the voucher has a saved party.
+  const savedPartyCode = formVoucher?.party
+    ? partyAccounts.find((p) => p.description === formVoucher.party)?.code
+    : undefined;
+  if (savedPartyCode) {
+    const pcRows = await db
+      .select()
+      .from(schema.partyCounts)
+      .where(eq(schema.partyCounts.partyCode, savedPartyCode));
+    for (const r of pcRows) {
+      if (r.ratePerLbs == null) continue;
+      const k = String(r.countCode);
+      countDefaultMap[k] = { ...(countDefaultMap[k] ?? { line_pack: 24 }), line_rate: r.ratePerLbs };
+    }
+  }
+
+  const savedContract = formVoucher?.cont
+    ? salContracts.find((c) => c.contNo === formVoucher.cont)
+    : undefined;
+  const savedPur = savedContract ? salBagsByCont[savedContract.contNo] ?? 0 : null;
+  const savedBal = savedContract ? (savedContract.qtyBags ?? 0) - (savedPur ?? 0) : null;
+
+  const voucherCounts = [...new Set(lines.map((l) => l.count).filter((c): c is string => !!c))];
+
+  let stockBagCalc: number | null = null;
+  let stockConCalc: number | null = null;
+  let stockLbsCalc: number | null = null;
+  if (voucherCounts.length) {
+    const purStock = await db
+      .select({
+        bag: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+        con: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.con}), 0)`,
+        lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+      })
+      .from(schema.extYarnPurVoucherLine)
+      .where(inArray(schema.extYarnPurVoucherLine.count, voucherCounts));
+    const salStock = await db
+      .select({
+        bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+        con: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.cons}), 0)`,
+        lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
+      })
+      .from(schema.extYarnSalVoucherLine)
+      .where(inArray(schema.extYarnSalVoucherLine.count, voucherCounts));
+    stockBagCalc = round2((purStock[0]?.bag ?? 0) - (salStock[0]?.bag ?? 0));
+    stockConCalc = round2((purStock[0]?.con ?? 0) - (salStock[0]?.con ?? 0));
+    stockLbsCalc = round2((purStock[0]?.lbs ?? 0) - (salStock[0]?.lbs ?? 0));
+  }
+
+  let ratePvCalc: number | null = null;
+  let amtPvCalc: number | null = null;
+  let plCalc: number | null = null;
+  if (formVoucher && voucherCounts.length) {
+    const pv = await db
+      .select({
+        wsum: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+        bsum: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+      })
+      .from(schema.extYarnPurVoucherLine)
+      .where(inArray(schema.extYarnPurVoucherLine.count, voucherCounts));
+    const { wsum, bsum } = pv[0] ?? { wsum: 0, bsum: 0 };
+    if (bsum > 0) {
+      ratePvCalc = round2(wsum / bsum);
+      const totalLbs = lines.reduce((a, l) => a + (l.lbs ?? 0), 0);
+      amtPvCalc = round2(totalLbs * ratePvCalc);
+      const saleAmt = lines.reduce((a, l) => a + (l.lbs ?? 0) * (l.rate ?? 0), 0);
+      plCalc = round2(saleAmt - amtPvCalc);
+    }
+  }
 
   const nextVNoVal = await db
     .select({
@@ -90,7 +231,7 @@ export default async function YarnSaleVoucherPage({
     })
     .from(schema.extYarnSalVoucher);
   const upcomingVNo = "YSV-" + String((nextVNoVal[0]?.m ?? 0) + 1).padStart(4, "0");
-  const upcomingLvNo = vouchers.length + 1;
+  const lastVNoNum = nextVNoVal[0]?.m ?? 0;
 
   async function saveVoucher(formData: FormData) {
     "use server";
@@ -100,7 +241,10 @@ export default async function YarnSaleVoucherPage({
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const loomType = txt(formData.get("loom_type"));
     const party = txt(formData.get("party"));
+    const broker = txt(formData.get("broker"));
+    const type = txt(formData.get("type")) ?? "SAL";
     const term = txt(formData.get("term")) ?? "CASH";
+    const dueDate = term === "DUE" ? txt(formData.get("due_date")) : null;
     const posting = txt(formData.get("posting")) ?? "N";
     const img = txt(formData.get("img"));
     const cont = txt(formData.get("cont"));
@@ -196,6 +340,14 @@ export default async function YarnSaleVoucherPage({
       });
     }
 
+    if (!validLines.some((l) => (l.bag ?? 0) > 0 || (l.lbs ?? 0) > 0)) {
+      redirect(
+        Number.isFinite(id) && id > 0
+          ? `/external/yarn/sale?id=${id}&error=no_lines`
+          : `/external/yarn/sale?error=no_lines`
+      );
+    }
+
     const nowIso = new Date().toISOString();
 
     if (Number.isFinite(id) && id > 0) {
@@ -203,7 +355,7 @@ export default async function YarnSaleVoucherPage({
         await tx
           .update(schema.extYarnSalVoucher)
           .set({
-            vDate, loomType, party, term, posting, img, cont, pur, bal,
+            vDate, type, loomType, party, broker, term, dueDate, posting, img, cont, pur, bal,
             stockBag, stockCon, stockLbs, ratePv, amtPv, pl, avgRate, remarks, pendingFinance,
             modifiedDate: nowIso,
           })
@@ -236,7 +388,7 @@ export default async function YarnSaleVoucherPage({
           const inserted = await tx
             .insert(schema.extYarnSalVoucher)
             .values({
-              vNo, lvNo: nextL, vDate, type: "SAL", posting, loomType, party, term, img,
+              vNo, lvNo: nextL, vDate, type, posting, loomType, party, broker, term, dueDate, img,
               cont, pur, bal, stockBag, stockCon, stockLbs, ratePv, amtPv, pl, avgRate,
               remarks, pendingFinance, postedDate: nowIso,
             })
@@ -278,6 +430,30 @@ export default async function YarnSaleVoucherPage({
     });
     revalidatePath("/external/yarn/sale");
     redirect("/external/yarn/sale");
+  }
+
+  async function setOk(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string, 10);
+    if (!Number.isFinite(id)) return;
+    await db
+      .update(schema.extYarnSalVoucher)
+      .set({ statusOk: "OK" })
+      .where(eq(schema.extYarnSalVoucher.id, id));
+    revalidatePath("/external/yarn/sale");
+    redirect(`/external/yarn/sale?id=${id}`);
+  }
+
+  async function clearOk(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string, 10);
+    if (!Number.isFinite(id)) return;
+    await db
+      .update(schema.extYarnSalVoucher)
+      .set({ statusOk: null })
+      .where(eq(schema.extYarnSalVoucher.id, id));
+    revalidatePath("/external/yarn/sale");
+    redirect(`/external/yarn/sale?id=${id}`);
   }
 
   const emptySlots = Math.max(LINE_ROWS - lines.length, 3);
@@ -355,12 +531,22 @@ export default async function YarnSaleVoucherPage({
             Voucher number already exists. Try again.
           </div>
         )}
+        {params.error === "no_lines" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            At least one line with Bag or Lbs is required. Nothing was saved.
+          </div>
+        )}
 
         <datalist id="ysv-parties">
-          {parties.map((p) => (
+          {partyAccounts.map((p) => (
             <option key={p.code} value={p.description}>
               {p.code}
             </option>
+          ))}
+        </datalist>
+        <datalist id="ysv-contracts">
+          {salContracts.map((c) => (
+            <option key={c.contNo} value={c.contNo} />
           ))}
         </datalist>
 
@@ -443,18 +629,20 @@ export default async function YarnSaleVoucherPage({
                   </div>
                   <div className="lg:col-span-1">
                     <label className="label block mb-1">Type</label>
-                    <input
-                      className="input-box mono bg-gray-100 text-center"
-                      defaultValue="SAL"
-                      readOnly
-                      tabIndex={-1}
-                    />
+                    <select
+                      name="type"
+                      className="input-box mono"
+                      defaultValue={formVoucher?.type ?? "SAL"}
+                    >
+                      <option value="SAL">SALE</option>
+                      <option value="RET">RETURN</option>
+                    </select>
                   </div>
                   <div className="lg:col-span-1">
                     <label className="label block mb-1">LV.No</label>
                     <input
                       className="input-box mono bg-gray-100 text-center"
-                      defaultValue={formVoucher?.lvNo ?? upcomingLvNo}
+                      defaultValue={formVoucher?.lvNo ?? lastVNoNum}
                       readOnly
                       tabIndex={-1}
                     />
@@ -518,39 +706,59 @@ export default async function YarnSaleVoucherPage({
                     </div>
                   </div>
                   <div className="lg:col-span-3 flex items-end gap-2">
-                    <button type="button" className="btn btn-outline btn-sm">
-                      Clear-OK
-                    </button>
-                    <button type="button" className="btn btn-outline btn-sm">
-                      OK
-                    </button>
+                    {formVoucher && (
+                      <>
+                        <button
+                          type="submit"
+                          formAction={clearOk}
+                          formNoValidate
+                          className="btn btn-outline btn-sm"
+                          title="Clear OK status"
+                        >
+                          Clear-OK
+                        </button>
+                        <button
+                          type="submit"
+                          formAction={setOk}
+                          formNoValidate
+                          className="btn btn-outline btn-sm"
+                          title="Mark voucher OK"
+                        >
+                          OK
+                        </button>
+                        {formVoucher.statusOk === "OK" && (
+                          <span className="mono text-[11px] font-bold border border-black px-2 py-1">
+                            OK
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
 
-                  <div className="lg:col-span-12">
+                  <div className="lg:col-span-7">
                     <label className="label block mb-1">Party</label>
-                    <input
+                    <Combobox
                       name="party"
-                      list="ysv-parties"
-                      className="input-box mono"
+                      options={partyOpts}
                       defaultValue={formVoucher?.party ?? ""}
+                      placeholder="Select party…"
+                    />
+                  </div>
+                  <div className="lg:col-span-5">
+                    <label className="label block mb-1">Broaker</label>
+                    <Combobox
+                      name="broker"
+                      options={partyOpts}
+                      defaultValue={formVoucher?.broker ?? ""}
+                      placeholder="Select broker…"
                     />
                   </div>
 
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">Term</label>
-                    <select
-                      name="term"
-                      className="input-box mono"
-                      defaultValue={formVoucher?.term ?? "CASH"}
-                    >
-                      {TERM_OPTIONS.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="lg:col-span-10">
+                  <TermSelect
+                    defaultTerm={formVoucher?.term ?? "CASH"}
+                    defaultDate={formVoucher?.dueDate ?? ""}
+                  />
+                  <div className="lg:col-span-8">
                     <label className="label block mb-1">Img</label>
                     <input
                       name="img"
@@ -561,10 +769,17 @@ export default async function YarnSaleVoucherPage({
 
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Cont</label>
-                    <input
+                    <Combobox
                       name="cont"
-                      className="input-box mono"
+                      options={contractOpts}
                       defaultValue={formVoucher?.cont ?? ""}
+                      placeholder="Contract #…"
+                    />
+                    <AutoFill
+                      watch="cont"
+                      map={contractMap}
+                      combos={["party", "broker"]}
+                      inputs={["pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                     />
                   </div>
                   <div className="lg:col-span-2">
@@ -574,7 +789,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.pur ?? ""}
+                      defaultValue={savedPur ?? formVoucher?.pur ?? ""}
                       readOnly
                     />
                   </div>
@@ -585,7 +800,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.bal ?? ""}
+                      defaultValue={savedBal ?? formVoucher?.bal ?? ""}
                       readOnly
                     />
                   </div>
@@ -596,7 +811,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.stockBag ?? ""}
+                      defaultValue={stockBagCalc ?? formVoucher?.stockBag ?? ""}
                       readOnly
                     />
                   </div>
@@ -607,7 +822,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.stockCon ?? ""}
+                      defaultValue={stockConCalc ?? formVoucher?.stockCon ?? ""}
                       readOnly
                     />
                   </div>
@@ -618,7 +833,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.stockLbs ?? ""}
+                      defaultValue={stockLbsCalc ?? formVoucher?.stockLbs ?? ""}
                       readOnly
                     />
                   </div>
@@ -630,7 +845,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.ratePv ?? ""}
+                      defaultValue={ratePvCalc ?? formVoucher?.ratePv ?? ""}
                       readOnly
                     />
                   </div>
@@ -641,7 +856,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.amtPv ?? ""}
+                      defaultValue={amtPvCalc ?? formVoucher?.amtPv ?? ""}
                       readOnly
                     />
                   </div>
@@ -652,7 +867,7 @@ export default async function YarnSaleVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.pl ?? ""}
+                      defaultValue={plCalc ?? formVoucher?.pl ?? ""}
                       readOnly
                     />
                   </div>
@@ -678,7 +893,48 @@ export default async function YarnSaleVoucherPage({
                   </div>
                 </div>
 
+                {(() => {
+                  const ci = formVoucher?.cont ? contractMap[formVoucher.cont] : null;
+                  return (
+                <div className="mt-4 border border-[var(--border-light)] bg-[var(--surface)] p-3">
+                  <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2 text-[var(--muted)]">
+                    Contract Info (auto — pick a contract above)
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2">
+                    <div>
+                      <label className="label block mb-1">Cont Date</label>
+                      <input name="ci_date" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_date ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Rate/Lbs</label>
+                      <input name="ci_rate" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_rate ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Qty Bags</label>
+                      <input name="ci_qty" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_qty ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Age %</label>
+                      <input name="ci_age" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_age ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Days</label>
+                      <input name="ci_days" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_days ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Remarks</label>
+                      <input name="ci_remarks" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={ci?.ci_remarks ?? ""} />
+                    </div>
+                  </div>
+                </div>
+                  );
+                })()}
+
                 <div className="mt-6">
+                  <RowAutoFill watch="line_cont_no" map={lineContractMap} />
+                  <RowAutoFill watch="line_count" map={countDefaultMap} />
+                  <RowCalc target="line_lbs" a="line_bag" factor={100} round={0} onlyWhenEmpty />
+                  <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
                   </div>
@@ -713,6 +969,7 @@ export default async function YarnSaleVoucherPage({
                             <td>
                               <input
                                 name="line_cont_no"
+                                list="ysv-contracts"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.contNo ?? ""}
                               />
@@ -1001,6 +1258,11 @@ export default async function YarnSaleVoucherPage({
                       <td className="mono text-[12px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {v.posting === "Y" ? "POSTED" : "PENDING"}
+                          {v.statusOk === "OK" && (
+                            <span className="ml-1 border border-current px-1 text-[10px] font-bold">
+                              OK
+                            </span>
+                          )}
                         </a>
                       </td>
                     </tr>

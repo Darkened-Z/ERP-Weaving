@@ -2,8 +2,12 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill, RowCalc } from "@/components/auto-fill";
+import { AutoAmount } from "@/components/auto-amount";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -23,10 +27,20 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
+const round = (v: number, d: number) => {
+  const p = 10 ** d;
+  return Math.round(v * p) / p;
+};
 const today = () => new Date().toISOString().slice(0, 10);
 const nowHm = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+const ERROR_MESSAGES: Record<string, string> = {
+  code_exists: "Voucher number already exists. Try again.",
+  qty_required: "Enter Qty Bags or Qty (Lbs) greater than zero.",
+  lbs_mismatch: "Header Qty Lbs does not match the carton total. Clear it to auto-fill, or fix the cartons.",
 };
 
 export default async function YarnTransferPage({
@@ -76,35 +90,84 @@ export default async function YarnTransferPage({
   const nextNum = (maxRow[0]?.maxNum ?? 0) + 1;
   const upcomingVNo = `IYT-${String(nextNum).padStart(4, "0")}`;
 
+  const lastLvRow = await db
+    .select({ maxLv: sql<number>`COALESCE(MAX(${schema.intYarnTransfer.lvNo}), 0)` })
+    .from(schema.intYarnTransfer);
+  const lastLvNo = lastLvRow[0]?.maxLv ?? 0;
+
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
+
+  const priorLotsRows = await db
+    .selectDistinct({ v: schema.intYarnTransfer.yarnLotNo })
+    .from(schema.intYarnTransfer)
+    .where(sql`${schema.intYarnTransfer.yarnLotNo} IS NOT NULL AND ${schema.intYarnTransfer.yarnLotNo} <> ''`);
+  const priorLots = priorLotsRows.map((r) => r.v).filter((v): v is string => !!v);
+
+  const priorLocFromRows = await db
+    .selectDistinct({ v: schema.intYarnTransfer.locationFrom })
+    .from(schema.intYarnTransfer)
+    .where(sql`${schema.intYarnTransfer.locationFrom} IS NOT NULL AND ${schema.intYarnTransfer.locationFrom} <> ''`);
+  const priorLocToRows = await db
+    .selectDistinct({ v: schema.intYarnTransfer.locationTo })
+    .from(schema.intYarnTransfer)
+    .where(sql`${schema.intYarnTransfer.locationTo} IS NOT NULL AND ${schema.intYarnTransfer.locationTo} <> ''`);
+  const locSet = new Set<string>();
+  for (const r of priorLocFromRows) if (r.v) locSet.add(r.v);
+  for (const r of priorLocToRows) if (r.v) locSet.add(r.v);
+  const locOpts = Array.from(locSet)
+    .sort()
+    .map((v) => ({ value: v, label: v }));
+
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}` }));
+
+  // AutoFill map: picking a party in Transfer-From copies it to Transfer-To.
+  const fromToMap: Record<string, Record<string, string>> = {};
+  for (const p of partyOpts) fromToMap[p.value] = { transferToParty: p.value };
+
+  // Server-computed stock for (count, fromParty, fromLocation) on the current voucher.
+  let stockBag: number | null = null;
+  let stockLbs: number | null = null;
+  if (editing && editing.countCode && editing.transferFromParty) {
+    const whereClauses = [
+      eq(schema.intYarnTransfer.countCode, editing.countCode),
+      eq(schema.intYarnTransfer.transferFromParty, editing.transferFromParty),
+      ne(schema.intYarnTransfer.id, editing.id),
+    ];
+    if (editing.locationFrom) {
+      whereClauses.push(eq(schema.intYarnTransfer.locationFrom, editing.locationFrom));
+    }
+    const agg = await db
+      .select({
+        bags: sql<number>`COALESCE(SUM(${schema.intYarnTransfer.qtyBags}), 0)`,
+        lbs: sql<number>`COALESCE(SUM(${schema.intYarnTransfer.qtyLbs}), 0)`,
+      })
+      .from(schema.intYarnTransfer)
+      .where(and(...whereClauses));
+    stockBag = agg[0]?.bags ?? 0;
+    stockLbs = agg[0]?.lbs ?? 0;
+  }
+
   async function saveAction(formData: FormData) {
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    const isUpdate = Number.isFinite(id) && id > 0;
+    const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
 
-    const header = {
-      vDate: txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10),
-      type: txt(formData.get("type")),
-      time: txt(formData.get("time")),
-      lvNo: intVal(formData.get("lvNo")),
-      condition: txt(formData.get("condition")) ?? "FRS",
-      transferFromParty: txt(formData.get("transferFromParty")),
-      locationFrom: txt(formData.get("locationFrom")),
-      transferToParty: txt(formData.get("transferToParty")),
-      locationTo: txt(formData.get("locationTo")),
-      stockBag: num(formData.get("stockBag")),
-      stockLbs: num(formData.get("stockLbs")),
-      countCode: txt(formData.get("countCode")),
-      qtyBags: num(formData.get("qtyBags")),
-      qtyLbs: num(formData.get("qtyLbs")),
-      amount: num(formData.get("amount")),
-      ratePerLbs: num(formData.get("ratePerLbs")),
-      brand: txt(formData.get("brand")),
-      yarnLotNo: txt(formData.get("yarnLotNo")),
-      setNo: txt(formData.get("setNo")),
-      imgBlock: txt(formData.get("imgBlock")),
-      remarks: txt(formData.get("remarks")),
-      rkd: num(formData.get("rkd")),
-    };
+    const vDate = txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10);
+
+    const qtyBags = num(formData.get("qtyBags"));
+    let qtyLbs = num(formData.get("qtyLbs"));
 
     const cartonNos = formData.getAll("cartonNo") as string[];
     const grossKgsArr = formData.getAll("grossKgs") as string[];
@@ -122,8 +185,9 @@ export default async function YarnTransferPage({
       const cn = (cartonNos[i] || "").trim();
       const gk = num(grossKgsArr[i]);
       const nk = num(netKgsArr[i]);
-      const nl = num(netLbsArr[i]);
+      let nl = num(netLbsArr[i]);
       if (!cn && gk == null && nk == null && nl == null) continue;
+      if (nl == null && nk != null) nl = round(nk * 2.2046, 3);
       validLines.push({
         srNo: validLines.length + 1,
         cartonNo: cn || null,
@@ -133,10 +197,57 @@ export default async function YarnTransferPage({
       });
     }
 
+    const cartonLbsSum = validLines.reduce((s, l) => s + (l.netLbs ?? 0), 0);
+    const hasCartons = validLines.some((l) => (l.netLbs ?? 0) > 0);
+    if (hasCartons) {
+      const rounded = round(cartonLbsSum, 3);
+      if (qtyLbs != null && Math.abs(qtyLbs - rounded) > 0.01) {
+        redirect(`/inventory/yarn-transfer${backQ}&error=lbs_mismatch`);
+      }
+      qtyLbs = rounded;
+    } else if (qtyLbs == null && qtyBags != null && qtyBags > 0) {
+      qtyLbs = round(qtyBags * 100, 2);
+    }
+
+    if (!((qtyBags ?? 0) > 0 || (qtyLbs ?? 0) > 0)) {
+      redirect(`/inventory/yarn-transfer${backQ}&error=qty_required`);
+    }
+
+    const ratePerLbs = num(formData.get("ratePerLbs"));
+    const amountRaw = num(formData.get("amount"));
+    const amount =
+      amountRaw != null ? amountRaw : ratePerLbs != null ? round((qtyLbs ?? 0) * ratePerLbs, 2) : null;
+
+    const header = {
+      vDate,
+      type: txt(formData.get("type")),
+      time: txt(formData.get("time")),
+      lvNo: intVal(formData.get("lvNo")),
+      condition: txt(formData.get("condition")) ?? "FRS",
+      transferFromParty: txt(formData.get("transferFromParty")),
+      locationFrom: txt(formData.get("locationFrom")),
+      transferToParty: txt(formData.get("transferToParty")),
+      locationTo: txt(formData.get("locationTo")),
+      // stockBag / stockLbs are display-only, computed on read
+      stockBag: null,
+      stockLbs: null,
+      countCode: txt(formData.get("countCode")),
+      qtyBags,
+      qtyLbs,
+      amount,
+      ratePerLbs,
+      brand: txt(formData.get("brand")),
+      yarnLotNo: txt(formData.get("yarnLotNo")),
+      setNo: txt(formData.get("setNo")),
+      imgBlock: txt(formData.get("imgBlock")),
+      remarks: txt(formData.get("remarks")),
+      rkd: num(formData.get("rkd")),
+    };
+
     const nowIso = new Date().toISOString();
 
     try {
-      if (Number.isFinite(id) && id > 0) {
+      if (isUpdate) {
         await db.transaction(async (tx) => {
           await tx
             .update(schema.intYarnTransfer)
@@ -167,9 +278,13 @@ export default async function YarnTransferPage({
             const n = (maxRes[0]?.maxNum ?? 0) + 1;
             vNo = `IYT-${String(n).padStart(4, "0")}`;
           }
+          const lvRow = await tx
+            .select({ maxLv: sql<number>`COALESCE(MAX(${schema.intYarnTransfer.lvNo}), 0)` })
+            .from(schema.intYarnTransfer);
+          const nextLv = (lvRow[0]?.maxLv ?? 0) + 1;
           const inserted = await tx
             .insert(schema.intYarnTransfer)
-            .values({ ...header, vNo, postedDate: nowIso })
+            .values({ ...header, lvNo: header.lvNo ?? nextLv, vNo, postedDate: nowIso })
             .returning({ id: schema.intYarnTransfer.id });
           const insertedId = inserted[0].id;
           if (validLines.length) {
@@ -185,7 +300,7 @@ export default async function YarnTransferPage({
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message ?? "unknown";
       if (/UNIQUE|constraint/i.test(msg)) {
-        redirect(`/inventory/yarn-transfer?error=code_exists`);
+        redirect(`/inventory/yarn-transfer${backQ}&error=code_exists`);
       }
       throw e;
     }
@@ -205,6 +320,9 @@ export default async function YarnTransferPage({
 
   const ROWS = Math.max(18, lines.length + 3);
   const showForm = !!editing || isAdding;
+  const lvDisplay = editing?.lvNo ?? lastLvNo ?? "";
+  const displayedStockBag = stockBag ?? editing?.stockBag ?? "";
+  const displayedStockLbs = stockLbs ?? editing?.stockLbs ?? "";
 
   return (
     <Shell active="yarn-transfer">
@@ -253,11 +371,17 @@ export default async function YarnTransferPage({
           />
         </div>
 
-        {params.error === "code_exists" && (
+        {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Voucher number already exists. Try again.
+            {ERROR_MESSAGES[params.error]}
           </div>
         )}
+
+        <datalist id="iyt-lot-list">
+          {priorLots.map((l) => (
+            <option key={l} value={l} />
+          ))}
+        </datalist>
 
         <form id="iyt-find-form" method="GET" action="/inventory/yarn-transfer" className="hidden" />
 
@@ -273,7 +397,9 @@ export default async function YarnTransferPage({
               {editing && (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message="Delete this voucher and its cartons? This cannot be undone.">
+                    Delete
+                  </ConfirmButton>
                 </form>
               )}
               <a href="/inventory/yarn-transfer" className="btn btn-outline btn-sm">Exit</a>
@@ -283,6 +409,10 @@ export default async function YarnTransferPage({
           {showForm && (
             <form id="iyt-save-form" action={saveAction}>
               {editing && <input type="hidden" name="id" value={editing.id} />}
+              <input type="hidden" name="one" defaultValue="1" readOnly />
+              <AutoAmount qty="qtyLbs" rate="ratePerLbs" target="amount" />
+              <RowCalc target="netLbs" a="netKgs" factor={2.2046} round={3} />
+              <AutoFill watch="transferFromParty" map={fromToMap} combos={["transferToParty"]} />
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
@@ -308,7 +438,7 @@ export default async function YarnTransferPage({
                       </div>
                       <div className="md:col-span-2">
                         <label className="label block mb-1">LV.No</label>
-                        <input name="lvNo" type="number" step="1" className="input-box mono bg-gray-100" defaultValue={editing?.lvNo ?? ""} readOnly />
+                        <input name="lvNo" type="number" step="1" className="input-box mono bg-gray-100" defaultValue={lvDisplay} readOnly />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Modified</label>
@@ -339,11 +469,11 @@ export default async function YarnTransferPage({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
                       <div className="md:col-span-12">
                         <label className="label block mb-1">Transfer From (Party)</label>
-                        <input name="transferFromParty" className="input-box" defaultValue={editing?.transferFromParty ?? ""} />
+                        <Combobox name="transferFromParty" options={partyOpts} defaultValue={editing?.transferFromParty ?? ""} placeholder="Select party" />
                       </div>
                       <div className="md:col-span-9">
                         <label className="label block mb-1">Location From (GDN)</label>
-                        <input name="locationFrom" className="input-box mono" defaultValue={editing?.locationFrom ?? ""} />
+                        <Combobox name="locationFrom" options={locOpts} defaultValue={editing?.locationFrom ?? ""} placeholder="Type or select location" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
@@ -357,11 +487,11 @@ export default async function YarnTransferPage({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
                       <div className="md:col-span-12">
                         <label className="label block mb-1">Transfer To (Party)</label>
-                        <input name="transferToParty" className="input-box" defaultValue={editing?.transferToParty ?? ""} />
+                        <Combobox name="transferToParty" options={partyOpts} defaultValue={editing?.transferToParty ?? editing?.transferFromParty ?? ""} placeholder="Select party" />
                       </div>
                       <div className="md:col-span-9">
                         <label className="label block mb-1">Location To (GDN)</label>
-                        <input name="locationTo" className="input-box mono" defaultValue={editing?.locationTo ?? ""} />
+                        <Combobox name="locationTo" options={locOpts} defaultValue={editing?.locationTo ?? ""} placeholder="Type or select location" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
@@ -375,16 +505,16 @@ export default async function YarnTransferPage({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Stock Bage</label>
-                        <input name="stockBag" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.stockBag ?? ""} readOnly />
+                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockBag} readOnly tabIndex={-1} />
                       </div>
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Stock Lbs</label>
-                        <input name="stockLbs" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.stockLbs ?? ""} readOnly />
+                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockLbs} readOnly tabIndex={-1} />
                       </div>
 
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Count Code (F9)</label>
-                        <input name="countCode" className="input-box mono" defaultValue={editing?.countCode ?? ""} />
+                        <Combobox name="countCode" options={countOpts} defaultValue={editing?.countCode ?? ""} placeholder="Select count" />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Qty Bags</label>
@@ -401,7 +531,7 @@ export default async function YarnTransferPage({
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Amount</label>
-                        <input name="amount" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.amount ?? ""} />
+                        <input name="amount" type="number" step="0.01" className="input-box mono text-right bg-gray-100" defaultValue={editing?.amount ?? ""} readOnly />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Brand</label>
@@ -410,7 +540,7 @@ export default async function YarnTransferPage({
 
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Yarn Lot # (F9)</label>
-                        <input name="yarnLotNo" className="input-box mono" defaultValue={editing?.yarnLotNo ?? ""} />
+                        <input name="yarnLotNo" list="iyt-lot-list" className="input-box mono" defaultValue={editing?.yarnLotNo ?? ""} />
                       </div>
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Set No.</label>
@@ -462,7 +592,7 @@ export default async function YarnTransferPage({
                                 <td><input name="cartonNo" className="input-box mono text-[12px]" defaultValue={l?.cartonNo ?? ""} /></td>
                                 <td><input name="grossKgs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.grossKgs ?? ""} /></td>
                                 <td><input name="netKgs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.netKgs ?? ""} /></td>
-                                <td><input name="netLbs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.netLbs ?? ""} /></td>
+                                <td><input name="netLbs" type="number" step="0.001" className="input-box mono text-[12px] text-right bg-gray-50" defaultValue={l?.netLbs ?? ""} /></td>
                                 <td className="text-center"><RowClearButton /></td>
                               </tr>
                             );
@@ -471,7 +601,7 @@ export default async function YarnTransferPage({
                       </table>
                     </div>
                     <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black">
-                      Empty rows are ignored on save. Grid replaces on update.
+                      Net Lbs = Net Kgs × 2.2046. Header Qty Lbs is the carton total.
                     </div>
                   </div>
                 </div>

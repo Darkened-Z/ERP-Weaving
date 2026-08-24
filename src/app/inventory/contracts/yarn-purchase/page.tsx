@@ -1,6 +1,9 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoAmount } from "@/components/auto-amount";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -26,6 +29,11 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+const ERROR_MESSAGES: Record<string, string> = {
+  code_exists: "Contract number already exists. Try again.",
+  qty_rate_required: "Qty (Bags) and Rate/Lbs are both required.",
+};
 
 export default async function IntYarnPurchaseContractPage({
   searchParams,
@@ -76,12 +84,44 @@ export default async function IntYarnPurchaseContractPage({
     .from(schema.intYarnPurchaseContract);
   const upcomingNumber = (nextRow[0]?.maxN ?? 0) + 1;
   const upcomingContNo = `IYC-${String(upcomingNumber).padStart(4, "0")}`;
-  const upcomingLContNo = contracts.length + 1;
+
+  const lRow = await db
+    .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
+    .from(schema.intYarnPurchaseContract);
+  const maxLContNo = lRow[0]?.maxL ?? 0;
+  const upcomingLContNo = maxLContNo + 1;
+
+  const parties = await db
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+    })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+
+  const brandList = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
+
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}`, desc: c.description }));
+  const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
 
   async function saveContract(formData: FormData) {
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    const isUpdate = Number.isFinite(id) && id > 0;
+    const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
+
     const contDate = txt(formData.get("cont_date")) ?? today();
     const expdDate = txt(formData.get("expd_date"));
     const refno = txt(formData.get("refno"));
@@ -94,11 +134,15 @@ export default async function IntYarnPurchaseContractPage({
     const brand = txt(formData.get("brand"));
     const qtyBags = num(formData.get("qty_bags"));
     const ratePerLbs = num(formData.get("rate_per_lbs"));
-    const amount = (qtyBags ?? 0) * (ratePerLbs ?? 0);
+    if (!((qtyBags ?? 0) > 0) || !((ratePerLbs ?? 0) > 0)) {
+      redirect(`/inventory/contracts/yarn-purchase${backQ}&error=qty_rate_required`);
+    }
+    // 1 bag = 100 lbs; rate is per-lbs (Oracle: QTY_BAG * RATE * 100)
+    const qtyLbs = Math.round((qtyBags ?? 0) * 100 * 100) / 100;
+    const amount = Math.round((qtyBags ?? 0) * (ratePerLbs ?? 0) * 100 * 100) / 100;
     const remarks = txt(formData.get("remarks"));
     const status = txt(formData.get("status")) ?? "R";
     const deliveryPlace = txt(formData.get("delivery_place"));
-    const qtyLbsHeader = num(formData.get("qty_lbs"));
 
     const delivDates = formData.getAll("delivery_date") as string[];
     const bagsList = formData.getAll("delivery_bags") as string[];
@@ -117,7 +161,7 @@ export default async function IntYarnPurchaseContractPage({
 
     const nowIso = new Date().toISOString();
 
-    if (Number.isFinite(id) && id > 0) {
+    if (isUpdate) {
       await db.transaction(async (tx) => {
         await tx
           .update(schema.intYarnPurchaseContract)
@@ -133,7 +177,7 @@ export default async function IntYarnPurchaseContractPage({
             ratio,
             brand,
             qtyBags,
-            qtyLbs: qtyLbsHeader,
+            qtyLbs,
             ratePerLbs,
             deliveryPlace,
             amount,
@@ -168,10 +212,10 @@ export default async function IntYarnPurchaseContractPage({
           const nextN = (row[0]?.maxN ?? 0) + 1;
           const contNo = `IYC-${String(nextN).padStart(4, "0")}`;
 
-          const countRow = await tx
-            .select({ c: sql<number>`count(*)` })
+          const lRowIns = await tx
+            .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
             .from(schema.intYarnPurchaseContract);
-          const nextL = (countRow[0]?.c ?? 0) + 1;
+          const nextL = (lRowIns[0]?.maxL ?? 0) + 1;
 
           const inserted = await tx
             .insert(schema.intYarnPurchaseContract)
@@ -189,7 +233,7 @@ export default async function IntYarnPurchaseContractPage({
               ratio,
               brand,
               qtyBags,
-              qtyLbs: qtyLbsHeader,
+              qtyLbs,
               ratePerLbs,
               deliveryPlace,
               amount,
@@ -217,7 +261,7 @@ export default async function IntYarnPurchaseContractPage({
       }
 
       if (codeExists) {
-        redirect(`/inventory/contracts/yarn-purchase?error=code_exists`);
+        redirect(`/inventory/contracts/yarn-purchase${backQ}&error=code_exists`);
       }
       revalidatePath("/inventory/contracts/yarn-purchase");
       redirect(`/inventory/contracts/yarn-purchase?id=${newId}`);
@@ -316,9 +360,9 @@ export default async function IntYarnPurchaseContractPage({
           </div>
         </div>
 
-        {params.error === "code_exists" && (
+        {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Contract number already exists. Try again.
+            {ERROR_MESSAGES[params.error]}
           </div>
         )}
 
@@ -346,6 +390,14 @@ export default async function IntYarnPurchaseContractPage({
                 New
               </a>
               <PrintButton label="Print" />
+              {formContract && (
+                <form action={deleteContract} className="inline">
+                  <input type="hidden" name="id" value={formContract.id} />
+                  <ConfirmButton message="Delete this contract and its deliveries? This cannot be undone.">
+                    Delete
+                  </ConfirmButton>
+                </form>
+              )}
               <a href="/inventory/contracts/yarn-purchase" className="btn btn-outline btn-sm">
                 Exit
               </a>
@@ -354,6 +406,9 @@ export default async function IntYarnPurchaseContractPage({
 
           <form id="iyc-save-form" action={saveContract}>
             {formContract && <input type="hidden" name="id" value={formContract.id} />}
+            <input type="hidden" name="one" defaultValue="1" readOnly />
+            <AutoAmount qty="qty_bags" rate="one" target="qty_lbs" factor={100} round={0} />
+            <AutoAmount qty="qty_bags" rate="rate_per_lbs" target="amount" factor={100} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3">
               <div className="lg:col-span-3">
@@ -456,18 +511,20 @@ export default async function IntYarnPurchaseContractPage({
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Party</label>
-                <input
+                <Combobox
                   name="party_code"
-                  className="input-box mono"
+                  options={partyOpts}
                   defaultValue={formContract?.partyCode ?? ""}
+                  placeholder="Select party"
                 />
               </div>
               <div className="lg:col-span-5">
                 <label className="label block mb-1">Broker</label>
-                <input
+                <Combobox
                   name="broker"
-                  className="input-box mono"
+                  options={partyOpts}
                   defaultValue={formContract?.broker ?? ""}
+                  placeholder="Select broker"
                 />
               </div>
 
@@ -494,10 +551,22 @@ export default async function IntYarnPurchaseContractPage({
 
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Count Code</label>
-                <input
+                <Combobox
                   name="count_code"
-                  className="input-box mono"
+                  options={countOpts}
                   defaultValue={formContract?.countCode ?? ""}
+                  placeholder="Select count"
+                  descTargetId="iyc-count-desc"
+                />
+                <input
+                  id="iyc-count-desc"
+                  className="input-box mono text-[11px] bg-gray-100 mt-1"
+                  defaultValue={
+                    countOpts.find((o) => o.value === (formContract?.countCode ?? ""))?.desc ?? ""
+                  }
+                  readOnly
+                  tabIndex={-1}
+                  placeholder="count description"
                 />
               </div>
               <div className="lg:col-span-4">
@@ -510,41 +579,58 @@ export default async function IntYarnPurchaseContractPage({
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Brand</label>
-                <input
+                <Combobox
                   name="brand"
-                  className="input-box mono"
+                  options={brandOpts}
                   defaultValue={formContract?.brand ?? ""}
+                  placeholder="Select brand"
                 />
               </div>
 
-              <div className="lg:col-span-4">
-                <label className="label block mb-1">Qty (Bags)</label>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Qty (Bags) *</label>
                 <input
                   name="qty_bags"
                   type="number"
                   step="any"
+                  min={0.01}
                   className="input-box mono"
                   defaultValue={formContract?.qtyBags ?? ""}
+                  required
                 />
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Qty (Lbs)</label>
                 <input
                   name="qty_lbs"
                   type="number"
                   step="any"
-                  className="input-box mono"
+                  className="input-box mono bg-gray-100"
                   defaultValue={formContract?.qtyLbs ?? formContract?.days ?? ""}
+                  readOnly
                 />
               </div>
-              <div className="lg:col-span-4">
-                <label className="label block mb-1">Rate Per Lbs</label>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Rate Per Lbs *</label>
                 <input
                   name="rate_per_lbs"
                   type="number"
                   step="any"
+                  min={0.01}
                   className="input-box mono"
                   defaultValue={formContract?.ratePerLbs ?? ""}
+                  required
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Amount</label>
+                <input
+                  name="amount"
+                  type="number"
+                  step="any"
+                  className="input-box mono bg-gray-100"
+                  defaultValue={formContract?.amount ?? ""}
+                  readOnly
                 />
               </div>
 
@@ -605,7 +691,6 @@ export default async function IntYarnPurchaseContractPage({
                             className="text-[var(--muted)] hover:text-black mono text-[12px]"
                             aria-label="Clear row"
                             title="Clear row"
-                            onClick={undefined}
                           >
                             X
                           </button>
@@ -637,18 +722,6 @@ export default async function IntYarnPurchaseContractPage({
               </div>
             </div>
           </form>
-
-          {formContract && (
-            <form action={deleteContract} className="mt-4 flex items-center gap-3">
-              <input type="hidden" name="id" value={formContract.id} />
-              <button type="submit" className="btn btn-outline btn-sm">
-                Delete
-              </button>
-              <span className="mono text-[10px] text-[var(--muted)]">
-                Deletes the contract and all delivery lines.
-              </span>
-            </form>
-          )}
         </div>
 
         <div className="border border-black">

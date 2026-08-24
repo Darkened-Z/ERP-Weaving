@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -66,7 +67,16 @@ export default async function GreyTransferPage({
   const parties = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
     .orderBy(schema.chartOfAccounts.description);
+  const greyList = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .where(eq(schema.greyConstruction.status, "A"))
+    .orderBy(schema.greyConstruction.code);
+
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
 
   const nextVNoVal = await db
     .select({
@@ -74,7 +84,52 @@ export default async function GreyTransferPage({
     })
     .from(schema.extGreyTransfer);
   const upcomingVNo = "GTR-" + String((nextVNoVal[0]?.m ?? 0) + 1).padStart(4, "0");
-  const upcomingLvNo = transfers.length + 1;
+  const lastLvNo = transfers.reduce((m, t) => Math.max(m, t.lvNo ?? 0), 0);
+
+  let stockThanDisp: number | null = null;
+  let stockMtrDisp: number | null = null;
+  if (formTransfer?.partyFrom && formTransfer?.qualityFrom) {
+    const p = formTransfer.partyFrom;
+    const q = formTransfer.qualityFrom;
+    const [gdn] = await db
+      .select({
+        t: sql<number>`coalesce(sum(${schema.extGodownStock.than}), 0)`,
+        m: sql<number>`coalesce(sum(${schema.extGodownStock.meter}), 0)`,
+      })
+      .from(schema.extGodownStock)
+      .where(sql`${schema.extGodownStock.type} = 'STOCK'
+        AND (${schema.extGodownStock.gdnParty} = ${p} OR ${schema.extGodownStock.purchaseParty} = ${p})
+        AND ${schema.extGodownStock.dspQuality} = ${q}`);
+    const [kp] = await db
+      .select({
+        t: sql<number>`coalesce(sum(${schema.extKachiParchi.than}), 0)`,
+        m: sql<number>`coalesce(sum(${schema.extKachiParchi.meter}), 0)`,
+      })
+      .from(schema.extKachiParchi)
+      .where(sql`${schema.extKachiParchi.purchaseParty} = ${p}
+        AND ${schema.extKachiParchi.dspQuality} = ${q}`);
+    // exclude the record being edited so its own deduction doesn't hide the stock it came from
+    const [out] = await db
+      .select({
+        t: sql<number>`coalesce(sum(${schema.extGreyTransfer.than}), 0)`,
+        m: sql<number>`coalesce(sum(${schema.extGreyTransfer.meters}), 0)`,
+      })
+      .from(schema.extGreyTransfer)
+      .where(sql`${schema.extGreyTransfer.partyFrom} = ${p}
+        AND ${schema.extGreyTransfer.qualityFrom} = ${q}
+        AND ${schema.extGreyTransfer.id} != ${formTransfer.id}`);
+    const [inn] = await db
+      .select({
+        t: sql<number>`coalesce(sum(${schema.extGreyTransfer.than}), 0)`,
+        m: sql<number>`coalesce(sum(${schema.extGreyTransfer.meters}), 0)`,
+      })
+      .from(schema.extGreyTransfer)
+      .where(sql`${schema.extGreyTransfer.partyTo} = ${p}
+        AND ${schema.extGreyTransfer.qualityTo} = ${q}
+        AND ${schema.extGreyTransfer.id} != ${formTransfer.id}`);
+    stockThanDisp = (gdn?.t ?? 0) - (kp?.t ?? 0) - (out?.t ?? 0) + (inn?.t ?? 0);
+    stockMtrDisp = Math.round(((gdn?.m ?? 0) - (kp?.m ?? 0) - (out?.m ?? 0) + (inn?.m ?? 0)) * 100) / 100;
+  }
 
   async function saveTransfer(formData: FormData) {
     "use server";
@@ -87,11 +142,14 @@ export default async function GreyTransferPage({
     const qualityFrom = txt(formData.get("quality_from"));
     const than = intVal(formData.get("than"));
     const meters = num(formData.get("meters"));
-    const stockThan = intVal(formData.get("stock_than"));
-    const stockMtr = num(formData.get("stock_mtr"));
     const partyTo = txt(formData.get("party_to"));
     const qualityTo = txt(formData.get("quality_to"));
     const remarks = txt(formData.get("remarks"));
+
+    if (than == null || meters == null) {
+      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=qty_required` : `?adding=1&error=qty_required`;
+      redirect("/external/grey/transfer" + q);
+    }
 
     const nowIso = new Date().toISOString();
 
@@ -99,7 +157,7 @@ export default async function GreyTransferPage({
       await db
         .update(schema.extGreyTransfer)
         .set({
-          vDate, greyType, partyFrom, qualityFrom, than, meters, stockThan, stockMtr,
+          vDate, greyType, partyFrom, qualityFrom, than, meters,
           partyTo, qualityTo, remarks, modifiedDate: nowIso,
         })
         .where(eq(schema.extGreyTransfer.id, id));
@@ -123,7 +181,7 @@ export default async function GreyTransferPage({
           .insert(schema.extGreyTransfer)
           .values({
             vNo, lvNo: nextL, vDate, greyType, partyFrom, qualityFrom, than, meters,
-            stockThan, stockMtr, partyTo, qualityTo, remarks, postedDate: nowIso,
+            partyTo, qualityTo, remarks, postedDate: nowIso,
           })
           .returning({ id: schema.extGreyTransfer.id });
         newId = inserted[0].id;
@@ -196,14 +254,11 @@ export default async function GreyTransferPage({
             V.No already exists. Try again.
           </div>
         )}
-
-        <datalist id="gt-parties">
-          {parties.map((p) => (
-            <option key={p.code} value={p.description}>
-              {p.code}
-            </option>
-          ))}
-        </datalist>
+        {params.error === "qty_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Than and Meters are required.
+          </div>
+        )}
 
         <form id="gt-find-form" method="GET" action="/external/grey/transfer" className="hidden"></form>
 
@@ -265,7 +320,7 @@ export default async function GreyTransferPage({
             </div>
             <div className="col-span-1">
               <label className="label block mb-1">LV.No</label>
-              <input className={roCls + " text-center"} defaultValue={formTransfer?.lvNo ?? upcomingLvNo} readOnly tabIndex={-1} />
+              <input className={roCls + " text-center"} defaultValue={formTransfer?.lvNo ?? lastLvNo} readOnly tabIndex={-1} />
             </div>
             <div className="col-span-1">
               <label className="label block mb-1">Posted</label>
@@ -305,39 +360,29 @@ export default async function GreyTransferPage({
                 </div>
                 <div className="col-span-6">
                   <label className="label block mb-1">Party From</label>
-                  <div className="grid grid-cols-[100px_1fr] gap-2">
-                    <input name="party_from_code" className="input-box mono" placeholder="Code" />
-                    <input
-                      name="party_from"
-                      list="gt-parties"
-                      className="input-box mono"
-                      placeholder="Description"
-                      defaultValue={formTransfer?.partyFrom ?? ""}
-                    />
-                  </div>
+                  <Combobox name="party_from" options={partyOpts} defaultValue={formTransfer?.partyFrom ?? ""} placeholder="Select party" />
                 </div>
 
                 <div className="col-span-12">
                   <label className="label block mb-1">Quality</label>
-                  <input name="quality_from" className="input-box mono" defaultValue={formTransfer?.qualityFrom ?? ""} />
+                  <Combobox name="quality_from" options={greyOpts} defaultValue={formTransfer?.qualityFrom ?? ""} placeholder="Select quality" />
                 </div>
 
                 <div className="col-span-3">
                   <label className="label block mb-1">Than</label>
-                  <input name="than" type="number" step="1" className="input-box mono text-right" defaultValue={formTransfer?.than ?? ""} />
+                  <input name="than" type="number" step="1" required className="input-box mono text-right" defaultValue={formTransfer?.than ?? ""} />
                 </div>
                 <div className="col-span-3">
                   <label className="label block mb-1">Meters</label>
-                  <input name="meters" type="number" step="any" className="input-box mono text-right" defaultValue={formTransfer?.meters ?? ""} />
+                  <input name="meters" type="number" step="any" required className="input-box mono text-right" defaultValue={formTransfer?.meters ?? ""} />
                 </div>
                 <div className="col-span-3">
                   <label className="label block mb-1">Stock Than</label>
                   <input
-                    name="stock_than"
                     type="number"
                     step="1"
                     className={roCls + " text-right"}
-                    defaultValue={formTransfer?.stockThan ?? ""}
+                    defaultValue={stockThanDisp ?? ""}
                     readOnly
                     tabIndex={-1}
                   />
@@ -345,11 +390,10 @@ export default async function GreyTransferPage({
                 <div className="col-span-3">
                   <label className="label block mb-1">Stock Mtr</label>
                   <input
-                    name="stock_mtr"
                     type="number"
                     step="any"
                     className={roCls + " text-right"}
-                    defaultValue={formTransfer?.stockMtr ?? ""}
+                    defaultValue={stockMtrDisp ?? ""}
                     readOnly
                     tabIndex={-1}
                   />
@@ -364,20 +408,11 @@ export default async function GreyTransferPage({
               <div className="p-4 grid grid-cols-12 gap-3">
                 <div className="col-span-6">
                   <label className="label block mb-1">Party To</label>
-                  <div className="grid grid-cols-[100px_1fr] gap-2">
-                    <input name="party_to_code" className="input-box mono" placeholder="Code" />
-                    <input
-                      name="party_to"
-                      list="gt-parties"
-                      className="input-box mono"
-                      placeholder="Description"
-                      defaultValue={formTransfer?.partyTo ?? ""}
-                    />
-                  </div>
+                  <Combobox name="party_to" options={partyOpts} defaultValue={formTransfer?.partyTo ?? ""} placeholder="Select party" />
                 </div>
                 <div className="col-span-6">
                   <label className="label block mb-1">Quality</label>
-                  <input name="quality_to" className="input-box mono" defaultValue={formTransfer?.qualityTo ?? ""} />
+                  <Combobox name="quality_to" options={greyOpts} defaultValue={formTransfer?.qualityTo ?? ""} placeholder="Select quality" />
                 </div>
                 <div className="col-span-8">
                   <label className="label block mb-1">Remarks</label>

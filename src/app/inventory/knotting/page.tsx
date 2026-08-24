@@ -1,6 +1,9 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -87,6 +90,8 @@ async function saveKnotting(formData: FormData) {
   const kAndLs = formData.getAll("k_and_l") as string[];
 
   const lines: (typeof schema.intKnottingSarningLine.$inferInsert)[] = [];
+  const rpe = header.ratePerEnds ?? 0;
+  const rpb = header.ratePerBeam ?? 0;
   const rowCount = Math.max(
     beamSetNos.length,
     beamLengths.length,
@@ -139,6 +144,19 @@ async function saveKnotting(formData: FormData) {
       kAndL;
     if (!hasAny) continue;
 
+    const cAmount =
+      rpe > 0
+        ? ends != null
+          ? Math.round(ends * rpe * 100) / 100
+          : null
+        : rpb > 0
+        ? rpb
+        : null;
+    const cNetAmt =
+      cAmount != null || extAmt != null
+        ? Math.round(((cAmount ?? 0) + (extAmt ?? 0)) * 100) / 100
+        : null;
+
     lines.push({
       knottingId: 0,
       srNo: lines.length + 1,
@@ -148,22 +166,30 @@ async function saveKnotting(formData: FormData) {
       beamNo: beamNo || null,
       beamLength,
       issueDate: issueDate || null,
-      kDate: kDate || null,
+      kDate: kDate || header.vDate,
       shdHash: shdHash || null,
       lmHash: lmHash || null,
       extShrAge,
       dspType: dspType || null,
       knContNo: knContNo || null,
       ends,
-      amount,
+      amount: cAmount,
       extraCharger,
       extAmt,
-      netAmt,
+      netAmt: cNetAmt,
       wt,
       mtr,
       lHash: lHash || null,
       kAndL: kAndL || null,
     });
+  }
+
+  if (lines.some((l) => l.beamNo && !l.lmHash)) {
+    redirect(
+      Number.isFinite(id) && id > 0
+        ? `/inventory/knotting?id=${id}&error=loom_required`
+        : `/inventory/knotting?adding=1&error=loom_required`,
+    );
   }
 
   const nowIso = new Date().toISOString();
@@ -193,11 +219,14 @@ async function saveKnotting(formData: FormData) {
     try {
       newId = await db.transaction(async (tx) => {
         const existingRows = await tx
-          .select({ vNo: schema.intKnottingSarning.vNo })
+          .select({
+            vNo: schema.intKnottingSarning.vNo,
+            lvNo: schema.intKnottingSarning.lvNo,
+          })
           .from(schema.intKnottingSarning);
         const providedVNo = txt(formData.get("v_no"));
         const vNo = providedVNo || nextVNoFromRows(existingRows);
-        const nextLv = existingRows.length + 1;
+        const nextLv = existingRows.reduce((m, r) => Math.max(m, r.lvNo ?? 0), 0) + 1;
 
         const inserted = await tx
           .insert(schema.intKnottingSarning)
@@ -248,6 +277,73 @@ async function deleteKnotting(formData: FormData) {
   });
   revalidatePath("/inventory/knotting");
   redirect("/inventory/knotting");
+}
+
+async function deleteBillKnotting(formData: FormData) {
+  "use server";
+  const id = intVal(formData.get("id"));
+  if (id === null) return;
+  await db
+    .update(schema.intKnottingSarning)
+    .set({
+      billNo: null,
+      billDate: null,
+      billingStatus: null,
+      delBill: "Y",
+      modifiedDate: new Date().toISOString(),
+    })
+    .where(eq(schema.intKnottingSarning.id, id));
+  revalidatePath("/inventory/knotting");
+  redirect(`/inventory/knotting?id=${id}`);
+}
+
+async function mountBeam(formData: FormData) {
+  "use server";
+  const lineId = intVal(formData.get("mount_line_id"));
+  if (lineId === null) return;
+  const rows = await db
+    .select({
+      line: schema.intKnottingSarningLine,
+      vNo: schema.intKnottingSarning.vNo,
+      vDate: schema.intKnottingSarning.vDate,
+      knottingId: schema.intKnottingSarning.id,
+    })
+    .from(schema.intKnottingSarningLine)
+    .innerJoin(
+      schema.intKnottingSarning,
+      eq(schema.intKnottingSarningLine.knottingId, schema.intKnottingSarning.id),
+    )
+    .where(eq(schema.intKnottingSarningLine.id, lineId));
+  const row = rows[0];
+  if (!row) redirect("/inventory/knotting");
+  const { line } = row;
+  const loomNo = line.lmHash ? parseInt(line.lmHash, 10) : NaN;
+  if (!line.beamNo || !Number.isFinite(loomNo)) {
+    redirect(`/inventory/knotting?id=${row.knottingId}&error=loom_required`);
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.looms)
+      .set({
+        statusWrk: "RUNNING",
+        currentBeam: line.beamNo,
+        ...(line.knContNo ? { currentContract: line.knContNo } : {}),
+      })
+      .where(eq(schema.looms.loomNo, loomNo));
+    await tx
+      .update(schema.beams)
+      .set({
+        statusWrk: "RUNNING",
+        loomNo,
+        knVno: row.vNo,
+        knDate: line.kDate ?? row.vDate,
+        ...(line.setNo ? { setNo: line.setNo } : {}),
+        ...(line.beamSetNo ? { beamSetNo: line.beamSetNo } : {}),
+      })
+      .where(eq(schema.beams.beamNo, line.beamNo!));
+  });
+  revalidatePath("/inventory/knotting");
+  redirect(`/inventory/knotting?id=${row.knottingId}`);
 }
 
 export default async function KnottingPage({
@@ -302,7 +398,70 @@ export default async function KnottingPage({
     .select({ vNo: schema.intKnottingSarning.vNo })
     .from(schema.intKnottingSarning);
   const upcomingVNo = nextVNoFromRows(allVNos);
-  const upcomingLvNo = allVNos.length + 1;
+  const lastLvNo =
+    (
+      await db
+        .select({ maxLv: sql<number>`coalesce(max(${schema.intKnottingSarning.lvNo}), 0)` })
+        .from(schema.intKnottingSarning)
+    )[0]?.maxLv ?? 0;
+
+  const knContracts = await db
+    .select({
+      party: schema.intKnottingContract.party,
+      ratePerEnds: schema.intKnottingContract.ratePerEnds,
+      ratePerBeam: schema.intKnottingContract.ratePerBeam,
+      type: schema.intKnottingContract.type,
+      contDate: schema.intKnottingContract.contDate,
+    })
+    .from(schema.intKnottingContract)
+    .where(eq(schema.intKnottingContract.status, "R"))
+    .orderBy(desc(schema.intKnottingContract.contDate));
+
+  const partyMap = new Map<string, { rate_per_ends?: number | null; rate_per_beam?: number | null; type?: string | null }>();
+  for (const c of knContracts) {
+    if (!c.party) continue;
+    if (partyMap.has(c.party)) continue;
+    partyMap.set(c.party, {
+      rate_per_ends: c.ratePerEnds,
+      rate_per_beam: c.ratePerBeam,
+      type: c.type,
+    });
+  }
+  const partyOpts = Array.from(partyMap.keys())
+    .sort()
+    .map((p) => ({ value: p, label: p }));
+  const partyFillMap = Object.fromEntries(partyMap.entries());
+
+  const loadedBeams = await db
+    .select({
+      beamNo: schema.beams.beamNo,
+      statusWrk: schema.beams.statusWrk,
+      beamSetNo: schema.beams.beamSetNo,
+      setNo: schema.beams.setNo,
+      beamLength: schema.beams.length,
+      ends: schema.beams.ends,
+    })
+    .from(schema.beams)
+    .where(eq(schema.beams.statusWrk, "LOADED"))
+    .orderBy(schema.beams.beamNo);
+  const beamFillMap = Object.fromEntries(
+    loadedBeams.map((b) => [
+      b.beamNo,
+      { beam_set_no: b.beamSetNo, set_no: b.setNo, beam_length: b.beamLength, ends: b.ends },
+    ]),
+  );
+
+  const loomRows = await db
+    .select({
+      loomNo: schema.looms.loomNo,
+      statusWrk: schema.looms.statusWrk,
+      shed: schema.looms.shed,
+    })
+    .from(schema.looms)
+    .orderBy(
+      sql`CASE WHEN ${schema.looms.statusWrk} = 'RUNNING' THEN 1 ELSE 0 END`,
+      schema.looms.loomNo,
+    );
 
   const showForm = !!formBill || isAdding;
   const rowsToShow = Math.max(LINE_ROWS, lines.length + 3);
@@ -384,12 +543,20 @@ export default async function KnottingPage({
               )}
               <PrintButton label="Print" />
               {formBill && (
-                <form action={deleteKnotting} className="inline">
-                  <input type="hidden" name="id" value={formBill.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
-                    Del Bill
-                  </button>
-                </form>
+                <>
+                  <form action={deleteBillKnotting} className="inline">
+                    <input type="hidden" name="id" value={formBill.id} />
+                    <button type="submit" className="btn btn-outline btn-sm">
+                      Del Bill
+                    </button>
+                  </form>
+                  <form action={deleteKnotting} className="inline">
+                    <input type="hidden" name="id" value={formBill.id} />
+                    <ConfirmButton message="Delete this voucher permanently? This cannot be undone.">
+                      Delete
+                    </ConfirmButton>
+                  </form>
+                </>
               )}
               <a href="/inventory/knotting" className="btn btn-outline btn-sm">
                 Exit
@@ -433,9 +600,9 @@ export default async function KnottingPage({
                   {formBill ? (
                     <button
                       type="submit"
-                      formAction={deleteKnotting}
+                      formAction={deleteBillKnotting}
                       className="btn btn-outline btn-sm w-full"
-                      title="Delete Bill"
+                      title="Nulls Bill No / Date only"
                     >
                       Del Bill
                     </button>
@@ -463,10 +630,11 @@ export default async function KnottingPage({
 
                 <div className="lg:col-span-4">
                   <label className="label block mb-1">Party</label>
-                  <input
+                  <Combobox
                     name="party"
-                    className="input-box mono"
+                    options={partyOpts}
                     defaultValue={formBill?.party ?? ""}
+                    placeholder="knotting contract party"
                   />
                 </div>
                 <div className="lg:col-span-2">
@@ -509,7 +677,7 @@ export default async function KnottingPage({
                   <label className="label block mb-1">LV.No</label>
                   <input
                     className="input-box mono bg-gray-100 text-center"
-                    defaultValue={formBill?.lvNo ?? upcomingLvNo}
+                    defaultValue={formBill?.lvNo ?? lastLvNo}
                     readOnly
                     tabIndex={-1}
                   />
@@ -636,6 +804,7 @@ export default async function KnottingPage({
                     <tbody>
                       {Array.from({ length: rowsToShow }).map((_, i) => {
                         const l = lines[i];
+                        const headerVDate = formBill?.vDate ?? today();
                         return (
                           <tr key={i}>
                             <td className="text-[var(--muted)] text-center">
@@ -667,6 +836,7 @@ export default async function KnottingPage({
                             <td>
                               <input
                                 name="beam_no"
+                                list="ks-beam-list"
                                 className="input-box mono text-[12px]"
                                 defaultValue={l?.beamNo ?? ""}
                               />
@@ -693,7 +863,7 @@ export default async function KnottingPage({
                                 name="k_date"
                                 type="date"
                                 className="input-box mono text-[12px]"
-                                defaultValue={l?.kDate ?? ""}
+                                defaultValue={l?.kDate ?? headerVDate}
                               />
                             </td>
                             <td>
@@ -706,6 +876,7 @@ export default async function KnottingPage({
                             <td>
                               <input
                                 name="lm_hash"
+                                list="ks-loom-list"
                                 className="input-box mono text-[12px]"
                                 defaultValue={l?.lmHash ?? ""}
                               />
@@ -810,7 +981,20 @@ export default async function KnottingPage({
                                 defaultValue={l?.kAndL ?? ""}
                               />
                             </td>
-                            <td className="text-center text-[10px]">U</td>
+                            <td className="text-center text-[10px]">
+                              {l?.id ? (
+                                <button
+                                  type="submit"
+                                  form={`ks-mount-${l.id}`}
+                                  className="btn btn-outline btn-sm"
+                                  title="Mount beam on loom (RUNNING)"
+                                >
+                                  U
+                                </button>
+                              ) : (
+                                <span className="text-[var(--muted)]">U</span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -821,6 +1005,23 @@ export default async function KnottingPage({
                   Note:- Beam Length, K.Date, Loom#, Shr.Age, Set Status UpDate Only Press Buten &apos;U&apos;
                 </div>
               </div>
+
+              <datalist id="ks-beam-list">
+                {loadedBeams.map((b) => (
+                  <option key={b.beamNo} value={b.beamNo}>
+                    {b.statusWrk}
+                  </option>
+                ))}
+              </datalist>
+              <datalist id="ks-loom-list">
+                {loomRows.map((lm) => (
+                  <option key={lm.loomNo} value={String(lm.loomNo)}>
+                    {(lm.statusWrk ?? "") + (lm.shed ? " · " + lm.shed : "")}
+                  </option>
+                ))}
+              </datalist>
+              <RowAutoFill watch="beam_no" map={beamFillMap} />
+              <AutoFill watch="party" map={partyFillMap} inputs={["rate_per_ends", "rate_per_beam", "type"]} />
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
                 <button type="submit" className="btn btn-sm">
@@ -848,6 +1049,15 @@ export default async function KnottingPage({
           ) : (
             <div className="text-[13px] text-[var(--muted)] py-6 text-center">
               Select a bill from the list below, or click <b>New</b> to create one.
+            </div>
+          )}
+          {showForm && lines.length > 0 && (
+            <div className="hidden">
+              {lines.map((l) => (
+                <form key={l.id} id={`ks-mount-${l.id}`} action={mountBeam}>
+                  <input type="hidden" name="mount_line_id" value={l.id} />
+                </form>
+              ))}
             </div>
           )}
         </div>

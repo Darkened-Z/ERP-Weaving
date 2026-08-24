@@ -2,8 +2,13 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
+import { Combobox } from "@/components/combobox";
+import { RowAutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
+import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, gte, sql, desc } from "drizzle-orm";
+import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -19,6 +24,12 @@ const GRID_ROWS = 18;
 const num = (v: FormDataEntryValue | null): number | null => {
   if (v === null || v === undefined || v === "") return null;
   const n = parseFloat(v as string);
+  return Number.isFinite(n) ? n : null;
+};
+
+const intVal = (v: FormDataEntryValue | null): number | null => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = parseInt(v as string, 10);
   return Number.isFinite(n) ? n : null;
 };
 
@@ -45,36 +56,43 @@ type GridLine = {
   narr: string | null;
   chqNo: string | null;
   chqDate: string | null;
+  yarn: string | null;
+  cc: number | null;
   amount: number;
 };
 
-function buildDetails(fyCode: string, vno: number, pettyAcc: string, narration: string, lines: GridLine[]) {
-  const total = lines.reduce((s, l) => s + l.amount, 0);
+function buildDetails(fyCode: string, vno: number, pettyAcc: string, lines: GridLine[]) {
   const rows: (typeof schema.transDetail.$inferInsert)[] = lines.map((l, i) => ({
     fyCode,
     vtype: VTYPE,
     vno,
     srno: i + 1,
     accCode: l.acc,
-    ccCode: null,
+    partyCode: pettyAcc,
+    ccCode: l.cc,
     narration: l.narr,
     debit: IS_RECEIPT ? 0 : l.amount,
     credit: IS_RECEIPT ? l.amount : 0,
     chqNo: l.chqNo,
     chqDate: l.chqDate,
+    yarnCount: l.yarn,
   }));
-  rows.push({
-    fyCode,
-    vtype: VTYPE,
-    vno,
-    srno: lines.length + 1,
-    accCode: pettyAcc,
-    ccCode: null,
-    narration,
-    debit: IS_RECEIPT ? total : 0,
-    credit: IS_RECEIPT ? 0 : total,
-    chqNo: null,
-    chqDate: null,
+  lines.forEach((l, i) => {
+    const chq = l.chqNo ? ` CHQ.#: ${l.chqNo}${l.chqDate ? " DT." + l.chqDate : ""}` : "";
+    rows.push({
+      fyCode,
+      vtype: VTYPE,
+      vno,
+      srno: (IS_RECEIPT ? 50 : 100) + i,
+      accCode: pettyAcc,
+      partyCode: pettyAcc,
+      ccCode: null,
+      narration: ((l.narr ?? "") + chq).trim() || null,
+      debit: IS_RECEIPT ? l.amount : 0,
+      credit: IS_RECEIPT ? 0 : l.amount,
+      chqNo: null,
+      chqDate: null,
+    });
   });
   const sumD = rows.reduce((s, r) => s + (r.debit ?? 0), 0);
   const sumC = rows.reduce((s, r) => s + (r.credit ?? 0), 0);
@@ -86,21 +104,24 @@ function buildDetails(fyCode: string, vno: number, pettyAcc: string, narration: 
 
 async function saveVoucher(formData: FormData) {
   "use server";
+  const session = await getSession();
+  const utCode = session?.userId ?? null;
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   const editing = Number.isFinite(id) && id > 0;
   const back = editing ? `id=${id}` : "adding=1";
 
   const pettyAcc = txt(formData.get("acc_code"));
-  const acctTitle = txt(formData.get("acc_title"));
   const vdate = ((formData.get("v_date") as string) || "").trim() || today();
   const vtime = txt(formData.get("v_time")) ?? nowTime();
-  const narration = acctTitle ?? "PETTY CASH RECEIPT";
+  const narration = txt(formData.get("narration")) ?? "PETTY CASH RECEIPT";
 
   const accsArr = formData.getAll("line_acc") as string[];
   const narrArr = formData.getAll("line_narr") as string[];
   const chqNoArr = formData.getAll("line_chq_no") as string[];
   const chqDateArr = formData.getAll("line_chq_date") as string[];
+  const yarnArr = formData.getAll("line_yarn") as string[];
+  const ccArr = formData.getAll("line_cc") as string[];
   const amtArr = formData.getAll("line_amount") as string[];
 
   const rowCount = Math.max(accsArr.length, amtArr.length);
@@ -114,6 +135,8 @@ async function saveVoucher(formData: FormData) {
       narr: txt(narrArr[i]),
       chqNo: txt(chqNoArr[i]),
       chqDate: txt(chqDateArr[i]),
+      yarn: txt(yarnArr[i]),
+      cc: intVal(ccArr[i]),
       amount,
     });
   }
@@ -144,7 +167,7 @@ async function saveVoucher(formData: FormData) {
       const vno = ex[0].vno;
       await tx
         .update(schema.transMain)
-        .set({ vdate, vtime, accCode: pettyAcc, narration, balanceAmount: total })
+        .set({ vdate, vtime, accCode: pettyAcc, narration, balanceAmount: total, utCode })
         .where(eq(schema.transMain.id, id));
       await tx
         .delete(schema.transDetail)
@@ -157,7 +180,7 @@ async function saveVoucher(formData: FormData) {
         );
       await tx
         .insert(schema.transDetail)
-        .values(buildDetails(exFy, vno, pettyAcc!, narration, lines));
+        .values(buildDetails(exFy, vno, pettyAcc!, lines));
     });
     revalidatePath(BASE);
     redirect(`${BASE}?id=${id}`);
@@ -183,12 +206,13 @@ async function saveVoucher(formData: FormData) {
           accCode: pettyAcc!,
           narration,
           balanceAmount: total,
+          utCode,
         })
         .returning({ id: schema.transMain.id });
       const mainId = inserted[0].id;
       await tx
         .insert(schema.transDetail)
-        .values(buildDetails(currentFy!, vno, pettyAcc!, narration, lines));
+        .values(buildDetails(currentFy!, vno, pettyAcc!, lines));
       return mainId;
     });
   } catch (e: unknown) {
@@ -209,6 +233,8 @@ async function saveVoucher(formData: FormData) {
 
 async function deleteVoucher(formData: FormData) {
   "use server";
+  const session = await getSession();
+  if (session?.roleName !== "ADMIN") redirect(`${BASE}?error=admin_only`);
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   if (!Number.isFinite(id) || id <= 0) return;
@@ -234,6 +260,30 @@ async function deleteVoucher(formData: FormData) {
   redirect(BASE);
 }
 
+async function setOkStatus(formData: FormData) {
+  "use server";
+  const id = intVal(formData.get("id"));
+  if (id === null) return;
+  const [main] = await db
+    .select()
+    .from(schema.transMain)
+    .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)))
+    .limit(1);
+  if (!main) redirect(BASE);
+  await db
+    .update(schema.transDetail)
+    .set({ statusOk: formData.get("ok") ? "OK" : null })
+    .where(
+      and(
+        eq(schema.transDetail.fyCode, main.fyCode),
+        eq(schema.transDetail.vtype, VTYPE),
+        eq(schema.transDetail.vno, main.vno),
+      ),
+    );
+  revalidatePath(BASE);
+  redirect(`${BASE}?id=${id}`);
+}
+
 export default async function PettyCashReceiptPage({
   searchParams,
 }: {
@@ -252,8 +302,26 @@ export default async function PettyCashReceiptPage({
       descShort: schema.chartOfAccounts.descShort,
     })
     .from(schema.chartOfAccounts)
+    .where(gte(schema.chartOfAccounts.level, 4))
     .orderBy(schema.chartOfAccounts.code);
   const acctMap = new Map(accounts.map((a) => [a.code, a.description]));
+  const accOpts = accounts.map((a) => ({
+    value: a.code,
+    label: `${a.code} — ${a.description}`,
+    desc: a.description,
+  }));
+  const accDescMap = Object.fromEntries(
+    accounts.map((a) => [a.code, { line_title: a.description }]),
+  );
+
+  const centers = await db
+    .select({ code: schema.costCenters.code, description: schema.costCenters.description })
+    .from(schema.costCenters)
+    .orderBy(schema.costCenters.code);
+  const yarnList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
 
   const cp = await db
     .select({ fy: schema.companyProfile.currentFy })
@@ -321,8 +389,8 @@ export default async function PettyCashReceiptPage({
         )
         .orderBy(schema.transDetail.srno)
     : [];
-  const gridLines = details.filter((d) =>
-    IS_RECEIPT ? (d.credit ?? 0) > 0 : (d.debit ?? 0) > 0,
+  const gridLines = details.filter(
+    (d) => d.srno < 50 && (IS_RECEIPT ? (d.credit ?? 0) > 0 : (d.debit ?? 0) > 0),
   );
 
   const showForm = !!formVoucher || isAdding;
@@ -336,6 +404,8 @@ export default async function PettyCashReceiptPage({
       ? "Enter the petty cash account and at least one line with an amount."
       : params.error === "no_fy"
       ? "No current fiscal year is set in Company Profile."
+      : params.error === "admin_only"
+      ? "Only ADMIN can delete vouchers."
       : null;
 
   return (
@@ -374,17 +444,17 @@ export default async function PettyCashReceiptPage({
           </div>
         )}
 
-        <datalist id="fin-accounts">
-          {accounts.map((a) => (
-            <option key={a.code} value={a.code}>
-              {(a.descShort ? a.descShort + " · " : "") + a.description}
+        <datalist id="fin-ccs">
+          {centers.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} — {c.description}
             </option>
           ))}
         </datalist>
-        <datalist id="fin-acc-titles">
-          {accounts.map((a) => (
-            <option key={a.code} value={a.description}>
-              {a.code}
+        <datalist id="fin-yarns">
+          {yarnList.map((y) => (
+            <option key={y.countCode} value={y.countCode}>
+              {y.description ? `${y.countCode} — ${y.description}` : y.countCode}
             </option>
           ))}
         </datalist>
@@ -401,6 +471,23 @@ export default async function PettyCashReceiptPage({
                 : TITLE}
             </div>
             <div className="flex gap-2 no-print flex-wrap">
+              {formVoucher && (
+                <>
+                  <form action={setOkStatus} className="inline">
+                    <input type="hidden" name="id" value={formVoucher.id} />
+                    <input type="hidden" name="ok" value="1" />
+                    <button type="submit" className="btn btn-outline btn-sm">
+                      OK
+                    </button>
+                  </form>
+                  <form action={setOkStatus} className="inline">
+                    <input type="hidden" name="id" value={formVoucher.id} />
+                    <button type="submit" className="btn btn-outline btn-sm">
+                      Clear-OK
+                    </button>
+                  </form>
+                </>
+              )}
               <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
                 New
               </a>
@@ -413,9 +500,9 @@ export default async function PettyCashReceiptPage({
               {formVoucher && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formVoucher.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
+                  <ConfirmButton message="Delete this voucher? This cannot be undone.">
                     Delete
-                  </button>
+                  </ConfirmButton>
                 </form>
               )}
               <a href={BASE} className="btn btn-outline btn-sm">
@@ -441,24 +528,24 @@ export default async function PettyCashReceiptPage({
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Acc.Code</label>
-                  <input
+                  <Combobox
                     name="acc_code"
-                    list="fin-accounts"
-                    className="input-box mono"
+                    options={accOpts}
                     defaultValue={formVoucher?.accCode ?? ""}
                     placeholder="Petty cash account"
+                    descTargetId="pr-acc-title"
                   />
                 </div>
                 <div className="lg:col-span-4">
                   <label className="label block mb-1">Tittle</label>
                   <input
-                    name="acc_title"
-                    list="fin-acc-titles"
-                    className="input-box mono"
+                    id="pr-acc-title"
+                    className="input-box mono bg-gray-100"
                     defaultValue={
-                      formVoucher?.narration ??
-                      (formVoucher?.accCode ? acctMap.get(formVoucher.accCode) ?? "" : "")
+                      formVoucher?.accCode ? acctMap.get(formVoucher.accCode) ?? "" : ""
                     }
+                    readOnly
+                    tabIndex={-1}
                     placeholder="Account description"
                   />
                 </div>
@@ -484,16 +571,19 @@ export default async function PettyCashReceiptPage({
                   <label className="label block mb-1">LV.No</label>
                   <input
                     className="input-box mono bg-gray-100 text-center"
-                    defaultValue={voucherCount}
+                    defaultValue={lastVno}
                     readOnly
                     tabIndex={-1}
                   />
                 </div>
 
-                <div className="lg:col-span-8 flex items-end">
-                  <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
-                    Clear-OK
-                  </a>
+                <div className="lg:col-span-8">
+                  <label className="label block mb-1">Narration</label>
+                  <input
+                    name="narration"
+                    className="input-box mono"
+                    defaultValue={formVoucher?.narration ?? ""}
+                  />
                 </div>
                 <div className="lg:col-span-4">
                   <label className="label block mb-1">Find</label>
@@ -516,18 +606,21 @@ export default async function PettyCashReceiptPage({
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                   Line Items
                 </div>
+                <RowAutoFill watch="line_acc" map={accDescMap} />
                 <div className="overflow-x-auto border border-black">
-                  <table className="mono text-[12px]" style={{ minWidth: 1150 }}>
+                  <table className="mono text-[12px]" style={{ minWidth: 1450 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
-                        <th style={{ width: 150 }}>Short Name</th>
-                        <th style={{ width: 240 }}>Tittle</th>
+                        <th style={{ width: 200 }}>Account (F9)</th>
+                        <th style={{ width: 220 }}>Tittle</th>
                         <th style={{ width: 40 }}>OK</th>
-                        <th style={{ width: 260 }}>Narr</th>
+                        <th style={{ width: 130 }}>Yarn Count - (List - F9)</th>
+                        <th style={{ width: 240 }}>Narr</th>
                         <th style={{ width: 110 }}>Chq.No</th>
                         <th style={{ width: 130 }}>Chq.Date</th>
                         <th style={{ width: 120 }}>{AMOUNT_LABEL}</th>
+                        <th style={{ width: 150 }}>Cost Center / Jobs (F9)</th>
                         <th style={{ width: 40 }}></th>
                       </tr>
                     </thead>
@@ -538,22 +631,33 @@ export default async function PettyCashReceiptPage({
                           <tr key={i}>
                             <td className="text-[var(--muted)] text-center">{i + 1}</td>
                             <td>
-                              <input
+                              <Combobox
                                 name="line_acc"
-                                list="fin-accounts"
-                                className="input-box mono text-[12px]"
+                                options={accOpts}
                                 defaultValue={l?.accCode ?? ""}
+                                className="input-box mono text-[12px]"
                               />
                             </td>
                             <td>
                               <input
+                                name="line_title"
                                 className="input-box mono text-[12px] bg-gray-100"
                                 defaultValue={l ? acctMap.get(l.accCode) ?? "" : ""}
                                 readOnly
                                 tabIndex={-1}
                               />
                             </td>
-                            <td className="text-center text-[10px] text-[var(--muted)]">OK</td>
+                            <td className="text-center text-[10px] text-[var(--muted)]">
+                              {l?.statusOk === "OK" ? "OK" : ""}
+                            </td>
+                            <td>
+                              <input
+                                name="line_yarn"
+                                list="fin-yarns"
+                                className="input-box mono text-[12px]"
+                                defaultValue={l?.yarnCount ?? ""}
+                              />
+                            </td>
                             <td>
                               <input
                                 name="line_narr"
@@ -587,6 +691,14 @@ export default async function PettyCashReceiptPage({
                                 }
                               />
                             </td>
+                            <td>
+                              <input
+                                name="line_cc"
+                                list="fin-ccs"
+                                className="input-box mono text-[12px]"
+                                defaultValue={l?.ccCode ?? ""}
+                              />
+                            </td>
                             <td className="text-center">
                               <RowClearButton />
                             </td>
@@ -614,14 +726,9 @@ export default async function PettyCashReceiptPage({
                     <label className="label block mb-1">Password</label>
                     <input type="password" name="pswd" className="input-box mono w-36" />
                   </div>
-                  <div>
+                  <div className="w-44">
                     <label className="label block mb-1">Balance Amount</label>
-                    <input
-                      className="input-box mono w-44 text-right bg-gray-100 font-semibold"
-                      defaultValue={fmt(balanceAmount)}
-                      readOnly
-                      tabIndex={-1}
-                    />
+                    <VoucherBalance initial={balanceAmount} fieldName="line_amount" />
                   </div>
                 </div>
               </div>

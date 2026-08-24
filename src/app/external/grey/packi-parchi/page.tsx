@@ -1,6 +1,10 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
+import { PackiCalc } from "@/components/packi-calc";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -29,7 +33,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const TYPE_OPTIONS = ["OK", "REJ"];
 const TYPE_REJ_OPTIONS = ["OK", "REJ", "MIX"];
-const TERM_OPTIONS = ["CASH", "CREDIT"];
+const TERM_OPTIONS = ["CASH", "DUE"];
 const COUNT_ROWS = 4;
 
 export default async function PackiParchiPage({
@@ -87,9 +91,64 @@ export default async function PackiParchiPage({
   const weftBag = bags.find((b) => b.section === "WEFT") ?? null;
 
   const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
+  const partyOpts = parties
+    .filter((p) => p.level >= 4)
+    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}`, desc: p.code }));
+
+  const kachiParchis = await db
+    .select()
+    .from(schema.extKachiParchi)
+    .orderBy(desc(schema.extKachiParchi.id));
+  const kpOpt = (k: (typeof kachiParchis)[number]) => ({
+    value: k.vNo,
+    label: `${k.vNo} — ${k.saleParty ?? ""} ${k.dspQuality ?? ""}`.trim(),
+  });
+  const kpUnconvOpts = kachiParchis
+    .filter((k) => k.ppVno == null || k.id === formItem?.kpId || k.vNo === formItem?.kpNo)
+    .map(kpOpt);
+  const kpAllOpts = kachiParchis.map(kpOpt);
+  // The KP's sale party holds the cloth after the kachi sale, so this packi
+  // purchase is made from that party.
+  const kpMap: Record<string, Record<string, string | number>> = {};
+  for (const k of kachiParchis) {
+    kpMap[k.vNo] = {
+      kp_id: k.id,
+      purchase_party: k.saleParty ?? "",
+      quality: k.dspQuality ?? "",
+      than: k.than ?? "",
+      kp_meter: k.meter ?? "",
+      grey_rate_kp: k.greyRate ?? "",
+      el_cumi_num: k.elCumiNum ?? "",
+      el_cumi_den: k.elCumiDen ?? "",
+      pp_date: k.vDate,
+      v_date: k.vDate,
+    };
+  }
+
+  const convContracts = await db
+    .select({ contNo: schema.extGreyConvContract.contNo, party: schema.extGreyConvContract.party })
+    .from(schema.extGreyConvContract)
+    .orderBy(desc(schema.extGreyConvContract.contNo));
+  const convOpts = convContracts.map((c) => ({
+    value: c.contNo,
+    label: c.party ? `${c.contNo} — ${c.party}` : c.contNo,
+  }));
+
+  const salContracts = await db
+    .select({ contractNo: schema.extGreySalContract.contractNo, party: schema.extGreySalContract.party })
+    .from(schema.extGreySalContract)
+    .orderBy(desc(schema.extGreySalContract.contractNo));
+  const salContractOpts = salContracts.map((c) => ({
+    value: c.contractNo,
+    label: c.party ? `${c.contractNo} — ${c.party}` : c.contractNo,
+  }));
 
   const nextVNoRow = await db
     .select({
@@ -105,7 +164,6 @@ export default async function PackiParchiPage({
 
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const purchaseParty = txt(formData.get("purchase_party"));
-    const kpNo = txt(formData.get("kp_no"));
     const kpAll = formData.get("kp_all") ? "Y" : "N";
     const ppNo = txt(formData.get("pp_no"));
     const ppDate = txt(formData.get("pp_date"));
@@ -113,7 +171,6 @@ export default async function PackiParchiPage({
     const qualityPrint = txt(formData.get("quality_print"));
     const meterRe = num(formData.get("meter_re"));
     const meterKam = num(formData.get("meter_kam"));
-    const meterNet = num(formData.get("meter_net"));
     const than = intVal(formData.get("than"));
     const kpMeter = num(formData.get("kp_meter"));
     const brokerName = txt(formData.get("broker_name"));
@@ -141,27 +198,95 @@ export default async function PackiParchiPage({
     const brokerNameSale = txt(formData.get("broker_name_sale"));
     const brokerPercentSale = num(formData.get("broker_percent_sale"));
     const remarks = txt(formData.get("remarks"));
-    const salAmtDiff = num(formData.get("sal_amt_diff"));
     const woc = num(formData.get("woc"));
     const wc = num(formData.get("wc"));
     const wck = num(formData.get("wck"));
     const printingName = txt(formData.get("printing_name"));
-    const commissionTotal = num(formData.get("commission_total"));
-    const diff = num(formData.get("diff"));
     const termSal = txt(formData.get("term_sal"));
+    const dueDate = termSal === "DUE" ? txt(formData.get("due_date")) : null;
     const typeRej = txt(formData.get("type_rej"));
+    const imgNo = txt(formData.get("img_no"));
+
+    const errPath = (slug: string) =>
+      `/external/grey/packi-parchi?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}error=${slug}`;
+
+    const kpNoRaw =
+      kpAll === "Y"
+        ? txt(formData.get("kp_no_all")) ?? txt(formData.get("kp_no"))
+        : txt(formData.get("kp_no")) ?? txt(formData.get("kp_no_all"));
+    const kpIdRaw = intVal(formData.get("kp_id"));
+
+    let kpRows = kpNoRaw
+      ? await db
+          .select()
+          .from(schema.extKachiParchi)
+          .where(eq(schema.extKachiParchi.vNo, kpNoRaw))
+          .limit(1)
+      : [];
+    if (!kpRows.length && kpIdRaw != null) {
+      kpRows = await db
+        .select()
+        .from(schema.extKachiParchi)
+        .where(eq(schema.extKachiParchi.id, kpIdRaw))
+        .limit(1);
+    }
+    if (!kpRows.length) redirect(errPath("kp_required"));
+    const kpLinkId = kpRows[0].id;
+    const kpNo = kpRows[0].vNo;
+
+    const rnd = Math.round;
+    const cumiDiv = (d: number) => (d === 5 ? 400 : 800);
+    const mRe = meterRe ?? 0;
+    let elMeterC = elMeter;
+    if (kpMeter != null && elCumiNum != null && elCumiDen != null) {
+      elMeterC = rnd(((kpMeter - mRe) * elCumiNum) / cumiDiv(elCumiDen));
+    }
+    const fineMtr =
+      kpMeter != null && meterFineNum != null && meterFineDen != null
+        ? rnd(((kpMeter - mRe) * meterFineNum) / cumiDiv(meterFineDen))
+        : 0;
+    const meterNetC =
+      kpMeter == null
+        ? null
+        : Math.round((kpMeter - (elMeterC ?? 0) - mRe - fineMtr - (meterKam ?? 0)) * 100) / 100;
+    if (meterNetC == null || meterNetC <= 0) redirect(errPath("meter_net"));
+
+    const wkcBrkC =
+      wkcBrk ??
+      (greyRate != null && greyRate > 0 ? Math.min(Math.max(Math.floor(greyRate / 10), 1), 9) : null);
+    const checkeryC = checkery ?? 0.07;
+
+    const greyAmtPur = rnd(meterNetC * (greyRate ?? 0));
+    const kaatAmt = rnd((meterNetC / 40) * (wkcBrkC ?? 0));
+    const checkeryAmt = rnd((kpMeter ?? 0) * checkeryC);
+    const commissionAmtPv = rnd((meterNetC * (greyRateKp ?? 0) * (commission ?? 0)) / 100);
+    const brokerAmtPv = rnd((greyAmtPur * (brokerPercent ?? 0)) / 100);
+    const purBal = greyAmtPur - kaatAmt - checkeryAmt - brokerAmtPv - commissionAmtPv;
+
+    const greyAmtSal = rnd(meterNetC * (greyRateKp ?? 0));
+    const commissionSaleAmt = rnd((greyAmtSal * (commissionSale ?? 0)) / 100);
+    const kaatSalAmt = rnd((greyAmtSal * (kaatPercentSale ?? 0)) / 100);
+    const checkerySalAmt = rnd((meterNetC / 40) * (checkerySale ?? 0));
+    const salAmtTot = greyAmtSal + commissionSaleAmt - kaatSalAmt - checkerySalAmt;
+
+    const brokerAmtSal = rnd((greyAmtSal * (brokerPercentSale ?? 0)) / 100);
+    const salAmtDiffC = salAmtTot - purBal;
+    const commissionTotalC = rnd(salAmtDiffC - brokerAmtSal - brokerAmtPv);
+    const diffC = commissionTotalC - ((woc ?? 0) + (wc ?? 0) + (wck ?? 0));
 
     const warpQuality = txt(formData.get("warp_quality"));
     const warpWt = num(formData.get("warp_wt"));
-    const warpBags = num(formData.get("warp_bags"));
     const warpRate = num(formData.get("warp_rate"));
-    const warpAmount = num(formData.get("warp_amount"));
 
     const weftQuality = txt(formData.get("weft_quality"));
     const weftWt = num(formData.get("weft_wt"));
-    const weftBags = num(formData.get("weft_bags"));
     const weftRate = num(formData.get("weft_rate"));
-    const weftAmount = num(formData.get("weft_amount"));
+
+    const bagFor = (quality: string | null, wt: number | null, rate: number | null) => {
+      const bagsC = wt != null ? Math.round(((wt * meterNetC) / 100) * 100) / 100 : null;
+      const amountC = bagsC != null && rate != null ? rnd(bagsC * rate * 100) : null;
+      return { quality, wtPerMeter: wt, bags: bagsC, rate, amount: amountC };
+    };
 
     const bagRows: {
       section: string;
@@ -172,25 +297,11 @@ export default async function PackiParchiPage({
       amount: number | null;
     }[] = [];
 
-    if (warpQuality || warpWt != null || warpBags != null || warpRate != null || warpAmount != null) {
-      bagRows.push({
-        section: "WARP",
-        quality: warpQuality,
-        wtPerMeter: warpWt,
-        bags: warpBags,
-        rate: warpRate,
-        amount: warpAmount,
-      });
+    if (warpQuality || warpWt != null || warpRate != null) {
+      bagRows.push({ section: "WARP", ...bagFor(warpQuality, warpWt, warpRate) });
     }
-    if (weftQuality || weftWt != null || weftBags != null || weftRate != null || weftAmount != null) {
-      bagRows.push({
-        section: "WEFT",
-        quality: weftQuality,
-        wtPerMeter: weftWt,
-        bags: weftBags,
-        rate: weftRate,
-        amount: weftAmount,
-      });
+    if (weftQuality || weftWt != null || weftRate != null) {
+      bagRows.push({ section: "WEFT", ...bagFor(weftQuality, weftWt, weftRate) });
     }
 
     const countCode = formData.getAll("count_code") as string[];
@@ -242,19 +353,39 @@ export default async function PackiParchiPage({
 
     if (Number.isFinite(id) && id > 0) {
       await db.transaction(async (tx) => {
+        const cur = await tx
+          .select({ vNo: schema.extPackiParchi.vNo })
+          .from(schema.extPackiParchi)
+          .where(eq(schema.extPackiParchi.id, id));
+        const curVNo = cur[0]?.vNo;
+        if (curVNo) {
+          await tx
+            .update(schema.extKachiParchi)
+            .set({ ppVno: null })
+            .where(eq(schema.extKachiParchi.ppVno, curVNo));
+        }
+
         await tx
           .update(schema.extPackiParchi)
           .set({
             vDate, purchaseParty, kpNo, kpAll, ppNo, ppDate, quality, qualityPrint,
-            meterRe, meterKam, meterNet, than, kpMeter, brokerName, brokerPercent,
-            meterFineNum, meterFineDen, greyRate, wokc, wkcBrk, elCumiNum, elCumiDen,
-            elMeter, elMeterMode, type, kaatPercent, checkery, commission, convContNo,
+            meterRe, meterKam, meterNet: meterNetC, than, kpMeter, brokerName, brokerPercent,
+            meterFineNum, meterFineDen, greyRate, wokc, wkcBrk: wkcBrkC, elCumiNum, elCumiDen,
+            elMeter: elMeterC, elMeterMode, type, kaatPercent, checkery: checkeryC, commission, convContNo,
             saleParty, convContNoSale, commissionSale, greyRateKp, kaatPercentSale,
-            checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff, woc,
-            wc, wck, printingName, commissionTotal, diff, termSal, typeRej,
+            checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
+            wc, wck, printingName, commissionTotal: commissionTotalC, diff: diffC, termSal, dueDate,
+            typeRej, imgNo, kpId: kpLinkId,
             modifiedDate: nowIso,
           })
           .where(eq(schema.extPackiParchi.id, id));
+
+        if (curVNo) {
+          await tx
+            .update(schema.extKachiParchi)
+            .set({ ppVno: curVNo })
+            .where(eq(schema.extKachiParchi.id, kpLinkId));
+        }
 
         await tx.delete(schema.extPackiParchiBag).where(eq(schema.extPackiParchiBag.parchiId, id));
         await tx.delete(schema.extPackiParchiCount).where(eq(schema.extPackiParchiCount.parchiId, id));
@@ -287,16 +418,22 @@ export default async function PackiParchiPage({
             .insert(schema.extPackiParchi)
             .values({
               vNo, vDate, purchaseParty, kpNo, kpAll, ppNo, ppDate, quality, qualityPrint,
-              meterRe, meterKam, meterNet, than, kpMeter, brokerName, brokerPercent,
-              meterFineNum, meterFineDen, greyRate, wokc, wkcBrk, elCumiNum, elCumiDen,
-              elMeter, elMeterMode, type, kaatPercent, checkery, commission, convContNo,
+              meterRe, meterKam, meterNet: meterNetC, than, kpMeter, brokerName, brokerPercent,
+              meterFineNum, meterFineDen, greyRate, wokc, wkcBrk: wkcBrkC, elCumiNum, elCumiDen,
+              elMeter: elMeterC, elMeterMode, type, kaatPercent, checkery: checkeryC, commission, convContNo,
               saleParty, convContNoSale, commissionSale, greyRateKp, kaatPercentSale,
-              checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff, woc,
-              wc, wck, printingName, commissionTotal, diff, termSal, typeRej,
+              checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
+              wc, wck, printingName, commissionTotal: commissionTotalC, diff: diffC, termSal, dueDate,
+              typeRej, imgNo, kpId: kpLinkId,
               postedDate: nowIso,
             })
             .returning({ id: schema.extPackiParchi.id });
           const insertedId = inserted[0].id;
+
+          await tx
+            .update(schema.extKachiParchi)
+            .set({ ppVno: vNo })
+            .where(eq(schema.extKachiParchi.id, kpLinkId));
 
           if (bagRows.length) {
             await tx.insert(schema.extPackiParchiBag).values(bagRows.map((b) => ({ ...b, parchiId: insertedId })));
@@ -329,6 +466,16 @@ export default async function PackiParchiPage({
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
+      const cur = await tx
+        .select({ vNo: schema.extPackiParchi.vNo })
+        .from(schema.extPackiParchi)
+        .where(eq(schema.extPackiParchi.id, id));
+      if (cur[0]?.vNo) {
+        await tx
+          .update(schema.extKachiParchi)
+          .set({ ppVno: null })
+          .where(eq(schema.extKachiParchi.ppVno, cur[0].vNo));
+      }
       await tx.delete(schema.extPackiParchiBag).where(eq(schema.extPackiParchiBag.parchiId, id));
       await tx.delete(schema.extPackiParchiCount).where(eq(schema.extPackiParchiCount.parchiId, id));
       await tx.delete(schema.extPackiParchi).where(eq(schema.extPackiParchi.id, id));
@@ -396,14 +543,16 @@ export default async function PackiParchiPage({
             V.No already exists. Try again.
           </div>
         )}
-
-        <datalist id="pp-parties">
-          {parties.map((p) => (
-            <option key={p.code} value={p.description}>
-              {p.code}
-            </option>
-          ))}
-        </datalist>
+        {params.error === "kp_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Pick a Kachi Parchi (KP.No) to convert first.
+          </div>
+        )}
+        {params.error === "meter_net" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Meter Net must be greater than 0. Check KP.Meter and deductions.
+          </div>
+        )}
 
         <form id="pp-find-form" method="GET" action="/external/grey/packi-parchi" className="hidden"></form>
 
@@ -424,7 +573,7 @@ export default async function PackiParchiPage({
               {formItem && (
                 <form action={deleteParchi} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Del</button>
+                  <ConfirmButton>Del</ConfirmButton>
                 </form>
               )}
               <button type="button" className="btn btn-outline btn-sm">Conv Rate</button>
@@ -485,23 +634,48 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-6">
                 <label className="label block mb-1">Purchase Party</label>
                 <div className="grid grid-cols-[100px_1fr] gap-2">
-                  <input name="purchase_party_code" className="input-box mono" placeholder="Code" />
-                  <input
+                  <input id="pp-purchase-party-code" className={roCls} placeholder="Code" readOnly tabIndex={-1} />
+                  <Combobox
                     name="purchase_party"
-                    list="pp-parties"
-                    className="input-box mono"
-                    placeholder="Description"
+                    options={partyOpts}
                     defaultValue={formItem?.purchaseParty ?? ""}
+                    placeholder="Select party…"
+                    descTargetId="pp-purchase-party-code"
                   />
                 </div>
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">KP.No</label>
-                <input
-                  name="kp_no"
-                  className="input-box mono"
-                  defaultValue={formItem?.kpNo ?? ""}
+                <div id="pp-kp-wrap-unconv" style={{ display: formItem?.kpAll === "Y" ? "none" : undefined }}>
+                  <Combobox
+                    name="kp_no"
+                    options={kpUnconvOpts}
+                    defaultValue={formItem?.kpNo ?? ""}
+                    placeholder="Unconverted KP…"
+                  />
+                </div>
+                <div id="pp-kp-wrap-all" style={{ display: formItem?.kpAll === "Y" ? undefined : "none" }}>
+                  <Combobox
+                    name="kp_no_all"
+                    options={kpAllOpts}
+                    defaultValue={formItem?.kpNo ?? ""}
+                    placeholder="Any KP…"
+                  />
+                </div>
+                <input type="hidden" name="kp_id" defaultValue={formItem?.kpId ?? ""} />
+                <AutoFill
+                  watch="kp_no"
+                  map={kpMap}
+                  combos={["purchase_party"]}
+                  inputs={["kp_id", "quality", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
                 />
+                <AutoFill
+                  watch="kp_no_all"
+                  map={kpMap}
+                  combos={["purchase_party"]}
+                  inputs={["kp_id", "quality", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
+                />
+                <PackiCalc />
               </div>
               <div className="lg:col-span-1 flex items-end pb-2">
                 <label className="flex items-center gap-1 text-[11px] mono">
@@ -581,10 +755,11 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Broker Name</label>
-                <input
+                <Combobox
                   name="broker_name"
-                  className="input-box mono"
+                  options={partyOpts}
                   defaultValue={formItem?.brokerName ?? ""}
+                  placeholder="Select broker…"
                 />
               </div>
               <div className="lg:col-span-2">
@@ -664,8 +839,9 @@ export default async function PackiParchiPage({
                     name="el_meter"
                     type="number"
                     step="any"
-                    className="input-box mono text-right"
+                    className={roCls + " text-right"}
                     defaultValue={formItem?.elMeter ?? ""}
+                    readOnly
                   />
                   <input
                     name="el_meter_mode"
@@ -752,10 +928,11 @@ export default async function PackiParchiPage({
 
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Conv.Cont No</label>
-                <input
+                <Combobox
                   name="conv_cont_no"
-                  className="input-box mono"
+                  options={convOpts}
                   defaultValue={formItem?.convContNo ?? ""}
+                  placeholder="Conv contract…"
                 />
               </div>
               <div className="lg:col-span-2">
@@ -787,22 +964,23 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-6">
                 <label className="label block mb-1">Sale Party</label>
                 <div className="grid grid-cols-[100px_1fr] gap-2">
-                  <input name="sale_party_code" className="input-box mono" placeholder="Code" />
-                  <input
+                  <input id="pp-sale-party-code" className={roCls} placeholder="Code" readOnly tabIndex={-1} />
+                  <Combobox
                     name="sale_party"
-                    list="pp-parties"
-                    className="input-box mono"
-                    placeholder="Description"
+                    options={partyOpts}
                     defaultValue={formItem?.saleParty ?? ""}
+                    placeholder="Select party…"
+                    descTargetId="pp-sale-party-code"
                   />
                 </div>
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Conv. Cont #</label>
-                <input
+                <Combobox
                   name="conv_cont_no_sale"
-                  className="input-box mono"
+                  options={salContractOpts}
                   defaultValue={formItem?.convContNoSale ?? ""}
+                  placeholder="Sale contract…"
                 />
               </div>
               <div className="lg:col-span-3">
@@ -856,10 +1034,11 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Broker Name</label>
-                <input
+                <Combobox
                   name="broker_name_sale"
-                  className="input-box mono"
+                  options={partyOpts}
                   defaultValue={formItem?.brokerNameSale ?? ""}
+                  placeholder="Select broker…"
                 />
               </div>
 
@@ -892,8 +1071,9 @@ export default async function PackiParchiPage({
                   name="sal_amt_diff"
                   type="number"
                   step="any"
-                  className="input-box mono text-right"
+                  className={roCls + " text-right"}
                   defaultValue={formItem?.salAmtDiff ?? ""}
+                  readOnly
                 />
               </div>
               <div className="lg:col-span-2">
@@ -943,8 +1123,9 @@ export default async function PackiParchiPage({
                   name="diff"
                   type="number"
                   step="any"
-                  className="input-box mono text-right"
+                  className={roCls + " text-right"}
                   defaultValue={formItem?.diff ?? ""}
+                  readOnly
                 />
               </div>
 
@@ -959,6 +1140,19 @@ export default async function PackiParchiPage({
                     <option value={formItem.termSal}>{formItem.termSal}</option>
                   )}
                 </select>
+              </div>
+              <div
+                id="pp-due-date-wrap"
+                className="lg:col-span-2"
+                style={{ display: formItem?.termSal === "DUE" ? undefined : "none" }}
+              >
+                <label className="label block mb-1">Due Date</label>
+                <input
+                  name="due_date"
+                  type="date"
+                  className="input-box mono"
+                  defaultValue={formItem?.dueDate ?? ""}
+                />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Alt-S Password</label>
@@ -999,7 +1193,7 @@ export default async function PackiParchiPage({
                       <td className="mono text-[12px] text-center font-bold">Warp</td>
                       <td><input name="warp_quality" className={gridCellCls} defaultValue={warpBag?.quality ?? ""} /></td>
                       <td><input name="warp_wt" type="number" step="any" className={gridCellNumCls} defaultValue={warpBag?.wtPerMeter ?? ""} /></td>
-                      <td><input name="warp_bags" type="number" step="any" className={gridCellNumCls} defaultValue={warpBag?.bags ?? ""} /></td>
+                      <td><input name="warp_bags" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={warpBag?.bags ?? ""} readOnly /></td>
                       <td><input name="warp_rate" type="number" step="any" className={gridCellNumCls} defaultValue={warpBag?.rate ?? ""} /></td>
                       <td><input name="warp_amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={warpBag?.amount ?? ""} readOnly /></td>
                     </tr>
@@ -1007,7 +1201,7 @@ export default async function PackiParchiPage({
                       <td className="mono text-[12px] text-center font-bold">Weft</td>
                       <td><input name="weft_quality" className={gridCellCls} defaultValue={weftBag?.quality ?? ""} /></td>
                       <td><input name="weft_wt" type="number" step="any" className={gridCellNumCls} defaultValue={weftBag?.wtPerMeter ?? ""} /></td>
-                      <td><input name="weft_bags" type="number" step="any" className={gridCellNumCls} defaultValue={weftBag?.bags ?? ""} /></td>
+                      <td><input name="weft_bags" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={weftBag?.bags ?? ""} readOnly /></td>
                       <td><input name="weft_rate" type="number" step="any" className={gridCellNumCls} defaultValue={weftBag?.rate ?? ""} /></td>
                       <td><input name="weft_amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={weftBag?.amount ?? ""} readOnly /></td>
                     </tr>
@@ -1081,9 +1275,6 @@ export default async function PackiParchiPage({
               <button type="submit" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
               <a href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Exit</a>
-              {formItem && (
-                <button type="submit" formAction={deleteParchi} className="btn btn-outline btn-sm">Del</button>
-              )}
               <button type="button" className="btn btn-outline btn-sm">Conv Rate</button>
             </div>
           </form>

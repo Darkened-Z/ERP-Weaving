@@ -1,8 +1,12 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { RowAutoFill } from "@/components/auto-fill";
+import { ProductionSetCalc } from "@/components/production-calc";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -30,6 +34,8 @@ const nowHm = () => {
 
 const SET_ROWS = 8;
 const DETAIL_ROWS = 8;
+
+const MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 export default async function DailyProductionPage({
   searchParams,
@@ -85,6 +91,104 @@ export default async function DailyProductionPage({
     .where(sql`${schema.intDailyProduction.vNo} LIKE 'IDP-%'`);
   const nextNum = (maxRow[0]?.maxNum ?? 0) + 1;
   const upcomingVNo = `IDP-${String(nextNum).padStart(4, "0")}`;
+
+  const beamStatusList = await db.select().from(schema.beamStatuses).orderBy(schema.beamStatuses.status);
+  const beamCatalog = await db
+    .select({
+      beamNo: schema.beams.beamNo,
+      ends: schema.beams.ends,
+      length: schema.beams.length,
+      beamSetNo: schema.beams.beamSetNo,
+      setNo: schema.beams.setNo,
+    })
+    .from(schema.beams)
+    .orderBy(schema.beams.beamNo);
+
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+
+  // Per-beam accumulated Rcvd/Mtr = Σ(totalCount + rejCount) across ALL saved production
+  // (excluding the current voucher so the live client math can add this row's own numbers).
+  const accumRowsRaw = editing
+    ? await db
+        .select({
+          beamNo: schema.intDailyProductionSet.beamNo,
+          total: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0) + COALESCE(${schema.intDailyProductionSet.rejCount},0)),0)`,
+        })
+        .from(schema.intDailyProductionSet)
+        .where(
+          and(
+            isNotNull(schema.intDailyProductionSet.beamNo),
+            ne(schema.intDailyProductionSet.productionId, editing.id)
+          )
+        )
+        .groupBy(schema.intDailyProductionSet.beamNo)
+    : await db
+        .select({
+          beamNo: schema.intDailyProductionSet.beamNo,
+          total: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0) + COALESCE(${schema.intDailyProductionSet.rejCount},0)),0)`,
+        })
+        .from(schema.intDailyProductionSet)
+        .where(isNotNull(schema.intDailyProductionSet.beamNo))
+        .groupBy(schema.intDailyProductionSet.beamNo);
+
+  const beamStats: Record<string, { rcvd: number; length: number | null }> = {};
+  for (const b of beamCatalog) {
+    if (b.beamNo) beamStats[b.beamNo] = { rcvd: 0, length: b.length ?? null };
+  }
+  for (const r of accumRowsRaw) {
+    if (!r.beamNo) continue;
+    if (!beamStats[r.beamNo]) beamStats[r.beamNo] = { rcvd: 0, length: null };
+    beamStats[r.beamNo].rcvd = Number(r.total ?? 0);
+  }
+
+  const beamFillMap: Record<string, Record<string, string | number | null>> = {};
+  for (const b of beamCatalog) {
+    if (!b.beamNo) continue;
+    beamFillMap[b.beamNo] = {
+      ends: b.ends ?? null,
+      bLength: b.length ?? null,
+      beamSetNo: b.beamSetNo ?? null,
+      setHash: b.setNo ?? null,
+    };
+  }
+
+  // Folding stock = Σ(totalCount) − Σ(despatched meters) for the voucher's conv party.
+  let foldingStockCalc: number | null = null;
+  if (editing?.convContParty) {
+    const partyName = editing.convContParty;
+    const prodSumRow = await db
+      .select({
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0)),0)`,
+      })
+      .from(schema.intDailyProductionSet)
+      .innerJoin(
+        schema.intDailyProduction,
+        eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id)
+      )
+      .where(eq(schema.intDailyProduction.convContParty, partyName));
+    const despSumRow = await db
+      .select({
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.intGreyDespatchLine.lengthMtrs},0)),0)`,
+      })
+      .from(schema.intGreyDespatchLine)
+      .innerJoin(
+        schema.intGreyDespatch,
+        eq(schema.intGreyDespatchLine.despatchId, schema.intGreyDespatch.id)
+      )
+      .where(eq(schema.intGreyDespatch.party, partyName));
+    foldingStockCalc = Number(prodSumRow[0]?.s ?? 0) - Number(despSumRow[0]?.s ?? 0);
+  }
+
+  // LV.No display = last saved max lvNo across all vouchers.
+  const lvRow = await db
+    .select({ m: sql<number>`COALESCE(MAX(${schema.intDailyProduction.lvNo}),0)` })
+    .from(schema.intDailyProduction);
+  const maxLvNo = Number(lvRow[0]?.m ?? 0);
 
   const totalRowsList = list.map((r) => ({ id: r.id }));
 
@@ -199,6 +303,12 @@ export default async function DailyProductionPage({
       const df = num(diffArr[i]);
       const sh = num(shrinkageArr[i]);
       if (!setHash && !mmThanSrNo && aC == null && bC == null && cC == null && cpC == null && ppc == null && tc == null && rc == null && !bsn && !kt && !kd && !bs && ww == null && !bn && en == null && bl == null && rm == null && df == null && sh == null) continue;
+      // Server-authoritative total: Total = A + B + C + CP + PPC. Any manually
+      // typed totalCount is discarded — the client shows it as a readonly cell.
+      const anyCount = aC != null || bC != null || cC != null || cpC != null || ppc != null;
+      const authoritativeTotal = anyCount
+        ? (aC ?? 0) + (bC ?? 0) + (cC ?? 0) + (cpC ?? 0) + (ppc ?? 0)
+        : tc;
       validSets.push({
         srNo: validSets.length + 1,
         setHash: setHash || null,
@@ -208,7 +318,7 @@ export default async function DailyProductionPage({
         cCount: cC,
         cpCount: cpC,
         ppcCount: ppc,
-        totalCount: tc,
+        totalCount: authoritativeTotal,
         rejCount: rc,
         beamSetNo: bsn || null,
         kSmType: kt || null,
@@ -222,6 +332,66 @@ export default async function DailyProductionPage({
         diff: df,
         shrinkage: sh,
       });
+    }
+
+    // ---- validations ----
+    const hasBeam = validSets.some((s) => (s.beamNo ?? "").trim().length > 0);
+    if (!hasBeam) {
+      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=no_beam` : `?adding=1&error=no_beam`;
+      redirect(`/inventory/daily-production${q}`);
+    }
+    const totalGrade = validSets.reduce((a, s) => a + (s.totalCount ?? 0), 0);
+    if (totalGrade <= 0) {
+      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=no_grade` : `?adding=1&error=no_grade`;
+      redirect(`/inventory/daily-production${q}`);
+    }
+
+    // ---- auto-generate mm/Than Sr No for blanks (MON-<seq>-YY) ----
+    const vDateStr = header.vDate || new Date().toISOString().slice(0, 10);
+    const dParts = vDateStr.split("-");
+    const yy = dParts[0] ? dParts[0].slice(-2) : "00";
+    const monIdx = dParts[1] ? parseInt(dParts[1], 10) - 1 : 0;
+    const monAbbr = MONTH_ABBR[monIdx] ?? "JAN";
+    const monthPrefix = `${monAbbr}-`;
+    const monthSuffix = `-${yy}`;
+    const monthMaxRow = await db
+      .select({
+        m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
+      })
+      .from(schema.intDailyProductionSet)
+      .where(
+        sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
+      );
+    let seq = Number(monthMaxRow[0]?.m ?? 0);
+    for (const s of validSets) {
+      if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
+        seq += 1;
+        s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(4, "0")}-${yy}`;
+      }
+    }
+
+    // ---- duplicate mm/Than Sr No check ----
+    // Reject collisions against ANY previously saved row not in the current voucher.
+    const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
+    const seen = new Set<string>();
+    for (const s of inputSerials) {
+      if (seen.has(s)) {
+        const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
+        redirect(`/inventory/daily-production${q}`);
+      }
+      seen.add(s);
+    }
+    if (inputSerials.length) {
+      const dupRows = await db
+        .select({ mm: schema.intDailyProductionSet.mmThanSrNo, pid: schema.intDailyProductionSet.productionId })
+        .from(schema.intDailyProductionSet)
+        .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputSerials));
+      for (const d of dupRows) {
+        if (!d.mm) continue;
+        if (Number.isFinite(id) && id > 0 && d.pid === id) continue;
+        const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
+        redirect(`/inventory/daily-production${q}`);
+      }
     }
 
     const detailDateArr = formData.getAll("detailDate") as string[];
@@ -292,6 +462,13 @@ export default async function DailyProductionPage({
               .insert(schema.intDailyProductionDetail)
               .values(validDetails.map((d) => ({ ...d, productionId: id })));
           }
+          // Beam lifecycle writes: set beams.statusWrk from each set row's beam status.
+          for (const s of validSets) {
+            if (!s.beamNo || !s.beamStatus) continue;
+            const patch: { statusWrk: string; loomNo?: number | null } = { statusWrk: s.beamStatus };
+            if (s.beamStatus.toUpperCase() === "EMPTY") patch.loomNo = null;
+            await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
+          }
         });
         revalidatePath("/inventory/daily-production");
         redirect(`/inventory/daily-production?id=${id}`);
@@ -323,6 +500,12 @@ export default async function DailyProductionPage({
             await tx
               .insert(schema.intDailyProductionDetail)
               .values(validDetails.map((d) => ({ ...d, productionId: insertedId })));
+          }
+          for (const s of validSets) {
+            if (!s.beamNo || !s.beamStatus) continue;
+            const patch: { statusWrk: string; loomNo?: number | null } = { statusWrk: s.beamStatus };
+            if (s.beamStatus.toUpperCase() === "EMPTY") patch.loomNo = null;
+            await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
           }
           return insertedId;
         });
@@ -409,6 +592,21 @@ export default async function DailyProductionPage({
             Voucher number already exists. Try again.
           </div>
         )}
+        {params.error === "dup_than" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Duplicate mm/Than Sr No — already used by another production entry.
+          </div>
+        )}
+        {params.error === "no_beam" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            At least one Set# row must have a Beam #.
+          </div>
+        )}
+        {params.error === "no_grade" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Total grade production must be greater than 0.
+          </div>
+        )}
 
         <form id="idp-find-form" method="GET" action="/inventory/daily-production" className="hidden" />
 
@@ -424,7 +622,7 @@ export default async function DailyProductionPage({
               {editing && (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message={`Delete production voucher ${editing.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
                 </form>
               )}
               <a href="/inventory/daily-production" className="btn btn-outline btn-sm">Exit</a>
@@ -434,6 +632,15 @@ export default async function DailyProductionPage({
           {showForm && (
             <form id="idp-save-form" action={saveAction}>
               {editing && <input type="hidden" name="id" value={editing.id} />}
+              <ProductionSetCalc beamStats={beamStats} />
+              <RowAutoFill watch="beamNo" map={beamFillMap} />
+              <datalist id="beams-list">
+                {beamCatalog.map((b) => (
+                  <option key={b.beamNo ?? ""} value={b.beamNo ?? ""}>
+                    {b.beamSetNo ? `set ${b.beamSetNo}` : ""} {b.length != null ? `— ${b.length}m` : ""}
+                  </option>
+                ))}
+              </datalist>
 
               <div className="border border-black p-4 mb-6">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">HEADER</div>
@@ -448,7 +655,7 @@ export default async function DailyProductionPage({
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">LV.No</label>
-                    <input name="lvNo" type="number" step="1" className="input-box mono" defaultValue={editing?.lvNo ?? ""} />
+                    <input name="lvNo" type="number" step="1" className="input-box mono bg-gray-100" defaultValue={editing?.lvNo ?? maxLvNo} readOnly tabIndex={-1} />
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Time</label>
@@ -469,7 +676,15 @@ export default async function DailyProductionPage({
                   </div>
                   <div className="md:col-span-3">
                     <label className="label block mb-1">Folding Stock</label>
-                    <input name="foldingStock" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.foldingStock ?? ""} />
+                    <input
+                      name="foldingStock"
+                      type="number"
+                      step="0.01"
+                      className="input-box mono text-right bg-gray-100"
+                      defaultValue={foldingStockCalc ?? editing?.foldingStock ?? ""}
+                      readOnly
+                      tabIndex={-1}
+                    />
                   </div>
                   <div className="md:col-span-3">
                     <label className="label block mb-1">Set#</label>
@@ -538,7 +753,7 @@ export default async function DailyProductionPage({
                             <td><input name="cCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cCount ?? ""} /></td>
                             <td><input name="cpCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cpCount ?? ""} /></td>
                             <td><input name="ppcCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.ppcCount ?? ""} /></td>
-                            <td><input name="totalCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.totalCount ?? ""} /></td>
+                            <td><input name="totalCount" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.totalCount ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="rejCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.rejCount ?? ""} /></td>
                             <td><input name="beamSetNo" className="input-box mono text-[12px]" defaultValue={s?.beamSetNo ?? ""} /></td>
                             <td>
@@ -550,14 +765,27 @@ export default async function DailyProductionPage({
                               </select>
                             </td>
                             <td><input name="kSmDate" type="date" className="input-box mono text-[12px]" defaultValue={s?.kSmDate ?? ""} /></td>
-                            <td><input name="beamStatus" className="input-box mono text-[12px]" defaultValue={s?.beamStatus ?? ""} /></td>
+                            <td>
+                              <select name="beamStatus" className="input-box mono text-[12px]" defaultValue={s?.beamStatus ?? ""}>
+                                <option value=""></option>
+                                {beamStatusList.map((bs) => (
+                                  <option key={bs.id} value={bs.status}>{bs.status}</option>
+                                ))}
+                                {s?.beamStatus && !beamStatusList.some((bs) => bs.status === s.beamStatus) && (
+                                  <option value={s.beamStatus}>{s.beamStatus}</option>
+                                )}
+                              </select>
+                            </td>
                             <td><input name="wastWtKg" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.wastWtKg ?? ""} /></td>
-                            <td><input name="beamNo" className="input-box mono text-[12px]" defaultValue={s?.beamNo ?? ""} /></td>
+                            <td>
+                              <input name="beamNo" list="beams-list" className="input-box mono text-[12px]" defaultValue={s?.beamNo ?? ""} />
+                              <span data-near-empty className="mono text-[9px] text-[var(--danger)] font-bold ml-1"></span>
+                            </td>
                             <td><input name="ends" type="number" step="1" className="input-box mono text-[12px] text-right" defaultValue={s?.ends ?? ""} /></td>
                             <td><input name="bLength" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bLength ?? ""} /></td>
-                            <td><input name="rcvdMtr" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.rcvdMtr ?? ""} /></td>
-                            <td><input name="diff" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.diff ?? ""} /></td>
-                            <td><input name="shrinkage" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.shrinkage ?? ""} /></td>
+                            <td><input name="rcvdMtr" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.rcvdMtr ?? ""} readOnly tabIndex={-1} /></td>
+                            <td><input name="diff" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.diff ?? ""} readOnly tabIndex={-1} /></td>
+                            <td><input name="shrinkage" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.shrinkage ?? ""} readOnly tabIndex={-1} /></td>
                           </tr>
                         );
                       })}
@@ -640,15 +868,15 @@ export default async function DailyProductionPage({
                     <div className="grid grid-cols-1 gap-3">
                       <div>
                         <label className="label block mb-1">Conv Cont Party</label>
-                        <input name="convContParty" className="input-box" defaultValue={editing?.convContParty ?? ""} />
+                        <Combobox name="convContParty" options={partyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
                         <label className="label block mb-1">Beam Cont Party</label>
-                        <input name="beamContParty" className="input-box" defaultValue={editing?.beamContParty ?? ""} />
+                        <Combobox name="beamContParty" options={partyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
                         <label className="label block mb-1">Szg Party</label>
-                        <input name="szgParty" className="input-box" defaultValue={editing?.szgParty ?? ""} />
+                        <Combobox name="szgParty" options={partyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select party" />
                       </div>
                     </div>
                   </div>

@@ -2,8 +2,12 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill, RowCalc } from "@/components/auto-fill";
+import { AutoAmount } from "@/components/auto-amount";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -23,10 +27,21 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
+const round = (v: number, d: number) => {
+  const p = 10 ** d;
+  return Math.round(v * p) / p;
+};
 const today = () => new Date().toISOString().slice(0, 10);
 const nowHm = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+const ERROR_MESSAGES: Record<string, string> = {
+  code_exists: "Voucher number already exists. Try again.",
+  qty_required: "Enter Bags or Qty (Lbs) greater than zero.",
+  purcont_required: "Pur.Cont No is required.",
+  lbs_mismatch: "Header Qty Lbs does not match the carton total. Clear it to auto-fill, or fix the cartons.",
 };
 
 export default async function YarnReceiptPage({
@@ -76,44 +91,109 @@ export default async function YarnReceiptPage({
   const nextNum = (maxRow[0]?.maxNum ?? 0) + 1;
   const upcomingVNo = `IYR-${String(nextNum).padStart(4, "0")}`;
 
+  const lastLvRow = await db
+    .select({ maxLv: sql<number>`COALESCE(MAX(${schema.intYarnReceipt.lvNo}), 0)` })
+    .from(schema.intYarnReceipt);
+  const lastLvNo = lastLvRow[0]?.maxLv ?? 0;
+
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
+
+  const purContracts = await db
+    .select()
+    .from(schema.intYarnPurchaseContract)
+    .where(eq(schema.intYarnPurchaseContract.status, "R"))
+    .orderBy(desc(schema.intYarnPurchaseContract.contNo));
+
+  const convContracts = await db
+    .select()
+    .from(schema.intGreyConversionContract)
+    .orderBy(desc(schema.intGreyConversionContract.contNo));
+
+  const priorLotsRows = await db
+    .selectDistinct({ v: schema.intYarnReceipt.yarnLotNo })
+    .from(schema.intYarnReceipt)
+    .where(sql`${schema.intYarnReceipt.yarnLotNo} IS NOT NULL AND ${schema.intYarnReceipt.yarnLotNo} <> ''`);
+  const priorLots = priorLotsRows.map((r) => r.v).filter((v): v is string => !!v);
+
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const partyDescByCode: Record<string, string> = {};
+  for (const p of parties) partyDescByCode[p.code] = p.description;
+  const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}` }));
+  const purOpts = purContracts.map((c) => ({
+    value: c.contNo,
+    label: `${c.contNo}${c.partyCode ? ` — ${partyDescByCode[c.partyCode] ?? c.partyCode}` : ""}${c.countCode ? ` [${c.countCode}]` : ""}`,
+  }));
+  const convOpts = convContracts.map((c) => ({
+    value: c.contNo,
+    label: `${c.contNo}${c.party ? ` — ${c.party}` : ""}`,
+  }));
+
+  const purMap: Record<string, Record<string, string | number>> = {};
+  for (const c of purContracts) {
+    purMap[c.contNo] = {
+      countCode: c.countCode ?? "",
+      ratioText: c.ratio ?? "",
+      brand: c.brand ?? "",
+      ratePerLbs: c.ratePerLbs ?? "",
+      remarks: c.remarks ?? "",
+      party: c.partyCode ? partyDescByCode[c.partyCode] ?? c.partyCode : "",
+    };
+  }
+  const convMap: Record<string, Record<string, string | number>> = {};
+  for (const c of convContracts) {
+    convMap[c.contNo] = {
+      yarnPartyTo: c.party ?? "",
+      ratePerLbsTo: c.ratePerMtr1 ?? c.ratePerMtr2 ?? "",
+    };
+  }
+
+  // Server-computed stock for the selected voucher's (count, party, location).
+  let stockBag: number | null = null;
+  let stockLbs: number | null = null;
+  if (editing && editing.countCode && editing.party) {
+    const whereClauses = [
+      eq(schema.intYarnReceipt.countCode, editing.countCode),
+      eq(schema.intYarnReceipt.party, editing.party),
+      ne(schema.intYarnReceipt.id, editing.id),
+    ];
+    if (editing.locationFrom) {
+      whereClauses.push(eq(schema.intYarnReceipt.locationFrom, editing.locationFrom));
+    }
+    const agg = await db
+      .select({
+        bags: sql<number>`COALESCE(SUM(${schema.intYarnReceipt.bags}), 0)`,
+        lbs: sql<number>`COALESCE(SUM(${schema.intYarnReceipt.qtyLbs}), 0)`,
+      })
+      .from(schema.intYarnReceipt)
+      .where(and(...whereClauses));
+    stockBag = agg[0]?.bags ?? 0;
+    stockLbs = agg[0]?.lbs ?? 0;
+  }
+
   async function saveAction(formData: FormData) {
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    const isUpdate = Number.isFinite(id) && id > 0;
+    const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
 
-    const header = {
-      vDate: txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10),
-      time: txt(formData.get("time")),
-      bookDoBiltyNo: txt(formData.get("bookDoBiltyNo")),
-      doDate: txt(formData.get("doDate")),
-      lgpNo: txt(formData.get("lgpNo")),
-      gpDate: txt(formData.get("gpDate")),
-      party: txt(formData.get("party")),
-      trnType: txt(formData.get("trnType")),
-      condition: txt(formData.get("condition")) ?? "FRS",
-      lvNo: intVal(formData.get("lvNo")),
-      convContNo: txt(formData.get("convContNo")),
-      purContNo: txt(formData.get("purContNo")),
-      yarnPartyTo: txt(formData.get("yarnPartyTo")),
-      timeTo: txt(formData.get("timeTo")),
-      ratePerLbsTo: num(formData.get("ratePerLbsTo")),
-      amount: num(formData.get("amount")),
-      locationFrom: txt(formData.get("locationFrom")),
-      imgBlock: txt(formData.get("imgBlock")),
-      stockBag: num(formData.get("stockBag")),
-      stockLbs: num(formData.get("stockLbs")),
-      countCode: txt(formData.get("countCode")),
-      warp: txt(formData.get("warp")),
-      weft: txt(formData.get("weft")),
-      bags: num(formData.get("bags")),
-      qtyLbs: num(formData.get("qtyLbs")),
-      ratePerLbs: num(formData.get("ratePerLbs")),
-      brand: txt(formData.get("brand")),
-      yarnLotNo: txt(formData.get("yarnLotNo")),
-      setNo: txt(formData.get("setNo")),
-      ratioText: txt(formData.get("ratioText")),
-      remarks: txt(formData.get("remarks")),
-    };
+    const vDate = txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10);
+    const purContNo = txt(formData.get("purContNo"));
+    if (!purContNo) {
+      redirect(`/inventory/yarn-receipt${backQ}&error=purcont_required`);
+    }
+
+    const bags = num(formData.get("bags"));
+    let qtyLbs = num(formData.get("qtyLbs"));
 
     const cartonNos = formData.getAll("cartonNo") as string[];
     const grossKgsArr = formData.getAll("grossKgs") as string[];
@@ -131,8 +211,9 @@ export default async function YarnReceiptPage({
       const cn = (cartonNos[i] || "").trim();
       const gk = num(grossKgsArr[i]);
       const nk = num(netKgsArr[i]);
-      const nl = num(netLbsArr[i]);
+      let nl = num(netLbsArr[i]);
       if (!cn && gk == null && nk == null && nl == null) continue;
+      if (nl == null && nk != null) nl = round(nk * 2.2046, 3);
       validLines.push({
         srNo: validLines.length + 1,
         cartonNo: cn || null,
@@ -142,10 +223,66 @@ export default async function YarnReceiptPage({
       });
     }
 
+    const cartonLbsSum = validLines.reduce((s, l) => s + (l.netLbs ?? 0), 0);
+    const hasCartons = validLines.some((l) => (l.netLbs ?? 0) > 0);
+    if (hasCartons) {
+      const rounded = round(cartonLbsSum, 3);
+      if (qtyLbs != null && Math.abs(qtyLbs - rounded) > 0.01) {
+        redirect(`/inventory/yarn-receipt${backQ}&error=lbs_mismatch`);
+      }
+      qtyLbs = rounded;
+    } else if (qtyLbs == null && bags != null && bags > 0) {
+      qtyLbs = round(bags * 100, 2);
+    }
+
+    if (!((bags ?? 0) > 0 || (qtyLbs ?? 0) > 0)) {
+      redirect(`/inventory/yarn-receipt${backQ}&error=qty_required`);
+    }
+
+    const ratePerLbs = num(formData.get("ratePerLbs"));
+    const amountRaw = num(formData.get("amount"));
+    const amount =
+      amountRaw != null ? amountRaw : ratePerLbs != null ? round((qtyLbs ?? 0) * ratePerLbs, 2) : null;
+
+    const header = {
+      vDate,
+      time: txt(formData.get("time")),
+      bookDoBiltyNo: txt(formData.get("bookDoBiltyNo")),
+      doDate: txt(formData.get("doDate")) ?? vDate,
+      lgpNo: txt(formData.get("lgpNo")),
+      gpDate: txt(formData.get("gpDate")) ?? vDate,
+      party: txt(formData.get("party")),
+      trnType: txt(formData.get("trnType")),
+      condition: txt(formData.get("condition")) ?? "FRS",
+      lvNo: intVal(formData.get("lvNo")),
+      convContNo: txt(formData.get("convContNo")),
+      purContNo,
+      yarnPartyTo: txt(formData.get("yarnPartyTo")),
+      timeTo: txt(formData.get("timeTo")),
+      ratePerLbsTo: num(formData.get("ratePerLbsTo")),
+      amount,
+      locationFrom: txt(formData.get("locationFrom")),
+      imgBlock: txt(formData.get("imgBlock")),
+      // stockBag / stockLbs are display-only, computed on read
+      stockBag: null,
+      stockLbs: null,
+      countCode: txt(formData.get("countCode")),
+      warp: txt(formData.get("warp")),
+      weft: txt(formData.get("weft")),
+      bags,
+      qtyLbs,
+      ratePerLbs,
+      brand: txt(formData.get("brand")),
+      yarnLotNo: txt(formData.get("yarnLotNo")),
+      setNo: txt(formData.get("setNo")),
+      ratioText: txt(formData.get("ratioText")),
+      remarks: txt(formData.get("remarks")),
+    };
+
     const nowIso = new Date().toISOString();
 
     try {
-      if (Number.isFinite(id) && id > 0) {
+      if (isUpdate) {
         await db.transaction(async (tx) => {
           await tx
             .update(schema.intYarnReceipt)
@@ -176,9 +313,13 @@ export default async function YarnReceiptPage({
             const n = (maxRes[0]?.maxNum ?? 0) + 1;
             vNo = `IYR-${String(n).padStart(4, "0")}`;
           }
+          const lvRow = await tx
+            .select({ maxLv: sql<number>`COALESCE(MAX(${schema.intYarnReceipt.lvNo}), 0)` })
+            .from(schema.intYarnReceipt);
+          const nextLv = (lvRow[0]?.maxLv ?? 0) + 1;
           const inserted = await tx
             .insert(schema.intYarnReceipt)
-            .values({ ...header, vNo, postedDate: nowIso })
+            .values({ ...header, lvNo: header.lvNo ?? nextLv, vNo, postedDate: nowIso })
             .returning({ id: schema.intYarnReceipt.id });
           const insertedId = inserted[0].id;
           if (validLines.length) {
@@ -194,7 +335,7 @@ export default async function YarnReceiptPage({
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message ?? "unknown";
       if (/UNIQUE|constraint/i.test(msg)) {
-        redirect(`/inventory/yarn-receipt?error=code_exists`);
+        redirect(`/inventory/yarn-receipt${backQ}&error=code_exists`);
       }
       throw e;
     }
@@ -214,6 +355,11 @@ export default async function YarnReceiptPage({
 
   const ROWS = Math.max(18, lines.length + 3);
   const showForm = !!editing || isAdding;
+  const lvDisplay = editing?.lvNo ?? lastLvNo ?? "";
+  const doDateDefault = editing?.doDate ?? (isAdding ? today() : "");
+  const gpDateDefault = editing?.gpDate ?? (isAdding ? today() : "");
+  const displayedStockBag = stockBag ?? editing?.stockBag ?? "";
+  const displayedStockLbs = stockLbs ?? editing?.stockLbs ?? "";
 
   return (
     <Shell active="yarn-receipt">
@@ -262,11 +408,17 @@ export default async function YarnReceiptPage({
           />
         </div>
 
-        {params.error === "code_exists" && (
+        {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Voucher number already exists. Try again.
+            {ERROR_MESSAGES[params.error]}
           </div>
         )}
+
+        <datalist id="iyr-lot-list">
+          {priorLots.map((l) => (
+            <option key={l} value={l} />
+          ))}
+        </datalist>
 
         <form id="iyr-find-form" method="GET" action="/inventory/yarn-receipt" className="hidden" />
 
@@ -282,7 +434,9 @@ export default async function YarnReceiptPage({
               {editing && (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message="Delete this voucher and its cartons? This cannot be undone.">
+                    Delete
+                  </ConfirmButton>
                 </form>
               )}
               <a href="/inventory/yarn-receipt" className="btn btn-outline btn-sm">Exit</a>
@@ -292,6 +446,20 @@ export default async function YarnReceiptPage({
           {showForm && (
             <form id="iyr-save-form" action={saveAction}>
               {editing && <input type="hidden" name="id" value={editing.id} />}
+              <input type="hidden" name="one" defaultValue="1" readOnly />
+              <AutoAmount qty="qtyLbs" rate="ratePerLbs" target="amount" />
+              <RowCalc target="netLbs" a="netKgs" factor={2.2046} round={3} />
+              <AutoFill
+                watch="purContNo"
+                map={purMap}
+                combos={["party", "countCode"]}
+                inputs={["ratioText", "brand", "ratePerLbs", "remarks"]}
+              />
+              <AutoFill
+                watch="convContNo"
+                map={convMap}
+                inputs={["yarnPartyTo", "ratePerLbsTo"]}
+              />
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
@@ -309,7 +477,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">LV.No</label>
-                        <input name="lvNo" type="number" step="1" className="input-box mono bg-gray-100" defaultValue={editing?.lvNo ?? ""} readOnly />
+                        <input name="lvNo" type="number" step="1" className="input-box mono bg-gray-100" defaultValue={lvDisplay} readOnly />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
@@ -322,7 +490,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">DO Date</label>
-                        <input name="doDate" type="date" className="input-box mono" defaultValue={editing?.doDate ?? ""} />
+                        <input name="doDate" type="date" className="input-box mono" defaultValue={doDateDefault} />
                       </div>
                       <div className="md:col-span-2">
                         <label className="label block mb-1">Posted</label>
@@ -339,7 +507,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">GP Date</label>
-                        <input name="gpDate" type="date" className="input-box mono" defaultValue={editing?.gpDate ?? ""} />
+                        <input name="gpDate" type="date" className="input-box mono" defaultValue={gpDateDefault} />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Trn. Type</label>
@@ -354,7 +522,7 @@ export default async function YarnReceiptPage({
 
                       <div className="md:col-span-8">
                         <label className="label block mb-1">Party</label>
-                        <input name="party" className="input-box" defaultValue={editing?.party ?? ""} />
+                        <Combobox name="party" options={partyOpts} defaultValue={editing?.party ?? ""} placeholder="Select party" />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Condition</label>
@@ -367,11 +535,11 @@ export default async function YarnReceiptPage({
 
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Conv.Cont No (F9)</label>
-                        <input name="convContNo" className="input-box mono" defaultValue={editing?.convContNo ?? ""} />
+                        <Combobox name="convContNo" options={convOpts} defaultValue={editing?.convContNo ?? ""} placeholder="Select conv contract" />
                       </div>
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Pur.Cont No (F9)</label>
-                        <input name="purContNo" className="input-box mono" defaultValue={editing?.purContNo ?? ""} />
+                        <label className="label block mb-1">Pur.Cont No (F9) *</label>
+                        <Combobox name="purContNo" options={purOpts} defaultValue={editing?.purContNo ?? ""} placeholder="Select purchase contract" />
                       </div>
                     </div>
                   </div>
@@ -394,7 +562,7 @@ export default async function YarnReceiptPage({
 
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Amount</label>
-                        <input name="amount" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.amount ?? ""} />
+                        <input name="amount" type="number" step="0.01" className="input-box mono text-right bg-gray-100" defaultValue={editing?.amount ?? ""} readOnly />
                       </div>
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Location From (F9)</label>
@@ -417,16 +585,16 @@ export default async function YarnReceiptPage({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Stock Bage</label>
-                        <input name="stockBag" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.stockBag ?? ""} readOnly />
+                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockBag} readOnly tabIndex={-1} />
                       </div>
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Stock Lbs</label>
-                        <input name="stockLbs" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.stockLbs ?? ""} readOnly />
+                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockLbs} readOnly tabIndex={-1} />
                       </div>
 
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Count Code (F9)</label>
-                        <input name="countCode" className="input-box mono" defaultValue={editing?.countCode ?? ""} />
+                        <Combobox name="countCode" options={countOpts} defaultValue={editing?.countCode ?? ""} placeholder="Select count" />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Warp</label>
@@ -456,7 +624,7 @@ export default async function YarnReceiptPage({
 
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Yarn Lot #</label>
-                        <input name="yarnLotNo" className="input-box mono" defaultValue={editing?.yarnLotNo ?? ""} />
+                        <input name="yarnLotNo" list="iyr-lot-list" className="input-box mono" defaultValue={editing?.yarnLotNo ?? ""} />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Ratio</label>
@@ -498,7 +666,7 @@ export default async function YarnReceiptPage({
                                 <td><input name="cartonNo" className="input-box mono text-[12px]" defaultValue={l?.cartonNo ?? ""} /></td>
                                 <td><input name="grossKgs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.grossKgs ?? ""} /></td>
                                 <td><input name="netKgs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.netKgs ?? ""} /></td>
-                                <td><input name="netLbs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.netLbs ?? ""} /></td>
+                                <td><input name="netLbs" type="number" step="0.001" className="input-box mono text-[12px] text-right bg-gray-50" defaultValue={l?.netLbs ?? ""} /></td>
                                 <td className="text-center">
                                   <RowClearButton />
                                 </td>
@@ -509,7 +677,7 @@ export default async function YarnReceiptPage({
                       </table>
                     </div>
                     <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black">
-                      Empty rows are ignored on save. Grid replaces on update.
+                      Net Lbs = Net Kgs × 2.2046. Header Qty Lbs is the carton total.
                     </div>
                   </div>
                 </div>

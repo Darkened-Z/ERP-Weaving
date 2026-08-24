@@ -1,12 +1,17 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { ConfirmButton } from "@/components/confirm-button";
+import { BeamWtCalc } from "@/components/int-conv-calc";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+const DETAIL_ROWS = 6;
 
 const num = (v: FormDataEntryValue | null): number | null => {
   if (v === null || v === undefined || v === "") return null;
@@ -25,7 +30,17 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
+const round = (v: number, d: number) => {
+  const p = 10 ** d;
+  return Math.round(v * p) / p;
+};
+
 const today = () => new Date().toISOString().slice(0, 10);
+
+const ERROR_MESSAGES: Record<string, string> = {
+  code_exists: "Contract number already exists. Try again.",
+  wt_zero: "Detail rows present but computed WT is zero. Fix Cal Count / Ends / No. of Width.",
+};
 
 export default async function BeamContractExtWsPage({
   searchParams,
@@ -49,7 +64,8 @@ export default async function BeamContractExtWsPage({
           ${schema.intBeamContractExtWs.contNo} LIKE ${pat} ESCAPE '\\' OR
           ${schema.intBeamContractExtWs.party} LIKE ${pat} ESCAPE '\\' OR
           ${schema.intBeamContractExtWs.sizingParty} LIKE ${pat} ESCAPE '\\' OR
-          ${schema.intBeamContractExtWs.warpingParty} LIKE ${pat} ESCAPE '\\'
+          ${schema.intBeamContractExtWs.warpingParty} LIKE ${pat} ESCAPE '\\' OR
+          ${schema.intBeamContractExtWs.converterParty} LIKE ${pat} ESCAPE '\\'
         `)
         .orderBy(desc(schema.intBeamContractExtWs.id))
     : await db
@@ -60,6 +76,16 @@ export default async function BeamContractExtWsPage({
   const selected = isEditing ? contracts.find((c) => c.id === idParam) ?? null : null;
   const formContract = isAdding ? null : selected;
 
+  const detailRows = formContract
+    ? await db
+        .select()
+        .from(schema.intBeamContractExtWsDetail)
+        .where(eq(schema.intBeamContractExtWsDetail.contractId, formContract.id))
+        .orderBy(schema.intBeamContractExtWsDetail.srNo)
+    : [];
+
+  const detailGrid = Array.from({ length: DETAIL_ROWS }, (_, i) => detailRows.find((r) => r.srNo === i + 1) ?? null);
+
   const nextRow = await db
     .select({
       maxN: sql<number>`coalesce(max(CAST(SUBSTR(cont_no, 6) AS INTEGER)), 0)`,
@@ -68,41 +94,130 @@ export default async function BeamContractExtWsPage({
   const upcomingNumber = (nextRow[0]?.maxN ?? 0) + 1;
   const upcomingContNo = `IBWS-${String(upcomingNumber).padStart(4, "0")}`;
 
+  const parties = await db
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+    })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .orderBy(schema.yarnCounts.countCode);
+
+  const greyList = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.code);
+
+  const productList = await db
+    .select({ code: schema.products.code, description: schema.products.description })
+    .from(schema.products)
+    .orderBy(schema.products.description);
+
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
+  const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+
   async function saveContract(formData: FormData) {
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    const isUpdate = Number.isFinite(id) && id > 0;
+    const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
+
     const contDate = txt(formData.get("cont_date")) ?? today();
     const expDate = txt(formData.get("exp_date"));
     const sizingParty = txt(formData.get("sizing_party"));
     const warpingParty = txt(formData.get("warping_party"));
     const party = txt(formData.get("party"));
+    const converterParty = txt(formData.get("converter_party"));
+    const wrpCode = txt(formData.get("wrp_code"));
+    const noOfWidthRaw = num(formData.get("no_of_width"));
+    const noOfWidth = noOfWidthRaw ?? 1;
+    const prdCode = txt(formData.get("prd_code"));
+    const vtype = txt(formData.get("vtype"));
     const ratePerBeam = num(formData.get("rate_per_beam"));
     const terms = txt(formData.get("terms"));
     const remarks = txt(formData.get("remarks"));
     const status = txt(formData.get("status")) ?? "R";
 
+    // Detail rows — 6 fixed slots
+    const detailParsed: {
+      srNo: number;
+      countCode: string | null;
+      brand: string | null;
+      calCount: number | null;
+      ends: number | null;
+      wtPerMtr: number;
+    }[] = [];
+    const widthDiv = noOfWidth > 0 ? noOfWidth : 1;
+    for (let i = 1; i <= DETAIL_ROWS; i++) {
+      const countCode = txt(formData.get(`d_count_code_${i}`));
+      const brand = txt(formData.get(`d_brand_${i}`));
+      const calCount = num(formData.get(`d_cal_count_${i}`));
+      const ends = num(formData.get(`d_ends_${i}`));
+      if (!countCode && !brand && calCount == null && ends == null) continue;
+      const wtPerMtr =
+        calCount && calCount > 0
+          ? round((((ends ?? 0) * 1.0936) / 840 / calCount) / widthDiv, 6)
+          : 0;
+      detailParsed.push({
+        srNo: detailParsed.length + 1,
+        countCode,
+        brand,
+        calCount,
+        ends,
+        wtPerMtr,
+      });
+    }
+
+    const headerEnds = round(detailParsed.reduce((s, r) => s + (r.ends ?? 0), 0), 2);
+    const headerWtPerMtr = round(detailParsed.reduce((s, r) => s + r.wtPerMtr, 0), 6);
+
+    if (detailParsed.length > 0 && headerWtPerMtr <= 0) {
+      redirect(`/inventory/contracts/beam-ext-ws${backQ}&error=wt_zero`);
+    }
+
     const nowIso = new Date().toISOString();
 
-    if (Number.isFinite(id) && id > 0) {
-      await db
-        .transaction(async (tx) => {
+    const headerVals = {
+      contDate,
+      expDate,
+      sizingParty,
+      warpingParty,
+      party,
+      converterParty,
+      wrpCode,
+      noOfWidth,
+      prdCode,
+      vtype,
+      ends: headerEnds || null,
+      wtPerMtr: headerWtPerMtr || null,
+      ratePerBeam,
+      terms,
+      remarks,
+      status,
+    };
+
+    if (isUpdate) {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(schema.intBeamContractExtWs)
+          .set({ ...headerVals, modifiedDate: nowIso })
+          .where(eq(schema.intBeamContractExtWs.id, id));
+        await tx
+          .delete(schema.intBeamContractExtWsDetail)
+          .where(eq(schema.intBeamContractExtWsDetail.contractId, id));
+        if (detailParsed.length) {
           await tx
-            .update(schema.intBeamContractExtWs)
-            .set({
-              contDate,
-              expDate,
-              sizingParty,
-              warpingParty,
-              party,
-              ratePerBeam,
-              terms,
-              remarks,
-              status,
-              modifiedDate: nowIso,
-            })
-            .where(eq(schema.intBeamContractExtWs.id, id));
-        });
+            .insert(schema.intBeamContractExtWsDetail)
+            .values(detailParsed.map((d) => ({ contractId: id, ...d })));
+        }
+      });
       revalidatePath("/inventory/contracts/beam-ext-ws");
       redirect(`/inventory/contracts/beam-ext-ws?id=${id}`);
     } else {
@@ -122,19 +237,19 @@ export default async function BeamContractExtWsPage({
             .insert(schema.intBeamContractExtWs)
             .values({
               contNo,
-              contDate,
-              expDate,
-              sizingParty,
-              warpingParty,
-              party,
-              ratePerBeam,
-              terms,
-              remarks,
-              status,
+              ...headerVals,
               postedDate: nowIso,
             })
             .returning({ id: schema.intBeamContractExtWs.id });
-          return inserted[0].id;
+          const insertedId = inserted[0].id;
+
+          if (detailParsed.length) {
+            await tx
+              .insert(schema.intBeamContractExtWsDetail)
+              .values(detailParsed.map((d) => ({ contractId: insertedId, ...d })));
+          }
+
+          return insertedId;
         });
       } catch (e: unknown) {
         const msg = (e as { message?: string })?.message ?? "";
@@ -146,7 +261,7 @@ export default async function BeamContractExtWsPage({
       }
 
       if (codeExists) {
-        redirect(`/inventory/contracts/beam-ext-ws?error=code_exists`);
+        redirect(`/inventory/contracts/beam-ext-ws${backQ}&error=code_exists`);
       }
       revalidatePath("/inventory/contracts/beam-ext-ws");
       redirect(`/inventory/contracts/beam-ext-ws?id=${newId}`);
@@ -157,9 +272,14 @@ export default async function BeamContractExtWsPage({
     "use server";
     const id = intVal(formData.get("id"));
     if (id === null) return;
-    await db
-      .delete(schema.intBeamContractExtWs)
-      .where(eq(schema.intBeamContractExtWs.id, id));
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(schema.intBeamContractExtWsDetail)
+        .where(eq(schema.intBeamContractExtWsDetail.contractId, id));
+      await tx
+        .delete(schema.intBeamContractExtWs)
+        .where(eq(schema.intBeamContractExtWs.id, id));
+    });
     revalidatePath("/inventory/contracts/beam-ext-ws");
     redirect("/inventory/contracts/beam-ext-ws");
   }
@@ -173,6 +293,11 @@ export default async function BeamContractExtWsPage({
 
   const formatNum = (n?: number | null) =>
     n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
+
+  const showForm = !!formContract || isAdding;
+  const gridCellCls = "input-box mono text-[12px]";
+  const gridCellNumCls = "input-box mono text-[12px] text-right";
+  const gridCellCalcCls = "input-box mono text-[12px] text-right bg-gray-100";
 
   return (
     <Shell active="int-c-bews">
@@ -193,6 +318,11 @@ export default async function BeamContractExtWsPage({
               party: c.party,
               sizingParty: c.sizingParty,
               warpingParty: c.warpingParty,
+              converterParty: c.converterParty,
+              wrpCode: c.wrpCode,
+              noOfWidth: c.noOfWidth,
+              ends: c.ends,
+              wtPerMtr: c.wtPerMtr,
               ratePerBeam: c.ratePerBeam,
               status: c.status,
             }))}
@@ -203,6 +333,11 @@ export default async function BeamContractExtWsPage({
               { key: "party", label: "Party" },
               { key: "sizingParty", label: "Sizing Party" },
               { key: "warpingParty", label: "Warping Party" },
+              { key: "converterParty", label: "Converter Party" },
+              { key: "wrpCode", label: "WRP Code" },
+              { key: "noOfWidth", label: "No.Width" },
+              { key: "ends", label: "Ends" },
+              { key: "wtPerMtr", label: "WT/Mtr" },
               { key: "ratePerBeam", label: "Rate/Beam" },
               { key: "status", label: "Status" },
             ]}
@@ -211,11 +346,17 @@ export default async function BeamContractExtWsPage({
           />
         </div>
 
-        {params.error === "code_exists" && (
+        {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Contract number already exists. Try again.
+            {ERROR_MESSAGES[params.error]}
           </div>
         )}
+
+        <datalist id="ibws-count-list">
+          {countList.map((c) => (
+            <option key={c.code} value={c.code}>{c.description}</option>
+          ))}
+        </datalist>
 
         <form
           id="ibws-find-form"
@@ -241,178 +382,326 @@ export default async function BeamContractExtWsPage({
                 New
               </a>
               <PrintButton label="Print" />
+              {formContract && (
+                <form action={deleteContract} className="inline">
+                  <input type="hidden" name="id" value={formContract.id} />
+                  <ConfirmButton message="Delete this contract and its detail rows? This cannot be undone.">
+                    Delete
+                  </ConfirmButton>
+                </form>
+              )}
               <a href="/inventory/contracts/beam-ext-ws" className="btn btn-outline btn-sm">
                 Exit
               </a>
             </div>
           </div>
 
-          <form id="ibws-save-form" action={saveContract}>
-            {formContract && <input type="hidden" name="id" value={formContract.id} />}
+          {showForm && (
+            <form id="ibws-save-form" action={saveContract}>
+              {formContract && <input type="hidden" name="id" value={formContract.id} />}
+              <BeamWtCalc />
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3">
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Cont. Date</label>
-                <input
-                  name="cont_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formContract?.contDate ?? today()}
-                  required
-                />
-              </div>
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Cont.#</label>
-                <input
-                  className="input-box mono bg-gray-100"
-                  defaultValue={formContract?.contNo ?? upcomingContNo}
-                  readOnly
-                  tabIndex={-1}
-                />
-              </div>
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Exp. Date</label>
-                <input
-                  name="exp_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formContract?.expDate ?? ""}
-                />
-              </div>
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Find</label>
-                <div className="flex gap-2">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3">
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Cont. Date</label>
                   <input
-                    form="ibws-find-form"
-                    name="find"
-                    className="input-box mono flex-1"
-                    defaultValue={params.find ?? ""}
-                    placeholder="cont / party"
+                    name="cont_date"
+                    type="date"
+                    className="input-box mono"
+                    defaultValue={formContract?.contDate ?? today()}
+                    required
                   />
-                  <button form="ibws-find-form" type="submit" className="btn btn-outline btn-sm">
-                    Find
-                  </button>
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Cont.#</label>
+                  <input
+                    className="input-box mono bg-gray-100"
+                    defaultValue={formContract?.contNo ?? upcomingContNo}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Exp. Date</label>
+                  <input
+                    name="exp_date"
+                    type="date"
+                    className="input-box mono"
+                    defaultValue={formContract?.expDate ?? ""}
+                  />
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Find</label>
+                  <div className="flex gap-2">
+                    <input
+                      form="ibws-find-form"
+                      name="find"
+                      className="input-box mono flex-1"
+                      defaultValue={params.find ?? ""}
+                      placeholder="cont / party"
+                    />
+                    <button form="ibws-find-form" type="submit" className="btn btn-outline btn-sm">
+                      Find
+                    </button>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Sizing Party</label>
+                  <Combobox
+                    name="sizing_party"
+                    options={partyOpts}
+                    defaultValue={formContract?.sizingParty ?? ""}
+                    placeholder="Select party"
+                  />
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Warping Party</label>
+                  <Combobox
+                    name="warping_party"
+                    options={partyOpts}
+                    defaultValue={formContract?.warpingParty ?? ""}
+                    placeholder="Select party"
+                  />
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Party</label>
+                  <Combobox
+                    name="party"
+                    options={partyOpts}
+                    defaultValue={formContract?.party ?? ""}
+                    placeholder="Select party"
+                  />
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Converter Party</label>
+                  <Combobox
+                    name="converter_party"
+                    options={partyOpts}
+                    defaultValue={formContract?.converterParty ?? ""}
+                    placeholder="Select party"
+                  />
+                </div>
+
+                <div className="lg:col-span-4">
+                  <label className="label block mb-1">WRP Code (Grey Const)</label>
+                  <Combobox
+                    name="wrp_code"
+                    options={greyOpts}
+                    defaultValue={formContract?.wrpCode ?? ""}
+                    placeholder="Select construction"
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">No. of Width</label>
+                  <input
+                    name="no_of_width"
+                    type="number"
+                    step="any"
+                    className="input-box mono text-right"
+                    defaultValue={formContract?.noOfWidth ?? 1}
+                  />
+                </div>
+                <div className="lg:col-span-4">
+                  <label className="label block mb-1">Prd Code (Product)</label>
+                  <Combobox
+                    name="prd_code"
+                    options={productOpts}
+                    defaultValue={formContract?.prdCode ?? ""}
+                    placeholder="Select product"
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">V-Type</label>
+                  <input
+                    name="vtype"
+                    className="input-box mono"
+                    defaultValue={formContract?.vtype ?? ""}
+                  />
+                </div>
+
+                <div className="lg:col-span-4">
+                  <label className="label block mb-1">Rate Per Beam</label>
+                  <input
+                    name="rate_per_beam"
+                    type="number"
+                    step="any"
+                    className="input-box mono text-right"
+                    defaultValue={formContract?.ratePerBeam ?? ""}
+                  />
+                </div>
+                <div className="lg:col-span-4">
+                  <label className="label block mb-1">Status</label>
+                  <select
+                    name="status"
+                    className="input-box"
+                    defaultValue={formContract?.status ?? "R"}
+                  >
+                    {statusOptions.map((s) => (
+                      <option key={s.v} value={s.v}>
+                        {s.l}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="text-[10px] text-[var(--muted)] mt-1 mono">
+                    (R-Running, C-Completed, F-Finished, X-Cancelled)
+                  </div>
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">Total Ends</label>
+                  <input
+                    name="ends_total"
+                    type="number"
+                    step="any"
+                    className="input-box mono text-right bg-gray-100"
+                    defaultValue={formContract?.ends ?? ""}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">Total WT/Mtr</label>
+                  <input
+                    name="wt_total"
+                    type="number"
+                    step="any"
+                    className="input-box mono text-right bg-gray-100"
+                    defaultValue={formContract?.wtPerMtr ?? ""}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+
+                <div className="lg:col-span-6">
+                  <label className="label block mb-1">Posted</label>
+                  <input
+                    className="input-box mono bg-gray-100 text-[12px]"
+                    defaultValue={formContract?.postedDate?.slice(0, 10) ?? ""}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+                <div className="lg:col-span-6">
+                  <label className="label block mb-1">Modified</label>
+                  <input
+                    className="input-box mono bg-gray-100 text-[12px]"
+                    defaultValue={formContract?.modifiedDate?.slice(0, 10) ?? ""}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+
+                <div className="lg:col-span-12">
+                  <label className="label block mb-1">Terms</label>
+                  <input
+                    name="terms"
+                    className="input-box"
+                    defaultValue={formContract?.terms ?? ""}
+                  />
+                </div>
+                <div className="lg:col-span-12">
+                  <label className="label block mb-1">Remarks</label>
+                  <input
+                    name="remarks"
+                    className="input-box"
+                    defaultValue={formContract?.remarks ?? ""}
+                  />
                 </div>
               </div>
 
-              <div className="lg:col-span-4">
-                <label className="label block mb-1">Sizing Party</label>
-                <input
-                  name="sizing_party"
-                  className="input-box mono"
-                  defaultValue={formContract?.sizingParty ?? ""}
-                />
-              </div>
-              <div className="lg:col-span-4">
-                <label className="label block mb-1">Warping Party</label>
-                <input
-                  name="warping_party"
-                  className="input-box mono"
-                  defaultValue={formContract?.warpingParty ?? ""}
-                />
-              </div>
-              <div className="lg:col-span-4">
-                <label className="label block mb-1">Party</label>
-                <input
-                  name="party"
-                  className="input-box mono"
-                  defaultValue={formContract?.party ?? ""}
-                />
-              </div>
-
-              <div className="lg:col-span-4">
-                <label className="label block mb-1">Rate Per Beam</label>
-                <input
-                  name="rate_per_beam"
-                  type="number"
-                  step="any"
-                  className="input-box mono"
-                  defaultValue={formContract?.ratePerBeam ?? ""}
-                />
-              </div>
-              <div className="lg:col-span-4">
-                <label className="label block mb-1">Status</label>
-                <select
-                  name="status"
-                  className="input-box"
-                  defaultValue={formContract?.status ?? "R"}
-                >
-                  {statusOptions.map((s) => (
-                    <option key={s.v} value={s.v}>
-                      {s.l}
-                    </option>
-                  ))}
-                </select>
-                <div className="text-[10px] text-[var(--muted)] mt-1 mono">
-                  (R-Running, C-Completed, F-Finished, X-Cancelled)
+              <div className="border border-black mt-6">
+                <div className="bg-gray-50 border-b border-black px-3 py-2 text-[12px] uppercase tracking-[0.1em] font-bold">
+                  Count Detail ({DETAIL_ROWS} rows)
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-1 py-1 border-b border-black" style={{ width: 30 }}>Sr#</th>
+                        <th className="px-1 py-1 border-b border-black">Count Code</th>
+                        <th className="px-1 py-1 border-b border-black">Brand</th>
+                        <th className="px-1 py-1 border-b border-black text-right">Cal Count</th>
+                        <th className="px-1 py-1 border-b border-black text-right">Ends</th>
+                        <th className="px-1 py-1 border-b border-black text-right">WT/Mtr</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailGrid.map((r, idx) => {
+                        const i = idx + 1;
+                        return (
+                          <tr key={i}>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                              <input
+                                name={`d_count_code_${i}`}
+                                list="ibws-count-list"
+                                className={gridCellCls}
+                                defaultValue={r?.countCode ?? ""}
+                              />
+                            </td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                              <input
+                                name={`d_brand_${i}`}
+                                className={gridCellCls}
+                                defaultValue={r?.brand ?? ""}
+                              />
+                            </td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                              <input
+                                name={`d_cal_count_${i}`}
+                                type="number"
+                                step="any"
+                                className={gridCellNumCls}
+                                defaultValue={r?.calCount ?? ""}
+                              />
+                            </td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                              <input
+                                name={`d_ends_${i}`}
+                                type="number"
+                                step="any"
+                                className={gridCellNumCls}
+                                defaultValue={r?.ends ?? ""}
+                              />
+                            </td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                              <input
+                                name={`d_wt_${i}`}
+                                type="number"
+                                step="any"
+                                className={gridCellCalcCls}
+                                defaultValue={r?.wtPerMtr ?? ""}
+                                readOnly
+                                tabIndex={-1}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black">
+                  WT/Mtr = ((Ends × 1.0936 / 840) / Cal Count) / No. of Width. Empty detail rows are ignored on save.
                 </div>
               </div>
-              <div className="lg:col-span-4"></div>
 
-              <div className="lg:col-span-6">
-                <label className="label block mb-1">Posted</label>
-                <input
-                  className="input-box mono bg-gray-100 text-[12px]"
-                  defaultValue={formContract?.postedDate?.slice(0, 10) ?? ""}
-                  readOnly
-                  tabIndex={-1}
-                />
+              <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
+                <button type="submit" className="btn btn-sm">
+                  Save
+                </button>
+                <a href="/inventory/contracts/beam-ext-ws?adding=1" className="btn btn-outline btn-sm">
+                  New
+                </a>
+                <PrintButton label="Print" />
+                <a href="/inventory/contracts/beam-ext-ws" className="btn btn-outline btn-sm">
+                  Exit
+                </a>
+                <div className="ml-auto">
+                  <label className="label block mb-1">Alt-S Password</label>
+                  <input className="input-box mono" placeholder="password" type="password" />
+                </div>
               </div>
-              <div className="lg:col-span-6">
-                <label className="label block mb-1">Modified</label>
-                <input
-                  className="input-box mono bg-gray-100 text-[12px]"
-                  defaultValue={formContract?.modifiedDate?.slice(0, 10) ?? ""}
-                  readOnly
-                  tabIndex={-1}
-                />
-              </div>
-
-              <div className="lg:col-span-12">
-                <label className="label block mb-1">Terms</label>
-                <input
-                  name="terms"
-                  className="input-box"
-                  defaultValue={formContract?.terms ?? ""}
-                />
-              </div>
-              <div className="lg:col-span-12">
-                <label className="label block mb-1">Remarks</label>
-                <input
-                  name="remarks"
-                  className="input-box"
-                  defaultValue={formContract?.remarks ?? ""}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
-              <button type="submit" className="btn btn-sm">
-                Save
-              </button>
-              <a href="/inventory/contracts/beam-ext-ws?adding=1" className="btn btn-outline btn-sm">
-                New
-              </a>
-              <PrintButton label="Print" />
-              <a href="/inventory/contracts/beam-ext-ws" className="btn btn-outline btn-sm">
-                Exit
-              </a>
-              <div className="ml-auto">
-                <label className="label block mb-1">Alt-S Password</label>
-                <input className="input-box mono" placeholder="password" type="password" />
-              </div>
-            </div>
-          </form>
-
-          {formContract && (
-            <form action={deleteContract} className="mt-4 flex items-center gap-3">
-              <input type="hidden" name="id" value={formContract.id} />
-              <button type="submit" className="btn btn-outline btn-sm">
-                Delete
-              </button>
-              <span className="mono text-[10px] text-[var(--muted)]">
-                Deletes the contract permanently.
-              </span>
             </form>
           )}
         </div>
@@ -431,6 +720,9 @@ export default async function BeamContractExtWsPage({
                   <th>Party</th>
                   <th>Sizing Party</th>
                   <th>Warping Party</th>
+                  <th>Converter</th>
+                  <th className="text-right">Ends</th>
+                  <th className="text-right">WT/Mtr</th>
                   <th className="text-right">Rate/Beam</th>
                   <th>Status</th>
                 </tr>
@@ -475,6 +767,21 @@ export default async function BeamContractExtWsPage({
                           {c.warpingParty ?? "-"}
                         </a>
                       </td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {c.converterParty ?? "-"}
+                        </a>
+                      </td>
+                      <td className="text-right mono text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {formatNum(c.ends)}
+                        </a>
+                      </td>
+                      <td className="text-right mono text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {formatNum(c.wtPerMtr)}
+                        </a>
+                      </td>
                       <td className="text-right mono text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {formatNum(c.ratePerBeam)}
@@ -490,7 +797,7 @@ export default async function BeamContractExtWsPage({
                 })}
                 {contracts.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-[13px] text-[var(--muted)] py-6">
+                    <td colSpan={11} className="text-center text-[13px] text-[var(--muted)] py-6">
                       No contracts. Click <b>New</b> above to create one.
                     </td>
                   </tr>

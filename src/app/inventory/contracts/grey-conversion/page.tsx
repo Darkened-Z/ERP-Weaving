@@ -1,8 +1,12 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
+import { IntConvCalc } from "@/components/int-conv-calc";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { and, eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -22,6 +26,19 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
+const round = (v: number, d: number) => {
+  const p = 10 ** d;
+  return Math.round(v * p) / p;
+};
+
+const ERROR_MESSAGES: Record<string, string> = {
+  code_exists: "Contract No already exists. Save again to auto-assign a fresh number.",
+  design_exists: "This party already has a contract with this Design No.",
+  rate_required: "Either Rate Per Pick or Rate/Mtr must be greater than 0.",
+  read_required: "Read must be greater than 0.",
+  pick_required: "Pick must be greater than 0.",
+  width_required: "Width must be greater than 0.",
+};
 
 const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
 const SELV_TYPES = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
@@ -38,7 +55,25 @@ export default async function IntGreyConversionContractPage({
   const isAdding = params.adding === "1";
   const findFilter = params.find?.trim();
 
-  const parties = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.description);
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const greyList = await db
+    .select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      width: schema.greyConstruction.width,
+    })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.code);
+  const productList = await db
+    .select({ code: schema.products.code, description: schema.products.description })
+    .from(schema.products)
+    .orderBy(schema.products.description);
 
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = escFind ? `%${escFind}%` : "";
@@ -78,13 +113,100 @@ export default async function IntGreyConversionContractPage({
   const weftGrid = Array.from({ length: 9 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
 
   const today = new Date().toISOString().slice(0, 10);
-  const lContCount = contracts.length;
+  const [lRow] = await db
+    .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
+    .from(schema.intGreyConversionContract);
+  const maxLContNo = lRow?.maxL ?? 0;
+
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
+  const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const greyFillMap = Object.fromEntries(
+    greyList.map((g) => [g.code, { read: g.reed, pick: g.pick, width: g.width }])
+  );
+  const productFillMap = Object.fromEntries(
+    productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description }])
+  );
 
   async function saveContract(formData: FormData) {
     "use server";
     const idStr = formData.get("id") as string;
     const idParsed = idStr ? parseInt(idStr, 10) : NaN;
     const isUpdate = Number.isFinite(idParsed);
+    const backQ = isUpdate ? `?id=${idParsed}` : `?adding=1`;
+
+    const ratePerPick = num(formData.get("rate_per_pick"));
+    const rateMtr = num(formData.get("rate_mtr"));
+    const readVal = num(formData.get("read"));
+    const pickVal = num(formData.get("pick"));
+    const widthVal = num(formData.get("width"));
+
+    if (!((ratePerPick ?? 0) > 0 || (rateMtr ?? 0) > 0))
+      redirect(`/inventory/contracts/grey-conversion${backQ}&error=rate_required`);
+    if (!((readVal ?? 0) > 0)) redirect(`/inventory/contracts/grey-conversion${backQ}&error=read_required`);
+    if (!((pickVal ?? 0) > 0)) redirect(`/inventory/contracts/grey-conversion${backQ}&error=pick_required`);
+    if (!((widthVal ?? 0) > 0)) redirect(`/inventory/contracts/grey-conversion${backQ}&error=width_required`);
+
+    const party = txt(formData.get("party"));
+    const designNo = txt(formData.get("design_no"));
+    if (party && designNo) {
+      const dups = await db
+        .select({ id: schema.intGreyConversionContract.id })
+        .from(schema.intGreyConversionContract)
+        .where(
+          and(
+            eq(schema.intGreyConversionContract.party, party),
+            eq(schema.intGreyConversionContract.designNo, designNo)
+          )
+        );
+      if (dups.some((d) => !isUpdate || d.id !== idParsed))
+        redirect(`/inventory/contracts/grey-conversion${backQ}&error=design_exists`);
+    }
+
+    const parseRows = (prefix: "warp" | "weft") => {
+      const out: {
+        srNo: number;
+        count: string | null;
+        descr: string | null;
+        brand: string | null;
+        calCount: number | null;
+        ends: number | null;
+        wtPerMtr: number;
+        ratePerLbs: number | null;
+        costPerMtr: number;
+      }[] = [];
+      for (let i = 1; i <= 9; i++) {
+        const count = txt(formData.get(`${prefix}_count_${i}`));
+        const descr = txt(formData.get(`${prefix}_descr_${i}`));
+        const brand = txt(formData.get(`${prefix}_brand_${i}`));
+        const calCount = num(formData.get(`${prefix}_cal_count_${i}`));
+        const ends = intVal(formData.get(`${prefix}_ends_${i}`));
+        const ratePerLbs = num(formData.get(`${prefix}_rate_${i}`));
+        if (count || descr || brand || calCount !== null || ends !== null || ratePerLbs !== null) {
+          const wtPerMtr =
+            calCount && calCount > 0 ? round(((ends ?? 0) * 1.0936 / 800) / calCount, 6) : 0;
+          const costPerMtr = round(wtPerMtr * (ratePerLbs ?? 0), 4);
+          out.push({ srNo: i, count, descr, brand, calCount, ends, wtPerMtr, ratePerLbs, costPerMtr });
+        }
+      }
+      return out;
+    };
+
+    const warpParsed = parseRows("warp");
+    const weftParsed = parseRows("weft");
+
+    const warpWtPerMtr = round(warpParsed.reduce((s, r) => s + r.wtPerMtr, 0), 6);
+    const weftWtPerMtr = round(weftParsed.reduce((s, r) => s + r.wtPerMtr, 0), 6);
+    const wtPerMtr = round(warpWtPerMtr + weftWtPerMtr, 6);
+    const warpCostPerMtr = round(warpParsed.reduce((s, r) => s + r.costPerMtr, 0), 4);
+    const weftCostPerMtr = round(weftParsed.reduce((s, r) => s + r.costPerMtr, 0), 4);
+    const costPerMtr = round(warpCostPerMtr + weftCostPerMtr, 4);
+    const clb = num(formData.get("cost_lakhai_border_mtr")) ?? 0;
+    const convRatePerMtr =
+      (ratePerPick ?? 0) > 0
+        ? round((ratePerPick ?? 0) * (pickVal ?? 0) + clb, 4)
+        : round((rateMtr ?? 0) + clb, 4);
+    const grayRatePerMtr = round(costPerMtr + convRatePerMtr, 2);
 
     let contNo = (formData.get("cont_no") as string)?.trim() || "";
     if (!isUpdate) {
@@ -97,41 +219,42 @@ export default async function IntGreyConversionContractPage({
 
     const data = {
       contNo,
-      lContNo: intVal(formData.get("l_cont_no")),
       contDate: txt(formData.get("cont_date")) ?? new Date().toISOString().slice(0, 10),
       expDate: txt(formData.get("exp_date")),
       status: txt(formData.get("status")) ?? "R",
       type: "CONV",
-      party: txt(formData.get("party")),
+      party,
       weaveFrame: txt(formData.get("weave_frame")),
       selvType: txt(formData.get("selv_type")),
       slvName: txt(formData.get("slv_name")),
       qtyMtr: num(formData.get("qty_mtr")),
       costLakhaiBorderMtr: num(formData.get("cost_lakhai_border_mtr")),
-      ratePerPick: num(formData.get("rate_per_pick")),
-      rateMtr: num(formData.get("rate_mtr")),
+      ratePerPick,
+      rateMtr,
+      convRatePerMtr,
+      grayRatePerMtr,
       loomType: txt(formData.get("loom_type")),
       broker: txt(formData.get("broker")),
       ratePick: num(formData.get("rate_pick")),
-      designNo: txt(formData.get("design_no")),
+      designNo,
       grayQltyCode: txt(formData.get("gray_qlty_code")),
       img: txt(formData.get("img")),
-      wrpWt40: num(formData.get("wrp_wt_40")),
-      wftWt40: num(formData.get("wft_wt_40")),
-      weight40: num(formData.get("weight_40")),
+      wrpWt40: round(warpWtPerMtr * 40, 6),
+      wftWt40: round(weftWtPerMtr * 40, 6),
+      weight40: round(wtPerMtr * 40, 6),
       remarks: txt(formData.get("remarks")),
-      read: num(formData.get("read")),
-      pick: num(formData.get("pick")),
-      width: num(formData.get("width")),
+      read: readVal,
+      pick: pickVal,
+      width: widthVal,
       findDesign: txt(formData.get("find_design")),
       grayCode: txt(formData.get("gray_code")),
       findContract: txt(formData.get("find_contract")),
-      warpWtPerMtr: num(formData.get("warp_wt_per_mtr")),
-      weftWtPerMtr: num(formData.get("weft_wt_per_mtr")),
-      wtPerMtr: num(formData.get("wt_per_mtr")),
-      warpCostPerMtr: num(formData.get("warp_cost_per_mtr")),
-      weftCostPerMtr: num(formData.get("weft_cost_per_mtr")),
-      costPerMtr: num(formData.get("cost_per_mtr")),
+      warpWtPerMtr,
+      weftWtPerMtr,
+      wtPerMtr,
+      warpCostPerMtr,
+      weftCostPerMtr,
+      costPerMtr,
       ratePerMtr1: num(formData.get("rate_per_mtr_1")),
       ratePerMtr2: num(formData.get("rate_per_mtr_2")),
       productName: txt(formData.get("product_name")),
@@ -155,45 +278,20 @@ export default async function IntGreyConversionContractPage({
           await tx.delete(schema.intGreyConversionWarp).where(eq(schema.intGreyConversionWarp.contractId, cid));
           await tx.delete(schema.intGreyConversionWeft).where(eq(schema.intGreyConversionWeft.contractId, cid));
         } else {
+          const [lr] = await tx
+            .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
+            .from(schema.intGreyConversionContract);
           const [inserted] = await tx
             .insert(schema.intGreyConversionContract)
-            .values({ ...data, postedDate: new Date().toISOString() })
+            .values({ ...data, lContNo: (lr?.maxL ?? 0) + 1, postedDate: new Date().toISOString() })
             .returning({ id: schema.intGreyConversionContract.id });
           cid = inserted.id;
         }
 
-        const warpValues: (typeof schema.intGreyConversionWarp.$inferInsert)[] = [];
-        for (let i = 1; i <= 9; i++) {
-          const count = txt(formData.get(`warp_count_${i}`));
-          const descr = txt(formData.get(`warp_descr_${i}`));
-          const brand = txt(formData.get(`warp_brand_${i}`));
-          const calCount = num(formData.get(`warp_cal_count_${i}`));
-          const ends = intVal(formData.get(`warp_ends_${i}`));
-          const wtPerMtr = num(formData.get(`warp_wt_${i}`));
-          const ratePerLbs = num(formData.get(`warp_rate_${i}`));
-          const costPerMtr = num(formData.get(`warp_cost_${i}`));
-          if (count || descr || brand || calCount !== null || ends !== null || wtPerMtr !== null || ratePerLbs !== null || costPerMtr !== null) {
-            warpValues.push({ contractId: cid, srNo: i, count, descr, brand, calCount, ends, wtPerMtr, ratePerLbs, costPerMtr });
-          }
-        }
-
-        const weftValues: (typeof schema.intGreyConversionWeft.$inferInsert)[] = [];
-        for (let i = 1; i <= 9; i++) {
-          const count = txt(formData.get(`weft_count_${i}`));
-          const descr = txt(formData.get(`weft_descr_${i}`));
-          const brand = txt(formData.get(`weft_brand_${i}`));
-          const calCount = num(formData.get(`weft_cal_count_${i}`));
-          const ends = intVal(formData.get(`weft_ends_${i}`));
-          const wtPerMtr = num(formData.get(`weft_wt_${i}`));
-          const ratePerLbs = num(formData.get(`weft_rate_${i}`));
-          const costPerMtr = num(formData.get(`weft_cost_${i}`));
-          if (count || descr || brand || calCount !== null || ends !== null || wtPerMtr !== null || ratePerLbs !== null || costPerMtr !== null) {
-            weftValues.push({ contractId: cid, srNo: i, count, descr, brand, calCount, ends, wtPerMtr, ratePerLbs, costPerMtr });
-          }
-        }
-
-        if (warpValues.length) await tx.insert(schema.intGreyConversionWarp).values(warpValues);
-        if (weftValues.length) await tx.insert(schema.intGreyConversionWeft).values(weftValues);
+        if (warpParsed.length)
+          await tx.insert(schema.intGreyConversionWarp).values(warpParsed.map((r) => ({ contractId: cid, ...r })));
+        if (weftParsed.length)
+          await tx.insert(schema.intGreyConversionWeft).values(weftParsed.map((r) => ({ contractId: cid, ...r })));
 
         return cid;
       });
@@ -208,8 +306,7 @@ export default async function IntGreyConversionContractPage({
     }
 
     if (uniqueError) {
-      const q = isUpdate ? `?id=${idParsed}&error=code_exists` : `?adding=1&error=code_exists`;
-      redirect("/inventory/contracts/grey-conversion" + q);
+      redirect(`/inventory/contracts/grey-conversion${backQ}&error=code_exists`);
     }
 
     if (contractId === null) return;
@@ -233,6 +330,7 @@ export default async function IntGreyConversionContractPage({
 
   const gridCellCls = "input-box mono text-[12px]";
   const gridCellNumCls = "input-box mono text-[12px] text-right";
+  const gridCellCalcCls = "input-box mono text-[12px] text-right bg-gray-100";
   const roCls = "input-box mono text-[13px] bg-gray-100";
   const yellowCls = "input-box mono text-[13px]";
   const greenCls = "input-box mono text-[13px] bg-green-50";
@@ -277,9 +375,9 @@ export default async function IntGreyConversionContractPage({
           />
         </div>
 
-        {params.error === "code_exists" && (
+        {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
-            Contract No already exists. Save again to auto-assign a fresh number.
+            {ERROR_MESSAGES[params.error]}
           </div>
         )}
 
@@ -295,7 +393,7 @@ export default async function IntGreyConversionContractPage({
               {formItem && (
                 <form action={deleteContract} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message="Delete this contract and its warp/weft rows? This cannot be undone.">Delete</ConfirmButton>
                 </form>
               )}
               <a href="/inventory/contracts/grey-conversion" className="btn btn-outline btn-sm">Exit</a>
@@ -305,6 +403,9 @@ export default async function IntGreyConversionContractPage({
           {showForm && (
             <form id="igcc-save-form" action={saveContract}>
               {formItem && <input type="hidden" name="id" value={formItem.id} />}
+              <IntConvCalc />
+              <AutoFill watch="gray_qlty_code" map={greyFillMap} inputs={["read", "pick", "width"]} />
+              <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name"]} />
 
               <div className="grid grid-cols-12 gap-3 mb-3">
                 <div className="col-span-8">
@@ -336,7 +437,7 @@ export default async function IntGreyConversionContractPage({
                     </div>
                     <div>
                       <label className="label block mb-1">LCont.No</label>
-                      <input name="l_cont_no" className={roCls} defaultValue={formItem?.lContNo ?? lContCount} readOnly />
+                      <input className={roCls} defaultValue={formItem?.lContNo ?? maxLContNo} readOnly tabIndex={-1} />
                     </div>
                   </div>
 
@@ -353,7 +454,7 @@ export default async function IntGreyConversionContractPage({
                   <div className="grid grid-cols-4 gap-3 mb-3">
                     <div>
                       <label className="label block mb-1">Party</label>
-                      <input name="party" list="parties-list" className="input-box mono text-[13px]" defaultValue={formItem?.party ?? ""} />
+                      <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[13px]" />
                     </div>
                     <div>
                       <label className="label block mb-1">Weave &amp; Frame</label>
@@ -410,7 +511,7 @@ export default async function IntGreyConversionContractPage({
                   <div className="grid grid-cols-4 gap-3 mb-3">
                     <div>
                       <label className="label block mb-1">Broaker</label>
-                      <input name="broker" list="parties-list" className="input-box mono text-[13px]" defaultValue={formItem?.broker ?? ""} />
+                      <Combobox name="broker" options={partyOpts} defaultValue={formItem?.broker ?? ""} placeholder="Select broker" className="input-box mono text-[13px]" />
                     </div>
                     <div>
                       <label className="label block mb-1">Rate/Pick</label>
@@ -425,7 +526,7 @@ export default async function IntGreyConversionContractPage({
                   <div className="grid grid-cols-4 gap-3 mb-3">
                     <div className="col-span-2">
                       <label className="label block mb-1">Gray Qlty Code (Const)</label>
-                      <input name="gray_qlty_code" className="input-box mono" defaultValue={formItem?.grayQltyCode ?? ""} />
+                      <Combobox name="gray_qlty_code" options={greyOpts} defaultValue={formItem?.grayQltyCode ?? ""} placeholder="Select construction" />
                     </div>
                     <div className="col-span-2">
                       <label className="label block mb-1">Img</label>
@@ -456,15 +557,15 @@ export default async function IntGreyConversionContractPage({
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="label block mb-1">Read</label>
-                      <input name="read" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.read ?? ""} />
+                      <input name="read" type="number" step="any" required className="input-box mono text-right" defaultValue={formItem?.read ?? ""} />
                     </div>
                     <div>
                       <label className="label block mb-1">Pick</label>
-                      <input name="pick" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.pick ?? ""} />
+                      <input name="pick" type="number" step="any" required className="input-box mono text-right" defaultValue={formItem?.pick ?? ""} />
                     </div>
                     <div>
                       <label className="label block mb-1">Width</label>
-                      <input name="width" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.width ?? ""} />
+                      <input name="width" type="number" step="any" required className="input-box mono text-right" defaultValue={formItem?.width ?? ""} />
                     </div>
                   </div>
                 </div>
@@ -477,7 +578,7 @@ export default async function IntGreyConversionContractPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Grey Code</label>
-                    <input name="gray_code" className={yellowCls} style={{ background: "#FFF8B7" }} defaultValue={formItem?.grayCode ?? ""} />
+                    <Combobox name="gray_code" options={greyOpts} defaultValue={formItem?.grayCode ?? ""} placeholder="Select construction" className={`${yellowCls} bg-[#FFF8B7]`} />
                   </div>
                   <div>
                     <label className="label block mb-1">Find Contract#</label>
@@ -510,6 +611,14 @@ export default async function IntGreyConversionContractPage({
                       <input name="cost_per_mtr" type="number" step="any" className={roCls} defaultValue={formItem?.costPerMtr ?? ""} readOnly />
                     </div>
                     <div>
+                      <label className="label block mb-1">Conv Rate/Mtr</label>
+                      <input name="conv_rate_per_mtr" type="number" step="any" className={greenCls} defaultValue={formItem?.convRatePerMtr ?? ""} readOnly />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Gray Rate/Mtr</label>
+                      <input name="gray_rate_per_mtr" type="number" step="any" className={greenCls} defaultValue={formItem?.grayRatePerMtr ?? ""} readOnly />
+                    </div>
+                    <div>
                       <label className="label block mb-1">Rate Per Mtr</label>
                       <input name="rate_per_mtr_1" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePerMtr1 ?? ""} />
                     </div>
@@ -521,7 +630,7 @@ export default async function IntGreyConversionContractPage({
 
                   <div>
                     <label className="label block mb-1">Product Name</label>
-                    <input name="product_name" className="input-box" defaultValue={formItem?.productName ?? ""} />
+                    <Combobox name="product_name" options={productOpts} defaultValue={formItem?.productName ?? ""} placeholder="Select product" className="input-box" />
                   </div>
                   <div>
                     <label className="label block mb-1">Product Quality</label>
@@ -578,9 +687,9 @@ export default async function IntGreyConversionContractPage({
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
-                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.wtPerMtr ?? ""} /></td>
+                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
-                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cost_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.costPerMtr ?? ""} /></td>
+                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
                             </tr>
                           );
@@ -625,9 +734,9 @@ export default async function IntGreyConversionContractPage({
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
-                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.wtPerMtr ?? ""} /></td>
+                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
-                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cost_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.costPerMtr ?? ""} /></td>
+                              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>
                               <td className="px-0.5 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
                             </tr>
                           );
@@ -650,12 +759,6 @@ export default async function IntGreyConversionContractPage({
               </div>
             </form>
           )}
-
-          <datalist id="parties-list">
-            {parties.map((p) => (
-              <option key={p.code} value={p.description} />
-            ))}
-          </datalist>
         </div>
 
         <div className="border border-black">

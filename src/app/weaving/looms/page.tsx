@@ -1,5 +1,8 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -10,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function LoomsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const looms = await db.select().from(schema.looms).orderBy(schema.looms.loomNo);
@@ -21,6 +24,29 @@ export default async function LoomsPage({
     : null;
   const isAdding = params.adding === "1";
   const formItem = isAdding ? null : selected;
+
+  const sheds = [...new Set(looms.map((l) => l.shed))].sort();
+  const shedOpts = sheds.map((s) => ({ value: s, label: s }));
+  const formanOpts = [...new Set(looms.map((l) => l.forman).filter((f): f is string => !!f))]
+    .sort()
+    .map((f) => ({ value: f, label: f }));
+  const nextLoomByShed = Object.fromEntries(
+    sheds.map((s) => [
+      s,
+      { loom_no: looms.filter((l) => l.shed === s).reduce((m, l) => Math.max(m, l.loomNo), 0) + 1 },
+    ])
+  );
+
+  const q = (params.q ?? "").trim();
+  const ql = q.toLowerCase();
+  const listed = !q
+    ? looms
+    : looms.filter(
+        (l) =>
+          String(l.loomNo).includes(ql) ||
+          l.shed.toLowerCase().includes(ql) ||
+          l.type.toLowerCase().includes(ql)
+      );
 
   async function saveLoom(formData: FormData) {
     "use server";
@@ -34,6 +60,7 @@ export default async function LoomsPage({
     const actRpm = parseInt(formData.get("act_rpm") as string) || null;
     const weaverName = (formData.get("weaver_name") as string)?.trim() || null;
     const group = (formData.get("group") as string)?.trim() || null;
+    const forman = (formData.get("forman") as string)?.trim() || null;
     const status = (formData.get("status") as string)?.trim() || "A";
     const make = (formData.get("lm_allocation") as string)?.trim() || null;
     const statusWrk = (formData.get("status_wrk") as string)?.trim() || null;
@@ -42,11 +69,11 @@ export default async function LoomsPage({
     try {
       if (id) {
         await db.update(schema.looms).set({
-          shed, loomNo, type, rpm, actRpm, weaverName, group, status, make, statusWrk,
+          shed, loomNo, type, rpm, actRpm, weaverName, group, forman, status, make, statusWrk,
         }).where(eq(schema.looms.id, parseInt(id)));
       } else {
         await db.insert(schema.looms).values({
-          shed, loomNo, type, rpm, actRpm, weaverName, group, status, make, statusWrk,
+          shed, loomNo, type, rpm, actRpm, weaverName, group, forman, status, make, statusWrk,
         });
       }
     } catch {
@@ -114,7 +141,7 @@ export default async function LoomsPage({
               {formItem && (
                 <form action={deleteLoom} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton>Delete</ConfirmButton>
                 </form>
               )}
             </div>
@@ -127,6 +154,7 @@ export default async function LoomsPage({
           )}
           <form action={saveLoom}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
+            {!formItem && <AutoFill watch="shed" map={nextLoomByShed} inputs={["loom_no"]} />}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-3">
               <div>
                 <label className="label block mb-1">Code</label>
@@ -134,7 +162,7 @@ export default async function LoomsPage({
               </div>
               <div>
                 <label className="label block mb-1">Shed No</label>
-                <input name="shed" className="input-box" defaultValue={formItem?.shed ?? ""} required />
+                <Combobox name="shed" options={shedOpts} defaultValue={formItem?.shed ?? ""} className="input-box" />
               </div>
               <div>
                 <label className="label block mb-1">Loom No</label>
@@ -171,6 +199,10 @@ export default async function LoomsPage({
                 </select>
               </div>
               <div>
+                <label className="label block mb-1">Forman</label>
+                <Combobox name="forman" options={formanOpts} defaultValue={formItem?.forman ?? ""} className="input-box" />
+              </div>
+              <div>
                 <label className="label block mb-1">Status</label>
                 <select name="status" className="input-box" defaultValue={formItem?.status ?? "A"}>
                   <option value="A">A - Active</option>
@@ -179,7 +211,7 @@ export default async function LoomsPage({
               </div>
               <div>
                 <label className="label block mb-1">Lm Allocation Type</label>
-                <input name="lm_allocation" className="input-box" defaultValue={formItem?.make ?? ""} />
+                <input name="lm_allocation" className="input-box" defaultValue={formItem?.make ?? "AP"} />
               </div>
               <div>
                 <label className="label block mb-1">Status Wrk</label>
@@ -197,10 +229,12 @@ export default async function LoomsPage({
           </form>
         </div>
 
-        <div className="flex items-center gap-2 mb-3">
+        <form method="get" className="flex items-center gap-2 mb-3">
           <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">Find</div>
-          <input className="input-box flex-1 text-[13px]" placeholder="Find Loom Desc / Loom No..." />
-        </div>
+          <input name="q" defaultValue={q} className="input-box flex-1 text-[13px]" placeholder="Find Loom Desc / Loom No..." />
+          <button type="submit" className="btn btn-outline btn-sm">Find</button>
+          {q && <a href="/weaving/looms" className="btn btn-outline btn-sm">Clear</a>}
+        </form>
 
         <div className="overflow-x-auto">
           <table>
@@ -219,12 +253,12 @@ export default async function LoomsPage({
               </tr>
             </thead>
             <tbody>
-              {looms.map((l) => {
+              {listed.map((l) => {
                 const isSel = l.id === selected?.id;
                 return (
                   <tr key={l.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                     <td className="mono font-bold">
-                      <a href={`/weaving/looms?id=${l.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
+                      <a href={`/weaving/looms?id=${l.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
                         {l.id}
                       </a>
                     </td>

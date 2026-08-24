@@ -2,8 +2,12 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { WhatsAppModal } from "@/components/whatsapp-modal";
+import { Combobox } from "@/components/combobox";
+import { AutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
+import { DespatchAmountCalc, CountGridFiller } from "@/components/production-calc";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -25,7 +29,12 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toISOString().slice(11, 16);
+// Local wall-clock HH:MM — the previous toISOString() version reported UTC and
+// silently drifted by the browser's TZ offset (~5 hours in Pakistan).
+const nowTime = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
 function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
   const nums = rows
@@ -44,7 +53,7 @@ const COUNT_ROWS = 5;
 export default async function GreyDespatchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; pending?: string; contract?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -104,7 +113,139 @@ export default async function GreyDespatchPage({
   const metersById = new Map(meterSums.map((m) => [m.despatchId, m.meters]));
 
   const upcomingVNo = nextVNoFromRows(despatches, "IGD");
-  const upcomingLNo = despatches.length + 1;
+
+  // LV.No / L.No display = last saved max, read-only.
+  const lNoRow = await db
+    .select({ m: sql<number>`COALESCE(MAX(${schema.intGreyDespatch.lNo}),0)` })
+    .from(schema.intGreyDespatch);
+  const maxLNo = Number(lNoRow[0]?.m ?? 0);
+
+  // Parties (level>=4).
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+
+  // Running conv contracts + warp/weft rows for count-grid auto-populate.
+  const contracts = await db
+    .select()
+    .from(schema.intGreyConversionContract)
+    .where(eq(schema.intGreyConversionContract.status, "R"))
+    .orderBy(schema.intGreyConversionContract.contNo);
+  const contractOpts = contracts.map((c) => ({
+    value: c.contNo,
+    label: `${c.contNo} — ${c.party ?? ""}`,
+    desc: c.party ?? "",
+  }));
+  const contractFillMap: Record<string, Record<string, string | number | null>> = {};
+  const contractPartyMap: Record<string, string | null> = {};
+  for (const c of contracts) {
+    contractFillMap[c.contNo] = {
+      party: c.party ?? "",
+      do_party: c.party ?? "",
+      conv_rate: c.convRatePerMtr ?? 1, // Default conv rate = 1 when contract chosen.
+      design_no: c.designNo ?? "",
+      grey_code: c.grayCode ?? "",
+      width: c.width ?? "",
+      product_brand: c.productName ?? "",
+      loom_type: c.loomType ?? "",
+      ft_weave: c.weaveFrame ?? "",
+      gst_rate: 0,
+      ftx_rate: 0,
+    };
+    contractPartyMap[c.contNo] = c.party ?? null;
+  }
+  const warpRows = contracts.length
+    ? await db
+        .select()
+        .from(schema.intGreyConversionWarp)
+        .where(inArray(schema.intGreyConversionWarp.contractId, contracts.map((c) => c.id)))
+        .orderBy(schema.intGreyConversionWarp.contractId, schema.intGreyConversionWarp.srNo)
+    : [];
+  const weftRows = contracts.length
+    ? await db
+        .select()
+        .from(schema.intGreyConversionWeft)
+        .where(inArray(schema.intGreyConversionWeft.contractId, contracts.map((c) => c.id)))
+        .orderBy(schema.intGreyConversionWeft.contractId, schema.intGreyConversionWeft.srNo)
+    : [];
+  const contractRowsByContNo: Record<string, {
+    count?: string | null;
+    calCount?: number | null;
+    ends?: number | null;
+    ratePerLbs?: number | null;
+    wtPerMtr?: number | null;
+    costPerMtr?: number | null;
+  }[]> = {};
+  const idToContNo = new Map(contracts.map((c) => [c.id, c.contNo]));
+  const push = (r: typeof warpRows[number]) => {
+    const cn = idToContNo.get(r.contractId);
+    if (!cn) return;
+    (contractRowsByContNo[cn] ||= []).push({
+      count: r.count ?? null,
+      calCount: r.calCount ?? null,
+      ends: r.ends ?? null,
+      ratePerLbs: r.ratePerLbs ?? null,
+      wtPerMtr: r.wtPerMtr ?? null,
+      costPerMtr: r.costPerMtr ?? null,
+    });
+  };
+  for (const w of warpRows) push(w);
+  for (const w of weftRows) push(w);
+
+  // Prior distinct values → datalists.
+  const priorSup = await db
+    .selectDistinct({ v: schema.intGreyDespatch.supervisor })
+    .from(schema.intGreyDespatch)
+    .where(isNotNull(schema.intGreyDespatch.supervisor));
+  const priorVeh = await db
+    .selectDistinct({ v: schema.intGreyDespatch.vehicleNo })
+    .from(schema.intGreyDespatch)
+    .where(isNotNull(schema.intGreyDespatch.vehicleNo));
+  const priorDrv = await db
+    .selectDistinct({ v: schema.intGreyDespatch.driver })
+    .from(schema.intGreyDespatch)
+    .where(isNotNull(schema.intGreyDespatch.driver));
+  const priorGp = await db
+    .selectDistinct({ v: schema.intGreyDespatch.gpNo })
+    .from(schema.intGreyDespatch)
+    .where(isNotNull(schema.intGreyDespatch.gpNo));
+
+  // Pending thans panel: show for the selected contract on a saved voucher, or via ?pending=1&contract=.
+  const pendingContract =
+    (formItem?.convContNo && formItem.convContNo.trim()) ||
+    (params.pending === "1" ? params.contract?.trim() ?? "" : "");
+  const pendingParty = pendingContract ? contractPartyMap[pendingContract] ?? null : null;
+  const pendingThans = pendingParty
+    ? await db
+        .select({
+          mm: schema.intDailyProductionSet.mmThanSrNo,
+          totalCount: schema.intDailyProductionSet.totalCount,
+          beamNo: schema.intDailyProductionSet.beamNo,
+          setHash: schema.intDailyProductionSet.setHash,
+          vNo: schema.intDailyProduction.vNo,
+          vDate: schema.intDailyProduction.vDate,
+        })
+        .from(schema.intDailyProductionSet)
+        .innerJoin(
+          schema.intDailyProduction,
+          eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id)
+        )
+        .where(
+          and(
+            eq(schema.intDailyProduction.convContParty, pendingParty),
+            isNotNull(schema.intDailyProductionSet.mmThanSrNo),
+            or(
+              sql`${schema.intDailyProductionSet.dlvStatus} IS NULL`,
+              ne(schema.intDailyProductionSet.dlvStatus, "Y")
+            )
+          )
+        )
+        .orderBy(schema.intDailyProductionSet.mmThanSrNo)
+    : [];
+
 
   async function saveDespatch(formData: FormData) {
     "use server";
@@ -160,6 +301,77 @@ export default async function GreyDespatchPage({
       modifiedDate: new Date().toISOString(),
     };
 
+    // Collect line rows once so we can validate + drive than consumption below.
+    type LineIn = { i: number; tSrNo: string | null; a: number | null; b: number | null; c: number | null; cp: number | null; rej: number | null; lengthMtrs: number | null };
+    const inLines: LineIn[] = [];
+    for (let i = 1; i <= LINE_ROWS; i++) {
+      const raw = (formData.get(`line_t_sr_${i}`) as string | null)?.trim() ?? "";
+      const tSrNo = raw || null;
+      const a = num(formData.get(`line_a_${i}`));
+      const b = num(formData.get(`line_b_${i}`));
+      const c = num(formData.get(`line_c_${i}`));
+      const cp = num(formData.get(`line_cp_${i}`));
+      const rej = num(formData.get(`line_rej_${i}`));
+      const lengthMtrs = num(formData.get(`line_len_${i}`));
+      if (tSrNo || a !== null || b !== null || c !== null || cp !== null || rej !== null || lengthMtrs !== null) {
+        inLines.push({ i, tSrNo, a, b, c, cp, rej, lengthMtrs });
+      }
+    }
+    const filledLineCount = inLines.length;
+    const summedMtrs = inLines.reduce((acc, l) => acc + (l.lengthMtrs ?? 0), 0);
+    if (data.thanQty != null && Math.round((data.thanQty as number) * 100) !== Math.round(filledLineCount * 100)) {
+      const q = isUpdate ? `?id=${id}&error=than_count` : `?adding=1&error=than_count`;
+      redirect("/inventory/grey-despatch" + q);
+    }
+    if (data.thanQty != null && Math.round(summedMtrs * 100) === 0 && data.thanQty > 0) {
+      const q = isUpdate ? `?id=${id}&error=mtrs_zero` : `?adding=1&error=mtrs_zero`;
+      redirect("/inventory/grey-despatch" + q);
+    }
+    // Optional explicit qty_mtrs form field (from live calc) may override; otherwise use summedMtrs.
+    const declaredMtrs = num(formData.get("qty_mtrs_calc"));
+    if (declaredMtrs != null && Math.round(declaredMtrs * 100) !== Math.round(summedMtrs * 100)) {
+      const q = isUpdate ? `?id=${id}&error=mtrs_mismatch` : `?adding=1&error=mtrs_mismatch`;
+      redirect("/inventory/grey-despatch" + q);
+    }
+
+    const inputThanSerials = inLines.map((l) => l.tSrNo).filter((s): s is string => !!s);
+    const seenSerials = new Set<string>();
+    for (const s of inputThanSerials) {
+      if (seenSerials.has(s)) {
+        const q = isUpdate ? `?id=${id}&error=dup_than_line` : `?adding=1&error=dup_than_line`;
+        redirect("/inventory/grey-despatch" + q);
+      }
+      seenSerials.add(s);
+    }
+
+    // For UPDATE we need to know which serials THIS voucher previously consumed so we
+    // don't flag them as "used by another voucher". Fetch old lines up-front.
+    let previouslyConsumed: string[] = [];
+    if (isUpdate) {
+      const oldLines = await db
+        .select({ tSrNo: schema.intGreyDespatchLine.tSrNo })
+        .from(schema.intGreyDespatchLine)
+        .where(eq(schema.intGreyDespatchLine.despatchId, id));
+      previouslyConsumed = oldLines
+        .map((r) => (r.tSrNo as unknown as string | null))
+        .filter((s): s is string => !!s);
+    }
+    if (inputThanSerials.length) {
+      const existing = await db
+        .select({ mm: schema.intDailyProductionSet.mmThanSrNo, dlv: schema.intDailyProductionSet.dlvStatus })
+        .from(schema.intDailyProductionSet)
+        .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputThanSerials));
+      for (const row of existing) {
+        if (!row.mm) continue;
+        const isDelivered = row.dlv === "Y";
+        const ours = previouslyConsumed.includes(row.mm);
+        if (isDelivered && !ours) {
+          const q = isUpdate ? `?id=${id}&error=than_used` : `?adding=1&error=than_used`;
+          redirect("/inventory/grey-despatch" + q);
+        }
+      }
+    }
+
     let uniqueError = false;
     let savedId: number | null = null;
 
@@ -169,6 +381,13 @@ export default async function GreyDespatchPage({
         if (isUpdate) {
           await tx.update(schema.intGreyDespatch).set(data).where(eq(schema.intGreyDespatch.id, id));
           did = id;
+          // Reset dlvStatus for serials this voucher previously consumed before rewriting.
+          if (previouslyConsumed.length) {
+            await tx
+              .update(schema.intDailyProductionSet)
+              .set({ dlvStatus: null })
+              .where(inArray(schema.intDailyProductionSet.mmThanSrNo, previouslyConsumed));
+          }
           await tx.delete(schema.intGreyDespatchLine).where(eq(schema.intGreyDespatchLine.despatchId, did));
           await tx.delete(schema.intGreyDespatchUpdateCount).where(eq(schema.intGreyDespatchUpdateCount.despatchId, did));
         } else {
@@ -188,38 +407,31 @@ export default async function GreyDespatchPage({
         }
 
         const lineValues: (typeof schema.intGreyDespatchLine.$inferInsert)[] = [];
-        for (let i = 1; i <= LINE_ROWS; i++) {
-          const tSrNo = intVal(formData.get(`line_t_sr_${i}`));
-          const a = num(formData.get(`line_a_${i}`));
-          const b = num(formData.get(`line_b_${i}`));
-          const c = num(formData.get(`line_c_${i}`));
-          const cp = num(formData.get(`line_cp_${i}`));
-          const rej = num(formData.get(`line_rej_${i}`));
-          const lengthMtrs = num(formData.get(`line_len_${i}`));
-          if (
-            tSrNo !== null ||
-            a !== null ||
-            b !== null ||
-            c !== null ||
-            cp !== null ||
-            rej !== null ||
-            lengthMtrs !== null
-          ) {
-            lineValues.push({
-              despatchId: did,
-              srNo: i,
-              tSrNo,
-              a,
-              b,
-              c,
-              cp,
-              rej,
-              cpRej: cp != null || rej != null ? (cp ?? 0) + (rej ?? 0) : null,
-              lengthMtrs,
-            });
-          }
+        for (const l of inLines) {
+          lineValues.push({
+            despatchId: did,
+            srNo: l.i,
+            // SQLite has dynamic type affinity; we intentionally store the full mm/Than
+            // Sr No text here so `dlvStatus` can be matched precisely.
+            tSrNo: (l.tSrNo as unknown) as number | null,
+            a: l.a,
+            b: l.b,
+            c: l.c,
+            cp: l.cp,
+            rej: l.rej,
+            cpRej: l.cp != null || l.rej != null ? (l.cp ?? 0) + (l.rej ?? 0) : null,
+            lengthMtrs: l.lengthMtrs,
+          });
         }
         if (lineValues.length) await tx.insert(schema.intGreyDespatchLine).values(lineValues);
+
+        // Mark than serials as delivered.
+        if (inputThanSerials.length) {
+          await tx
+            .update(schema.intDailyProductionSet)
+            .set({ dlvStatus: "Y" })
+            .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputThanSerials));
+        }
 
         const countValues: (typeof schema.intGreyDespatchUpdateCount.$inferInsert)[] = [];
         for (let i = 1; i <= COUNT_ROWS; i++) {
@@ -292,6 +504,20 @@ export default async function GreyDespatchPage({
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
+      // Reset dlvStatus for any thans this voucher consumed.
+      const oldLines = await tx
+        .select({ tSrNo: schema.intGreyDespatchLine.tSrNo })
+        .from(schema.intGreyDespatchLine)
+        .where(eq(schema.intGreyDespatchLine.despatchId, id));
+      const serials = oldLines
+        .map((r) => (r.tSrNo as unknown as string | null))
+        .filter((s): s is string => !!s);
+      if (serials.length) {
+        await tx
+          .update(schema.intDailyProductionSet)
+          .set({ dlvStatus: null })
+          .where(inArray(schema.intDailyProductionSet.mmThanSrNo, serials));
+      }
       await tx.delete(schema.intGreyDespatchLine).where(eq(schema.intGreyDespatchLine.despatchId, id));
       await tx.delete(schema.intGreyDespatchUpdateCount).where(eq(schema.intGreyDespatchUpdateCount.despatchId, id));
       await tx.delete(schema.intGreyDespatch).where(eq(schema.intGreyDespatch.id, id));
@@ -374,8 +600,79 @@ export default async function GreyDespatchPage({
             V.No already exists. Try again.
           </div>
         )}
+        {params.error === "than_used" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            One of the entered mm/Than Sr No values is already delivered on another despatch.
+          </div>
+        )}
+        {params.error === "than_count" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Than/Qty must equal the number of filled line rows.
+          </div>
+        )}
+        {params.error === "mtrs_zero" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Line lengths sum to zero — enter Length (Mtrs) on the line rows.
+          </div>
+        )}
+        {params.error === "mtrs_mismatch" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            qty (Mtrs) does not equal Σ line lengths.
+          </div>
+        )}
+        {params.error === "dup_than_line" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Duplicate mm/Than Sr No entered in line grid.
+          </div>
+        )}
 
         <form id="gd-find-form" method="GET" action="/inventory/grey-despatch" className="hidden"></form>
+
+        {pendingContract && (
+          <div className="border border-black mb-6">
+            <div className="flex items-center justify-between px-4 py-2 border-b-2 border-black bg-gray-50">
+              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
+                Pending Thans — contract {pendingContract} · party {pendingParty ?? "-"}
+              </div>
+              <div className="text-[10px] text-[var(--muted)] mono">
+                {pendingThans.length} pending. Copy the mm/Than Sr No values into the line grid&apos;s T.Sr# column.
+              </div>
+            </div>
+            <div className="overflow-x-auto" style={{ maxHeight: "30vh", overflowY: "auto" }}>
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-yellow-50">
+                    <th className="px-2 py-1 border-b border-black">mm/Than Sr No</th>
+                    <th className="px-2 py-1 border-b border-black text-right">Total</th>
+                    <th className="px-2 py-1 border-b border-black">Beam#</th>
+                    <th className="px-2 py-1 border-b border-black">Set#</th>
+                    <th className="px-2 py-1 border-b border-black">Prod V.No</th>
+                    <th className="px-2 py-1 border-b border-black">Prod Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingThans.map((p) => (
+                    <tr key={p.mm ?? ""}>
+                      <td className="px-2 py-0.5 mono font-bold">{p.mm}</td>
+                      <td className="px-2 py-0.5 mono text-right">{p.totalCount ?? "-"}</td>
+                      <td className="px-2 py-0.5 mono">{p.beamNo ?? "-"}</td>
+                      <td className="px-2 py-0.5 mono">{p.setHash ?? "-"}</td>
+                      <td className="px-2 py-0.5 mono">{p.vNo}</td>
+                      <td className="px-2 py-0.5 mono">{p.vDate}</td>
+                    </tr>
+                  ))}
+                  {pendingThans.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center text-[12px] text-[var(--muted)] py-4">
+                        No pending thans for this contract&apos;s party.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="border border-black p-5 mb-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -394,7 +691,7 @@ export default async function GreyDespatchPage({
               {formItem && (
                 <form action={deleteDespatch} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message={`Delete despatch ${formItem.vNo}? This releases its consumed than serials.`}>Delete</ConfirmButton>
                 </form>
               )}
             </div>
@@ -402,6 +699,43 @@ export default async function GreyDespatchPage({
 
           <form id="gd-save-form" action={saveDespatch}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
+            <DespatchAmountCalc countRows={COUNT_ROWS} lineRows={LINE_ROWS} />
+            <CountGridFiller contractRows={contractRowsByContNo} rows={COUNT_ROWS} />
+            <AutoFill
+              watch="conv_cont_no"
+              map={contractFillMap}
+              combos={["party", "do_party"]}
+              inputs={["conv_rate", "design_no", "grey_code", "width", "product_brand", "loom_type", "ft_weave", "gst_rate", "ftx_rate"]}
+            />
+            <input type="hidden" name="qty_mtrs_calc" defaultValue="" />
+            <input type="hidden" name="than_qty_calc" defaultValue="" />
+            <datalist id="thans-list">
+              {pendingThans.map((t) => (
+                <option key={t.mm ?? ""} value={t.mm ?? ""}>
+                  {t.beamNo ?? ""} · {t.totalCount ?? 0}m · {t.vNo}
+                </option>
+              ))}
+            </datalist>
+            <datalist id="supervisors-list">
+              {priorSup.map((r) => (
+                <option key={r.v ?? ""} value={r.v ?? ""} />
+              ))}
+            </datalist>
+            <datalist id="vehicles-list">
+              {priorVeh.map((r) => (
+                <option key={r.v ?? ""} value={r.v ?? ""} />
+              ))}
+            </datalist>
+            <datalist id="drivers-list">
+              {priorDrv.map((r) => (
+                <option key={r.v ?? ""} value={r.v ?? ""} />
+              ))}
+            </datalist>
+            <datalist id="gp-list">
+              {priorGp.map((r) => (
+                <option key={r.v ?? ""} value={r.v ?? ""} />
+              ))}
+            </datalist>
 
             <div className="grid grid-cols-12 gap-3 mb-4">
               <div className="col-span-2">
@@ -418,7 +752,7 @@ export default async function GreyDespatchPage({
               </div>
               <div className="col-span-1">
                 <label className="label block mb-1">LNo</label>
-                <input name="l_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lNo ?? upcomingLNo} readOnly />
+                <input name="l_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lNo ?? maxLNo} readOnly tabIndex={-1} />
               </div>
               <div className="col-span-1 flex items-end">
                 <button type="button" className="btn btn-outline btn-sm w-full" title="Clear OK">OK</button>
@@ -482,7 +816,7 @@ export default async function GreyDespatchPage({
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_t_sr_${i}`} type="number" step="1" className={gCls} defaultValue={r?.tSrNo ?? ""} />
+                              <input name={`line_t_sr_${i}`} type="text" list="thans-list" className={gCls} defaultValue={(r?.tSrNo as unknown as string) ?? ""} />
                             </td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                               <input name={`line_a_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.a ?? ""} />
@@ -533,7 +867,13 @@ export default async function GreyDespatchPage({
                     <label className="label block mb-1">
                       Conv.Cont No <span className="text-[9px] text-[var(--muted)]">F9</span>
                     </label>
-                    <input name="conv_cont_no" className="input-box mono text-[12px]" defaultValue={formItem?.convContNo ?? ""} />
+                    <Combobox
+                      name="conv_cont_no"
+                      options={contractOpts}
+                      defaultValue={formItem?.convContNo ?? ""}
+                      placeholder="Select conv contract"
+                      className="input-box mono text-[12px]"
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -556,11 +896,11 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="label block mb-1">Party</label>
-                    <input name="party" className="input-box mono text-[12px]" defaultValue={formItem?.party ?? ""} />
+                    <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
                   </div>
                   <div>
                     <label className="label block mb-1">Do Party</label>
-                    <input name="do_party" className="input-box mono text-[12px]" defaultValue={formItem?.doParty ?? ""} />
+                    <Combobox name="do_party" options={partyOpts} defaultValue={formItem?.doParty ?? ""} placeholder="Select do party" className="input-box mono text-[12px]" />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
@@ -574,29 +914,39 @@ export default async function GreyDespatchPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Amnt</label>
-                    <input name="amnt" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.amnt ?? ""} />
+                    <input name="amnt" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.amnt ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div>
-                    <label className="label block mb-1">GST</label>
-                    <input name="gst" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.gst ?? ""} />
+                    <label className="label block mb-1">GST %</label>
+                    <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   <div>
-                    <label className="label block mb-1">Further</label>
-                    <input name="further" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.further ?? ""} />
+                    <label className="label block mb-1">Ftx %</label>
+                    <input name="ftx_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
                   </div>
                   <div>
+                    <label className="label block mb-1">GST</label>
+                    <input name="gst" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.gst ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Further</label>
+                    <input name="further" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.further ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Amt Tot</label>
+                    <input name="amt_tot" type="number" step="any" className="input-box mono text-right text-[12px] bg-red-50" defaultValue={formItem?.amtTot ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
                     <label className="label block mb-1">GP No</label>
-                    <input name="gp_no" className="input-box mono text-[12px]" defaultValue={formItem?.gpNo ?? ""} />
+                    <input name="gp_no" list="gp-list" className="input-box mono text-[12px]" defaultValue={formItem?.gpNo ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">GP Date</label>
                     <input name="gp_date" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.gpDate ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Amt Tot</label>
-                    <input name="amt_tot" type="number" step="any" className="input-box mono text-right text-[12px] bg-red-50" defaultValue={formItem?.amtTot ?? ""} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -636,15 +986,15 @@ export default async function GreyDespatchPage({
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Supervisor</label>
-                <input name="supervisor" className="input-box mono text-[12px]" defaultValue={formItem?.supervisor ?? ""} />
+                <input name="supervisor" list="supervisors-list" className="input-box mono text-[12px]" defaultValue={formItem?.supervisor ?? ""} />
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Vehicle No</label>
-                <input name="vehicle_no" className="input-box mono text-[12px]" defaultValue={formItem?.vehicleNo ?? ""} />
+                <input name="vehicle_no" list="vehicles-list" className="input-box mono text-[12px]" defaultValue={formItem?.vehicleNo ?? ""} />
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Driver</label>
-                <input name="driver" className="input-box mono text-[12px]" defaultValue={formItem?.driver ?? ""} />
+                <input name="driver" list="drivers-list" className="input-box mono text-[12px]" defaultValue={formItem?.driver ?? ""} />
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Trans Adda</label>
@@ -750,7 +1100,7 @@ export default async function GreyDespatchPage({
                             <input name={`uc_cost_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.costPerMtr ?? ""} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                            <input name={`uc_tot_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.totLbs ?? ""} />
+                            <input name={`uc_tot_${i}`} type="number" step="any" className={`${gCellNum} bg-gray-100`} defaultValue={r?.totLbs ?? ""} readOnly tabIndex={-1} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                             <input name={`uc_amt_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.amount ?? ""} />

@@ -2,9 +2,12 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
+import { RowAutoFill } from "@/components/auto-fill";
+import { ConfirmButton } from "@/components/confirm-button";
 import { JvBalanceBar } from "./balance-bar";
 import { db, schema } from "@/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, gte } from "drizzle-orm";
+import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -53,6 +56,9 @@ type ParsedLine = {
 async function saveVoucher(formData: FormData) {
   "use server";
 
+  const session = await getSession();
+  const utCode = session?.userId ?? null;
+
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   const editing = Number.isFinite(id) && id > 0;
@@ -84,7 +90,8 @@ async function saveVoucher(formData: FormData) {
       description: schema.chartOfAccounts.description,
       descShort: schema.chartOfAccounts.descShort,
     })
-    .from(schema.chartOfAccounts);
+    .from(schema.chartOfAccounts)
+    .where(gte(schema.chartOfAccounts.level, 4));
   const byCode = new Map<string, string>();
   const byShort = new Map<string, string>();
   const byDesc = new Map<string, string>();
@@ -187,6 +194,8 @@ async function saveVoucher(formData: FormData) {
     redirect(`/finance/jv?${ctx}&error=unbalanced`);
   }
 
+  const partyCode = lines[0].accCode;
+
   const header = {
     vdate: txt(formData.get("v_date")) ?? today(),
     narration: txt(formData.get("narration")),
@@ -194,6 +203,7 @@ async function saveVoucher(formData: FormData) {
     expDate: txt(formData.get("exp_date")),
     trnType: txt(formData.get("trn_type")),
     balanceAmount: sumDr,
+    utCode,
   };
 
   const nowIso = new Date().toISOString();
@@ -224,6 +234,7 @@ async function saveVoucher(formData: FormData) {
           vno,
           srno: l.srno,
           accCode: l.accCode,
+          partyCode,
           ccCode: l.ccCode,
           narration: l.narration,
           debit: l.debit,
@@ -273,6 +284,7 @@ async function saveVoucher(formData: FormData) {
           vno,
           srno: l.srno,
           accCode: l.accCode,
+          partyCode,
           ccCode: l.ccCode,
           narration: l.narration,
           debit: l.debit,
@@ -304,6 +316,11 @@ async function deleteVoucher(formData: FormData) {
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
 
+  const session = await getSession();
+  if (session?.roleName !== "ADMIN") {
+    redirect(`/finance/jv?id=${id}&error=forbidden`);
+  }
+
   const rows = await db
     .select()
     .from(schema.transMain)
@@ -329,6 +346,40 @@ async function deleteVoucher(formData: FormData) {
   redirect("/finance/jv");
 }
 
+async function setOkStatus(formData: FormData, value: string | null) {
+  const id = parseInt(formData.get("id") as string, 10);
+  if (!Number.isFinite(id)) return;
+  const rows = await db
+    .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })
+    .from(schema.transMain)
+    .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)))
+    .limit(1);
+  const main = rows[0];
+  if (!main) redirect("/finance/jv");
+  await db
+    .update(schema.transDetail)
+    .set({ statusOk: value })
+    .where(
+      and(
+        eq(schema.transDetail.fyCode, main.fyCode),
+        eq(schema.transDetail.vtype, VTYPE),
+        eq(schema.transDetail.vno, main.vno),
+      ),
+    );
+  revalidatePath("/finance/jv");
+  redirect(`/finance/jv?id=${id}`);
+}
+
+async function markOk(formData: FormData) {
+  "use server";
+  await setOkStatus(formData, "Y");
+}
+
+async function clearOk(formData: FormData) {
+  "use server";
+  await setOkStatus(formData, null);
+}
+
 const ERROR_MESSAGES: Record<string, string> = {
   unbalanced:
     "Debit and Credit totals do not match. A journal voucher must balance before it can be saved.",
@@ -336,6 +387,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   incomplete:
     "Need at least two lines, every line with an amount must have an account, and totals must be greater than zero.",
   no_fy: "No current fiscal year set in Company Profile. Cannot save vouchers.",
+  forbidden: "Only ADMIN can delete vouchers.",
 };
 
 export default async function JournalVoucherPage({
@@ -356,6 +408,8 @@ export default async function JournalVoucherPage({
   const escFind = findFilter ? escapeLike(findFilter) : "";
   const pat = escFind ? `%${escFind}%` : "";
 
+  const session = await getSession();
+
   const profile = await db
     .select({ currentFy: schema.companyProfile.currentFy })
     .from(schema.companyProfile)
@@ -367,10 +421,29 @@ export default async function JournalVoucherPage({
       code: schema.chartOfAccounts.code,
       description: schema.chartOfAccounts.description,
       descShort: schema.chartOfAccounts.descShort,
+      level: schema.chartOfAccounts.level,
     })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
   const accByCode = new Map(accounts.map((a) => [a.code, a]));
+  const pickerAccounts = accounts.filter((a) => a.level >= 4);
+  const titleMap: Record<string, { title: string }> = {};
+  for (const a of pickerAccounts) {
+    titleMap[a.code] = { title: a.description };
+    if (a.descShort && !titleMap[a.descShort]) titleMap[a.descShort] = { title: a.description };
+  }
+
+  const contractNos = Array.from(
+    new Set(
+      [
+        ...(await db.select({ c: schema.extYarnPurContract.contNo }).from(schema.extYarnPurContract)).map((r) => r.c),
+        ...(await db.select({ c: schema.extYarnSalContract.contNo }).from(schema.extYarnSalContract)).map((r) => r.c),
+        ...(await db.select({ c: schema.extGreyPurContract.contractNo }).from(schema.extGreyPurContract)).map((r) => r.c),
+        ...(await db.select({ c: schema.extGreySalContract.contractNo }).from(schema.extGreySalContract)).map((r) => r.c),
+        ...(await db.select({ c: schema.extGreyConvContract.contNo }).from(schema.extGreyConvContract)).map((r) => r.c),
+      ].filter(Boolean),
+    ),
+  ).sort();
 
   const ccList = await db
     .select({
@@ -464,7 +537,7 @@ export default async function JournalVoucherPage({
 
   const showForm = !!formMain || isAdding;
   const rowsToShow = Math.max(LINE_ROWS, detailLines.length + 2);
-  const lvDisplay = formMain ? jvCount : jvCount + 1;
+  const lvDisplay = maxVnoRows[0]?.m ?? 0;
 
   const fmt = (n?: number | null) =>
     n == null
@@ -523,19 +596,24 @@ export default async function JournalVoucherPage({
         )}
 
         <datalist id="jv-acc-short">
-          {accounts
+          {pickerAccounts
             .filter((a) => a.descShort)
             .map((a) => (
               <option key={a.code} value={a.descShort as string}>
                 {a.code} — {a.description}
               </option>
             ))}
+          {pickerAccounts
+            .filter((a) => !a.descShort)
+            .map((a) => (
+              <option key={a.code} value={a.code}>
+                {a.description}
+              </option>
+            ))}
         </datalist>
-        <datalist id="jv-acc-title">
-          {accounts.map((a) => (
-            <option key={a.code} value={a.description}>
-              {a.code}
-            </option>
+        <datalist id="jv-contracts">
+          {contractNos.map((c) => (
+            <option key={c} value={c} />
           ))}
         </datalist>
         <datalist id="jv-costcenters">
@@ -545,6 +623,7 @@ export default async function JournalVoucherPage({
             </option>
           ))}
         </datalist>
+        <RowAutoFill watch="short_name" map={titleMap} />
 
         <form
           id="jv-find-form"
@@ -572,12 +651,12 @@ export default async function JournalVoucherPage({
                 </button>
               )}
               <PrintButton label="Print" />
-              {formMain && (
+              {formMain && session?.roleName === "ADMIN" && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formMain.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
+                  <ConfirmButton message="Delete this voucher? This cannot be undone.">
                     Delete
-                  </button>
+                  </ConfirmButton>
                 </form>
               )}
               <a href="/finance/jv" className="btn btn-outline btn-sm">
@@ -612,14 +691,33 @@ export default async function JournalVoucherPage({
                     tabIndex={-1}
                   />
                 </div>
-                <div className="lg:col-span-2 flex items-end">
-                  <a
-                    href="/finance/jv?adding=1"
-                    className="btn btn-outline btn-sm w-full"
-                    title="Clear and start a new voucher"
-                  >
-                    Clear-OK
-                  </a>
+                <div className="lg:col-span-2 flex items-end gap-2">
+                  {formMain ? (
+                    <>
+                      <button
+                        formAction={markOk}
+                        className="btn btn-outline btn-sm flex-1"
+                        title="Mark all lines OK"
+                      >
+                        OK
+                      </button>
+                      <button
+                        formAction={clearOk}
+                        className="btn btn-outline btn-sm flex-1"
+                        title="Clear OK on all lines"
+                      >
+                        Clear-OK
+                      </button>
+                    </>
+                  ) : (
+                    <a
+                      href="/finance/jv?adding=1"
+                      className="btn btn-outline btn-sm w-full"
+                      title="Clear and start a new voucher"
+                    >
+                      Clear-OK
+                    </a>
+                  )}
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">V. No</label>
@@ -750,15 +848,16 @@ export default async function JournalVoucherPage({
                             <td>
                               <input
                                 name="title"
-                                list="jv-acc-title"
-                                className={cell}
+                                className={cell + " bg-gray-50"}
                                 defaultValue={
                                   acc?.description ?? l?.accCode ?? ""
                                 }
+                                readOnly
+                                tabIndex={-1}
                               />
                             </td>
                             <td className="text-center text-[10px] text-[var(--muted)]">
-                              OK
+                              {l?.statusOk === "Y" ? "✓" : ""}
                             </td>
                             <td>
                               <input
@@ -785,6 +884,7 @@ export default async function JournalVoucherPage({
                             <td>
                               <input
                                 name="cont_no"
+                                list="jv-contracts"
                                 className={cell}
                                 defaultValue={l?.contNo ?? ""}
                               />

@@ -1,6 +1,11 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoFill } from "@/components/auto-fill";
+import { TermSelect } from "@/components/term-select";
+import { ConfirmButton } from "@/components/confirm-button";
+import { GodownCalc } from "@/components/godown-calc";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -28,7 +33,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const today = () => new Date().toISOString().slice(0, 10);
 
 const TYPE_OPTIONS = ["STOCK", "OTHERS"];
-const TERM_OPTIONS = ["", "CASH", "CREDIT"];
 const STATUS_OPTIONS = ["", "OK", "REJ"];
 const EL_METER_MODE_OPTIONS = ["", "1/5", "1/10"];
 const CONV_GREY_TYPES = ["", "CONV", "GREY"];
@@ -88,9 +92,98 @@ export default async function GodownStockPage({
     : [];
 
   const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
+
+  const partyAccounts = parties.filter((p) => p.level >= 4);
+  const partyOpts = partyAccounts.map((p) => ({
+    value: p.description,
+    label: `${p.code} — ${p.description}`,
+    desc: p.code,
+  }));
+  const godownParty =
+    partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+
+  const convContracts = await db
+    .select()
+    .from(schema.extGreyConvContract)
+    .orderBy(desc(schema.extGreyConvContract.id));
+  const constructions = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction);
+  const qualityByCode: Record<string, string> = Object.fromEntries(
+    constructions.map((c) => [c.code, c.description])
+  );
+  const contractOpts = convContracts.map((c) => ({
+    value: c.contNo,
+    label: `${c.contNo} — ${c.party ?? ""}`,
+  }));
+  const contractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    convContracts.map((c) => [
+      c.contNo,
+      {
+        rate_conversion: c.rateMtr ?? c.convRatePerMtr,
+        contact_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
+      },
+    ])
+  );
+
+  const purContracts = await db
+    .select({ contractNo: schema.extGreyPurContract.contractNo, party: schema.extGreyPurContract.party })
+    .from(schema.extGreyPurContract)
+    .orderBy(desc(schema.extGreyPurContract.id));
+  const purOpts = purContracts.map((c) => ({
+    value: c.contractNo,
+    label: `${c.contractNo} — ${c.party ?? ""}`,
+  }));
+  const salContracts = await db
+    .select({ contractNo: schema.extGreySalContract.contractNo, party: schema.extGreySalContract.party })
+    .from(schema.extGreySalContract)
+    .orderBy(desc(schema.extGreySalContract.id));
+  const salOpts = salContracts.map((c) => ({
+    value: c.contractNo,
+    label: `${c.contractNo} — ${c.party ?? ""}`,
+  }));
+
+  const warpRows = await db
+    .select()
+    .from(schema.extGreyConvWarp)
+    .orderBy(schema.extGreyConvWarp.contractId, schema.extGreyConvWarp.srNo);
+  const weftRows = await db
+    .select()
+    .from(schema.extGreyConvWeft)
+    .orderBy(schema.extGreyConvWeft.contractId, schema.extGreyConvWeft.srNo);
+  const contNoById = new Map(convContracts.map((c) => [c.id, c.contNo]));
+  type CountFill = {
+    code: string | null;
+    type: string;
+    calCount: number | null;
+    ends: number | null;
+    ratePerLbs: number | null;
+    wtPerMtr: number | null;
+    costPerMtr: number | null;
+  };
+  const countMap: Record<string, CountFill[]> = {};
+  const pushCount = (contractId: number, cType: string, r: typeof warpRows[number]) => {
+    const key = contNoById.get(contractId);
+    if (!key) return;
+    (countMap[key] ??= []).push({
+      code: r.count,
+      type: cType,
+      calCount: r.calCount,
+      ends: r.ends,
+      ratePerLbs: r.ratePerLbs,
+      wtPerMtr: r.wtPerMtr,
+      costPerMtr: r.costPerMtr,
+    });
+  };
+  for (const w of warpRows) pushCount(w.contractId, "WARP", w);
+  for (const w of weftRows) pushCount(w.contractId, "WEFT", w);
 
   const nextVNoVal = await db
     .select({
@@ -98,7 +191,13 @@ export default async function GodownStockPage({
     })
     .from(schema.extGodownStock);
   const upcomingVNo = "GDN-" + String((nextVNoVal[0]?.m ?? 0) + 1).padStart(4, "0");
-  const upcomingLvNo = stocks.length + 1;
+  const upcomingKpNo = String((nextVNoVal[0]?.m ?? 0) + 1);
+  const upcomingLvNo = stocks.reduce((m, s) => Math.max(m, s.lvNo ?? 0), 0);
+
+  const lastLvRow = await db
+    .select({ m: sql<number>`coalesce(max(${schema.extGodownStock.lvNo}), 0)` })
+    .from(schema.extGodownStock);
+  const lastLvNo = lastLvRow[0]?.m ?? 0;
 
   async function saveStock(formData: FormData) {
     "use server";
@@ -121,12 +220,12 @@ export default async function GodownStockPage({
     const kamiMtr = num(formData.get("kami_mtr"));
     const rateConversion = num(formData.get("rate_conversion"));
     const term = txt(formData.get("term"));
+    const dueDate = term === "DUE" ? txt(formData.get("due_date")) : null;
     const days = intVal(formData.get("days"));
     const rateSal = num(formData.get("rate_sal"));
     const salContNo = txt(formData.get("sal_cont_no"));
     const greySaleCont = txt(formData.get("grey_sale_cont"));
     const kaatPercent = num(formData.get("kaat_percent"));
-    const elMeter = num(formData.get("el_meter"));
     const elMeterMode = txt(formData.get("el_meter_mode"));
     const checkery = num(formData.get("checkery"));
     const commission = num(formData.get("commission"));
@@ -138,14 +237,21 @@ export default async function GodownStockPage({
     const rate = num(formData.get("rate"));
     const salAvgRate = num(formData.get("sal_avg_rate"));
 
+    if (!than || !meter) {
+      redirect(`/external/grey/godown-stock?error=qty_required`);
+    }
+
     const meterVal = meter ?? 0;
-    const kaatVal = kaatPercent ?? 0;
-    const netMeter = meterVal - kaatVal;
-    const checkeryVal = checkery ?? 0;
-    const commissionVal = commission ?? 0;
-    const rateConvVal = rateConversion ?? 0;
-    const total = netMeter * rateConvVal + checkeryVal + commissionVal;
-    const balance = total;
+    const elMeter = Math.round(
+      (meterVal * (elCumiNum ?? 0)) / ((elCumiDen ?? 0) === 5 ? 400 : 800)
+    );
+    const netMeter = meterVal - elMeter - (kamiMtr ?? 0);
+    const rateVal = rate ?? 0;
+    const kaatAmt = Math.round((netMeter / 40) * (kaatPercent ?? 0));
+    const checkeryAmt = Math.round(netMeter * (checkery ?? 0));
+    const commissionAmt = Math.round((netMeter * rateVal * (commission ?? 0)) / 100);
+    const total = Math.round(netMeter * rateVal);
+    const balance = total - (kaatAmt + checkeryAmt + commissionAmt);
 
     const lineThans = formData.getAll("line_than") as string[];
     const lineMtrs = formData.getAll("line_mtr") as string[];
@@ -223,7 +329,7 @@ export default async function GodownStockPage({
           .update(schema.extGodownStock)
           .set({
             vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo, contactQuality, dspQuality,
-            than, meter, elCumiNum, elCumiDen, kamiMtr, rateConversion, term, days, rateSal, salContNo,
+            than, meter, elCumiNum, elCumiDen, kamiMtr, rateConversion, term, dueDate, days, rateSal, salContNo,
             greySaleCont, kaatPercent, elMeter, elMeterMode, netMeter, checkery, commission, total, balance,
             printingName, brokerName, remarks, imgHash, convGreyType, rate, salAvgRate,
             modifiedDate: nowIso,
@@ -255,15 +361,17 @@ export default async function GodownStockPage({
             .from(schema.extGodownStock);
           const maxN = existingRows[0]?.m ?? 0;
           const vNo = "GDN-" + String(maxN + 1).padStart(4, "0");
-          const cntAll = await tx.select({ c: sql<number>`count(*)` }).from(schema.extGodownStock);
-          const nextL = (cntAll[0]?.c ?? 0) + 1;
+          const lvRow = await tx
+            .select({ m: sql<number>`coalesce(max(${schema.extGodownStock.lvNo}), 0)` })
+            .from(schema.extGodownStock);
+          const nextL = (lvRow[0]?.m ?? 0) + 1;
 
           const inserted = await tx
             .insert(schema.extGodownStock)
             .values({
               vNo, lvNo: nextL, vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo,
               contactQuality, dspQuality, than, meter, elCumiNum, elCumiDen, kamiMtr, rateConversion,
-              term, days, rateSal, salContNo, greySaleCont, kaatPercent, elMeter, elMeterMode, netMeter,
+              term, dueDate, days, rateSal, salContNo, greySaleCont, kaatPercent, elMeter, elMeterMode, netMeter,
               checkery, commission, total, balance, printingName, brokerName, remarks, imgHash,
               convGreyType, rate, salAvgRate, postedDate: nowIso,
             })
@@ -307,6 +415,30 @@ export default async function GodownStockPage({
     });
     revalidatePath("/external/grey/godown-stock");
     redirect("/external/grey/godown-stock");
+  }
+
+  async function setStatusOk(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string, 10);
+    if (!Number.isFinite(id) || id <= 0) return;
+    await db
+      .update(schema.extGodownStock)
+      .set({ statusOk: "OK" })
+      .where(eq(schema.extGodownStock.id, id));
+    revalidatePath("/external/grey/godown-stock");
+    redirect(`/external/grey/godown-stock?id=${id}`);
+  }
+
+  async function clearStatusOk(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string, 10);
+    if (!Number.isFinite(id) || id <= 0) return;
+    await db
+      .update(schema.extGodownStock)
+      .set({ statusOk: null })
+      .where(eq(schema.extGodownStock.id, id));
+    revalidatePath("/external/grey/godown-stock");
+    redirect(`/external/grey/godown-stock?id=${id}`);
   }
 
   const lineGridRows: (typeof lines[number] | null)[] = Array.from(
@@ -372,14 +504,11 @@ export default async function GodownStockPage({
             V.No already exists. Try again.
           </div>
         )}
-
-        <datalist id="gdn-parties">
-          {parties.map((p) => (
-            <option key={p.code} value={p.description}>
-              {p.code}
-            </option>
-          ))}
-        </datalist>
+        {params.error === "qty_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Than and Meter are required.
+          </div>
+        )}
 
         <form id="gdn-find-form" method="GET" action="/external/grey/godown-stock" className="hidden"></form>
 
@@ -412,9 +541,7 @@ export default async function GodownStockPage({
                   {formStock && (
                     <form action={deleteStock} className="inline">
                       <input type="hidden" name="id" value={formStock.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">
-                        Delete
-                      </button>
+                      <ConfirmButton>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>
@@ -436,7 +563,7 @@ export default async function GodownStockPage({
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">KP No</label>
-                    <input name="kp_no" className="input-box mono" defaultValue={formStock?.kpNo ?? ""} />
+                    <input name="kp_no" className="input-box mono" defaultValue={formStock?.kpNo ?? (isAdding ? upcomingKpNo : "")} />
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">Type</label>
@@ -471,19 +598,33 @@ export default async function GodownStockPage({
 
                   <div className="col-span-5">
                     <label className="label block mb-1">Purchase Party</label>
-                    <div className="grid grid-cols-[100px_1fr] gap-2">
-                      <input name="purchase_party_code" className="input-box mono" placeholder="Code" />
-                      <input
-                        name="purchase_party"
-                        list="gdn-parties"
-                        className="input-box mono"
-                        placeholder="Description"
-                        defaultValue={formStock?.purchaseParty ?? ""}
-                      />
-                    </div>
+                    <Combobox
+                      name="purchase_party"
+                      options={partyOpts}
+                      defaultValue={formStock?.purchaseParty ?? ""}
+                      placeholder="Select party…"
+                    />
                   </div>
-                  <div className="col-span-2 flex items-end">
-                    <button type="button" className="btn btn-outline btn-sm w-full">Clear-OK</button>
+                  <div className="col-span-2 flex flex-col items-stretch">
+                    <label className="label block mb-1">
+                      Status{" "}
+                      <span
+                        className={`mono text-[10px] px-1 ${
+                          formStock?.statusOk === "OK"
+                            ? "bg-green-100 border border-green-600 text-green-700"
+                            : "text-[var(--muted)]"
+                        }`}
+                      >
+                        {formStock?.statusOk ?? "—"}
+                      </span>
+                    </label>
+                    <button
+                      formAction={clearStatusOk}
+                      className="btn btn-outline btn-sm w-full"
+                      disabled={!formStock}
+                    >
+                      Clear-OK
+                    </button>
                   </div>
                   <div className="col-span-5">
                     <label className="label block mb-1">Pending Finance No</label>
@@ -492,25 +633,36 @@ export default async function GodownStockPage({
 
                   <div className="col-span-12">
                     <label className="label block mb-1">Gdn Party</label>
-                    <div className="grid grid-cols-[100px_1fr] gap-2">
-                      <input name="gdn_party_code" className="input-box mono" placeholder="Code" />
-                      <input
-                        name="gdn_party"
-                        list="gdn-parties"
-                        className="input-box mono"
-                        placeholder="Description"
-                        defaultValue={formStock?.gdnParty ?? ""}
-                      />
-                    </div>
+                    <Combobox
+                      name="gdn_party"
+                      options={partyOpts}
+                      defaultValue={formStock?.gdnParty ?? ""}
+                      placeholder="Select party…"
+                    />
                   </div>
 
                   <div className="col-span-6">
                     <label className="label block mb-1">Cont #</label>
-                    <input name="cont_no" className="input-box mono" defaultValue={formStock?.contNo ?? ""} />
+                    <Combobox
+                      name="cont_no"
+                      options={contractOpts}
+                      defaultValue={formStock?.contNo ?? ""}
+                      placeholder="Contract #…"
+                    />
+                    <AutoFill
+                      watch="cont_no"
+                      map={contractMap}
+                      inputs={["rate_conversion", "contact_quality"]}
+                    />
                   </div>
                   <div className="col-span-6">
                     <label className="label block mb-1">Pur Cont #</label>
-                    <input name="pur_cont_no" className="input-box mono" defaultValue={formStock?.purContNo ?? ""} />
+                    <Combobox
+                      name="pur_cont_no"
+                      options={purOpts}
+                      defaultValue={formStock?.purContNo ?? ""}
+                      placeholder="Pur contract #…"
+                    />
                   </div>
 
                   <div className="col-span-12">
@@ -548,14 +700,10 @@ export default async function GodownStockPage({
                     <label className="label block mb-1">Rate Conversion</label>
                     <input name="rate_conversion" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateConversion ?? ""} />
                   </div>
-                  <div className="col-span-4">
-                    <label className="label block mb-1">Term</label>
-                    <select name="term" className="input-box mono" defaultValue={formStock?.term ?? ""}>
-                      {TERM_OPTIONS.map((t) => (
-                        <option key={t} value={t}>{t || "—"}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <TermSelect
+                    defaultTerm={formStock?.term ?? "CASH"}
+                    defaultDate={formStock?.dueDate ?? ""}
+                  />
                   <div className="col-span-4">
                     <label className="label block mb-1">Days</label>
                     <input name="days" type="number" step="1" className="input-box mono text-right" defaultValue={formStock?.days ?? ""} />
@@ -567,7 +715,12 @@ export default async function GodownStockPage({
                   </div>
                   <div className="col-span-3">
                     <label className="label block mb-1">Sal Cont #</label>
-                    <input name="sal_cont_no" className="input-box mono" defaultValue={formStock?.salContNo ?? ""} />
+                    <Combobox
+                      name="sal_cont_no"
+                      options={salOpts}
+                      defaultValue={formStock?.salContNo ?? ""}
+                      placeholder="Sal contract #…"
+                    />
                   </div>
                   <div className="col-span-6">
                     <label className="label block mb-1">Grey Sale Cont</label>
@@ -580,7 +733,15 @@ export default async function GodownStockPage({
                   </div>
                   <div className="col-span-4">
                     <label className="label block mb-1">EL-Meter</label>
-                    <input name="el_meter" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.elMeter ?? ""} />
+                    <input
+                      name="el_meter"
+                      type="number"
+                      step="any"
+                      className={roCls + " text-right"}
+                      defaultValue={formStock?.elMeter ?? ""}
+                      readOnly
+                      tabIndex={-1}
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">(1/5 or 1/10)</label>
@@ -614,6 +775,7 @@ export default async function GodownStockPage({
                   <div className="col-span-3">
                     <label className="label block mb-1">Total</label>
                     <input
+                      name="total_display"
                       type="number"
                       step="any"
                       className={roCls + " text-right"}
@@ -625,6 +787,7 @@ export default async function GodownStockPage({
                   <div className="col-span-3">
                     <label className="label block mb-1">Balance</label>
                     <input
+                      name="balance_display"
                       type="number"
                       step="any"
                       className={roCls + " text-right"}
@@ -634,13 +797,57 @@ export default async function GodownStockPage({
                     />
                   </div>
 
+                  <div className="col-span-4">
+                    <label className="label block mb-1">Kaat Amt</label>
+                    <input
+                      name="kaat_amt_disp"
+                      type="number"
+                      step="any"
+                      className={roCls + " text-right"}
+                      readOnly
+                      tabIndex={-1}
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <label className="label block mb-1">Checkery Amt</label>
+                    <input
+                      name="checkery_amt_disp"
+                      type="number"
+                      step="any"
+                      className={roCls + " text-right"}
+                      readOnly
+                      tabIndex={-1}
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <label className="label block mb-1">Commission Amt</label>
+                    <input
+                      name="commission_amt_disp"
+                      type="number"
+                      step="any"
+                      className={roCls + " text-right"}
+                      readOnly
+                      tabIndex={-1}
+                    />
+                  </div>
+
                   <div className="col-span-6">
                     <label className="label block mb-1">Printing Name</label>
-                    <input name="printing_name" className="input-box mono" defaultValue={formStock?.printingName ?? ""} />
+                    <Combobox
+                      name="printing_name"
+                      options={partyOpts}
+                      defaultValue={formStock?.printingName ?? ""}
+                      placeholder="Party or free text…"
+                    />
                   </div>
                   <div className="col-span-6">
                     <label className="label block mb-1">Broker Name</label>
-                    <input name="broker_name" className="input-box mono" defaultValue={formStock?.brokerName ?? ""} />
+                    <Combobox
+                      name="broker_name"
+                      options={partyOpts}
+                      defaultValue={formStock?.brokerName ?? ""}
+                      placeholder="Broker or free text…"
+                    />
                   </div>
 
                   <div className="col-span-12">
@@ -688,7 +895,13 @@ export default async function GodownStockPage({
                           />
                         </div>
                         <div className="col-span-3 flex items-end">
-                          <button type="button" className="btn btn-outline btn-sm w-full">OK</button>
+                          <button
+                            formAction={setStatusOk}
+                            className="btn btn-outline btn-sm w-full"
+                            disabled={!formStock}
+                          >
+                            OK
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -767,6 +980,8 @@ export default async function GodownStockPage({
                     Empty rows are ignored on save.
                   </div>
                 </div>
+
+                <GodownCalc godownParty={godownParty} countMap={countMap} />
               </form>
             </div>
           </div>

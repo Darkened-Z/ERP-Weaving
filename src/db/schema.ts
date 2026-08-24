@@ -111,6 +111,7 @@ export const transDetail = sqliteTable("trans_detail", {
   chqDate: text("chq_date"),
   yarnCount: text("yarn_count"),
   contNo: text("cont_no"),
+  statusOk: text("status_ok"),
 }, (t) => ({
   uxFyVtypeVnoSrno: uniqueIndex("ux_trans_detail_fy_vtype_vno_srno").on(t.fyCode, t.vtype, t.vno, t.srno),
   ixAccCode: index("ix_trans_detail_acc").on(t.accCode),
@@ -137,6 +138,7 @@ export const looms = sqliteTable("looms", {
   actRpm: integer("act_rpm"),
   weaverName: text("weaver_name"),
   group: text("group"),
+  forman: text("forman"),
   status: text("status").notNull().default("A"),
   statusWrk: text("status_wrk"),
   currentContract: text("current_contract"),
@@ -271,6 +273,7 @@ export const chartParts = sqliteTable("chart_parts", {
   currentStock: real("current_stock").notNull().default(0),
   avgCost: real("avg_cost").notNull().default(0),
   lastPurchaseDate: text("last_purchase_date"),
+  location: text("location"),
   status: text("status").notNull().default("A"),
 });
 
@@ -297,7 +300,7 @@ export const beams = sqliteTable("beams", {
   brDate: text("br_date"),
   knVno: text("kn_vno"),
   knDate: text("kn_date"),
-  statusWrk: text("status_wrk").notNull().default("RUNNING"),
+  statusWrk: text("status_wrk").notNull().default("EMPTY"),
   receivedDate: text("received_date"),
 });
 
@@ -534,11 +537,69 @@ export const storeGrn = sqliteTable("store_grn", {
   fyCode: text("fy_code").notNull(),
   grnDate: text("grn_date").notNull(),
   supplier: text("supplier").notNull(),
+  supplierCode: text("supplier_code"),
   invoiceNo: text("invoice_no"),
   itemCount: integer("item_count"),
   totalAmount: real("total_amount"),
   status: text("status").notNull().default("A"),
 });
+
+export const storeGrnDetail = sqliteTable("store_grn_detail", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  grnId: integer("grn_id").notNull().references(() => storeGrn.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  partCode: text("part_code").notNull(),
+  qty: real("qty").notNull(),
+  rateBill: real("rate_bill"),
+  discPer: real("disc_per"),
+  taxPer: real("tax_per"),
+  rate: real("rate").notNull(),
+  amount: real("amount").notNull(),
+}, (t) => ({
+  ixGrn: index("ix_store_grn_detail_grn").on(t.grnId),
+  ixPart: index("ix_store_grn_detail_part").on(t.partCode),
+}));
+
+export const storeDemandDetail = sqliteTable("store_demand_detail", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  demandId: integer("demand_id").notNull().references(() => storeDemands.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  partCode: text("part_code").notNull(),
+  qty: real("qty").notNull(),
+  rate: real("rate").notNull(),
+  amount: real("amount").notNull(),
+  ccCode: text("cc_code"),
+}, (t) => ({
+  ixDemand: index("ix_store_demand_detail_demand").on(t.demandId),
+  ixPart: index("ix_store_demand_detail_part").on(t.partCode),
+}));
+
+export const storeReturns = sqliteTable("store_returns", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  returnNo: integer("return_no").notNull(),
+  fyCode: text("fy_code").notNull(),
+  returnDate: text("return_date").notNull(),
+  department: text("department").notNull(),
+  returnedBy: text("returned_by"),
+  itemCount: integer("item_count"),
+  totalAmount: real("total_amount"),
+  remarks: text("remarks"),
+}, (t) => ({
+  uxFyNo: uniqueIndex("ux_store_returns_fy_no").on(t.fyCode, t.returnNo),
+}));
+
+export const storeReturnDetail = sqliteTable("store_return_detail", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  returnId: integer("return_id").notNull().references(() => storeReturns.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  partCode: text("part_code").notNull(),
+  qty: real("qty").notNull(),
+  rate: real("rate").notNull(),
+  amount: real("amount").notNull(),
+}, (t) => ({
+  ixReturn: index("ix_store_return_detail_return").on(t.returnId),
+  ixPart: index("ix_store_return_detail_part").on(t.partCode),
+}));
 
 export const storeGatepass = sqliteTable("store_gatepass", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -706,6 +767,7 @@ export const extYarnPurContract = sqliteTable("ext_yarn_pur_contract", {
   ratio: text("ratio"),
   brand: text("brand"),
   qtyBags: real("qty_bags"),
+  qtyLbs: real("qty_lbs"),
   ratePerLbs: real("rate_per_lbs"),
   amount: real("amount"),
   days: integer("days"),
@@ -745,6 +807,7 @@ export const extYarnSalContract = sqliteTable("ext_yarn_sal_contract", {
   ratio: text("ratio"),
   brand: text("brand"),
   qtyBags: real("qty_bags"),
+  qtyLbs: real("qty_lbs"),
   ratePerLbs: real("rate_per_lbs"),
   amount: real("amount"),
   days: integer("days"),
@@ -870,6 +933,8 @@ export const extGreyConvContract = sqliteTable("ext_grey_conv_contract", {
   costLakhaiBorderMtr: real("cost_lakhai_border_mtr"),
   ratePerPick: real("rate_per_pick"),
   rateMtr: real("rate_mtr"),
+  convRatePerMtr: real("conv_rate_per_mtr"),
+  grayRatePerMtr: real("gray_rate_per_mtr"),
   loomType: text("loom_type"),
   broker: text("broker"),
   ratePick: real("rate_pick"),
@@ -962,6 +1027,7 @@ export const extYarnPurVoucher = sqliteTable("ext_yarn_pur_voucher", {
   rkd: real("rkd"),
   lotNo: text("lot_no"),
   pendingFinance: text("pending_finance"),
+  statusOk: text("status_ok"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({
@@ -1000,7 +1066,9 @@ export const extYarnSalVoucher = sqliteTable("ext_yarn_sal_voucher", {
   posting: text("posting").notNull().default("N"),
   loomType: text("loom_type"),
   party: text("party"),
+  broker: text("broker"),
   term: text("term").notNull().default("CASH"),
+  dueDate: text("due_date"),
   img: text("img"),
   cont: text("cont"),
   pur: real("pur"),
@@ -1014,6 +1082,7 @@ export const extYarnSalVoucher = sqliteTable("ext_yarn_sal_voucher", {
   avgRate: real("avg_rate"),
   remarks: text("remarks"),
   pendingFinance: text("pending_finance"),
+  statusOk: text("status_ok"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({
@@ -1085,6 +1154,8 @@ export const extGodownStock = sqliteTable("ext_godown_stock", {
   rate: real("rate"),
   salAvgRate: real("sal_avg_rate"),
   pendingFinance: text("pending_finance"),
+  statusOk: text("status_ok"),
+  dueDate: text("due_date"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({
@@ -1174,6 +1245,8 @@ export const extKachiParchi = sqliteTable("ext_kachi_parchi", {
   brokerName: text("broker_name"),
   remarks: text("remarks"),
   term: text("term"),
+  dueDate: text("due_date"),
+  ppVno: text("pp_vno"),
   imgNo: text("img_no"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
@@ -1188,6 +1261,7 @@ export const extKachiParchiLine = sqliteTable("ext_kachi_parchi_line", {
   srNo: integer("sr_no").notNull(),
   than: integer("than"),
   mtr: real("mtr"),
+  gdnLineId: integer("gdn_line_id"),
 }, (t) => ({
   ixParchi: index("ix_ext_kpl_parchi").on(t.parchiId),
 }));
@@ -1256,9 +1330,11 @@ export const extPackiParchi = sqliteTable("ext_packi_parchi", {
   commissionTotal: real("commission_total"),
   diff: real("diff"),
   termSal: text("term_sal"),
+  dueDate: text("due_date"),
   typeRej: text("type_rej"),
   imgNo: text("img_no"),
   pendingFinance: text("pending_finance"),
+  kpId: integer("kp_id"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({
@@ -1360,6 +1436,8 @@ export const intGreyConversionContract = sqliteTable("int_grey_conversion_contra
   costLakhaiBorderMtr: real("cost_lakhai_border_mtr"),
   ratePerPick: real("rate_per_pick"),
   rateMtr: real("rate_mtr"),
+  convRatePerMtr: real("conv_rate_per_mtr"),
+  grayRatePerMtr: real("gray_rate_per_mtr"),
   loomType: text("loom_type"),
   broker: text("broker"),
   ratePick: real("rate_pick"),
@@ -1434,6 +1512,13 @@ export const intBeamContractExtWs = sqliteTable("int_beam_contract_ext_ws", {
   party: text("party"),
   sizingParty: text("sizing_party"),
   warpingParty: text("warping_party"),
+  converterParty: text("converter_party"),
+  wrpCode: text("wrp_code"),
+  noOfWidth: real("no_of_width"),
+  prdCode: text("prd_code"),
+  vtype: text("vtype"),
+  ends: real("ends"),
+  wtPerMtr: real("wt_per_mtr"),
   ratePerBeam: real("rate_per_beam"),
   terms: text("terms"),
   remarks: text("remarks"),
@@ -1443,6 +1528,19 @@ export const intBeamContractExtWs = sqliteTable("int_beam_contract_ext_ws", {
 }, (t) => ({
   ixParty: index("ix_int_bcew_party").on(t.party),
   ixStatus: index("ix_int_bcew_status").on(t.status),
+}));
+
+export const intBeamContractExtWsDetail = sqliteTable("int_beam_contract_ext_ws_detail", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => intBeamContractExtWs.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  countCode: text("count_code"),
+  brand: text("brand"),
+  calCount: real("cal_count"),
+  ends: real("ends"),
+  wtPerMtr: real("wt_per_mtr"),
+}, (t) => ({
+  ixContract: index("ix_int_bcewd_contract").on(t.contractId),
 }));
 
 export const intKnottingContract = sqliteTable("int_knotting_contract", {
@@ -1928,6 +2026,7 @@ export const intDailyProductionSet = sqliteTable("int_daily_production_set", {
   kSmType: text("k_s_m_type"),
   kSmDate: text("k_s_m_date"),
   beamStatus: text("beam_status"),
+  dlvStatus: text("dlv_status"),
   wastWtKg: real("wast_wt_kg"),
   beamNo: text("beam_no"),
   ends: integer("ends"),

@@ -8,6 +8,11 @@ const parseNum = (s: string): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const round = (v: number, d: number) => {
+  const p = 10 ** d;
+  return Math.round(v * p) / p;
+};
+
 const formatNum = (n: number, digits = 4): string => {
   if (!Number.isFinite(n) || n === 0) return "0";
   return new Intl.NumberFormat("en-PK", {
@@ -16,79 +21,101 @@ const formatNum = (n: number, digits = 4): string => {
   }).format(n);
 };
 
-const LOOM_TYPES = ["SULZER", "RAPIER", "AIRJET", "PROJECTILE"];
+type Row = { count: string; ends: string; rate: string };
+
+const emptyRow = (): Row => ({ count: "", ends: "", rate: "" });
+
+const rowCalc = (r: Row) => {
+  const cal = parseNum(r.count);
+  const wt = cal > 0 ? round((parseNum(r.ends) * 1.0936 / 800) / cal, 6) : 0;
+  const cost = round(wt * parseNum(r.rate), 4);
+  return { wt, cost };
+};
 
 export function ConversionCalculator() {
-  const [warpCount, setWarpCount] = useState("");
-  const [ends, setEnds] = useState("");
-  const [warpCostPerLbs, setWarpCostPerLbs] = useState("");
+  const [warpRows, setWarpRows] = useState<Row[]>([emptyRow()]);
+  const [weftRows, setWeftRows] = useState<Row[]>([emptyRow()]);
 
-  const [weftCount, setWeftCount] = useState("");
-  const [picks, setPicks] = useState("");
-  const [weftCostPerLbs, setWeftCostPerLbs] = useState("");
-
-  const [read, setRead] = useState("");
+  const [ratePerPick, setRatePerPick] = useState("");
+  const [rateMtr, setRateMtr] = useState("");
   const [pick, setPick] = useState("");
-  const [width, setWidth] = useState("");
-  const [loomType, setLoomType] = useState("SULZER");
+  const [lakhaiMtr, setLakhaiMtr] = useState("");
+  const [qtyMtr, setQtyMtr] = useState("");
 
   const [copied, setCopied] = useState(false);
 
   const outputs = useMemo(() => {
-    const wCount = parseNum(warpCount);
-    const wEnds = parseNum(ends);
-    const wCost = parseNum(warpCostPerLbs);
+    const warp = warpRows.map(rowCalc);
+    const weft = weftRows.map(rowCalc);
+    const warpWt = round(warp.reduce((s, r) => s + r.wt, 0), 6);
+    const weftWt = round(weft.reduce((s, r) => s + r.wt, 0), 6);
+    const totalWt = round(warpWt + weftWt, 6);
+    const warpCost = round(warp.reduce((s, r) => s + r.cost, 0), 4);
+    const weftCost = round(weft.reduce((s, r) => s + r.cost, 0), 4);
+    const totalCost = round(warpCost + weftCost, 4);
 
-    const fCount = parseNum(weftCount);
-    const fPicks = parseNum(picks);
-    const fCost = parseNum(weftCostPerLbs);
+    const rpp = parseNum(ratePerPick);
+    const clb = parseNum(lakhaiMtr);
+    const convRate =
+      rpp > 0 ? round(rpp * parseNum(pick) + clb, 4) : round(parseNum(rateMtr) + clb, 4);
+    const greyRate = round(totalCost + convRate, 2);
 
-    const w = parseNum(width);
-
-    const warpWt = wCount > 0 ? (wEnds * w * 39.37 * 0.5905) / (wCount * 840) : 0;
-    const weftWt = fCount > 0 ? (fPicks * w * 39.37 * 0.5905) / (fCount * 840) : 0;
-    const totalWt = warpWt + weftWt;
-
-    const warpCostPerMtr = (warpWt * wCost) / 2.2046;
-    const weftCostPerMtr = (weftWt * fCost) / 2.2046;
-    const totalCostPerMtr = warpCostPerMtr + weftCostPerMtr;
-
+    const qty = parseNum(qtyMtr);
     return {
+      warp,
+      weft,
       warpWt,
       weftWt,
       totalWt,
-      warpCostPerMtr,
-      weftCostPerMtr,
-      totalCostPerMtr,
+      warpCost,
+      weftCost,
+      totalCost,
+      convRate,
+      greyRate,
+      wrpWt40: round(warpWt * 40, 6),
+      wftWt40: round(weftWt * 40, 6),
+      weight40: round(totalWt * 40, 6),
+      qtyWt: round(totalWt * qty, 2),
+      qtyConvAmount: round(convRate * qty, 2),
+      qtyGreyAmount: round(greyRate * qty, 2),
     };
-  }, [warpCount, ends, warpCostPerLbs, weftCount, picks, weftCostPerLbs, width]);
+  }, [warpRows, weftRows, ratePerPick, rateMtr, pick, lakhaiMtr, qtyMtr]);
 
   const handleCopy = async () => {
+    const rowLines = (label: string, rows: Row[], calc: { wt: number; cost: number }[]) =>
+      rows
+        .map(
+          (r, i) =>
+            `${label} ${i + 1}: count=${r.count || "-"} ends=${r.ends || "-"} rate/lbs=${r.rate || "-"} wt=${formatNum(calc[i].wt, 6)} cost=${formatNum(calc[i].cost)}`
+        )
+        .join("\n");
     const block = [
       "GREY CONVERSION CALCULATOR",
       "==========================",
       "",
-      "INPUTS",
-      "------",
-      `Warp Count:            ${warpCount || "-"}`,
-      `Warp Ends:             ${ends || "-"}`,
-      `Warp Cost/Lbs:         ${warpCostPerLbs || "-"}`,
-      `Weft Count:            ${weftCount || "-"}`,
-      `Weft Picks/inch:       ${picks || "-"}`,
-      `Weft Cost/Lbs:         ${weftCostPerLbs || "-"}`,
-      `Read:                  ${read || "-"}`,
-      `Pick:                  ${pick || "-"}`,
-      `Width (inches):        ${width || "-"}`,
-      `Loom Type:             ${loomType}`,
+      rowLines("Warp", warpRows, outputs.warp),
+      rowLines("Weft", weftRows, outputs.weft),
       "",
-      "OUTPUTS",
-      "-------",
-      `Warp WT per Mtr:       ${formatNum(outputs.warpWt)}`,
-      `Weft WT per Mtr:       ${formatNum(outputs.weftWt)}`,
-      `Total WT per Mtr:      ${formatNum(outputs.totalWt)}`,
-      `Warp Cost per Mtr:     ${formatNum(outputs.warpCostPerMtr)}`,
-      `Weft Cost per Mtr:     ${formatNum(outputs.weftCostPerMtr)}`,
-      `Total Cost per Mtr:    ${formatNum(outputs.totalCostPerMtr)}`,
+      `Rate/Pick:             ${ratePerPick || "-"}`,
+      `Rate/Mtr:              ${rateMtr || "-"}`,
+      `Pick:                  ${pick || "-"}`,
+      `Lakhai/Mtr:            ${lakhaiMtr || "-"}`,
+      `Qty (Mtr):             ${qtyMtr || "-"}`,
+      "",
+      `Warp WT per Mtr:       ${formatNum(outputs.warpWt, 6)}`,
+      `Weft WT per Mtr:       ${formatNum(outputs.weftWt, 6)}`,
+      `Total WT per Mtr:      ${formatNum(outputs.totalWt, 6)}`,
+      `Warp Cost per Mtr:     ${formatNum(outputs.warpCost)}`,
+      `Weft Cost per Mtr:     ${formatNum(outputs.weftCost)}`,
+      `Total Cost per Mtr:    ${formatNum(outputs.totalCost)}`,
+      `Conv Rate per Mtr:     ${formatNum(outputs.convRate)}`,
+      `Grey Rate per Mtr:     ${formatNum(outputs.greyRate, 2)}`,
+      `WRP Wt / 40 Mtr:       ${formatNum(outputs.wrpWt40, 6)}`,
+      `WFT Wt / 40 Mtr:       ${formatNum(outputs.wftWt40, 6)}`,
+      `Weight / 40 Mtr:       ${formatNum(outputs.weight40, 6)}`,
+      `Qty Weight:            ${formatNum(outputs.qtyWt, 2)}`,
+      `Qty Conv Amount:       ${formatNum(outputs.qtyConvAmount, 2)}`,
+      `Qty Grey Amount:       ${formatNum(outputs.qtyGreyAmount, 2)}`,
     ].join("\n");
 
     try {
@@ -99,6 +126,109 @@ export function ConversionCalculator() {
       setCopied(false);
     }
   };
+
+  const rowsEditor = (
+    label: string,
+    rows: Row[],
+    calc: { wt: number; cost: number }[],
+    setRows: (r: Row[]) => void
+  ) => (
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-[var(--muted)]">
+          {label}
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => setRows([...rows, emptyRow()])}
+        >
+          + Row
+        </button>
+      </div>
+      <table className="w-full text-[12px]">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="px-1 py-1 border-b border-black text-left">Count</th>
+            <th className="px-1 py-1 border-b border-black text-left">Ends</th>
+            <th className="px-1 py-1 border-b border-black text-left">Rate/Lbs</th>
+            <th className="px-1 py-1 border-b border-black text-right">WT/Mtr</th>
+            <th className="px-1 py-1 border-b border-black text-right">Cost/Mtr</th>
+            <th className="px-1 py-1 border-b border-black" style={{ width: 26 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                <input
+                  type="number"
+                  step="any"
+                  className="input-box mono text-[12px]"
+                  value={r.count}
+                  onChange={(e) =>
+                    setRows(rows.map((x, j) => (j === i ? { ...x, count: e.target.value } : x)))
+                  }
+                />
+              </td>
+              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                <input
+                  type="number"
+                  step="any"
+                  className="input-box mono text-[12px]"
+                  value={r.ends}
+                  onChange={(e) =>
+                    setRows(rows.map((x, j) => (j === i ? { ...x, ends: e.target.value } : x)))
+                  }
+                />
+              </td>
+              <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                <input
+                  type="number"
+                  step="any"
+                  className="input-box mono text-[12px]"
+                  value={r.rate}
+                  onChange={(e) =>
+                    setRows(rows.map((x, j) => (j === i ? { ...x, rate: e.target.value } : x)))
+                  }
+                />
+              </td>
+              <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-right">
+                {formatNum(calc[i].wt, 6)}
+              </td>
+              <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-right">
+                {formatNum(calc[i].cost)}
+              </td>
+              <td className="px-1 py-0.5 border-b border-[var(--border-light)] text-center">
+                {rows.length > 1 && (
+                  <button
+                    type="button"
+                    className="mono text-[11px] text-[var(--muted)] hover:text-black"
+                    title="Remove row"
+                    onClick={() => setRows(rows.filter((_, j) => j !== i))}
+                  >
+                    X
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const outLine = (label: string, value: string, formula: string, dark = false) => (
+    <div className={dark ? "border-2 border-black p-3 bg-black text-white" : "border border-black p-3"}>
+      <div className="flex justify-between items-baseline gap-4">
+        <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">{label}</div>
+        <div className="mono text-lg font-bold">{value}</div>
+      </div>
+      <div className={`text-[10px] mono mt-1 ${dark ? "text-gray-300" : "text-[var(--muted)]"}`}>
+        {formula}
+      </div>
+    </div>
+  );
 
   return (
     <div className="animate-in">
@@ -115,93 +245,22 @@ export function ConversionCalculator() {
             Inputs
           </div>
 
-          <div className="mb-4">
+          {rowsEditor("Warp", warpRows, outputs.warp, setWarpRows)}
+          {rowsEditor("Weft", weftRows, outputs.weft, setWeftRows)}
+
+          <div>
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2 text-[var(--muted)]">
-              Warp
+              Conversion
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="label block mb-1">Count</label>
-                <input
-                  type="text"
-                  className="input-box mono"
-                  value={warpCount}
-                  onChange={(e) => setWarpCount(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label block mb-1">Ends</label>
+                <label className="label block mb-1">Rate/Pick</label>
                 <input
                   type="number"
                   step="any"
                   className="input-box mono"
-                  value={ends}
-                  onChange={(e) => setEnds(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label block mb-1">Cost/Lbs</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="input-box mono"
-                  value={warpCostPerLbs}
-                  onChange={(e) => setWarpCostPerLbs(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2 text-[var(--muted)]">
-              Weft
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="label block mb-1">Count</label>
-                <input
-                  type="text"
-                  className="input-box mono"
-                  value={weftCount}
-                  onChange={(e) => setWeftCount(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label block mb-1">Picks per inch</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="input-box mono"
-                  value={picks}
-                  onChange={(e) => setPicks(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label block mb-1">Cost/Lbs</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="input-box mono"
-                  value={weftCostPerLbs}
-                  onChange={(e) => setWeftCostPerLbs(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2 text-[var(--muted)]">
-              Fabric
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="label block mb-1">Read</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="input-box mono"
-                  value={read}
-                  onChange={(e) => setRead(e.target.value)}
+                  value={ratePerPick}
+                  onChange={(e) => setRatePerPick(e.target.value)}
                 />
               </div>
               <div>
@@ -215,29 +274,38 @@ export function ConversionCalculator() {
                 />
               </div>
               <div>
-                <label className="label block mb-1">Width (inches)</label>
+                <label className="label block mb-1">Rate/Mtr</label>
                 <input
                   type="number"
                   step="any"
                   className="input-box mono"
-                  value={width}
-                  onChange={(e) => setWidth(e.target.value)}
+                  value={rateMtr}
+                  onChange={(e) => setRateMtr(e.target.value)}
                 />
               </div>
               <div>
-                <label className="label block mb-1">Loom Type</label>
-                <select
-                  className="input-box"
-                  value={loomType}
-                  onChange={(e) => setLoomType(e.target.value)}
-                >
-                  {LOOM_TYPES.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
+                <label className="label block mb-1">Lakhai/Mtr</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input-box mono"
+                  value={lakhaiMtr}
+                  onChange={(e) => setLakhaiMtr(e.target.value)}
+                />
               </div>
+              <div>
+                <label className="label block mb-1">Qty (Mtr)</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input-box mono"
+                  value={qtyMtr}
+                  onChange={(e) => setQtyMtr(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="text-[10px] text-[var(--muted)] mono mt-2">
+              Rate/Pick &gt; 0 uses rate_per_pick x pick + lakhai, otherwise rate_mtr + lakhai.
             </div>
           </div>
         </div>
@@ -248,76 +316,40 @@ export function ConversionCalculator() {
           </div>
 
           <div className="space-y-3">
-            <div className="border border-black p-3">
-              <div className="flex justify-between items-baseline gap-4">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
-                  Warp WT per Mtr
-                </div>
-                <div className="mono text-lg font-bold">{formatNum(outputs.warpWt)}</div>
-              </div>
-              <div className="text-[10px] text-[var(--muted)] mono mt-1">
-                (ends x width x 39.37 x 0.5905) / (warp_count x 840)
-              </div>
-            </div>
+            {outLine("Warp WT per Mtr", formatNum(outputs.warpWt, 6), "sum of (ends x 1.0936 / 800) / count")}
+            {outLine("Weft WT per Mtr", formatNum(outputs.weftWt, 6), "sum of (ends x 1.0936 / 800) / count")}
+            {outLine("Total WT per Mtr", formatNum(outputs.totalWt, 6), "warp_wt + weft_wt", true)}
+            {outLine("Warp Cost per Mtr", formatNum(outputs.warpCost), "sum of wt x rate_per_lbs")}
+            {outLine("Weft Cost per Mtr", formatNum(outputs.weftCost), "sum of wt x rate_per_lbs")}
+            {outLine("Total Cost per Mtr", formatNum(outputs.totalCost), "warp_cost + weft_cost", true)}
+            {outLine("Conv Rate per Mtr", formatNum(outputs.convRate), "rate_per_pick x pick + lakhai (or rate_mtr + lakhai)")}
+            {outLine("Grey Rate per Mtr", formatNum(outputs.greyRate, 2), "cost_per_mtr + conv_rate_per_mtr", true)}
+          </div>
 
-            <div className="border border-black p-3">
-              <div className="flex justify-between items-baseline gap-4">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
-                  Weft WT per Mtr
-                </div>
-                <div className="mono text-lg font-bold">{formatNum(outputs.weftWt)}</div>
-              </div>
-              <div className="text-[10px] text-[var(--muted)] mono mt-1">
-                (picks x width x 39.37 x 0.5905) / (weft_count x 840)
-              </div>
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <div className="border border-black p-2">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold">WRP Wt/40</div>
+              <div className="mono text-[14px] font-bold">{formatNum(outputs.wrpWt40, 6)}</div>
             </div>
-
-            <div className="border-2 border-black p-3 bg-black text-white">
-              <div className="flex justify-between items-baseline gap-4">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
-                  Total WT per Mtr
-                </div>
-                <div className="mono text-lg font-bold">{formatNum(outputs.totalWt)}</div>
-              </div>
-              <div className="text-[10px] text-gray-300 mono mt-1">
-                warp_wt + weft_wt
-              </div>
+            <div className="border border-black p-2">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold">WFT Wt/40</div>
+              <div className="mono text-[14px] font-bold">{formatNum(outputs.wftWt40, 6)}</div>
             </div>
-
-            <div className="border border-black p-3">
-              <div className="flex justify-between items-baseline gap-4">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
-                  Warp Cost per Mtr
-                </div>
-                <div className="mono text-lg font-bold">{formatNum(outputs.warpCostPerMtr)}</div>
-              </div>
-              <div className="text-[10px] text-[var(--muted)] mono mt-1">
-                warp_wt x warp_cost_per_lbs / 2.2046
-              </div>
+            <div className="border border-black p-2">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold">Weight/40</div>
+              <div className="mono text-[14px] font-bold">{formatNum(outputs.weight40, 6)}</div>
             </div>
-
-            <div className="border border-black p-3">
-              <div className="flex justify-between items-baseline gap-4">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
-                  Weft Cost per Mtr
-                </div>
-                <div className="mono text-lg font-bold">{formatNum(outputs.weftCostPerMtr)}</div>
-              </div>
-              <div className="text-[10px] text-[var(--muted)] mono mt-1">
-                weft_wt x weft_cost_per_lbs / 2.2046
-              </div>
+            <div className="border border-black p-2">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold">Qty Weight</div>
+              <div className="mono text-[14px] font-bold">{formatNum(outputs.qtyWt, 2)}</div>
             </div>
-
-            <div className="border-2 border-black p-3 bg-black text-white">
-              <div className="flex justify-between items-baseline gap-4">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
-                  Total Cost per Mtr
-                </div>
-                <div className="mono text-lg font-bold">{formatNum(outputs.totalCostPerMtr)}</div>
-              </div>
-              <div className="text-[10px] text-gray-300 mono mt-1">
-                warp_cost + weft_cost
-              </div>
+            <div className="border border-black p-2">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold">Qty Conv Amt</div>
+              <div className="mono text-[14px] font-bold">{formatNum(outputs.qtyConvAmount, 2)}</div>
+            </div>
+            <div className="border border-black p-2">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold">Qty Grey Amt</div>
+              <div className="mono text-[14px] font-bold">{formatNum(outputs.qtyGreyAmount, 2)}</div>
             </div>
           </div>
 

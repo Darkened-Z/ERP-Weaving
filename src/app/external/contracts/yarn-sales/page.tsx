@@ -1,6 +1,10 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoAmount } from "@/components/auto-amount";
+import { ConfirmButton } from "@/components/confirm-button";
+import { ImageAttach } from "@/components/image-attach";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -76,7 +80,31 @@ export default async function YarnSalesContractPage({
     : [];
 
   const upcomingContNo = nextContNoFromRows(contracts, "YSC");
-  const upcomingLContNo = contracts.length + 1;
+  // LV shows the LAST saved local number (Oracle FRM_LVNO semantics)
+  const upcomingLContNo = contracts.reduce((m, c) => Math.max(m, c.lContNo ?? 0), 0);
+
+  const parties = await db
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const brandList = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
+
+  const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
+  const countOpts = countList.map((c) => ({ value: String(c.code), label: `${c.code} — ${c.description}` }));
+  const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -94,7 +122,12 @@ export default async function YarnSalesContractPage({
     const brand = ((formData.get("brand") as string) || "").trim() || null;
     const qtyBags = num(formData.get("qty_bags"));
     const ratePerLbs = num(formData.get("rate_per_lbs"));
-    const amount = (qtyBags ?? 0) * (ratePerLbs ?? 0);
+    if (!qtyBags || !ratePerLbs) {
+      redirect(`/external/contracts/yarn-sales?error=qty_rate_required`);
+    }
+    // 1 bag = 100 lbs; rate is per-lbs (Oracle: QTY_BAG * RATE * 100)
+    const qtyLbs = qtyBags * 100;
+    const amount = Math.round(qtyBags * ratePerLbs * 100 * 100) / 100;
     const days = int(formData.get("days"));
     const remarks = ((formData.get("remarks") as string) || "").trim() || null;
     const img = ((formData.get("img") as string) || "").trim() || null;
@@ -122,6 +155,12 @@ export default async function YarnSalesContractPage({
       });
     }
 
+    // Oracle pre-commit: delivery total must stay within ±5% of contract qty
+    const dlvTotal = validDeliveries.reduce((s, d) => s + (d.bags ?? 0), 0);
+    if (dlvTotal > 0 && (dlvTotal < qtyBags * 0.95 || dlvTotal > qtyBags * 1.05)) {
+      redirect(`/external/contracts/yarn-sales?error=qty_tolerance`);
+    }
+
     const nowIso = new Date().toISOString();
 
     if (Number.isFinite(id) && id > 0) {
@@ -130,7 +169,7 @@ export default async function YarnSalesContractPage({
           .update(schema.extYarnSalContract)
           .set({
             contDate, expdDate, refno, partyCode, broker, brokagePercentage, agePercent,
-            countCode, ratio, brand, qtyBags, ratePerLbs, amount, days, remarks, img, status,
+            countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount, days, remarks, img, status,
             modifiedDate: nowIso,
           })
           .where(eq(schema.extYarnSalContract.id, id));
@@ -158,13 +197,16 @@ export default async function YarnSalesContractPage({
             .select({ contNo: schema.extYarnSalContract.contNo })
             .from(schema.extYarnSalContract);
           const contNo = providedContNo || nextContNoFromRows(existingRows, "YSC");
-          const nextL = existingRows.length + 1;
+          const [{ maxL }] = await tx
+            .select({ maxL: sql<number>`coalesce(max(${schema.extYarnSalContract.lContNo}), 0)` })
+            .from(schema.extYarnSalContract);
+          const nextL = maxL + 1;
 
           const inserted = await tx
             .insert(schema.extYarnSalContract)
             .values({
               contNo, lContNo: nextL, contDate, expdDate, refno, partyCode, broker,
-              brokagePercentage, agePercent, countCode, ratio, brand, qtyBags, ratePerLbs, amount,
+              brokagePercentage, agePercent, countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount,
               days, remarks, img, status,
               postedDate: nowIso,
             })
@@ -290,6 +332,16 @@ export default async function YarnSalesContractPage({
             Contract number already exists. Try again.
           </div>
         )}
+        {params.error === "qty_rate_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Qty (Bags) and Rate /Lbs are required.
+          </div>
+        )}
+        {params.error === "qty_tolerance" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Delivery bags total must be within ±5% of contract qty.
+          </div>
+        )}
 
         <form
           id="ysc-find-form"
@@ -318,9 +370,9 @@ export default async function YarnSalesContractPage({
               {formContract && (
                 <form action={deleteContract} className="inline">
                   <input type="hidden" name="id" value={formContract.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
+                  <ConfirmButton message="Delete this contract and its deliveries?">
                     Del
-                  </button>
+                  </ConfirmButton>
                 </form>
               )}
               <a href="/external/contracts/yarn-sales" className="btn btn-outline btn-sm">
@@ -331,6 +383,9 @@ export default async function YarnSalesContractPage({
 
           <form id="ysc-save-form" action={saveContract}>
             {formContract && <input type="hidden" name="id" value={formContract.id} />}
+            <input type="hidden" name="one" value="1" readOnly />
+            <AutoAmount qty="qty_bags" rate="one" target="qty_lbs" factor={100} round={0} />
+            <AutoAmount qty="qty_bags" rate="rate_per_lbs" target="amount" factor={100} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 lg:gap-y-4">
               <div className="lg:col-span-3">
@@ -429,11 +484,7 @@ export default async function YarnSalesContractPage({
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Party Code</label>
-                <input
-                  name="party_code"
-                  className="input-box mono"
-                  defaultValue={formContract?.partyCode ?? ""}
-                />
+                <Combobox name="party_code" options={partyOpts} defaultValue={String(formContract?.partyCode ?? "")} placeholder="Select party" />
               </div>
               <div className="lg:col-span-5">
                 <label className="label block mb-1">
@@ -442,11 +493,7 @@ export default async function YarnSalesContractPage({
                     F9
                   </span>
                 </label>
-                <input
-                  name="broker"
-                  className="input-box mono"
-                  defaultValue={formContract?.broker ?? ""}
-                />
+                <Combobox name="broker" options={partyOpts} defaultValue={formContract?.broker ?? ""} placeholder="Select broker" />
               </div>
 
               <div className="lg:col-span-3">
@@ -472,11 +519,7 @@ export default async function YarnSalesContractPage({
 
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Count Code</label>
-                <input
-                  name="count_code"
-                  className="input-box mono"
-                  defaultValue={formContract?.countCode ?? ""}
-                />
+                <Combobox name="count_code" options={countOpts} defaultValue={String(formContract?.countCode ?? "")} placeholder="Select count" />
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Ratio</label>
@@ -488,34 +531,45 @@ export default async function YarnSalesContractPage({
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Brand</label>
-                <input
-                  name="brand"
-                  className="input-box mono"
-                  defaultValue={formContract?.brand ?? ""}
-                />
+                <Combobox name="brand" options={brandOpts} defaultValue={formContract?.brand ?? ""} placeholder="Select brand" />
               </div>
 
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Qty (Bags)</label>
                 <input
                   name="qty_bags"
                   type="number"
                   step="any"
+                  min={0.01}
                   className="input-box mono"
                   defaultValue={formContract?.qtyBags ?? ""}
+                  required
                 />
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Qty (Lbs)</label>
+                <input
+                  name="qty_lbs"
+                  type="number"
+                  step="any"
+                  className="input-box mono bg-gray-100"
+                  defaultValue={formContract?.qtyLbs ?? ""}
+                  readOnly
+                />
+              </div>
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Rate /Lbs</label>
                 <input
                   name="rate_per_lbs"
                   type="number"
                   step="any"
+                  min={0.01}
                   className="input-box mono"
                   defaultValue={formContract?.ratePerLbs ?? ""}
+                  required
                 />
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Amount</label>
                 <input
                   name="amount"
@@ -547,11 +601,7 @@ export default async function YarnSalesContractPage({
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Img</label>
-                <input
-                  name="img"
-                  className="input-box mono"
-                  defaultValue={formContract?.img ?? ""}
-                />
+                <ImageAttach name="img" defaultValue={formContract?.img ?? ""} />
               </div>
             </div>
 

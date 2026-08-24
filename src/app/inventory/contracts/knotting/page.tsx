@@ -1,6 +1,8 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -67,6 +69,13 @@ export default async function KnottingContractPage({
   const upcomingNumber = (nextRow[0]?.maxN ?? 0) + 1;
   const upcomingContNo = `IKC-${String(upcomingNumber).padStart(4, "0")}`;
 
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
+
   async function saveContract(formData: FormData) {
     "use server";
     const idRaw = formData.get("id") as string | null;
@@ -80,6 +89,14 @@ export default async function KnottingContractPage({
     const terms = txt(formData.get("terms"));
     const remarks = txt(formData.get("remarks"));
     const status = txt(formData.get("status")) ?? "R";
+
+    if ((ratePerEnds ?? 0) <= 0 && (ratePerBeam ?? 0) <= 0) {
+      const back =
+        Number.isFinite(id) && id > 0
+          ? `/inventory/contracts/knotting?id=${id}&error=rate_required`
+          : `/inventory/contracts/knotting?adding=1&error=rate_required`;
+      redirect(back);
+    }
 
     const nowIso = new Date().toISOString();
 
@@ -214,6 +231,11 @@ export default async function KnottingContractPage({
             Contract number already exists. Try again.
           </div>
         )}
+        {params.error === "rate_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            At least one of Rate Per Ends or Rate Per Beam must be greater than zero.
+          </div>
+        )}
 
         <form
           id="ikc-find-form"
@@ -295,10 +317,11 @@ export default async function KnottingContractPage({
 
               <div className="lg:col-span-6">
                 <label className="label block mb-1">Party</label>
-                <input
+                <Combobox
                   name="party"
-                  className="input-box mono"
+                  options={partyOpts}
                   defaultValue={formContract?.party ?? ""}
+                  placeholder="party account"
                 />
               </div>
               <div className="lg:col-span-3">
@@ -412,9 +435,9 @@ export default async function KnottingContractPage({
           {formContract && (
             <form action={deleteContract} className="mt-4 flex items-center gap-3">
               <input type="hidden" name="id" value={formContract.id} />
-              <button type="submit" className="btn btn-outline btn-sm">
+              <ConfirmButton message="Delete this contract permanently? This cannot be undone.">
                 Delete
-              </button>
+              </ConfirmButton>
               <span className="mono text-[10px] text-[var(--muted)]">
                 Deletes the contract permanently.
               </span>

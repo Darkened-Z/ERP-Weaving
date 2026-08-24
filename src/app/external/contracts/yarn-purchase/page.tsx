@@ -2,6 +2,9 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { AutoAmount } from "@/components/auto-amount";
+import { ConfirmButton } from "@/components/confirm-button";
+import { ImageAttach } from "@/components/image-attach";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -77,7 +80,8 @@ export default async function YarnPurchaseContractPage({
     : [];
 
   const upcomingContNo = nextContNoFromRows(contracts, "YPC");
-  const upcomingLContNo = contracts.length + 1;
+  // LV shows the LAST saved local number (Oracle FRM_LVNO semantics)
+  const upcomingLContNo = contracts.reduce((m, c) => Math.max(m, c.lContNo ?? 0), 0);
 
   const parties = await db
     .select({
@@ -91,6 +95,7 @@ export default async function YarnPurchaseContractPage({
   const countList = await db
     .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
     .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
     .orderBy(schema.yarnCounts.countCode);
   const brandList = await db
     .select({ name: schema.yarnBrands.name })
@@ -117,7 +122,12 @@ export default async function YarnPurchaseContractPage({
     const brand = ((formData.get("brand") as string) || "").trim() || null;
     const qtyBags = num(formData.get("qty_bags"));
     const ratePerLbs = num(formData.get("rate_per_lbs"));
-    const amount = (qtyBags ?? 0) * (ratePerLbs ?? 0);
+    if (!qtyBags || !ratePerLbs) {
+      redirect(`/external/contracts/yarn-purchase?error=qty_rate_required`);
+    }
+    // 1 bag = 100 lbs; rate is per-lbs (Oracle: QTY_BAG * RATE * 100)
+    const qtyLbs = qtyBags * 100;
+    const amount = Math.round(qtyBags * ratePerLbs * 100 * 100) / 100;
     const days = int(formData.get("days"));
     const remarks = ((formData.get("remarks") as string) || "").trim() || null;
     const img = ((formData.get("img") as string) || "").trim() || null;
@@ -149,6 +159,12 @@ export default async function YarnPurchaseContractPage({
       });
     }
 
+    // Oracle pre-commit: delivery total must stay within ±5% of contract qty
+    const dlvTotal = validDeliveries.reduce((s, d) => s + (d.bags ?? 0), 0);
+    if (dlvTotal > 0 && (dlvTotal < qtyBags * 0.95 || dlvTotal > qtyBags * 1.05)) {
+      redirect(`/external/contracts/yarn-purchase?error=qty_tolerance`);
+    }
+
     const nowIso = new Date().toISOString();
 
     if (Number.isFinite(id) && id > 0) {
@@ -157,7 +173,7 @@ export default async function YarnPurchaseContractPage({
           .update(schema.extYarnPurContract)
           .set({
             contDate, expdDate, refno, partyCode, broker, agePercent, brokagePerBag,
-            countCode, ratio, brand, qtyBags, ratePerLbs, amount, days, remarks, img, status,
+            countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount, days, remarks, img, status,
             modifiedDate: nowIso,
           })
           .where(eq(schema.extYarnPurContract.id, id));
@@ -185,13 +201,16 @@ export default async function YarnPurchaseContractPage({
             .select({ contNo: schema.extYarnPurContract.contNo })
             .from(schema.extYarnPurContract);
           const contNo = providedContNo || nextContNoFromRows(existingRows, "YPC");
-          const nextL = existingRows.length + 1;
+          const [{ maxL }] = await tx
+            .select({ maxL: sql<number>`coalesce(max(${schema.extYarnPurContract.lContNo}), 0)` })
+            .from(schema.extYarnPurContract);
+          const nextL = maxL + 1;
 
           const inserted = await tx
             .insert(schema.extYarnPurContract)
             .values({
               contNo, lContNo: nextL, contDate, expdDate, refno, partyCode, broker,
-              agePercent, brokagePerBag, countCode, ratio, brand, qtyBags, ratePerLbs, amount,
+              agePercent, brokagePerBag, countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount,
               days, remarks, img, status,
               postedDate: nowIso,
             })
@@ -317,6 +336,16 @@ export default async function YarnPurchaseContractPage({
             Contract number already exists. Try again.
           </div>
         )}
+        {params.error === "qty_rate_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Qty (Bags) and Rate /Lbs are required.
+          </div>
+        )}
+        {params.error === "qty_tolerance" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Delivery bags total must be within ±5% of contract qty.
+          </div>
+        )}
 
         <form
           id="ypc-find-form"
@@ -345,9 +374,9 @@ export default async function YarnPurchaseContractPage({
               {formContract && (
                 <form action={deleteContract} className="inline">
                   <input type="hidden" name="id" value={formContract.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
+                  <ConfirmButton message="Delete this contract and its deliveries?">
                     Del
-                  </button>
+                  </ConfirmButton>
                 </form>
               )}
               <a href="/external/contracts/yarn-purchase" className="btn btn-outline btn-sm">
@@ -358,6 +387,9 @@ export default async function YarnPurchaseContractPage({
 
           <form id="ypc-save-form" action={saveContract}>
             {formContract && <input type="hidden" name="id" value={formContract.id} />}
+            <input type="hidden" name="one" value="1" readOnly />
+            <AutoAmount qty="qty_bags" rate="one" target="qty_lbs" factor={100} round={0} />
+            <AutoAmount qty="qty_bags" rate="rate_per_lbs" target="amount" factor={100} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 lg:gap-y-4">
               <div className="lg:col-span-3">
@@ -506,27 +538,42 @@ export default async function YarnPurchaseContractPage({
                 <Combobox name="brand" options={brandOpts} defaultValue={formContract?.brand ?? ""} placeholder="Select brand" />
               </div>
 
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Qty (Bags)</label>
                 <input
                   name="qty_bags"
                   type="number"
                   step="any"
+                  min={0.01}
                   className="input-box mono"
                   defaultValue={formContract?.qtyBags ?? ""}
+                  required
                 />
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Qty (Lbs)</label>
+                <input
+                  name="qty_lbs"
+                  type="number"
+                  step="any"
+                  className="input-box mono bg-gray-100"
+                  defaultValue={formContract?.qtyLbs ?? ""}
+                  readOnly
+                />
+              </div>
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Rate /Lbs</label>
                 <input
                   name="rate_per_lbs"
                   type="number"
                   step="any"
+                  min={0.01}
                   className="input-box mono"
                   defaultValue={formContract?.ratePerLbs ?? ""}
+                  required
                 />
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Amount</label>
                 <input
                   name="amount"
@@ -558,11 +605,7 @@ export default async function YarnPurchaseContractPage({
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Img</label>
-                <input
-                  name="img"
-                  className="input-box mono"
-                  defaultValue={formContract?.img ?? ""}
-                />
+                <ImageAttach name="img" defaultValue={formContract?.img ?? ""} />
               </div>
             </div>
 

@@ -1,6 +1,9 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -77,6 +80,49 @@ export default async function WarpedBeamReceivingPage({
   const upcomingVNo = nextVNoFromRows(list, "IWB");
   const showForm = !!editing || isAdding;
 
+  const lastLvNo =
+    (
+      await db
+        .select({ maxLv: sql<number>`coalesce(max(${schema.intWarpedBeamReceiving.lvNo}), 0)` })
+        .from(schema.intWarpedBeamReceiving)
+    )[0]?.maxLv ?? 0;
+
+  const parties = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
+
+  const beamRows = await db
+    .select({
+      beamNo: schema.beams.beamNo,
+      statusWrk: schema.beams.statusWrk,
+      weight: schema.beams.weight,
+      setNo: schema.beams.setNo,
+      beamSetNo: schema.beams.beamSetNo,
+      ends: schema.beams.ends,
+    })
+    .from(schema.beams)
+    .orderBy(
+      sql`CASE WHEN ${schema.beams.statusWrk} = 'EMPTY' THEN 0 WHEN ${schema.beams.statusWrk} IN ('LOADED', 'RUNNING') THEN 2 ELSE 1 END`,
+      schema.beams.beamNo,
+    );
+  const beamFillMap = Object.fromEntries(
+    beamRows.map((b) => [
+      b.beamNo,
+      { emptyKg: b.weight, setNo: b.setNo, beamSetNo: b.beamSetNo, ends: b.ends },
+    ]),
+  );
+
+  const warpContracts = await db
+    .select({ contNo: schema.intBeamContractExtWs.contNo, ratePerBeam: schema.intBeamContractExtWs.ratePerBeam })
+    .from(schema.intBeamContractExtWs)
+    .orderBy(schema.intBeamContractExtWs.contNo);
+  const warpFillMap = Object.fromEntries(
+    warpContracts.map((c) => [c.contNo, { conv: c.ratePerBeam }]),
+  );
+
   async function saveAction(formData: FormData) {
     "use server";
     const idRaw = formData.get("id") as string | null;
@@ -87,7 +133,6 @@ export default async function WarpedBeamReceivingPage({
       time: txt(formData.get("time")),
       type: txt(formData.get("type")) ?? "SZG",
       gpNo: txt(formData.get("gpNo")),
-      lvNo: intVal(formData.get("lvNo")),
       freightCharges: num(formData.get("freightCharges")),
       totalAmount: num(formData.get("totalAmount")),
       unPostedBills: txt(formData.get("unPostedBills")),
@@ -129,7 +174,6 @@ export default async function WarpedBeamReceivingPage({
     const setNos = formData.getAll("setNo") as string[];
     const beamSetNos = formData.getAll("beamSetNo") as string[];
     const beamNos = formData.getAll("beamNo") as string[];
-    const beamStatuses = formData.getAll("beamStatus") as string[];
     const beamLoadedHnks = formData.getAll("beamLoadedHnk") as string[];
     const emptyKgs = formData.getAll("emptyKg") as string[];
     const yarnBmsNetLbss = formData.getAll("yarnBmsNetLbs") as string[];
@@ -153,7 +197,6 @@ export default async function WarpedBeamReceivingPage({
         setNo: (setNos[i] || "").trim() || null,
         beamSetNo: (beamSetNos[i] || "").trim() || null,
         beamNo: (beamNos[i] || "").trim() || null,
-        beamStatus: (beamStatuses[i] || "").trim() || null,
         beamLoadedHnk: num(beamLoadedHnks[i] ?? null),
         emptyKg: num(emptyKgs[i] ?? null),
         yarnBmsNetLbs: num(yarnBmsNetLbss[i] ?? null),
@@ -170,19 +213,53 @@ export default async function WarpedBeamReceivingPage({
       };
       const isEmpty =
         !row.rDate && !row.yarnLotNo && !row.yarnBrand && !row.setNo && !row.beamSetNo &&
-        !row.beamNo && !row.beamStatus && row.beamLoadedHnk == null && row.emptyKg == null &&
+        !row.beamNo && row.beamLoadedHnk == null && row.emptyKg == null &&
         row.yarnBmsNetLbs == null && row.beamLength == null && !row.warpingCntNo && row.wt == null &&
         row.width == null && row.ends == null && row.rate == null && row.length == null &&
         row.conv == null && row.amount == null && !row.gpNoLine;
       if (isEmpty) continue;
-      validLines.push({ ...row, receivingId: 0 });
+      if (row.beamLoadedHnk != null) {
+        row.yarnBmsNetLbs =
+          Math.round((row.beamLoadedHnk - (row.emptyKg ?? 0)) * 2.2046 * 100) / 100;
+      }
+      if (row.beamLength != null && row.conv != null) {
+        row.amount = Math.round(row.beamLength * row.conv * 100) / 100;
+      }
+      validLines.push({ ...row, beamStatus: row.beamNo ? "LOADED" : null, receivingId: 0 });
     }
+
+    const totalLoaded = validLines.reduce((s, l) => s + (l.beamLoadedHnk ?? 0), 0);
+    const totalLength = validLines.reduce((s, l) => s + (l.beamLength ?? 0), 0);
+    const errBase =
+      Number.isFinite(id) && id > 0
+        ? `/inventory/warped-beam?id=${id}&`
+        : `/inventory/warped-beam?adding=1&`;
+    if (totalLoaded <= 0) redirect(errBase + "error=loaded_weight_required");
+    if (totalLength <= 0) redirect(errBase + "error=beam_length_required");
+
+    header.totalAmount =
+      Math.round(
+        (validLines.reduce((s, l) => s + (l.amount ?? 0), 0) + (header.freightCharges ?? 0)) * 100,
+      ) / 100;
+    const bagConeWt = (header.bagsWeight ?? 0) + (header.conesWeight ?? 0);
+    const packWt =
+      (header.gulleyWeight ?? 0) + (header.emtBagWeight ?? 0) + (header.shoperWeight ?? 0) +
+      (header.wasteWeight ?? 0) + (header.gattaWeight ?? 0) + (header.headConeKgs ?? 0);
+    header.totalAmountFinal =
+      Math.round((bagConeWt - packWt) * (header.netWeightRate ?? 0) * 100) / 100;
+    header.amtTot =
+      Math.round(header.totalAmountFinal * (1 + (header.gstFtx ?? 0) / 100) * 100) / 100;
 
     const nowIso = new Date().toISOString();
 
     try {
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
+          const cur = await tx
+            .select({ vNo: schema.intWarpedBeamReceiving.vNo })
+            .from(schema.intWarpedBeamReceiving)
+            .where(eq(schema.intWarpedBeamReceiving.id, id));
+          const vNo = cur[0]?.vNo ?? "";
           await tx
             .update(schema.intWarpedBeamReceiving)
             .set({ ...header, modifiedDate: nowIso })
@@ -195,23 +272,58 @@ export default async function WarpedBeamReceivingPage({
               .insert(schema.intWarpedBeamReceivingLine)
               .values(validLines.map((l) => ({ ...l, receivingId: id })));
           }
+          for (const l of validLines) {
+            if (!l.beamNo) continue;
+            await tx
+              .update(schema.beams)
+              .set({
+                statusWrk: "LOADED",
+                receivedDate: header.vDate,
+                brVno: vNo,
+                brDate: header.vDate,
+                ...(l.beamSetNo ? { beamSetNo: l.beamSetNo } : {}),
+                ...(l.setNo ? { setNo: l.setNo } : {}),
+                ...(l.ends != null ? { ends: l.ends } : {}),
+                ...(l.beamLength != null ? { length: l.beamLength } : {}),
+              })
+              .where(eq(schema.beams.beamNo, l.beamNo));
+          }
         });
         revalidatePath("/inventory/warped-beam");
         redirect(`/inventory/warped-beam?id=${id}`);
       } else {
         const providedVNo = ((formData.get("vNo") as string) || "").trim();
         const newId = await db.transaction(async (tx) => {
-          const existing = await tx.select({ vNo: schema.intWarpedBeamReceiving.vNo }).from(schema.intWarpedBeamReceiving);
+          const existing = await tx
+            .select({ vNo: schema.intWarpedBeamReceiving.vNo, lvNo: schema.intWarpedBeamReceiving.lvNo })
+            .from(schema.intWarpedBeamReceiving);
           const vNo = providedVNo || nextVNoFromRows(existing, "IWB");
+          const nextLv = existing.reduce((m, r) => Math.max(m, r.lvNo ?? 0), 0) + 1;
           const inserted = await tx
             .insert(schema.intWarpedBeamReceiving)
-            .values({ ...header, vNo, postedDate: nowIso })
+            .values({ ...header, vNo, lvNo: nextLv, postedDate: nowIso })
             .returning({ id: schema.intWarpedBeamReceiving.id });
           const insertedId = inserted[0].id;
           if (validLines.length) {
             await tx
               .insert(schema.intWarpedBeamReceivingLine)
               .values(validLines.map((l) => ({ ...l, receivingId: insertedId })));
+          }
+          for (const l of validLines) {
+            if (!l.beamNo) continue;
+            await tx
+              .update(schema.beams)
+              .set({
+                statusWrk: "LOADED",
+                receivedDate: header.vDate,
+                brVno: vNo,
+                brDate: header.vDate,
+                ...(l.beamSetNo ? { beamSetNo: l.beamSetNo } : {}),
+                ...(l.setNo ? { setNo: l.setNo } : {}),
+                ...(l.ends != null ? { ends: l.ends } : {}),
+                ...(l.beamLength != null ? { length: l.beamLength } : {}),
+              })
+              .where(eq(schema.beams.beamNo, l.beamNo));
           }
           return insertedId;
         });
@@ -298,6 +410,16 @@ export default async function WarpedBeamReceivingPage({
             Voucher number already exists. Try again.
           </div>
         )}
+        {params.error === "loaded_weight_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Total loaded weight must be greater than zero.
+          </div>
+        )}
+        {params.error === "beam_length_required" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Total beam length must be greater than zero.
+          </div>
+        )}
 
         <div className="border border-black p-6 mb-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -359,12 +481,17 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-1">
                   <label className="label block mb-1">LV.No</label>
-                  <input name="lvNo" type="number" step="1" className={roCls} defaultValue={editing?.lvNo ?? ""} readOnly />
+                  <input className={roCls} defaultValue={editing?.lvNo ?? lastLvNo} readOnly tabIndex={-1} />
                 </div>
 
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Beam Receiving From</label>
-                  <input name="beamReceivingFrom" className="input-box mono" defaultValue={editing?.beamReceivingFrom ?? ""} />
+                  <Combobox
+                    name="beamReceivingFrom"
+                    options={partyOpts}
+                    defaultValue={editing?.beamReceivingFrom ?? ""}
+                    placeholder="party account"
+                  />
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Beam Stock-Loaded</label>
@@ -478,20 +605,20 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="yarnBrand" className={gridCellCls} defaultValue={l?.yarnBrand ?? ""} /></td>
                             <td><input name="setNo" className={gridCellCls} defaultValue={l?.setNo ?? ""} /></td>
                             <td><input name="beamSetNo" className={gridCellCls} defaultValue={l?.beamSetNo ?? ""} /></td>
-                            <td><input name="beamNo" className={gridCellCls} defaultValue={l?.beamNo ?? ""} /></td>
-                            <td><input name="beamStatus" className={gridCellCls} defaultValue={l?.beamStatus ?? ""} /></td>
+                            <td><input name="beamNo" list="iwb-beam-list" className={gridCellCls} defaultValue={l?.beamNo ?? ""} /></td>
+                            <td><input className={gridCellCls + " bg-gray-100"} defaultValue={l?.beamNo ? "LOADED" : l?.beamStatus ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="beamLoadedHnk" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLoadedHnk ?? ""} /></td>
                             <td><input name="emptyKg" type="number" step="any" className={gridCellNumCls} defaultValue={l?.emptyKg ?? ""} /></td>
-                            <td><input name="yarnBmsNetLbs" type="number" step="any" className={gridCellNumCls} defaultValue={l?.yarnBmsNetLbs ?? ""} /></td>
+                            <td><input name="yarnBmsNetLbs" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.yarnBmsNetLbs ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="beamLength" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLength ?? ""} /></td>
-                            <td><input name="warpingCntNo" className={gridCellCls} defaultValue={l?.warpingCntNo ?? ""} /></td>
+                            <td><input name="warpingCntNo" list="iwb-warp-cont-list" className={gridCellCls} defaultValue={l?.warpingCntNo ?? ""} /></td>
                             <td><input name="wt" type="number" step="any" className={gridCellNumCls} defaultValue={l?.wt ?? ""} /></td>
                             <td><input name="width" type="number" step="any" className={gridCellNumCls} defaultValue={l?.width ?? ""} /></td>
                             <td><input name="ends" type="number" step="1" className={gridCellNumCls} defaultValue={l?.ends ?? ""} /></td>
                             <td><input name="rate" type="number" step="any" className={gridCellNumCls} defaultValue={l?.rate ?? ""} /></td>
                             <td><input name="length" type="number" step="any" className={gridCellNumCls} defaultValue={l?.length ?? ""} /></td>
                             <td><input name="conv" type="number" step="any" className={gridCellNumCls} defaultValue={l?.conv ?? ""} /></td>
-                            <td><input name="amount" type="number" step="any" className={gridCellNumCls} defaultValue={l?.amount ?? ""} /></td>
+                            <td><input name="amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.amount ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="gpNoLine" className={gridCellCls} defaultValue={l?.gpNoLine ?? ""} /></td>
                             <td className="mono text-[10px] text-center text-[var(--muted)]">X</td>
                           </tr>
@@ -502,8 +629,26 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="text-[10px] text-[var(--muted)] mt-2 px-2">
                   Empty rows are ignored on save. On update, lines are replaced with the current grid.
+                  Beams named on lines are marked LOADED on save.
                 </div>
               </div>
+
+              <datalist id="iwb-beam-list">
+                {beamRows.map((b) => (
+                  <option key={b.beamNo} value={b.beamNo}>
+                    {b.statusWrk}
+                  </option>
+                ))}
+              </datalist>
+              <datalist id="iwb-warp-cont-list">
+                {warpContracts.map((c) => (
+                  <option key={c.contNo} value={c.contNo} />
+                ))}
+              </datalist>
+              <RowAutoFill watch="beamNo" map={beamFillMap} />
+              <RowAutoFill watch="warpingCntNo" map={warpFillMap} />
+              <RowCalc target="amount" a="beamLength" b="conv" />
+              <WarpedBeamCalc />
 
               <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-3 border border-black p-4">
                 <div className="lg:col-span-3 border-r border-[var(--border-light)] pr-3">
@@ -535,10 +680,10 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-6">
                   <div className="grid grid-cols-2 gap-2">
-                    <div><label className="label block mb-1">Total Amount</label><input name="totalAmountFinal" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.totalAmountFinal ?? ""} /></div>
+                    <div><label className="label block mb-1">Total Amount</label><input name="totalAmountFinal" type="number" step="any" className="input-box mono text-right bg-gray-100" defaultValue={editing?.totalAmountFinal ?? ""} readOnly tabIndex={-1} /></div>
                     <div><label className="label block mb-1">Gst / Ftx</label><input name="gstFtx" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.gstFtx ?? ""} /></div>
                     <div><label className="label block mb-1">Net Weight Rate (Kg)</label><input name="netWeightRate" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.netWeightRate ?? ""} /></div>
-                    <div><label className="label block mb-1">Amt Tot</label><input name="amtTot" type="number" step="any" className="input-box mono text-right bg-green-50" defaultValue={editing?.amtTot ?? ""} /></div>
+                    <div><label className="label block mb-1">Amt Tot</label><input name="amtTot" type="number" step="any" className="input-box mono text-right bg-green-50" defaultValue={editing?.amtTot ?? ""} readOnly tabIndex={-1} /></div>
                   </div>
                 </div>
               </div>

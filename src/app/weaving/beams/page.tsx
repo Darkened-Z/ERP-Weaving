@@ -1,5 +1,6 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -10,12 +11,95 @@ export const dynamic = "force-dynamic";
 export default async function BeamsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{
+    id?: string;
+    adding?: string;
+    error?: string;
+    beam?: string;
+    loom?: string;
+    shed?: string;
+    set?: string;
+    szg?: string;
+    status?: string;
+    prod?: string;
+  }>;
 }) {
   const params = await searchParams;
   const rows = await db.select().from(schema.beams).orderBy(schema.beams.beamNo);
   const beamStatuses = await db.select().from(schema.beamStatuses);
+  const accounts = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.code);
   const selected = params.id ? rows.find((r) => r.id === parseInt(params.id!)) ?? null : null;
+  const isAdding = params.adding === "1";
+
+  // Beams store party names as free text (seed never set them), so the option
+  // value is the account description, not the account code.
+  const partyOpts = accounts
+    .filter((a) => a.level >= 4)
+    .map((a) => ({ value: a.description, label: `${a.code} — ${a.description}` }));
+
+  const f = {
+    beam: (params.beam ?? "").trim(),
+    loom: (params.loom ?? "").trim(),
+    shed: (params.shed ?? "").trim(),
+    set: (params.set ?? "").trim(),
+    szg: (params.szg ?? "").trim(),
+    status: (params.status ?? "").trim(),
+    prod: (params.prod ?? "").trim(),
+  };
+  const loomN = f.loom ? parseInt(f.loom, 10) : null;
+  const has = (v: string | null, needle: string) => (v ?? "").toLowerCase().includes(needle.toLowerCase());
+  const listed = rows.filter(
+    (r) =>
+      (!f.beam || has(r.beamNo, f.beam)) &&
+      (loomN === null || r.loomNo === loomN) &&
+      (!f.shed || has(r.shed, f.shed)) &&
+      (!f.set || has(r.setNo, f.set) || has(r.beamSetNo, f.set)) &&
+      (!f.szg || has(r.szgParty, f.szg)) &&
+      (!f.status || r.statusWrk === f.status) &&
+      (!f.prod || r.type === f.prod)
+  );
+  const filterQS = Object.entries(f)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join("&");
+
+  async function createBeam(formData: FormData) {
+    "use server";
+    const txt = (k: string) => ((formData.get(k) as string) || "").trim() || null;
+    const beamNo = txt("beam_no");
+    if (!beamNo) return;
+    const loomNoRaw = parseInt(formData.get("loom_no") as string);
+
+    let insertedId: number | null = null;
+    let dup = false;
+    try {
+      const [inserted] = await db.insert(schema.beams).values({
+        beamNo,
+        type: txt("type") ?? "WARP",
+        partyTrade: txt("party_trade"),
+        codeConv: txt("code_conv"),
+        statusLoc: txt("status_loc"),
+        szgParty: txt("szg_party"),
+        shed: txt("shed"),
+        loomNo: Number.isFinite(loomNoRaw) ? loomNoRaw : null,
+        setNo: txt("set_no"),
+        beamSetNo: txt("beam_set_no"),
+        statusWrk: "EMPTY",
+      }).returning({ id: schema.beams.id });
+      insertedId = inserted.id;
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message ?? "");
+      const code = String((e as { code?: string })?.code ?? "");
+      if (msg.includes("UNIQUE") || code === "SQLITE_CONSTRAINT_UNIQUE") {
+        dup = true;
+      } else {
+        throw e;
+      }
+    }
+    if (dup) redirect("/weaving/beams?adding=1&error=dup");
+    revalidatePath("/weaving/beams");
+    redirect(`/weaving/beams?id=${insertedId}`);
+  }
 
   async function saveBeam(formData: FormData) {
     "use server";
@@ -60,6 +144,7 @@ export default async function BeamsPage({
             <span className="text-[var(--muted)] text-lg font-normal">({total})</span>
           </h1>
           <div className="flex items-center gap-2">
+            <a href="/weaving/beams?adding=1" className="btn btn-sm">Add Beam</a>
             <a href="/weaving/beams/qr" className="btn btn-outline btn-sm">Print QR Stickers</a>
             <a href="/tickets/new" className="btn btn-outline btn-sm">New Ticket</a>
             <ExcelExportButton
@@ -86,31 +171,32 @@ export default async function BeamsPage({
           </div>
         </div>
 
-        <div className="border border-black p-4 mb-6">
+        <form method="get" className="border border-black p-4 mb-6">
+          {params.id && <input type="hidden" name="id" value={params.id} />}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div>
               <label className="label block mb-1">FIND LOOM#</label>
-              <input className="input-box mono text-[13px]" placeholder="Loom No" />
+              <input name="loom" defaultValue={f.loom} className="input-box mono text-[13px]" placeholder="Loom No" />
             </div>
             <div>
               <label className="label block mb-1">FIND SHED#</label>
-              <input className="input-box mono text-[13px]" placeholder="Shed No" />
+              <input name="shed" defaultValue={f.shed} className="input-box mono text-[13px]" placeholder="Shed No" />
             </div>
             <div>
               <label className="label block mb-1">FIND SETNO</label>
-              <input className="input-box mono text-[13px]" placeholder="Set No" />
+              <input name="set" defaultValue={f.set} className="input-box mono text-[13px]" placeholder="Set No" />
             </div>
             <div>
               <label className="label block mb-1">FIND BEAM</label>
-              <input className="input-box mono text-[13px]" placeholder="Beam No" />
+              <input name="beam" defaultValue={f.beam} className="input-box mono text-[13px]" placeholder="Beam No" />
             </div>
             <div>
               <label className="label block mb-1">SZG PARTY</label>
-              <input className="input-box mono text-[13px]" placeholder="Sizing Party" />
+              <input name="szg" defaultValue={f.szg} className="input-box mono text-[13px]" placeholder="Sizing Party" />
             </div>
             <div>
               <label className="label block mb-1">FIND STATUS</label>
-              <select className="input-box text-[13px]">
+              <select name="status" defaultValue={f.status} className="input-box text-[13px]">
                 <option value="">All</option>
                 {beamStatuses.map((s) => (
                   <option key={s.id} value={s.status}>{s.status}</option>
@@ -121,20 +207,53 @@ export default async function BeamsPage({
           <div className="flex gap-2 mt-3">
             <div>
               <label className="label block mb-1">Beam Prod</label>
-              <select className="input-box text-[13px]">
+              <select name="prod" defaultValue={f.prod} className="input-box text-[13px]">
                 <option value="">All</option>
                 <option value="WRP">WRP</option>
                 <option value="WVG">WVG</option>
               </select>
             </div>
             <div className="flex items-end gap-2">
-              <button className="btn btn-outline btn-sm">Clear</button>
+              <button type="submit" className="btn btn-sm">Find</button>
+              <a href="/weaving/beams" className="btn btn-outline btn-sm">Clear</a>
               <a href="/" className="btn btn-outline btn-sm">Exit</a>
             </div>
           </div>
-        </div>
+        </form>
 
-        {selected && (
+        {isAdding && (
+          <div className="border border-black p-6 mb-6">
+            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4 flex justify-between items-center">
+              <span>New Beam</span>
+              <a href="/weaving/beams" className="text-[var(--muted)] hover:text-[var(--fg)] no-underline">✕ Close</a>
+            </div>
+            {params.error === "dup" && (
+              <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                That beam number already exists. Choose a different one.
+              </div>
+            )}
+            <form action={createBeam}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                <div><label className="label block mb-1">Beams No</label><input name="beam_no" className="input-box mono" required autoFocus /></div>
+                <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue="WARP" /></div>
+                <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} className="input-box" placeholder="Party (F9)" /></div>
+                <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" /></div>
+                <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" /></div>
+                <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} className="input-box" placeholder="Sizing Party (F9)" /></div>
+                <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" /></div>
+                <div><label className="label block mb-1">Loom No</label><input name="loom_no" type="number" className="input-box mono" /></div>
+                <div><label className="label block mb-1">Set#</label><input name="set_no" className="input-box mono" /></div>
+                <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" /></div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button type="submit" className="btn btn-sm">Save</button>
+                <a href="/weaving/beams" className="btn btn-outline btn-sm">Cancel</a>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {selected && !isAdding && (
           <div className="border border-black p-6 mb-6">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4 flex justify-between items-center">
               <span>Edit Beam — {selected.beamNo}</span>
@@ -144,11 +263,11 @@ export default async function BeamsPage({
               <input type="hidden" name="id" value={selected.id} />
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
                 <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue={selected.type ?? ""} /></div>
-                <div><label className="label block mb-1">Party/Trade</label><input name="party_trade" className="input-box" defaultValue={selected.partyTrade ?? ""} /></div>
+                <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} defaultValue={selected.partyTrade ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" defaultValue={selected.codeConv ?? ""} /></div>
                 <div><label className="label block mb-1">Conv Cont</label><input name="contract_no" className="input-box mono" defaultValue={selected.contractNo ?? ""} /></div>
                 <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" defaultValue={selected.statusLoc ?? ""} /></div>
-                <div><label className="label block mb-1">Szg Party</label><input name="szg_party" className="input-box" defaultValue={selected.szgParty ?? ""} /></div>
+                <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} defaultValue={selected.szgParty ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
                 <div><label className="label block mb-1">Loom No</label><input name="loom_no" type="number" className="input-box mono" defaultValue={selected.loomNo ?? ""} /></div>
                 <div><label className="label block mb-1">Set#</label><input name="set_no" className="input-box mono" defaultValue={selected.setNo ?? ""} /></div>
@@ -198,12 +317,12 @@ export default async function BeamsPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {listed.map((r) => {
                 const isSel = r.id === selected?.id;
                 return (
                 <tr key={r.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                   <td className="mono font-bold">
-                    <a href={`/weaving/beams?id=${r.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>{r.beamNo}</a>
+                    <a href={`/weaving/beams?id=${r.id}${filterQS ? `&${filterQS}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>{r.beamNo}</a>
                   </td>
                   <td className="text-[13px]">{r.partyTrade ?? "-"}</td>
                   <td className="mono text-[13px]">{r.codeConv ?? "-"}</td>

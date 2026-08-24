@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -13,7 +14,7 @@ type Account = typeof schema.chartOfAccounts.$inferSelect;
 export default async function ChartOfAccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string; adding?: string; find?: string }>;
+  searchParams: Promise<{ code?: string; adding?: string; find?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const findFilter = params.find?.trim();
@@ -140,6 +141,27 @@ export default async function ChartOfAccountPage({
     "use server";
     const code = (formData.get("code") as string)?.trim();
     if (!code) return;
+    const esc = code.replace(/[\\%_]/g, (m) => "\\" + m);
+    const children = await db
+      .select({ code: schema.chartOfAccounts.code })
+      .from(schema.chartOfAccounts)
+      .where(
+        or(
+          eq(schema.chartOfAccounts.codeHead, code),
+          sql`${schema.chartOfAccounts.code} LIKE ${esc + ".%"} ESCAPE '\\'`,
+        ),
+      )
+      .limit(1);
+    const refs = children.length
+      ? children
+      : await db
+          .select({ id: schema.transDetail.id })
+          .from(schema.transDetail)
+          .where(eq(schema.transDetail.accCode, code))
+          .limit(1);
+    if (refs.length > 0) {
+      redirect(`/accounts?code=${encodeURIComponent(code)}&error=in_use`);
+    }
     await db
       .delete(schema.chartOfAccounts)
       .where(eq(schema.chartOfAccounts.code, code));
@@ -160,6 +182,14 @@ export default async function ChartOfAccountPage({
               {accounts.length} accounts
             </p>
           </div>
+        </div>
+
+        {params.error === "in_use" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Account cannot be deleted: it has child accounts or is used in transactions.
+          </div>
+        )}
+        <div className="hidden">
           <ExcelExportButton
             rows={accounts}
             columns={[
@@ -208,7 +238,7 @@ export default async function ChartOfAccountPage({
                   {formAccount && (
                     <form action={deleteAccount} className="inline">
                       <input type="hidden" name="code" value={formAccount.code} />
-                      <button type="submit" className="btn btn-outline btn-sm">Del</button>
+                      <ConfirmButton message="Delete this account? This cannot be undone.">Del</ConfirmButton>
                     </form>
                   )}
                 </div>

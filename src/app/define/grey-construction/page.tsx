@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -17,7 +18,7 @@ const num = (v: FormDataEntryValue | null): number | null => {
 export default async function GreyConstructionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; reed?: string; pick?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const rows = await db.select().from(schema.greyConstruction).orderBy(schema.greyConstruction.code);
@@ -37,6 +38,26 @@ export default async function GreyConstructionPage({
     : null;
   const isAdding = params.adding === "1";
   const formItem = isAdding ? null : selected;
+
+  const fReed = (params.reed ?? "").trim();
+  const fPick = (params.pick ?? "").trim();
+  const fQ = (params.q ?? "").trim();
+  const fQl = fQ.toLowerCase();
+  const reedN = Number.isFinite(parseFloat(fReed)) ? parseFloat(fReed) : null;
+  const pickN = Number.isFinite(parseFloat(fPick)) ? parseFloat(fPick) : null;
+  const listed = rows.filter(
+    (r) =>
+      (reedN === null || r.reed === reedN) &&
+      (pickN === null || r.pick === pickN) &&
+      (!fQ || r.code.toLowerCase().includes(fQl) || r.description.toLowerCase().includes(fQl))
+  );
+  const filterQS = [
+    fReed && `reed=${encodeURIComponent(fReed)}`,
+    fPick && `pick=${encodeURIComponent(fPick)}`,
+    fQ && `q=${encodeURIComponent(fQ)}`,
+  ]
+    .filter(Boolean)
+    .join("&");
 
   async function saveConstruction(formData: FormData) {
     "use server";
@@ -128,7 +149,7 @@ export default async function GreyConstructionPage({
     { name: "weft_3", label: "RPT 3", value: formItem?.weft3 },
   ];
 
-  const rowHref = (id: number) => `/define/grey-construction?id=${id}`;
+  const rowHref = (id: number) => `/define/grey-construction?id=${id}` + (filterQS ? `&${filterQS}` : "");
 
   return (
     <Shell active="grey-construction">
@@ -240,10 +261,28 @@ export default async function GreyConstructionPage({
           {formItem && (
             <form action={deleteConstruction} className="inline mt-2">
               <input type="hidden" name="id" value={formItem.id} />
-              <button type="submit" className="btn btn-outline btn-sm">Del</button>
+              <ConfirmButton>Del</ConfirmButton>
             </form>
           )}
         </div>
+
+        <form method="get" className="flex items-end gap-2 mb-3 flex-wrap">
+          <div className="text-[11px] uppercase tracking-[0.1em] font-semibold self-center">Find</div>
+          <div>
+            <label className="label block mb-1">Read</label>
+            <input name="reed" type="number" step="any" defaultValue={fReed} className="input-box mono w-24 text-[13px]" />
+          </div>
+          <div>
+            <label className="label block mb-1">Pick</label>
+            <input name="pick" type="number" step="any" defaultValue={fPick} className="input-box mono w-24 text-[13px]" />
+          </div>
+          <div className="flex-1 min-w-44">
+            <label className="label block mb-1">Code / Desc</label>
+            <input name="q" defaultValue={fQ} className="input-box text-[13px]" placeholder="Gray Code or Description..." />
+          </div>
+          <button type="submit" className="btn btn-outline btn-sm">Find</button>
+          {(fReed || fPick || fQ) && <a href="/define/grey-construction" className="btn btn-outline btn-sm">Clear</a>}
+        </form>
 
         <div className="overflow-x-auto">
           <table>
@@ -258,7 +297,7 @@ export default async function GreyConstructionPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {listed.map((r) => {
                 const isSel = r.id === selected?.id;
                 const linkStyle = { color: isSel ? "white" : "inherit" };
                 const href = rowHref(r.id);

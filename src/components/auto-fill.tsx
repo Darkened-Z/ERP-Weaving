@@ -54,6 +54,48 @@ export function AutoFill({
 }
 
 /**
+ * Row-scoped live computation for line grids: for every <tr> in the document,
+ * target = a [× b] × factor, recomputed whenever a or b in that row changes.
+ * With `onlyWhenEmpty`, fills the target only if it is blank (Oracle's
+ * "default lbs = bags × 100 unless typed" behavior).
+ */
+export function RowCalc({
+  target,
+  a,
+  b,
+  factor = 1,
+  round = 2,
+  onlyWhenEmpty = false,
+}: {
+  target: string;
+  a: string;
+  b?: string;
+  factor?: number;
+  round?: number;
+  onlyWhenEmpty?: boolean;
+}) {
+  useEffect(() => {
+    const onInput = (e: Event) => {
+      const src = e.target as HTMLInputElement;
+      if (!src?.name || (src.name !== a && src.name !== b)) return;
+      const tr = src.closest("tr");
+      if (!tr) return;
+      const t = tr.querySelector<HTMLInputElement>(`[name="${target}"]`);
+      if (!t || (onlyWhenEmpty && t.value)) return;
+      const av = parseFloat(tr.querySelector<HTMLInputElement>(`[name="${a}"]`)?.value ?? "");
+      const bv = b ? parseFloat(tr.querySelector<HTMLInputElement>(`[name="${b}"]`)?.value ?? "") : 1;
+      if (!Number.isFinite(av) || !Number.isFinite(bv)) return;
+      const p = 10 ** round;
+      t.value = String(Math.round(av * bv * factor * p) / p);
+      t.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    document.addEventListener("input", onInput, true);
+    return () => document.removeEventListener("input", onInput, true);
+  }, [target, a, b, factor, round, onlyWhenEmpty]);
+  return null;
+}
+
+/**
  * Per-row auto-fill for line grids. When an input named `watch` inside a <tr>
  * changes, fills sibling inputs in the same row from `map[value]`
  * (keys of the fill object = sibling input names). Only fills empty siblings,

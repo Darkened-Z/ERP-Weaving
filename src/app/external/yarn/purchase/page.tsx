@@ -2,10 +2,10 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, ne, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -23,6 +23,8 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const LOOM_TYPES = ["SULZER", "RAPIER", "AIRJET", "PROJECTILE"];
 const POSTING_OPTIONS = ["Y", "N"];
@@ -111,18 +113,35 @@ export default async function YarnPurchaseVoucherPage({
     .from(schema.extYarnPurContract)
     .orderBy(desc(schema.extYarnPurContract.contNo));
 
-  const contractOpts = purContracts.map((c) => ({
-    value: c.contNo,
-    label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
-  }));
+  // Bags already received per contract (all vouchers except the one being edited).
+  const purAggByCont = await db
+    .select({
+      contNo: schema.extYarnPurVoucherLine.contNo,
+      bags: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+    })
+    .from(schema.extYarnPurVoucherLine)
+    .where(formVoucher ? ne(schema.extYarnPurVoucherLine.voucherId, formVoucher.id) : undefined)
+    .groupBy(schema.extYarnPurVoucherLine.contNo);
+  const purBagsByCont: Record<string, number> = {};
+  for (const r of purAggByCont) if (r.contNo) purBagsByCont[r.contNo] = r.bags;
+
+  const contractOpts = purContracts
+    .filter((c) => c.status === "R")
+    .map((c) => ({
+      value: c.contNo,
+      label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
+    }));
   // Picking a contract in the header auto-fills the party/broker (comboboxes),
-  // the brokerage %/bag, and the read-only contract-info strip.
+  // the brokerage %/bag, received/balance, and the read-only contract-info strip.
   const contractMap: Record<string, Record<string, string | number>> = {};
   for (const c of purContracts) {
+    const received = purBagsByCont[c.contNo] ?? 0;
     contractMap[c.contNo] = {
       party: c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "",
       broker: c.broker ? descByCode[c.broker] ?? c.broker : "",
       per_bag: c.brokagePerBag ?? "",
+      pur: received,
+      bal: (c.qtyBags ?? 0) - received,
       ci_rate: c.ratePerLbs ?? "",
       ci_age: c.agePercent ?? "",
       ci_days: c.days ?? "",
@@ -147,7 +166,33 @@ export default async function YarnPurchaseVoucherPage({
     })
     .from(schema.extYarnPurVoucher);
   const upcomingVNo = "YPV-" + String((nextVNoVal[0]?.m ?? 0) + 1).padStart(4, "0");
-  const upcomingLvNo = vouchers.length + 1;
+  const lastVNoNum = nextVNoVal[0]?.m ?? 0;
+
+  const savedContract = formVoucher?.cont
+    ? purContracts.find((c) => c.contNo === formVoucher.cont)
+    : undefined;
+  const savedPur = savedContract ? purBagsByCont[savedContract.contNo] ?? 0 : null;
+  const savedBal = savedContract ? (savedContract.qtyBags ?? 0) - (savedPur ?? 0) : null;
+
+  let salAvgRateCalc: number | null = null;
+  if (formVoucher?.party) {
+    const agg = await db
+      .select({
+        wsum: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag} * ${schema.extYarnSalVoucherLine.rate}), 0)`,
+        bsum: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+      })
+      .from(schema.extYarnSalVoucherLine)
+      .innerJoin(
+        schema.extYarnSalVoucher,
+        eq(schema.extYarnSalVoucherLine.voucherId, schema.extYarnSalVoucher.id)
+      )
+      .where(eq(schema.extYarnSalVoucher.party, formVoucher.party));
+    const { wsum, bsum } = agg[0] ?? { wsum: 0, bsum: 0 };
+    salAvgRateCalc = bsum > 0 ? round2(wsum / bsum) : null;
+  }
+
+  const countDefaultMap: Record<string, Record<string, string | number>> = {};
+  for (const c of countList) countDefaultMap[String(c.code)] = { line_pack: 24 };
 
   async function saveVoucher(formData: FormData) {
     "use server";
@@ -255,6 +300,14 @@ export default async function YarnPurchaseVoucherPage({
       });
     }
 
+    if (!validLines.some((l) => (l.bag ?? 0) > 0 || (l.lbs ?? 0) > 0)) {
+      redirect(
+        Number.isFinite(id) && id > 0
+          ? `/external/yarn/purchase?id=${id}&error=no_lines`
+          : `/external/yarn/purchase?error=no_lines`
+      );
+    }
+
     const nowIso = new Date().toISOString();
 
     if (Number.isFinite(id) && id > 0) {
@@ -339,6 +392,30 @@ export default async function YarnPurchaseVoucherPage({
     redirect("/external/yarn/purchase");
   }
 
+  async function setOk(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string, 10);
+    if (!Number.isFinite(id)) return;
+    await db
+      .update(schema.extYarnPurVoucher)
+      .set({ statusOk: "OK" })
+      .where(eq(schema.extYarnPurVoucher.id, id));
+    revalidatePath("/external/yarn/purchase");
+    redirect(`/external/yarn/purchase?id=${id}`);
+  }
+
+  async function clearOk(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string, 10);
+    if (!Number.isFinite(id)) return;
+    await db
+      .update(schema.extYarnPurVoucher)
+      .set({ statusOk: null })
+      .where(eq(schema.extYarnPurVoucher.id, id));
+    revalidatePath("/external/yarn/purchase");
+    redirect(`/external/yarn/purchase?id=${id}`);
+  }
+
   const emptySlots = Math.max(LINE_ROWS - lines.length, 3);
   const gridRows: (typeof lines[number] | null)[] = [
     ...lines,
@@ -414,6 +491,11 @@ export default async function YarnPurchaseVoucherPage({
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Voucher number already exists. Try again.
+          </div>
+        )}
+        {params.error === "no_lines" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            At least one line with Bag or Lbs is required. Nothing was saved.
           </div>
         )}
 
@@ -531,7 +613,7 @@ export default async function YarnPurchaseVoucherPage({
                     <label className="label block mb-1">LV.No</label>
                     <input
                       className="input-box mono bg-gray-100 text-center"
-                      defaultValue={formVoucher?.lvNo ?? upcomingLvNo}
+                      defaultValue={formVoucher?.lvNo ?? lastVNoNum}
                       readOnly
                       tabIndex={-1}
                     />
@@ -595,16 +677,33 @@ export default async function YarnPurchaseVoucherPage({
                     </div>
                   </div>
                   <div className="lg:col-span-3 flex items-end gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      title="Clear form"
-                    >
-                      Clear-OK
-                    </button>
-                    <button type="button" className="btn btn-outline btn-sm">
-                      OK
-                    </button>
+                    {formVoucher && (
+                      <>
+                        <button
+                          type="submit"
+                          formAction={clearOk}
+                          formNoValidate
+                          className="btn btn-outline btn-sm"
+                          title="Clear OK status"
+                        >
+                          Clear-OK
+                        </button>
+                        <button
+                          type="submit"
+                          formAction={setOk}
+                          formNoValidate
+                          className="btn btn-outline btn-sm"
+                          title="Mark voucher OK"
+                        >
+                          OK
+                        </button>
+                        {formVoucher.statusOk === "OK" && (
+                          <span className="mono text-[11px] font-bold border border-black px-2 py-1">
+                            OK
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   <div className="lg:col-span-2">
@@ -660,7 +759,7 @@ export default async function YarnPurchaseVoucherPage({
                       watch="cont"
                       map={contractMap}
                       combos={["party", "broker"]}
-                      inputs={["per_bag", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
+                      inputs={["per_bag", "pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                     />
                   </div>
                   <div className="lg:col-span-2">
@@ -670,7 +769,7 @@ export default async function YarnPurchaseVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.pur ?? ""}
+                      defaultValue={savedPur ?? formVoucher?.pur ?? ""}
                       readOnly
                     />
                   </div>
@@ -681,7 +780,7 @@ export default async function YarnPurchaseVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.bal ?? ""}
+                      defaultValue={savedBal ?? formVoucher?.bal ?? ""}
                       readOnly
                     />
                   </div>
@@ -692,7 +791,7 @@ export default async function YarnPurchaseVoucherPage({
                       type="number"
                       step="any"
                       className="input-box mono bg-gray-100"
-                      defaultValue={formVoucher?.salAvgRate ?? ""}
+                      defaultValue={salAvgRateCalc ?? formVoucher?.salAvgRate ?? ""}
                       readOnly
                     />
                   </div>
@@ -792,11 +891,14 @@ export default async function YarnPurchaseVoucherPage({
 
                 <div className="mt-6">
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
+                  <RowAutoFill watch="line_count" map={countDefaultMap} />
+                  <RowCalc target="line_lbs" a="line_bag" factor={100} round={0} onlyWhenEmpty />
+                  <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
                   </div>
                   <div className="overflow-x-auto border border-black">
-                    <table style={{ minWidth: "1600px" }}>
+                    <table style={{ minWidth: "1700px" }}>
                       <thead>
                         <tr>
                           <th style={{ width: "30px" }}>#</th>
@@ -815,6 +917,7 @@ export default async function YarnPurchaseVoucherPage({
                           <th>Despatch Party</th>
                           <th>Rate</th>
                           <th>Rate Sv</th>
+                          <th>Amt</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -940,6 +1043,21 @@ export default async function YarnPurchaseVoucherPage({
                                 step="any"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.rateSv ?? ""}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                name="line_amt"
+                                type="number"
+                                step="any"
+                                className="input-box mono text-[12px] bg-gray-100"
+                                defaultValue={
+                                  row?.lbs != null && row?.rate != null
+                                    ? round2(row.lbs * row.rate)
+                                    : ""
+                                }
+                                readOnly
+                                tabIndex={-1}
                               />
                             </td>
                           </tr>
@@ -1122,6 +1240,11 @@ export default async function YarnPurchaseVoucherPage({
                       <td className="mono text-[12px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {v.posting === "Y" ? "POSTED" : "PENDING"}
+                          {v.statusOk === "OK" && (
+                            <span className="ml-1 border border-current px-1 text-[10px] font-bold">
+                              OK
+                            </span>
+                          )}
                         </a>
                       </td>
                     </tr>

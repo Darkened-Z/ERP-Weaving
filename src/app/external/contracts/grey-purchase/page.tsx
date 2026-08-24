@@ -1,6 +1,9 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { Combobox } from "@/components/combobox";
+import { AutoAmount } from "@/components/auto-amount";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -14,7 +17,7 @@ const num = (v: FormDataEntryValue | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-const WEAVE_OPTIONS = ["PLAIN", "TWILL", "SATIN", "DRILL"] as const;
+const WEAVE_OPTIONS = ["1/1", "PLAIN", "TWILL", "SATIN", "DRILL"] as const;
 
 const STATUS_OPTIONS = [
   { value: "R", label: "R - Running" },
@@ -80,10 +83,28 @@ export default async function GreyPurchaseContractPage({
     return `GPC-${String(maxN + 1).padStart(4, "0")}`;
   })();
 
-  const nextLContNo = contracts.reduce(
+  const lastLContNo = contracts.reduce(
     (max, c) => (c.lContNo && c.lContNo > max ? c.lContNo : max),
     0
-  ) + 1;
+  );
+
+  const parties = await db
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      level: schema.chartOfAccounts.level,
+    })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .orderBy(schema.chartOfAccounts.description);
+  const greyList = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .where(eq(schema.greyConstruction.status, "A"))
+    .orderBy(schema.greyConstruction.code);
+
+  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -113,11 +134,8 @@ export default async function GreyPurchaseContractPage({
     const salvage = (formData.get("salvage") as string)?.trim() || null;
     const quantityMtr = num(formData.get("quantity_mtr"));
     const ratePerMtr = num(formData.get("rate_per_mtr"));
-    const amount =
-      quantityMtr != null && ratePerMtr != null
-        ? quantityMtr * ratePerMtr
-        : num(formData.get("amount"));
     const extMtr = num(formData.get("ext_mtr"));
+    const amount = ((quantityMtr ?? 0) + (extMtr ?? 0)) * (ratePerMtr ?? 0);
     const extDate = (formData.get("ext_date") as string)?.trim() || null;
     const gstRate = num(formData.get("gst_rate"));
     const specialInst = (formData.get("special_inst") as string)?.trim() || null;
@@ -165,6 +183,19 @@ export default async function GreyPurchaseContractPage({
       if (d || m !== null || loc) {
         deliveryRows.push({ deliveryDate: d, meters: m, location: loc });
       }
+    }
+
+    const errQ = (slug: string) =>
+      Number.isFinite(id) ? `?id=${id}&error=${slug}` : `?adding=1&error=${slug}`;
+
+    if (quantityMtr == null || quantityMtr <= 0 || ratePerMtr == null || ratePerMtr <= 0) {
+      redirect("/external/contracts/grey-purchase" + errQ("qty_rate_required"));
+    }
+
+    const totalQty = (quantityMtr ?? 0) + (extMtr ?? 0);
+    const deliveryTotal = deliveryRows.reduce((s, d) => s + (d.meters ?? 0), 0);
+    if (deliveryTotal > 0 && Math.abs(deliveryTotal - totalQty) > totalQty * 0.05) {
+      redirect("/external/contracts/grey-purchase" + errQ("qty_tolerance"));
     }
 
     let contractId: number | null = Number.isFinite(id) ? id : null;
@@ -320,6 +351,16 @@ export default async function GreyPurchaseContractPage({
             Contract No already exists. Choose a different code.
           </div>
         )}
+        {params.error === "qty_rate_required" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Quantity (Mtr) and Rate / Mtr are required and must be greater than zero.
+          </div>
+        )}
+        {params.error === "qty_tolerance" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Delivery schedule total must be within ±5% of contract quantity plus ext meters.
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 mb-8">
           <div className="border border-black p-4">
@@ -332,7 +373,7 @@ export default async function GreyPurchaseContractPage({
                 {formItem && (
                   <form action={deleteContract} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <button type="submit" className="btn btn-outline btn-sm">Del</button>
+                    <ConfirmButton message="Delete this contract and its delivery schedule? This cannot be undone.">Del</ConfirmButton>
                   </form>
                 )}
               </div>
@@ -366,7 +407,7 @@ export default async function GreyPurchaseContractPage({
                   <label className="label block mb-1">LCont.No</label>
                   <input
                     className="input-box mono bg-gray-100"
-                    defaultValue={formItem?.lContNo ?? nextLContNo}
+                    defaultValue={formItem?.lContNo ?? lastLContNo}
                     readOnly
                     tabIndex={-1}
                   />
@@ -432,11 +473,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
                 <div className="col-span-3">
                   <label className="label block mb-1">Party</label>
-                  <input
-                    name="party"
-                    className="input-box"
-                    defaultValue={formItem?.party ?? ""}
-                  />
+                  <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box" />
                 </div>
               </div>
 
@@ -445,11 +482,7 @@ export default async function GreyPurchaseContractPage({
                   <label className="label block mb-1">
                     Broaker <span className="text-[9px] font-normal">(F9)</span>
                   </label>
-                  <input
-                    name="broker"
-                    className="input-box"
-                    defaultValue={formItem?.broker ?? ""}
-                  />
+                  <Combobox name="broker" options={partyOpts} defaultValue={formItem?.broker ?? ""} placeholder="Select broker" className="input-box" />
                 </div>
               </div>
 
@@ -479,15 +512,11 @@ export default async function GreyPurchaseContractPage({
               <div className="grid grid-cols-4 gap-3 mb-3">
                 <div>
                   <label className="label block mb-1">Grey Code</label>
-                  <input
-                    name="grey_code"
-                    className="input-box mono"
-                    defaultValue={formItem?.greyCode ?? ""}
-                  />
+                  <Combobox name="grey_code" options={greyOpts} defaultValue={formItem?.greyCode ?? ""} placeholder="Select grey code" />
                 </div>
                 <div>
                   <label className="label block mb-1">Weave</label>
-                  <select name="weave" className="input-box" defaultValue={formItem?.weave ?? ""}>
+                  <select name="weave" className="input-box" defaultValue={formItem?.weave ?? "1/1"}>
                     <option value="">--</option>
                     {WEAVE_OPTIONS.map((w) => (
                       <option key={w} value={w}>{w}</option>
@@ -514,6 +543,8 @@ export default async function GreyPurchaseContractPage({
                     name="quantity_mtr"
                     type="number"
                     step="any"
+                    min="0.01"
+                    required
                     className="input-box mono"
                     defaultValue={formItem?.quantityMtr ?? ""}
                   />
@@ -524,6 +555,8 @@ export default async function GreyPurchaseContractPage({
                     name="rate_per_mtr"
                     type="number"
                     step="any"
+                    min="0.01"
+                    required
                     className="input-box mono"
                     defaultValue={formItem?.ratePerMtr ?? ""}
                   />
@@ -541,6 +574,7 @@ export default async function GreyPurchaseContractPage({
                   />
                 </div>
               </div>
+              <AutoAmount qty="quantity_mtr" qty2="ext_mtr" rate="rate_per_mtr" target="amount" />
 
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <div>
