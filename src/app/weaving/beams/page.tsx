@@ -157,12 +157,10 @@ export default async function BeamsPage({
                 <div>
                   <label className="label block mb-1">Status Wrk</label>
                   <select name="status_wrk" className="input-box" defaultValue={selected.statusWrk ?? "RUNNING"}>
-                    <option value="RUNNING">RUNNING</option>
-                    <option value="STOP">STOP</option>
-                    {beamStatuses.filter((s) => !["RUNNING", "STOP"].includes(s.status)).map((s) => (
+                    {beamStatuses.map((s) => (
                       <option key={s.id} value={s.status}>{s.status}</option>
                     ))}
-                    {selected.statusWrk && !["RUNNING", "STOP"].includes(selected.statusWrk) && !beamStatuses.some((s) => s.status === selected.statusWrk) && (
+                    {selected.statusWrk && !beamStatuses.some((s) => s.status === selected.statusWrk) && (
                       <option value={selected.statusWrk}>{selected.statusWrk}</option>
                     )}
                   </select>
