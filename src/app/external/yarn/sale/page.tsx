@@ -118,8 +118,16 @@ export default async function YarnSaleVoucherPage({
   const salBagsByCont: Record<string, number> = {};
   for (const r of salAggByCont) if (r.contNo) salBagsByCont[r.contNo] = r.bags;
 
+  // Scope the contract picker to the currently-chosen party (Oracle: contracts open
+  // only for their own party). When no party is chosen, show all open contracts.
+  const savedPartyDesc = formVoucher?.party ?? "";
   const contractOpts = salContracts
     .filter((c) => c.status === "R")
+    .filter(
+      (c) =>
+        !savedPartyDesc ||
+        (c.partyCode && (descByCode[c.partyCode] === savedPartyDesc || c.partyCode === savedPartyDesc))
+    )
     .map((c) => ({
       value: c.contNo,
       label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
@@ -150,11 +158,87 @@ export default async function YarnSaleVoucherPage({
   }
 
   const countList = await db
-    .select({ code: schema.yarnCounts.countCode })
+    .select({ code: schema.yarnCounts.countCode, type: schema.yarnCounts.type })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
-  for (const c of countList) countDefaultMap[String(c.code)] = { line_pack: 24 };
+  const countBlendByCode: Record<string, string> = {};
+  for (const c of countList) {
+    countDefaultMap[String(c.code)] = { line_pack: 24 };
+    if (c.type) countBlendByCode[String(c.code)] = c.type;
+  }
+
+  // Stock-per-count-per-godown: what's actually available to sell right now.
+  // Purchases in (extYarnPurVoucherLine) minus sales out (extYarnSalVoucherLine)
+  // grouped by (count, despatchParty). Excludes the voucher being edited so its
+  // own lines don't self-deduct.
+  const purByCountLoc = await db
+    .select({
+      count: schema.extYarnPurVoucherLine.count,
+      loc: schema.extYarnPurVoucherLine.despatchParty,
+      bag: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+      con: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.con}), 0)`,
+      lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+      wrate: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+    })
+    .from(schema.extYarnPurVoucherLine)
+    .groupBy(schema.extYarnPurVoucherLine.count, schema.extYarnPurVoucherLine.despatchParty);
+  const salByCountLoc = await db
+    .select({
+      count: schema.extYarnSalVoucherLine.count,
+      loc: schema.extYarnSalVoucherLine.despatchParty,
+      bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+      con: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.cons}), 0)`,
+      lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
+    })
+    .from(schema.extYarnSalVoucherLine)
+    .where(formVoucher ? ne(schema.extYarnSalVoucherLine.voucherId, formVoucher.id) : undefined)
+    .groupBy(schema.extYarnSalVoucherLine.count, schema.extYarnSalVoucherLine.despatchParty);
+
+  type Stock = { bag: number; con: number; lbs: number; avgRate: number };
+  const stockKey = (c: string, l: string) => `${c}||${l}`;
+  const stockMap = new Map<string, Stock>();
+  for (const p of purByCountLoc) {
+    if (!p.count) continue;
+    const loc = p.loc ?? "";
+    stockMap.set(stockKey(p.count, loc), {
+      bag: p.bag,
+      con: p.con,
+      lbs: p.lbs,
+      avgRate: p.bag > 0 ? round2(p.wrate / p.bag) : 0,
+    });
+  }
+  for (const s of salByCountLoc) {
+    if (!s.count) continue;
+    const k = stockKey(s.count, s.loc ?? "");
+    const cur = stockMap.get(k);
+    if (!cur) continue;
+    cur.bag -= s.bag;
+    cur.con -= s.con;
+    cur.lbs -= s.lbs;
+  }
+
+  // Build the enriched line-count picker: value is "count||despatchLoc" so each
+  // (count, godown) combo is a distinct option. Only rows with balance > 0.
+  type CountStockOpt = { value: string; label: string; desc?: string };
+  const countStockOpts: CountStockOpt[] = [];
+  const countStockFillMap: Record<string, Record<string, string | number>> = {};
+  for (const [key, s] of stockMap.entries()) {
+    if (s.bag <= 0 && s.lbs <= 0) continue;
+    const [c, loc] = key.split("||");
+    const blend = countBlendByCode[c] ?? "";
+    const label = `${c} ${blend ? `(${blend})` : ""} — bal ${s.bag.toFixed(2)} bag / ${s.lbs.toFixed(0)} lbs @ ${s.avgRate} — ${loc || "—"}`;
+    countStockOpts.push({ value: key, label });
+    countStockFillMap[key] = {
+      line_count: c,
+      line_bld: blend,
+      line_pack: 24,
+      line_rate: s.avgRate,
+      line_unit: "GDN",
+      line_despatch_party: loc,
+    };
+  }
+  countStockOpts.sort((a, b) => a.label.localeCompare(b.label));
   // Party-specific rates only apply once the voucher has a saved party.
   const savedPartyCode = formVoucher?.party
     ? partyAccounts.find((p) => p.description === formVoucher.party)?.code
@@ -549,6 +633,20 @@ export default async function YarnSaleVoucherPage({
             <option key={c.contNo} value={c.contNo} />
           ))}
         </datalist>
+        <datalist id="ysv-stock-list">
+          {countStockOpts.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </datalist>
+        <datalist id="ysv-count-list">
+          {countList.map((c) => (
+            <option key={c.code} value={String(c.code)}>
+              {c.type ?? ""}
+            </option>
+          ))}
+        </datalist>
 
         <form
           id="ysv-find-form"
@@ -634,8 +732,9 @@ export default async function YarnSaleVoucherPage({
                       className="input-box mono"
                       defaultValue={formVoucher?.type ?? "SAL"}
                     >
-                      <option value="SAL">SALE</option>
-                      <option value="RET">RETURN</option>
+                      <option value="SAL">SAL</option>
+                      <option value="RTN">RTN</option>
+                      <option value="CON">CON</option>
                     </select>
                   </div>
                   <div className="lg:col-span-1">
@@ -933,6 +1032,7 @@ export default async function YarnSaleVoucherPage({
                 <div className="mt-6">
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
+                  <RowAutoFill watch="line_stock_key" map={countStockFillMap} />
                   <RowCalc target="line_lbs" a="line_bag" factor={100} round={0} onlyWhenEmpty />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
@@ -944,6 +1044,7 @@ export default async function YarnSaleVoucherPage({
                         <tr>
                           <th style={{ width: "30px" }}>#</th>
                           <th>Cont.#</th>
+                          <th title="Pick a purchased count in stock — auto-fills the row">Stock</th>
                           <th>Count</th>
                           <th>Bld</th>
                           <th>Pack</th>
@@ -974,9 +1075,19 @@ export default async function YarnSaleVoucherPage({
                                 defaultValue={row?.contNo ?? ""}
                               />
                             </td>
+                            <td style={{ minWidth: "180px" }}>
+                              <input
+                                name="line_stock_key"
+                                list="ysv-stock-list"
+                                className="input-box mono text-[11px]"
+                                placeholder="pick from stock…"
+                                defaultValue=""
+                              />
+                            </td>
                             <td>
                               <input
                                 name="line_count"
+                                list="ysv-count-list"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.count ?? ""}
                               />
