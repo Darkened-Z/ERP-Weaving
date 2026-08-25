@@ -99,6 +99,7 @@ export default async function GreySalesContractPage({
     .select({
       code: schema.chartOfAccounts.code,
       description: schema.chartOfAccounts.description,
+      descShort: schema.chartOfAccounts.descShort,
       level: schema.chartOfAccounts.level,
     })
     .from(schema.chartOfAccounts)
@@ -110,7 +111,14 @@ export default async function GreySalesContractPage({
     .where(eq(schema.greyConstruction.status, "A"))
     .orderBy(schema.greyConstruction.code);
 
-  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Short code (HAMIDAN) is the visible token; full name is the helper description.
+  const partyOpts = parties.map((p) => ({
+    value: p.description,
+    label: `${p.descShort ?? p.code} — ${p.description}`,
+    desc: p.description,
+  }));
+  const partyDescByShort: Record<string, string> = {};
+  for (const p of parties) if (p.descShort) partyDescByShort[p.descShort] = p.description;
   const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}`, desc: g.description }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
