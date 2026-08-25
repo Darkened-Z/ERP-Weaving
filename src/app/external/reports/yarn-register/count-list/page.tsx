@@ -74,6 +74,15 @@ export default async function CountListPage({
   const purRows = await db.select().from(schema.extYarnPurContract).where(and(...purConditions));
   const salRows = await db.select().from(schema.extYarnSalContract).where(and(...salConditions));
 
+  const accountRows = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts);
+  const partyDescByCode = new Map(accountRows.map((r) => [r.code, r.description]));
+  const countLookup = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(countLookup.map((r) => [r.countCode, r.description]));
+
   const combined: Row[] = [
     ...purRows.map((r) => ({
       type: "PUR" as const,
@@ -204,8 +213,8 @@ export default async function CountListPage({
                     <td>{r.type}</td>
                     <td>{r.contNo}</td>
                     <td>{r.contDate}</td>
-                    <td>{r.party ?? "—"}</td>
-                    <td>{r.countCode ?? "—"}</td>
+                    <td>{r.party ? (partyDescByCode.get(r.party) ? `${r.party} — ${partyDescByCode.get(r.party)}` : r.party) : "—"}</td>
+                    <td>{r.countCode ? (countDescByCode.get(r.countCode) ? `${r.countCode} — ${countDescByCode.get(r.countCode)}` : r.countCode) : "—"}</td>
                     <td>{r.brand ?? "—"}</td>
                     <td className="num">{fmt(r.qtyBags)}</td>
                     <td className="num">{fmt(r.ratePerLbs, 2)}</td>

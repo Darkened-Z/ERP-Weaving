@@ -28,7 +28,12 @@ export default async function YarnStockPage({
   const count = p.count?.trim() ?? "";
   const location = p.location?.trim() ?? "";
 
-  const [partyOpts, countOpts] = await Promise.all([partyByNameOptions(), yarnCountOptions()]);
+  const [partyOpts, countOpts, countMetaRows] = await Promise.all([
+    partyByNameOptions(),
+    yarnCountOptions(),
+    db.select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description }).from(schema.yarnCounts),
+  ]);
+  const countDescMap = new Map(countMetaRows.map((r) => [r.code, r.description]));
 
   const receiptConds = [
     gte(schema.intYarnReceipt.vDate, from),
@@ -217,7 +222,12 @@ export default async function YarnStockPage({
               ) : (
                 rows.map((r) => (
                   <tr key={r.count}>
-                    <td className="mono font-bold">{r.count}</td>
+                    <td className="mono font-bold">
+                      {r.count}
+                      {countDescMap.get(r.count) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{countDescMap.get(r.count)}</div>
+                      ) : null}
+                    </td>
                     <td className="mono text-right">{fmt(r.rcvBags)}</td>
                     <td className="mono text-right">{fmt(r.rcvLbs)}</td>
                     <td className="mono text-right">{fmt(r.issBags)}</td>

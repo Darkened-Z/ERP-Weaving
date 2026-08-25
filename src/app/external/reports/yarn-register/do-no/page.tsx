@@ -70,6 +70,11 @@ export default async function DoNoPage({
     for (const a of accounts) acctMap.set(a.code, a.description);
   }
 
+  const countLookup = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(countLookup.map((r) => [r.countCode, r.description]));
+
   const sorted = rows.slice().sort((a, b) => {
     const cmp = (a.deliveryDate ?? "").localeCompare(b.deliveryDate ?? "");
     if (cmp !== 0) return cmp;
@@ -178,7 +183,7 @@ export default async function DoNoPage({
                       <td>{r.contNo}</td>
                       <td>{r.deliveryDate ?? "—"}</td>
                       <td>{partyDisplay}</td>
-                      <td>{r.countCode ?? "—"}</td>
+                      <td>{r.countCode ? (countDescByCode.get(r.countCode) ? `${r.countCode} — ${countDescByCode.get(r.countCode)}` : r.countCode) : "—"}</td>
                       <td className="num">{fmt(r.bags)}</td>
                       <td>{r.location ?? "—"}</td>
                     </tr>

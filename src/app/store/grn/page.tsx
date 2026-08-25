@@ -626,7 +626,10 @@ export default async function GrnPage({
                     </td>
                     <td>
                       <a href={href} className="no-underline block" style={linkStyle}>
-                        {r.supplier}
+                        <div>{r.supplier}</div>
+                        {r.supplierCode && (
+                          <div className="text-[11px] text-[var(--muted)]">{r.supplierCode}</div>
+                        )}
                       </a>
                     </td>
                     <td className="mono text-[13px]">{r.invoiceNo ?? ""}</td>

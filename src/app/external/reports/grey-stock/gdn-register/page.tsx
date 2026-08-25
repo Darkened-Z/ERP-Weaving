@@ -38,6 +38,10 @@ export default async function GdnRegisterPage({
 
   const f = await readFilters(searchParams);
   const [company] = await db.select().from(schema.companyProfile).limit(1);
+  const accountRows = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts);
+  const partyCodeByName = new Map(accountRows.map((r) => [r.description, r.code]));
 
   const conditions = [
     gte(schema.extGodownStock.vDate, f.from),
@@ -134,8 +138,14 @@ export default async function GdnRegisterPage({
                           <td className="mono">{r.vDate}</td>
                           <td className="mono">{r.vNo}</td>
                           <td className="mono">{r.kpNo ?? "-"}</td>
-                          <td>{r.gdnParty ?? "-"}</td>
-                          <td>{r.purchaseParty ?? "-"}</td>
+                          <td>
+                            {r.gdnParty ?? "-"}
+                            {r.gdnParty && partyCodeByName.get(r.gdnParty) ? ` (${partyCodeByName.get(r.gdnParty)})` : ""}
+                          </td>
+                          <td>
+                            {r.purchaseParty ?? "-"}
+                            {r.purchaseParty && partyCodeByName.get(r.purchaseParty) ? ` (${partyCodeByName.get(r.purchaseParty)})` : ""}
+                          </td>
                           <td className="mono">{r.salContNo ?? "-"}</td>
                           <td className="num">{r.meter != null ? fmt(r.meter) : "-"}</td>
                           <td className="num">{r.netMeter != null ? fmt(r.netMeter) : "-"}</td>

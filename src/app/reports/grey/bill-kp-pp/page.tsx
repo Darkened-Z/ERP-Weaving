@@ -27,6 +27,9 @@ export default async function GreyBillKpPpPage({
 
   const partyOpts = await partyByNameOptions();
 
+  const accounts = await db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts);
+  const partyCodeByName = new Map(accounts.map((a) => [a.description ?? "", a.code]));
+
   const conds = [
     gte(schema.extKachiParchi.vDate, from),
     lte(schema.extKachiParchi.vDate, to),
@@ -186,8 +189,8 @@ export default async function GreyBillKpPpPage({
                     <td className="mono text-[13px] font-bold">{r.kpVno}</td>
                     <td className="mono text-[13px]">{r.kpDate}</td>
                     <td className="mono text-[13px]">{r.kpNo ?? "-"}</td>
-                    <td className="text-[13px]">{r.purchaseParty ?? "-"}</td>
-                    <td className="text-[13px]">{r.saleParty ?? "-"}</td>
+                    <td className="text-[13px]">{r.purchaseParty ? `${r.purchaseParty}${partyCodeByName.get(r.purchaseParty) ? ` (${partyCodeByName.get(r.purchaseParty)})` : ""}` : "-"}</td>
+                    <td className="text-[13px]">{r.saleParty ? `${r.saleParty}${partyCodeByName.get(r.saleParty) ? ` (${partyCodeByName.get(r.saleParty)})` : ""}` : "-"}</td>
                     <td className="text-[13px]">{r.quality ?? "-"}</td>
                     <td className="mono text-right">{r.than ?? "-"}</td>
                     <td className="mono text-right">{fmt2(r.meter ?? 0)}</td>

@@ -26,7 +26,13 @@ export default async function YarnPurContractHistoryPage({
   const party = p.party?.trim() ?? "";
   const cont = p.cont?.trim() ?? "";
 
-  const partyOpts = await partyByNameOptions();
+  const [partyOpts, accountRows, countMetaRows] = await Promise.all([
+    partyByNameOptions(),
+    db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
+    db.select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description }).from(schema.yarnCounts),
+  ]);
+  const accountDescMap = new Map(accountRows.map((r) => [r.code, r.description]));
+  const countDescMap = new Map(countMetaRows.map((r) => [r.code, r.description]));
 
   const conds = [
     gte(schema.extYarnPurContract.contDate, from),
@@ -229,8 +235,18 @@ export default async function YarnPurContractHistoryPage({
                     <tr key={r.id}>
                       <td className="mono font-bold">{r.contNo}</td>
                       <td className="mono text-[13px]">{r.contDate}</td>
-                      <td className="text-[13px]">{r.party ?? "-"}</td>
-                      <td className="mono text-[13px]">{r.countCode ?? "-"}</td>
+                      <td className="text-[13px]">
+                        {r.party ?? "-"}
+                        {r.party && accountDescMap.get(r.party) ? (
+                          <div className="text-[11px] text-[var(--muted)]">{accountDescMap.get(r.party)}</div>
+                        ) : null}
+                      </td>
+                      <td className="mono text-[13px]">
+                        {r.countCode ?? "-"}
+                        {r.countCode && countDescMap.get(r.countCode) ? (
+                          <div className="text-[11px] text-[var(--muted)]">{countDescMap.get(r.countCode)}</div>
+                        ) : null}
+                      </td>
                       <td className="text-[13px]">{r.brand ?? "-"}</td>
                       <td className="mono text-right">{fmt(r.qtyBags ?? 0)}</td>
                       <td className="mono text-right">{fmt(r.delBags)}</td>

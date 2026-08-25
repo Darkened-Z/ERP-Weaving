@@ -130,12 +130,16 @@ export default async function GreyRegisterPrintPage({
     salConditions.push(sql`${schema.extGreySalContract.remarks} LIKE ${pat} ESCAPE '\\'`);
   }
 
-  const [purRows, salRows, companyRows] = await Promise.all([
+  const [purRows, salRows, companyRows, partyRows, greyRows] = await Promise.all([
     db.select().from(schema.extGreyPurContract).where(and(...purConditions)),
     db.select().from(schema.extGreySalContract).where(and(...salConditions)),
     db.select().from(schema.companyProfile).limit(1),
+    db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
+    db.select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description }).from(schema.greyConstruction),
   ]);
   const company = companyRows[0];
+  const partyCodeByDesc = new Map(partyRows.map((p) => [p.description, p.code]));
+  const greyDescByCode = new Map(greyRows.map((g) => [g.code, g.description]));
 
   const combined: Row[] = [
     ...purRows.map((r) => ({
@@ -292,8 +296,8 @@ export default async function GreyRegisterPrintPage({
                     <td>{r.type}</td>
                     <td>{r.contractNo}</td>
                     <td>{r.contractDate}</td>
-                    <td>{r.party ?? "-"}</td>
-                    <td>{r.greyCode ?? "-"}</td>
+                    <td>{r.party ? `${r.party}${partyCodeByDesc.get(r.party) ? ` (${partyCodeByDesc.get(r.party)})` : ""}` : "-"}</td>
+                    <td>{r.greyCode ? `${r.greyCode}${greyDescByCode.get(r.greyCode) ? ` — ${greyDescByCode.get(r.greyCode)}` : ""}` : "-"}</td>
                     <td>{r.weave ?? "-"}</td>
                     <td className="num">{r.quantityMtr != null ? fmt(r.quantityMtr) : "-"}</td>
                     <td className="num">{r.ratePerMtr != null ? fmt(r.ratePerMtr) : "-"}</td>

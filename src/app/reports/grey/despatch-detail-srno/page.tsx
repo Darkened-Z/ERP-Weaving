@@ -28,6 +28,13 @@ export default async function GreyDespatchDetailSrNoPage({
 
   const partyOpts = await partyByNameOptions();
 
+  const [accounts, greys] = await Promise.all([
+    db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
+    db.select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description }).from(schema.greyConstruction),
+  ]);
+  const partyCodeByName = new Map(accounts.map((a) => [a.description ?? "", a.code]));
+  const greyDescByCode = new Map(greys.map((g) => [g.code, g.description]));
+
   const conds = [
     gte(schema.intGreyDespatch.vDate, from),
     lte(schema.intGreyDespatch.vDate, to),
@@ -225,8 +232,18 @@ export default async function GreyDespatchDetailSrNoPage({
                   <tr key={r.lineId}>
                     <td className="mono text-[13px] font-bold">{r.vNo}</td>
                     <td className="mono text-[13px]">{r.vDate}</td>
-                    <td className="text-[13px]">{r.party ?? r.doParty ?? "-"}</td>
-                    <td className="text-[13px]">{r.quality ?? "-"}</td>
+                    <td className="text-[13px]">{(() => {
+                      const name = r.party ?? r.doParty;
+                      if (!name) return "-";
+                      const code = partyCodeByName.get(name);
+                      return code ? `${name} (${code})` : name;
+                    })()}</td>
+                    <td className="text-[13px]">
+                      {r.quality ?? "-"}
+                      {r.quality && greyDescByCode.get(r.quality) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{greyDescByCode.get(r.quality)}</div>
+                      ) : null}
+                    </td>
                     <td className="mono text-right">{r.tSrNo ?? "-"}</td>
                     <td className="mono text-right">{fmt2(r.a ?? 0)}</td>
                     <td className="mono text-right">{fmt2(r.b ?? 0)}</td>

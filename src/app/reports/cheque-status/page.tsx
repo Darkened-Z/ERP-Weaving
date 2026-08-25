@@ -93,7 +93,7 @@ export default async function ChequeStatusPage({
         vtype: r.vtype,
         vno: r.vno,
         vdate: r.vdate,
-        partyCode: r.partyCode,
+        partyCode: partyLookup,
         partyName: accMap.get(partyLookup ?? "") ?? partyLookup ?? "",
         amount,
         status,
@@ -220,7 +220,12 @@ export default async function ChequeStatusPage({
                     </span>
                   </td>
                   <td className="mono">{r.vno}</td>
-                  <td>{r.partyName}</td>
+                  <td>
+                    {r.partyName}
+                    {r.partyCode && r.partyCode !== r.partyName ? (
+                      <span className="text-[11px] text-[var(--muted)] mono ml-2">({r.partyCode})</span>
+                    ) : null}
+                  </td>
                   <td className="mono text-right">{fmt(r.amount)}</td>
                   <td>
                     <span

@@ -129,7 +129,9 @@ export default async function YarnReceiptPage({
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyDescByCode: Record<string, string> = {};
   for (const p of parties) partyDescByCode[p.code] = p.description;
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}` }));
+  const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
   const purOpts = purContracts.map((c) => ({
     value: c.contNo,
     label: `${c.contNo}${c.partyCode ? ` — ${partyDescByCode[c.partyCode] ?? c.partyCode}` : ""}${c.countCode ? ` [${c.countCode}]` : ""}`,
@@ -746,9 +748,24 @@ export default async function YarnReceiptPage({
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.vDate}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.trnType ?? "-"}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.condition ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>{r.party ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>{r.yarnPartyTo ?? "-"}</a></td>
-                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.countCode ?? "-"}</a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>
+                        <div>{r.party ?? "-"}</div>
+                        {r.party && partyCodeByDesc.get(r.party) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(r.party)}</div>
+                        )}
+                      </a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>
+                        <div>{r.yarnPartyTo ?? "-"}</div>
+                        {r.yarnPartyTo && partyCodeByDesc.get(r.yarnPartyTo) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(r.yarnPartyTo)}</div>
+                        )}
+                      </a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>
+                        <div>{r.countCode ?? "-"}</div>
+                        {r.countCode && countDescByCode.get(r.countCode) && (
+                          <div className="text-[11px] text-[var(--muted)]">{countDescByCode.get(r.countCode)}</div>
+                        )}
+                      </a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.bags ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.qtyLbs ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.amount ?? "-"}</a></td>

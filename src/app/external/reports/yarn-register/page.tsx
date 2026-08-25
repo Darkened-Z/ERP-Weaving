@@ -148,6 +148,15 @@ export default async function YarnRegisterPage({
   const purRows = type === "SAL" ? [] : await db.select().from(schema.extYarnPurContract).where(and(...purConditions));
   const salRows = type === "PUR" ? [] : await db.select().from(schema.extYarnSalContract).where(and(...salConditions));
 
+  const accountRows = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts);
+  const partyDescByCode = new Map(accountRows.map((r) => [r.code, r.description]));
+  const countLookup = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(countLookup.map((r) => [r.countCode, r.description]));
+
   const combined: Row[] = [
     ...purRows.map((r) => ({
       type: "PUR" as const,
@@ -446,8 +455,18 @@ export default async function YarnRegisterPage({
                     <td className="mono text-[12px] font-bold">{r.type}</td>
                     <td className="mono text-[13px] font-bold">{r.contNo}</td>
                     <td className="mono text-[13px]">{r.contDate}</td>
-                    <td className="text-[13px]">{r.party ?? "-"}</td>
-                    <td className="mono text-[13px]">{r.countCode ?? "-"}</td>
+                    <td className="text-[13px]">
+                      {r.party ?? "-"}
+                      {r.party && partyDescByCode.get(r.party) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{partyDescByCode.get(r.party)}</div>
+                      ) : null}
+                    </td>
+                    <td className="mono text-[13px]">
+                      {r.countCode ?? "-"}
+                      {r.countCode && countDescByCode.get(r.countCode) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{countDescByCode.get(r.countCode)}</div>
+                      ) : null}
+                    </td>
                     <td className="text-[13px]">{r.brand ?? "-"}</td>
                     <td className="mono text-[13px]">{r.ratio ?? "-"}</td>
                     <td className="mono text-right">{r.qtyBags != null ? fmt(r.qtyBags) : "-"}</td>

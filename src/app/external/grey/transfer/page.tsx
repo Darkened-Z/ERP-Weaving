@@ -77,6 +77,8 @@ export default async function GreyTransferPage({
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
 
   const nextVNoVal = await db
     .select({
@@ -471,9 +473,30 @@ export default async function GreyTransferPage({
                     <tr key={t.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{t.vNo}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{t.vDate}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{t.partyFrom ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{t.partyTo ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{t.qualityFrom ?? "-"}</a></td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {t.partyFrom ?? "-"}
+                          {t.partyFrom && partyCodeByDesc.get(t.partyFrom) && (
+                            <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(t.partyFrom)}</span>
+                          )}
+                        </a>
+                      </td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {t.partyTo ?? "-"}
+                          {t.partyTo && partyCodeByDesc.get(t.partyTo) && (
+                            <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(t.partyTo)}</span>
+                          )}
+                        </a>
+                      </td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {t.qualityFrom ?? "-"}
+                          {t.qualityFrom && greyDescByCode.get(t.qualityFrom) && (
+                            <span className="block text-[11px] opacity-70">{greyDescByCode.get(t.qualityFrom)}</span>
+                          )}
+                        </a>
+                      </td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(t.meters)}</a></td>
                     </tr>
                   );

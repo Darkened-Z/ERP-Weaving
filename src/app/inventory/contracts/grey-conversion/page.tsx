@@ -121,6 +121,9 @@ export default async function IntGreyConversionContractPage({
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
+  const productCodeByDesc = new Map(productList.map((p) => [p.description, p.code]));
   const greyFillMap = Object.fromEntries(
     greyList.map((g) => [g.code, { read: g.reed, pick: g.pick, width: g.width }])
   );
@@ -796,9 +799,24 @@ export default async function IntGreyConversionContractPage({
                   return (
                     <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{c.contNo}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.party ?? "-"}</a></td>
-                      <td className="mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.grayCode ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.productName ?? "-"}</a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
+                        <div>{c.party ?? "-"}</div>
+                        {c.party && partyCodeByDesc.get(c.party) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.party)}</div>
+                        )}
+                      </a></td>
+                      <td className="mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
+                        <div>{c.grayCode ?? "-"}</div>
+                        {c.grayCode && greyDescByCode.get(c.grayCode) && (
+                          <div className="text-[11px] text-[var(--muted)]">{greyDescByCode.get(c.grayCode)}</div>
+                        )}
+                      </a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
+                        <div>{c.productName ?? "-"}</div>
+                        {c.productName && productCodeByDesc.get(c.productName) && (
+                          <div className="text-[11px] text-[var(--muted)]">{productCodeByDesc.get(c.productName)}</div>
+                        )}
+                      </a></td>
                       <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.loomType ?? "-"}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{c.qtyMtr ?? "-"}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{c.rateMtr ?? "-"}</a></td>

@@ -47,6 +47,11 @@ export default async function GreyStockPage({
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
+  const greyRows = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction);
+  const partyCodeByName = new Map(parties.map((r) => [r.description, r.code]));
+  const greyDescMap = new Map(greyRows.map((r) => [r.code, r.description]));
 
   const conditions = [
     gte(schema.extGodownStock.vDate, from),
@@ -252,9 +257,20 @@ export default async function GreyStockPage({
                     <td className="mono text-[13px] font-bold">{r.vNo}</td>
                     <td className="mono text-[13px]">{r.vDate}</td>
                     <td className="mono text-[13px]">{r.kpNo ?? "-"}</td>
-                    <td className="text-[13px]">{r.purchaseParty ?? "-"}</td>
-                    <td className="text-[13px]">{r.gdnParty ?? "-"}</td>
-                    <td className="text-[13px]">{r.dspQuality ?? "-"}</td>
+                    <td className="text-[13px]">
+                      {r.purchaseParty ?? "-"}
+                      {r.purchaseParty && partyCodeByName.get(r.purchaseParty) ? ` (${partyCodeByName.get(r.purchaseParty)})` : ""}
+                    </td>
+                    <td className="text-[13px]">
+                      {r.gdnParty ?? "-"}
+                      {r.gdnParty && partyCodeByName.get(r.gdnParty) ? ` (${partyCodeByName.get(r.gdnParty)})` : ""}
+                    </td>
+                    <td className="text-[13px]">
+                      {r.dspQuality ?? "-"}
+                      {r.dspQuality && greyDescMap.get(r.dspQuality) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{greyDescMap.get(r.dspQuality)}</div>
+                      ) : null}
+                    </td>
                     <td className="mono text-[13px]">{r.contNo ?? "-"}</td>
                     <td className="mono text-[13px]">{r.salContNo ?? "-"}</td>
                     <td className="mono text-right">{r.meter != null ? fmt(r.meter) : "-"}</td>

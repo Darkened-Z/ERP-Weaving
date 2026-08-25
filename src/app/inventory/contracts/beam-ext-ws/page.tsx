@@ -121,6 +121,7 @@ export default async function BeamContractExtWsPage({
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -754,22 +755,34 @@ export default async function BeamContractExtWsPage({
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.party ?? "-"}
+                          <div>{c.party ?? "-"}</div>
+                          {c.party && partyCodeByDesc.get(c.party) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.party)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.sizingParty ?? "-"}
+                          <div>{c.sizingParty ?? "-"}</div>
+                          {c.sizingParty && partyCodeByDesc.get(c.sizingParty) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.sizingParty)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.warpingParty ?? "-"}
+                          <div>{c.warpingParty ?? "-"}</div>
+                          {c.warpingParty && partyCodeByDesc.get(c.warpingParty) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.warpingParty)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.converterParty ?? "-"}
+                          <div>{c.converterParty ?? "-"}</div>
+                          {c.converterParty && partyCodeByDesc.get(c.converterParty) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.converterParty)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-right mono text-[13px]">

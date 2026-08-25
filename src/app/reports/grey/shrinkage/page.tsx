@@ -28,6 +28,13 @@ export default async function GreyShrinkagePage({
 
   const partyOpts = await partyByNameOptions();
 
+  const [accounts, greys] = await Promise.all([
+    db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
+    db.select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description }).from(schema.greyConstruction),
+  ]);
+  const partyCodeByName = new Map(accounts.map((a) => [a.description ?? "", a.code]));
+  const greyDescByCode = new Map(greys.map((g) => [g.code, g.description]));
+
   const conds = [
     gte(schema.intDailyProduction.vDate, from),
     lte(schema.intDailyProduction.vDate, to),
@@ -189,8 +196,18 @@ export default async function GreyShrinkagePage({
                       <td className="mono text-[13px]">{r.setNo ?? "-"}</td>
                       <td className="mono text-[13px]">{r.lotNo ?? "-"}</td>
                       <td className="mono text-[13px]">{r.beamNo ?? r.beamSetNo ?? "-"}</td>
-                      <td className="text-[13px]">{r.quality ?? "-"}</td>
-                      <td className="text-[13px]">{r.convParty ?? r.beamParty ?? r.szgParty ?? "-"}</td>
+                      <td className="text-[13px]">
+                        {r.quality ?? "-"}
+                        {r.quality && greyDescByCode.get(r.quality) ? (
+                          <div className="text-[11px] text-[var(--muted)]">{greyDescByCode.get(r.quality)}</div>
+                        ) : null}
+                      </td>
+                      <td className="text-[13px]">{(() => {
+                        const name = r.convParty ?? r.beamParty ?? r.szgParty;
+                        if (!name) return "-";
+                        const code = partyCodeByName.get(name);
+                        return code ? `${name} (${code})` : name;
+                      })()}</td>
                       <td className="mono text-right">{fmt2(r.bLength)}</td>
                       <td className="mono text-right">{fmt2(r.rcvdMtr)}</td>
                       <td className="mono text-right">{fmt2(r.diff)}</td>

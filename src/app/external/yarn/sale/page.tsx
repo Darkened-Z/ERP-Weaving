@@ -100,6 +100,7 @@ export default async function YarnSaleVoucherPage({
   }));
   const descByCode: Record<string, string> = {};
   for (const p of parties) descByCode[p.code] = p.description;
+  const codeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
 
   const salContracts = await db
     .select()
@@ -1354,6 +1355,9 @@ export default async function YarnSaleVoucherPage({
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {v.party ?? "-"}
+                          {v.party && codeByDesc.get(v.party) && (
+                            <span className="block text-[11px] opacity-70">{codeByDesc.get(v.party)}</span>
+                          )}
                         </a>
                       </td>
                       <td className="mono text-[12px]">

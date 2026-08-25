@@ -102,6 +102,7 @@ export default async function YarnPurchaseVoucherPage({
   }));
   const descByCode: Record<string, string> = {};
   for (const p of parties) descByCode[p.code] = p.description;
+  const codeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
 
   const countList = await db
     .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
@@ -1220,11 +1221,17 @@ export default async function YarnPurchaseVoucherPage({
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {v.party ?? "-"}
+                          {v.party && codeByDesc.get(v.party) && (
+                            <span className="block text-[11px] opacity-70">{codeByDesc.get(v.party)}</span>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {v.broker ?? "-"}
+                          {v.broker && codeByDesc.get(v.broker) && (
+                            <span className="block text-[11px] opacity-70">{codeByDesc.get(v.broker)}</span>
+                          )}
                         </a>
                       </td>
                       <td className="mono text-[12px]">

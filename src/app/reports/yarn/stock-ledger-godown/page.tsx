@@ -37,7 +37,12 @@ export default async function YarnStockLedgerGodownPage({
   const party = p.party?.trim() ?? "";
   const count = p.count?.trim() ?? "";
 
-  const [partyOpts, countOpts] = await Promise.all([partyByNameOptions(), yarnCountOptions()]);
+  const [partyOpts, countOpts, countMetaRows] = await Promise.all([
+    partyByNameOptions(),
+    yarnCountOptions(),
+    db.select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description }).from(schema.yarnCounts),
+  ]);
+  const countDescMap = new Map(countMetaRows.map((r) => [r.code, r.description]));
 
   const receiptConds = [
     gte(schema.intYarnReceipt.vDate, from),
@@ -230,7 +235,12 @@ export default async function YarnStockLedgerGodownPage({
                 rows.map((r, i) => (
                   <tr key={i}>
                     <td className="text-[13px]">{r.location}</td>
-                    <td className="mono">{r.count}</td>
+                    <td className="mono">
+                      {r.count}
+                      {countDescMap.get(r.count) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{countDescMap.get(r.count)}</div>
+                      ) : null}
+                    </td>
                     <td className="mono text-right">{fmt(r.rcvBags)}</td>
                     <td className="mono text-right">{fmt(r.rcvLbs)}</td>
                     <td className="mono text-right">{fmt(r.inBags)}</td>

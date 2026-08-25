@@ -114,6 +114,8 @@ export default async function IntYarnPurchaseContractPage({
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}`, desc: c.description }));
   const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -765,17 +767,26 @@ export default async function IntYarnPurchaseContractPage({
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.partyCode ?? "-"}
+                          <div>{c.partyCode ?? "-"}</div>
+                          {c.partyCode && partyCodeByDesc.get(c.partyCode) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.partyCode)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.broker ?? "-"}
+                          <div>{c.broker ?? "-"}</div>
+                          {c.broker && partyCodeByDesc.get(c.broker) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.broker)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.countCode ?? "-"}
+                          <div>{c.countCode ?? "-"}</div>
+                          {c.countCode && countDescByCode.get(c.countCode) && (
+                            <div className="text-[11px] text-[var(--muted)]">{countDescByCode.get(c.countCode)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">

@@ -131,6 +131,8 @@ export default async function YarnTransferPage({
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}` }));
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
 
   // AutoFill map: picking a party in Transfer-From copies it to Transfer-To.
   const fromToMap: Record<string, Record<string, string>> = {};
@@ -670,9 +672,24 @@ export default async function YarnTransferPage({
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.vDate}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.type ?? "-"}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.condition ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>{r.transferFromParty ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>{r.transferToParty ?? "-"}</a></td>
-                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.countCode ?? "-"}</a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>
+                        <div>{r.transferFromParty ?? "-"}</div>
+                        {r.transferFromParty && partyCodeByDesc.get(r.transferFromParty) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(r.transferFromParty)}</div>
+                        )}
+                      </a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>
+                        <div>{r.transferToParty ?? "-"}</div>
+                        {r.transferToParty && partyCodeByDesc.get(r.transferToParty) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(r.transferToParty)}</div>
+                        )}
+                      </a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>
+                        <div>{r.countCode ?? "-"}</div>
+                        {r.countCode && countDescByCode.get(r.countCode) && (
+                          <div className="text-[11px] text-[var(--muted)]">{countDescByCode.get(r.countCode)}</div>
+                        )}
+                      </a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.qtyBags ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.qtyLbs ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.amount ?? "-"}</a></td>

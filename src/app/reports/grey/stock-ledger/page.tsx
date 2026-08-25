@@ -43,6 +43,13 @@ export default async function GreyStockLedgerPage({
     greyQualityOptions(),
   ]);
 
+  const [accounts, greys] = await Promise.all([
+    db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
+    db.select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description }).from(schema.greyConstruction),
+  ]);
+  const partyCodeByName = new Map(accounts.map((a) => [a.description ?? "", a.code]));
+  const greyDescByCode = new Map(greys.map((g) => [g.code, g.description]));
+
   const partyLike = party ? `%${escLike(party)}%` : null;
   const qualityLike = quality ? `%${escLike(quality)}%` : null;
 
@@ -298,8 +305,18 @@ export default async function GreyStockLedgerPage({
               ) : (
                 rows.map((r, i) => (
                   <tr key={i}>
-                    <td className="text-[13px]">{r.party}</td>
-                    <td className="text-[13px]">{r.quality}</td>
+                    <td className="text-[13px]">
+                      {r.party}
+                      {partyCodeByName.get(r.party) ? (
+                        <span> ({partyCodeByName.get(r.party)})</span>
+                      ) : null}
+                    </td>
+                    <td className="text-[13px]">
+                      {r.quality}
+                      {greyDescByCode.get(r.quality) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{greyDescByCode.get(r.quality)}</div>
+                      ) : null}
+                    </td>
                     <td className="mono text-right">{fmt(r.openThan)}</td>
                     <td className="mono text-right">{fmt2(r.openMtr)}</td>
                     <td className="mono text-right">{fmt(r.rcvThan)}</td>

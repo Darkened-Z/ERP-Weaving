@@ -267,6 +267,7 @@ export default async function DemandPage({
     value: c.description,
     label: `${c.code} — ${c.description}`,
   }));
+  const ccCodeByDesc = new Map(costCenters.map((c) => [c.description, String(c.code)]));
 
   const requesters = [
     ...new Set(rows.map((r) => r.requestedBy).filter(Boolean)),
@@ -614,7 +615,10 @@ export default async function DemandPage({
                     </td>
                     <td>
                       <a href={href} className="no-underline block" style={linkStyle}>
-                        {r.department}
+                        <div>{r.department}</div>
+                        {r.department && ccCodeByDesc.get(r.department) && (
+                          <div className="text-[11px] text-[var(--muted)]">{ccCodeByDesc.get(r.department)}</div>
+                        )}
                       </a>
                     </td>
                     <td>{r.requestedBy ?? ""}</td>

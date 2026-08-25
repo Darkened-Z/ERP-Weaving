@@ -59,6 +59,11 @@ export default async function CountAvgPage({
     .where(and(...conditions))
     .groupBy(schema.extYarnPurContract.countCode);
 
+  const countLookup = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(countLookup.map((r) => [r.countCode, r.description]));
+
   const enriched = rows
     .map((r) => ({
       ...r,
@@ -162,7 +167,7 @@ export default async function CountAvgPage({
                 enriched.map((r, i) => (
                   <tr key={r.countCode ?? `row-${i}`}>
                     <td>{i + 1}</td>
-                    <td>{r.countCode ?? "—"}</td>
+                    <td>{r.countCode ? (countDescByCode.get(r.countCode) ? `${r.countCode} — ${countDescByCode.get(r.countCode)}` : r.countCode) : "—"}</td>
                     <td className="num">{fmt(Number(r.contracts))}</td>
                     <td className="num">{fmt(Number(r.totalBags))}</td>
                     <td className="num">{fmt(r.avgRate, 2)}</td>

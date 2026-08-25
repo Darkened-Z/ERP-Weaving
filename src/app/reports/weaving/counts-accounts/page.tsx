@@ -38,6 +38,11 @@ export default async function CountsAccountsPage({
     .from(schema.chartOfAccounts)
     .where(sql`${schema.chartOfAccounts.level} >= 4`);
 
+  const yarnCountRows = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const yarnCountMap = new Map(yarnCountRows.map((r) => [r.countCode, r.description]));
+
   const receiptConds = [
     gte(schema.intYarnReceipt.vDate, from),
     lte(schema.intYarnReceipt.vDate, to),
@@ -214,7 +219,14 @@ export default async function CountsAccountsPage({
               ) : (
                 rows.map((r) => (
                   <tr key={r.count}>
-                    <td className="mono">{r.count}</td>
+                    <td className="mono">
+                      {r.count}
+                      {yarnCountMap.get(r.count) && (
+                        <div className="text-[11px] text-[var(--muted)]">
+                          {yarnCountMap.get(r.count)}
+                        </div>
+                      )}
+                    </td>
                     <td className="mono text-right">{fmt(r.input)}</td>
                     <td className="mono text-right">{fmt(r.consumed)}</td>
                     <td className="mono text-right">{fmt(r.wastage)}</td>

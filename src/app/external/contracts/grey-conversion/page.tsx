@@ -136,6 +136,9 @@ export default async function GreyConvContractPage({
   const productFillMap = Object.fromEntries(
     productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description }])
   );
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
+  const productCodeByDesc = new Map(productList.map((p) => [p.description, p.code]));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -799,9 +802,30 @@ export default async function GreyConvContractPage({
                   return (
                     <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{c.contNo}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.party ?? "-"}</a></td>
-                      <td className="mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.grayCode ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.productName ?? "-"}</a></td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {c.party ?? "-"}
+                          {c.party && partyCodeByDesc.get(c.party) && (
+                            <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(c.party)}</span>
+                          )}
+                        </a>
+                      </td>
+                      <td className="mono text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {c.grayCode ?? "-"}
+                          {c.grayCode && greyDescByCode.get(c.grayCode) && (
+                            <span className="block text-[11px] opacity-70">{greyDescByCode.get(c.grayCode)}</span>
+                          )}
+                        </a>
+                      </td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {c.productName ?? "-"}
+                          {c.productName && productCodeByDesc.get(c.productName) && (
+                            <span className="block text-[11px] opacity-70">{productCodeByDesc.get(c.productName)}</span>
+                          )}
+                        </a>
+                      </td>
                       <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.loomType ?? "-"}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{c.qtyMtr ?? "-"}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{c.rateMtr ?? "-"}</a></td>

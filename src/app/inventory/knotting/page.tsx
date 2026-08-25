@@ -443,6 +443,12 @@ export default async function KnottingPage({
     .map((p) => ({ value: p, label: p }));
   const partyFillMap = Object.fromEntries(partyMap.entries());
 
+  const partyAccounts = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`);
+  const partyDescByCode = new Map(partyAccounts.map((p) => [String(p.code), p.description]));
+
   const loadedBeams = await db
     .select({
       beamNo: schema.beams.beamNo,
@@ -1126,7 +1132,10 @@ export default async function KnottingPage({
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {b.party ?? "-"}
+                          <div>{b.party ?? "-"}</div>
+                          {b.party && partyDescByCode.get(b.party) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyDescByCode.get(b.party)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">

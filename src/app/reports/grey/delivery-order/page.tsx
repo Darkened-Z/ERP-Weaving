@@ -21,6 +21,9 @@ export default async function GreyDeliveryOrderPage({
 
   const [company] = await db.select().from(schema.companyProfile).limit(1);
 
+  const accounts = await db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts);
+  const partyCodeByName = new Map(accounts.map((a) => [a.description ?? "", a.code]));
+
   const recent = vNo
     ? []
     : await db
@@ -66,8 +69,8 @@ export default async function GreyDeliveryOrderPage({
                 <tr key={r.id}>
                   <td className="mono font-bold">{r.vNo}</td>
                   <td className="mono">{r.vDate}</td>
-                  <td>{r.party ?? "-"}</td>
-                  <td>{r.doParty ?? "-"}</td>
+                  <td>{r.party ? `${r.party}${partyCodeByName.get(r.party) ? ` (${partyCodeByName.get(r.party)})` : ""}` : "-"}</td>
+                  <td>{r.doParty ? `${r.doParty}${partyCodeByName.get(r.doParty) ? ` (${partyCodeByName.get(r.doParty)})` : ""}` : "-"}</td>
                   <td className="mono text-right">{r.thanQty ?? "-"}</td>
                   <td className="mono">{r.gpNo ?? "-"}</td>
                   <td>

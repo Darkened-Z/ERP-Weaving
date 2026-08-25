@@ -108,6 +108,7 @@ export default async function GodownStockPage({
   }));
   const godownParty =
     partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+  const partyCodeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
 
   const convContracts = await db
     .select()
@@ -1060,8 +1061,22 @@ export default async function GodownStockPage({
                       <td className="mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{s.vNo}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{s.vDate}</a></td>
                       <td className="mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{s.kpNo ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{s.purchaseParty ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{s.gdnParty ?? "-"}</a></td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {s.purchaseParty ?? "-"}
+                          {s.purchaseParty && partyCodeByDesc.get(s.purchaseParty) && (
+                            <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(s.purchaseParty)}</span>
+                          )}
+                        </a>
+                      </td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {s.gdnParty ?? "-"}
+                          {s.gdnParty && partyCodeByDesc.get(s.gdnParty) && (
+                            <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(s.gdnParty)}</span>
+                          )}
+                        </a>
+                      </td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(s.meter)}</a></td>
                       <td className="text-right mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(s.total)}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{s.type}</a></td>

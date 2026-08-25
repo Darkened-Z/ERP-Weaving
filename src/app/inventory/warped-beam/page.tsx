@@ -94,6 +94,7 @@ export default async function WarpedBeamReceivingPage({
     .where(sql`${schema.chartOfAccounts.level} >= 4`)
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
+  const partyDescByCode = new Map(parties.map((p) => [String(p.code), p.description]));
 
   const beamRows = await db
     .select({
@@ -762,7 +763,12 @@ export default async function WarpedBeamReceivingPage({
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.vDate}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.type}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.gpNo ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>{r.beamReceivingFrom ?? "-"}</a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>
+                        <div>{r.beamReceivingFrom ?? "-"}</div>
+                        {r.beamReceivingFrom && partyDescByCode.get(r.beamReceivingFrom) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyDescByCode.get(r.beamReceivingFrom)}</div>
+                        )}
+                      </a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.billNo ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.totalAmount ?? "-"}</a></td>
                     </tr>

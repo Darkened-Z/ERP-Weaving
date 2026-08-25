@@ -68,7 +68,12 @@ export default async function PakiParchiPage() {
                 <tr key={r.id}>
                   <td className="mono text-[13px]">{r.ppDate}</td>
                   <td className="mono font-bold">{r.ppNo}</td>
-                  <td className="text-[13px]">{r.party}</td>
+                  <td className="text-[13px]">
+                    <div>{r.party}</div>
+                    {r.partyCode && (
+                      <div className="text-[11px] text-[var(--muted)]">{r.partyCode}</div>
+                    )}
+                  </td>
                   <td className="mono text-[13px]">{r.contractNo ?? "-"}</td>
                   <td className="text-right mono">{r.qtyThan ?? "-"}</td>
                   <td className="text-right mono">{r.qtyMtrs != null ? formatNum(r.qtyMtrs) : "-"}</td>

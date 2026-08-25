@@ -294,13 +294,26 @@ export default async function FindingPage({
                 {rows.map((r) => {
                   const href = `${VTYPE_ROUTE[r.vtype] ?? "/vouchers"}?id=${r.id}`;
                   const partyCode = r.accCode ?? partyByVoucher.get(r.id) ?? "";
-                  const partyDesc = partyCode ? partyMap.get(partyCode) ?? partyCode : "-";
+                  const partyDescText = partyCode ? partyMap.get(partyCode) ?? "" : "";
                   return (
                     <tr key={r.id} className="cursor-pointer hover:bg-gray-50">
                       <td className="mono text-[12px]"><a href={href} className="no-underline block">{r.vtype}</a></td>
                       <td className="mono text-[13px]"><a href={href} className="no-underline block">{r.vno}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block">{r.vdate}</a></td>
-                      <td className="text-[12px]"><a href={href} className="no-underline block">{partyDesc}</a></td>
+                      <td className="text-[12px]">
+                        <a href={href} className="no-underline block">
+                          {partyCode ? (
+                            <>
+                              <span className="mono">{partyCode}</span>
+                              <span className="text-[11px] text-[var(--muted)] ml-1">
+                                — {partyDescText}
+                              </span>
+                            </>
+                          ) : (
+                            "-"
+                          )}
+                        </a>
+                      </td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block">{r.trnType ?? "-"}</a></td>
                       <td className="text-[13px]"><a href={href} className="no-underline block">{r.narration ?? "-"}</a></td>
                       <td className="text-right mono text-[13px]"><a href={href} className="no-underline block">{formatNum(totalMap.get(r.id))}</a></td>

@@ -103,6 +103,7 @@ export default async function KachiParchiPage({
   }));
   const godownParty =
     partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+  const partyCodeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
 
   const convContracts = await db
     .select()
@@ -1081,8 +1082,22 @@ export default async function KachiParchiPage({
                       <td className="mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{p.vNo}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{p.vDate}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{p.kpNo ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{p.purchaseParty ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{p.saleParty ?? "-"}</a></td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {p.purchaseParty ?? "-"}
+                          {p.purchaseParty && partyCodeByDesc.get(p.purchaseParty) && (
+                            <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(p.purchaseParty)}</span>
+                          )}
+                        </a>
+                      </td>
+                      <td className="text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {p.saleParty ?? "-"}
+                          {p.saleParty && partyCodeByDesc.get(p.saleParty) && (
+                            <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(p.saleParty)}</span>
+                          )}
+                        </a>
+                      </td>
                       <td className="text-right mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(p.meter)}</a></td>
                       <td className="text-right mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(p.totalElBadMtrs)}</a></td>
                     </tr>

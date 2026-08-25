@@ -86,6 +86,13 @@ export default async function ClothRegisterPage({
     );
   }
 
+  const [accountRows, greyRows] = await Promise.all([
+    db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
+    db.select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description }).from(schema.greyConstruction),
+  ]);
+  const partyCodeByName = new Map(accountRows.map((r) => [r.description, r.code]));
+  const greyDescMap = new Map(greyRows.map((r) => [r.code, r.description]));
+
   const purRows = await db
     .select({
       id: schema.extGreyPurContract.id,
@@ -317,8 +324,16 @@ export default async function ClothRegisterPage({
                     </td>
                     <td className="mono font-bold">{r.contractNo}</td>
                     <td className="mono text-[13px]">{toDate(r.contractDate)}</td>
-                    <td className="text-[13px]">{r.party ?? "-"}</td>
-                    <td className="mono text-[13px]">{r.greyCode ?? "-"}</td>
+                    <td className="text-[13px]">
+                      {r.party ?? "-"}
+                      {r.party && partyCodeByName.get(r.party) ? ` (${partyCodeByName.get(r.party)})` : ""}
+                    </td>
+                    <td className="mono text-[13px]">
+                      {r.greyCode ?? "-"}
+                      {r.greyCode && greyDescMap.get(r.greyCode) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{greyDescMap.get(r.greyCode)}</div>
+                      ) : null}
+                    </td>
                     <td className="text-[13px]">{r.weave ?? "-"}</td>
                     <td className="mono text-right">{fmt(r.qtyMtr ?? 0)}</td>
                     <td className="mono text-right">{fmt(r.ratePerMtr ?? 0)}</td>

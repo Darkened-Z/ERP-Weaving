@@ -87,6 +87,7 @@ export default async function YarnPurchaseContractPage({
     .select({
       code: schema.chartOfAccounts.code,
       description: schema.chartOfAccounts.description,
+      descShort: schema.chartOfAccounts.descShort,
       level: schema.chartOfAccounts.level,
     })
     .from(schema.chartOfAccounts)
@@ -102,9 +103,22 @@ export default async function YarnPurchaseContractPage({
     .from(schema.yarnBrands)
     .orderBy(schema.yarnBrands.name);
 
-  const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
-  const countOpts = countList.map((c) => ({ value: String(c.code), label: `${c.code} — ${c.description}` }));
+  // Short code (descShort) as the visible token, description as helper text.
+  const partyOpts = parties.map((p) => ({
+    value: String(p.code),
+    label: `${p.descShort ?? p.code} — ${p.description}`,
+    desc: p.description,
+  }));
+  const countOpts = countList.map((c) => ({
+    value: String(c.code),
+    label: `${c.code} — ${c.description}`,
+    desc: c.description,
+  }));
   const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
+  const partyDescByCode: Record<string, string> = {};
+  for (const p of parties) partyDescByCode[String(p.code)] = p.description;
+  const countDescByCode: Record<string, string> = {};
+  for (const c of countList) countDescByCode[String(c.code)] = c.description;
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -486,18 +500,26 @@ export default async function YarnPurchaseContractPage({
                   defaultValue={formContract?.refno ?? ""}
                 />
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-2">
                 <label className="label block mb-1">Party Code</label>
-                <Combobox name="party_code" options={partyOpts} defaultValue={String(formContract?.partyCode ?? "")} placeholder="Select party" />
+                <Combobox name="party_code" options={partyOpts} defaultValue={String(formContract?.partyCode ?? "")} placeholder="FAZAL" descTargetId="ypc-party-desc" />
               </div>
-              <div className="lg:col-span-5">
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Party Name</label>
+                <input id="ypc-party-desc" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={formContract?.partyCode ? partyDescByCode[String(formContract.partyCode)] ?? "" : ""} />
+              </div>
+              <div className="lg:col-span-2">
                 <label className="label block mb-1">
                   Broaker{" "}
                   <span className="text-[10px] font-normal text-[var(--muted)] normal-case tracking-normal">
                     F9
                   </span>
                 </label>
-                <Combobox name="broker" options={partyOpts} defaultValue={formContract?.broker ?? ""} placeholder="Select broker" />
+                <Combobox name="broker" options={partyOpts} defaultValue={formContract?.broker ?? ""} placeholder="SARCHC" descTargetId="ypc-broker-desc" />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Broker Name</label>
+                <input id="ypc-broker-desc" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={formContract?.broker ? partyDescByCode[String(formContract.broker)] ?? "" : ""} />
               </div>
 
               <div className="lg:col-span-3">
@@ -521,9 +543,13 @@ export default async function YarnPurchaseContractPage({
                 />
               </div>
 
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-2">
                 <label className="label block mb-1">Count Code</label>
-                <Combobox name="count_code" options={countOpts} defaultValue={String(formContract?.countCode ?? "")} placeholder="Select count" />
+                <Combobox name="count_code" options={countOpts} defaultValue={String(formContract?.countCode ?? "")} placeholder="55" descTargetId="ypc-count-desc" />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="label block mb-1">Count Desc</label>
+                <input id="ypc-count-desc" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={formContract?.countCode ? countDescByCode[String(formContract.countCode)] ?? "" : ""} />
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Ratio</label>
@@ -768,11 +794,17 @@ export default async function YarnPurchaseContractPage({
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {c.partyCode ?? "-"}
+                          {c.partyCode && partyDescByCode[String(c.partyCode)] && (
+                            <span className="block text-[11px] opacity-70">{partyDescByCode[String(c.partyCode)]}</span>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {c.countCode ?? "-"}
+                          {c.countCode && countDescByCode[String(c.countCode)] && (
+                            <span className="block text-[11px] opacity-70">{countDescByCode[String(c.countCode)]}</span>
+                          )}
                         </a>
                       </td>
                       <td className="text-[13px]">

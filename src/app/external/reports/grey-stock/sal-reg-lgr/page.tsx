@@ -24,6 +24,10 @@ export default async function SalRegLgrPage({
 
   const f = await readFilters(searchParams);
   const [company] = await db.select().from(schema.companyProfile).limit(1);
+  const accountRows = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts);
+  const partyCodeByName = new Map(accountRows.map((r) => [r.description, r.code]));
 
   const conditions = [
     gte(schema.extGodownStock.vDate, f.from),
@@ -94,7 +98,10 @@ export default async function SalRegLgrPage({
               ) : (
                 grouped.map((r, idx) => (
                   <tr key={`${r.purchaseParty ?? "none"}-${idx}`}>
-                    <td>{r.purchaseParty ?? "(No Party)"}</td>
+                    <td>
+                      {r.purchaseParty ?? "(No Party)"}
+                      {r.purchaseParty && partyCodeByName.get(r.purchaseParty) ? ` (${partyCodeByName.get(r.purchaseParty)})` : ""}
+                    </td>
                     <td className="num">{fmt(Number(r.records ?? 0))}</td>
                     <td className="num">{fmt(Number(r.totalMeter ?? 0))}</td>
                     <td className="num">{fmt(Number(r.totalNet ?? 0))}</td>

@@ -42,6 +42,7 @@ export default async function ChartOfAccountPage({
   // All accounts as potential parent "Acc. Head" options; each carries the next auto code
   // it would generate for a child (mirrored into the Code field on select).
   const allAccounts = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.code);
+  const accDescByCode = new Map(allAccounts.map((a) => [a.code, a.description]));
   const headOpts = allAccounts.map((a) => {
     const depth = a.code.split(".").length;
     const kids = allAccounts.filter((x) => x.code.startsWith(a.code + ".") && x.code.split(".").length === depth + 1);
@@ -263,7 +264,16 @@ export default async function ChartOfAccountPage({
                       Acc. Head <span className="text-[9px] font-normal">(F9)</span>
                     </label>
                     {formAccount ? (
-                      <input className="input-box mono bg-gray-100" value={formAccount.codeHead ?? ""} readOnly tabIndex={-1} />
+                      <input
+                        className="input-box mono bg-gray-100"
+                        value={
+                          formAccount.codeHead
+                            ? `${formAccount.codeHead}${accDescByCode.get(formAccount.codeHead) ? ` — ${accDescByCode.get(formAccount.codeHead)}` : ""}`
+                            : ""
+                        }
+                        readOnly
+                        tabIndex={-1}
+                      />
                     ) : (
                       <Combobox name="acc_head" options={headOpts} placeholder="Select parent head" descTargetId="acct-code" />
                     )}

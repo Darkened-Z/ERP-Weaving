@@ -128,6 +128,7 @@ export default async function GreyDespatchPage({
     .where(sql`${schema.chartOfAccounts.level} >= 4`)
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
   // Running conv contracts + warp/weft rows for count-grid auto-populate.
   const contracts = await db
@@ -1187,8 +1188,18 @@ export default async function GreyDespatchPage({
                     <tr key={d.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{d.vNo}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.vDate}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{d.party ?? "-"}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{d.doParty ?? "-"}</a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
+                        <div>{d.party ?? "-"}</div>
+                        {d.party && partyCodeByDesc.get(d.party) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(d.party)}</div>
+                        )}
+                      </a></td>
+                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
+                        <div>{d.doParty ?? "-"}</div>
+                        {d.doParty && partyCodeByDesc.get(d.doParty) && (
+                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(d.doParty)}</div>
+                        )}
+                      </a></td>
                       <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{d.despatchTo ?? "-"}</a></td>
                       <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(d.thanQty)}</a></td>
                       <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(d.convRate)}</a></td>

@@ -245,6 +245,7 @@ export default async function GatepassPage({
     value: c.description,
     label: `${c.code} — ${c.description}`,
   }));
+  const ccCodeByDesc = new Map(costCenters.map((c) => [c.description, String(c.code)]));
 
   const returners = [
     ...new Set(returns.map((r) => r.returnedBy).filter(Boolean)),
@@ -638,7 +639,10 @@ export default async function GatepassPage({
                     </td>
                     <td>
                       <a href={href} className="no-underline block" style={linkStyle}>
-                        {r.department}
+                        <div>{r.department}</div>
+                        {r.department && ccCodeByDesc.get(r.department) && (
+                          <div className="text-[11px] text-[var(--muted)]">{ccCodeByDesc.get(r.department)}</div>
+                        )}
                       </a>
                     </td>
                     <td>{r.returnedBy ?? ""}</td>

@@ -68,6 +68,7 @@ export default async function PartsIssuesRegisterPage({
       rate: r.rate ?? 0,
       amount: r.amount ?? 0,
       dept: r.department,
+      ccCode: r.ccCode ?? "",
       cc: ccMap.get(r.ccCode ?? "") ?? r.ccCode ?? "-",
     }));
 
@@ -209,7 +210,9 @@ export default async function PartsIssuesRegisterPage({
                     <td className="mono text-right">{fmt(r.rate)}</td>
                     <td className="mono text-right">{fmt(r.amount)}</td>
                     <td className="text-[13px]">{r.dept}</td>
-                    <td className="text-[13px]">{r.cc}</td>
+                    <td className="text-[13px]">
+                      {r.ccCode ? `${r.ccCode} — ${r.cc}` : r.cc}
+                    </td>
                   </tr>
                 ))
               )}

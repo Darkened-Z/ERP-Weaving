@@ -129,8 +129,19 @@ export default async function WeavingCountsReportPage({
     .where(and(...partyConditions));
 
   const partyCodeToDesc = new Map(parties.map((p) => [p.code, p.description]));
+  const partyDescToCode = new Map(parties.map((p) => [p.description, p.code]));
   const partyDescSet = new Set(parties.map((p) => p.description));
   const partyCodeSet = new Set(parties.map((p) => p.code));
+
+  const greyRows = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction);
+  const greyDescByCode = new Map(greyRows.map((r) => [r.code, r.description]));
+
+  const countRows = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(countRows.map((r) => [r.countCode, r.description]));
 
   const isConv = view.startsWith("CONV");
 
@@ -574,9 +585,29 @@ export default async function WeavingCountsReportPage({
                       const v = r[h.key];
                       const isNumber = typeof v === "number";
                       const cls = h.align === "right" ? "mono text-right" : "text-[13px]";
+                      let display: string;
+                      if (isNumber) {
+                        display = fmt(v as number);
+                      } else if (v == null || v === "") {
+                        display = "-";
+                      } else {
+                        const s = String(v);
+                        if (h.key === "party") {
+                          const code = partyDescToCode.get(s);
+                          display = code ? `${s} (${code})` : s;
+                        } else if (h.key === "grayCode") {
+                          const desc = greyDescByCode.get(s);
+                          display = desc ? `${s} — ${desc}` : s;
+                        } else if (h.key === "countCode") {
+                          const desc = countDescByCode.get(s);
+                          display = desc ? `${s} — ${desc}` : s;
+                        } else {
+                          display = s;
+                        }
+                      }
                       return (
                         <td key={h.key as string} className={cls}>
-                          {isNumber ? fmt(v as number) : v == null || v === "" ? "-" : String(v)}
+                          {display}
                         </td>
                       );
                     })}

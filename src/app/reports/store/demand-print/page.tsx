@@ -160,7 +160,7 @@ export default async function DemandPrintPage({
                   <td className="mono r">{fmt(l.qty)}</td>
                   <td className="mono r">{fmt2(l.rate)}</td>
                   <td className="mono r">{fmt(l.amount)}</td>
-                  <td>{ccMap.get(l.ccCode ?? "") ?? l.ccCode ?? "-"}</td>
+                  <td>{l.ccCode ? `${l.ccCode} — ${ccMap.get(l.ccCode) ?? l.ccCode}` : "-"}</td>
                 </tr>
               );
             })}

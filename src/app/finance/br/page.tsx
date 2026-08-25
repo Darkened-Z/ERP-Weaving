@@ -978,7 +978,16 @@ export default async function BankReceiptPage({
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {v.accCode ? descMap.get(v.accCode) ?? v.accCode : "-"}
+                          {v.accCode ? (
+                            <>
+                              <span className="mono">{v.accCode}</span>
+                              <span className="text-[11px] text-[var(--muted)] ml-1">
+                                — {descMap.get(v.accCode) ?? ""}
+                              </span>
+                            </>
+                          ) : (
+                            "-"
+                          )}
                         </a>
                       </td>
                       <td className="text-right mono text-[13px]">

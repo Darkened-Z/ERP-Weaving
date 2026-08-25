@@ -32,6 +32,12 @@ export default async function SizingWarpingConsumptionPage({
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
     .where(sql`${schema.chartOfAccounts.level} >= 4`);
+  const partyDescToCode = new Map(parties.map((p) => [p.description, p.code]));
+
+  const yarnCountRows = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const yarnCountMap = new Map(yarnCountRows.map((r) => [r.countCode, r.description]));
 
   const contractConds = [
     gte(schema.intBeamContractExtWs.contDate, from),
@@ -250,19 +256,35 @@ export default async function SizingWarpingConsumptionPage({
                   </td>
                 </tr>
               ) : (
-                rows.map((r, i) => (
+                rows.map((r, i) => {
+                  const partyCode = partyDescToCode.get(r.party);
+                  const wpCode = partyDescToCode.get(r.warpingParty);
+                  const countDesc = yarnCountMap.get(r.countCode);
+                  return (
                   <tr key={i}>
                     <td className="mono">{r.contNo}</td>
                     <td className="mono">{r.contDate}</td>
-                    <td className="text-[13px]">{r.party}</td>
-                    <td className="text-[13px]">{r.warpingParty}</td>
-                    <td className="mono">{r.countCode}</td>
+                    <td className="text-[13px]">
+                      {r.party}
+                      {partyCode ? ` (${partyCode})` : ""}
+                    </td>
+                    <td className="text-[13px]">
+                      {r.warpingParty}
+                      {wpCode ? ` (${wpCode})` : ""}
+                    </td>
+                    <td className="mono">
+                      {r.countCode}
+                      {countDesc && (
+                        <div className="text-[11px] text-[var(--muted)]">{countDesc}</div>
+                      )}
+                    </td>
                     <td className="mono text-right">{fmt(r.ends)}</td>
                     <td className="mono text-right">{fmt2(r.wtPerMtr)}</td>
                     <td className="mono text-right">{fmt(r.warpedMtr)}</td>
                     <td className="mono text-right font-bold">{fmt(r.consumedLbs)}</td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
             {rows.length > 0 && (

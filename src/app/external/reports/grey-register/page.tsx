@@ -144,6 +144,13 @@ export default async function GreyRegisterPage({
     salConditions.push(sql`${schema.extGreySalContract.remarks} LIKE ${pat} ESCAPE '\\'`);
   }
 
+  const [accountRows, greyRows] = await Promise.all([
+    db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
+    db.select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description }).from(schema.greyConstruction),
+  ]);
+  const partyCodeByName = new Map(accountRows.map((r) => [r.description, r.code]));
+  const greyDescMap = new Map(greyRows.map((r) => [r.code, r.description]));
+
   const purRows = await db.select().from(schema.extGreyPurContract).where(and(...purConditions));
   const salRows = await db.select().from(schema.extGreySalContract).where(and(...salConditions));
 
@@ -407,8 +414,16 @@ export default async function GreyRegisterPage({
                     <td className="mono text-[12px] font-bold">{r.type}</td>
                     <td className="mono text-[13px] font-bold">{r.contractNo}</td>
                     <td className="mono text-[13px]">{r.contractDate}</td>
-                    <td className="text-[13px]">{r.party ?? "-"}</td>
-                    <td className="mono text-[13px]">{r.greyCode ?? "-"}</td>
+                    <td className="text-[13px]">
+                      {r.party ?? "-"}
+                      {r.party && partyCodeByName.get(r.party) ? ` (${partyCodeByName.get(r.party)})` : ""}
+                    </td>
+                    <td className="mono text-[13px]">
+                      {r.greyCode ?? "-"}
+                      {r.greyCode && greyDescMap.get(r.greyCode) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{greyDescMap.get(r.greyCode)}</div>
+                      ) : null}
+                    </td>
                     <td className="text-[13px]">{r.weave ?? "-"}</td>
                     <td className="mono text-right">{r.quantityMtr != null ? fmt(r.quantityMtr) : "-"}</td>
                     <td className="mono text-right">{r.ratePerMtr != null ? fmt(r.ratePerMtr) : "-"}</td>

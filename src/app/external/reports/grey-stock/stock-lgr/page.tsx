@@ -27,6 +27,16 @@ export default async function StockLgrPage({
 
   const [company] = await db.select().from(schema.companyProfile).limit(1);
 
+  const accountRows = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts);
+  const partyCodeByDesc = new Map(accountRows.map((r) => [r.description, r.code]));
+  const partyLabel = (name: string | null | undefined) => {
+    if (!name) return "-";
+    const code = partyCodeByDesc.get(name);
+    return code ? `${name} (${code})` : name;
+  };
+
   const conditions = [
     gte(schema.extGodownStock.vDate, f.from),
     lte(schema.extGodownStock.vDate, f.to),
@@ -114,8 +124,8 @@ export default async function StockLgrPage({
                     <td className="mono">{r.vDate}</td>
                     <td className="mono">{r.vNo}</td>
                     <td className="mono">{r.kpNo ?? "-"}</td>
-                    <td>{r.purchaseParty ?? "-"}</td>
-                    <td>{r.gdnParty ?? "-"}</td>
+                    <td>{partyLabel(r.purchaseParty)}</td>
+                    <td>{partyLabel(r.gdnParty)}</td>
                     <td className="num">{r.meter != null ? fmt(r.meter) : "-"}</td>
                     <td className="num">{r.netMeter != null ? fmt(r.netMeter) : "-"}</td>
                     <td className="num">{r.kaatPercent != null ? fmt2(r.kaatPercent) : "-"}</td>

@@ -75,6 +75,7 @@ export default async function KnottingContractPage({
     .where(sql`${schema.chartOfAccounts.level} >= 4`)
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
+  const partyDescByCode = new Map(parties.map((p) => [String(p.code), p.description]));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -490,7 +491,10 @@ export default async function KnottingContractPage({
                       </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.party ?? "-"}
+                          <div>{c.party ?? "-"}</div>
+                          {c.party && partyDescByCode.get(c.party) && (
+                            <div className="text-[11px] text-[var(--muted)]">{partyDescByCode.get(c.party)}</div>
+                          )}
                         </a>
                       </td>
                       <td className="mono text-[12px]">

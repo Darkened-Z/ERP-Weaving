@@ -94,6 +94,11 @@ export default async function RegisterPartyPage({
     for (const a of accounts) acctMap.set(a.code, a.description);
   }
 
+  const countLookup = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(countLookup.map((r) => [r.countCode, r.description]));
+
   const grouped = new Map<string, PartyGroup>();
   for (const r of allRows) {
     const g = grouped.get(r.partyCode) ?? {
@@ -247,7 +252,7 @@ export default async function RegisterPartyPage({
                         <td>{c.type}</td>
                         <td>{c.contNo}</td>
                         <td>{c.contDate}</td>
-                        <td>{c.countCode ?? "—"}</td>
+                        <td>{c.countCode ? (countDescByCode.get(c.countCode) ? `${c.countCode} — ${countDescByCode.get(c.countCode)}` : c.countCode) : "—"}</td>
                         <td>{c.brand ?? "—"}</td>
                         <td className="num">{fmt(c.qtyBags)}</td>
                         <td className="num">{fmt(c.ratePerLbs, 2)}</td>

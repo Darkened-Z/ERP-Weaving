@@ -27,7 +27,12 @@ export default async function YarnCountAvgRatePage({
   const party = p.party?.trim() ?? "";
   const count = p.count?.trim() ?? "";
 
-  const [partyOpts, countOpts] = await Promise.all([partyByNameOptions(), yarnCountOptions()]);
+  const [partyOpts, countOpts, countMetaRows] = await Promise.all([
+    partyByNameOptions(),
+    yarnCountOptions(),
+    db.select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description }).from(schema.yarnCounts),
+  ]);
+  const countDescMap = new Map(countMetaRows.map((r) => [r.code, r.description]));
 
   const conds = [
     gte(schema.extYarnPurVoucher.vDate, from),
@@ -154,7 +159,12 @@ export default async function YarnCountAvgRatePage({
               ) : (
                 enriched.map((r) => (
                   <tr key={r.count ?? "—"}>
-                    <td className="mono font-bold">{r.count ?? "—"}</td>
+                    <td className="mono font-bold">
+                      {r.count ?? "—"}
+                      {r.count && countDescMap.get(r.count) ? (
+                        <div className="text-[11px] text-[var(--muted)]">{countDescMap.get(r.count)}</div>
+                      ) : null}
+                    </td>
                     <td className="mono text-right">{fmt(r.lines)}</td>
                     <td className="mono text-right">{fmt(r.totalBags)}</td>
                     <td className="mono text-right">{fmt(r.totalLbs)}</td>

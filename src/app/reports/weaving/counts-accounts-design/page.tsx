@@ -34,6 +34,11 @@ export default async function CountsAccountsDesignPage({
     .from(schema.chartOfAccounts)
     .where(sql`${schema.chartOfAccounts.level} >= 4`);
 
+  const yarnCountRows = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  const yarnCountMap = new Map(yarnCountRows.map((r) => [r.countCode, r.description]));
+
   const conds = [
     gte(schema.intDailyProduction.vDate, from),
     lte(schema.intDailyProduction.vDate, to),
@@ -189,7 +194,14 @@ export default async function CountsAccountsDesignPage({
                 rows.map((r, i) => (
                   <tr key={`${r.designNo}-${r.count}-${i}`}>
                     <td className="mono">{r.designNo}</td>
-                    <td className="mono">{r.count}</td>
+                    <td className="mono">
+                      {r.count}
+                      {yarnCountMap.get(r.count) && (
+                        <div className="text-[11px] text-[var(--muted)]">
+                          {yarnCountMap.get(r.count)}
+                        </div>
+                      )}
+                    </td>
                     <td className="mono text-right">{fmt(r.lbs)}</td>
                     <td className="mono text-right">{fmt(r.mtrs)}</td>
                     <td className="mono text-right">{r.mtrs > 0 ? fmt2(r.lbs / r.mtrs) : "-"}</td>

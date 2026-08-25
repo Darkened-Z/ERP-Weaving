@@ -52,6 +52,13 @@ export default async function KoraPendingPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
 
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  const partyLabel = (name: string | null | undefined) => {
+    if (!name) return "-";
+    const code = partyCodeByDesc.get(name);
+    return code ? `${name} (${code})` : name;
+  };
+
   const purPartyPat = purParty ? `${escLike(purParty)}%` : "";
   const salPartyPat = salParty ? `${escLike(salParty)}%` : "";
 
@@ -338,8 +345,8 @@ export default async function KoraPendingPage({
                     <td className="mono font-bold">{r.vNo}</td>
                     <td className="mono text-[13px]">{toDate(r.vDate)}</td>
                     <td className="mono text-[13px]">{r.subNo ?? "-"}</td>
-                    <td className="text-[13px]">{r.purchaseParty ?? "-"}</td>
-                    <td className="text-[13px]">{r.saleParty ?? "-"}</td>
+                    <td className="text-[13px]">{partyLabel(r.purchaseParty)}</td>
+                    <td className="text-[13px]">{partyLabel(r.saleParty)}</td>
                     <td className="mono text-right">{fmt(r.meterA ?? 0)}</td>
                     <td className="mono text-right">{fmt(r.meterB ?? 0)}</td>
                   </tr>

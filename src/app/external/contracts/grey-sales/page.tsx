@@ -112,6 +112,8 @@ export default async function GreySalesContractPage({
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}`, desc: g.description }));
+  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -833,9 +835,14 @@ export default async function GreySalesContractPage({
                         {c.contractDate}
                       </div>
                     </div>
-                    <div className="text-[11px] truncate">{c.party ?? "-"}</div>
+                    <div className="text-[11px] truncate">
+                      {c.party ?? "-"}
+                      {c.party && partyCodeByDesc.get(c.party) ? ` (${partyCodeByDesc.get(c.party)})` : ""}
+                    </div>
                     <div className="text-[10px] mono" style={{ color: isSel ? "white" : "var(--muted)" }}>
-                      {c.greyCode ?? "-"} {c.weave ? "/ " + c.weave : ""}
+                      {c.greyCode ?? "-"}
+                      {c.greyCode && greyDescByCode.get(c.greyCode) ? ` — ${greyDescByCode.get(c.greyCode)}` : ""}
+                      {c.weave ? " / " + c.weave : ""}
                     </div>
                   </a>
                 );
@@ -869,10 +876,20 @@ export default async function GreySalesContractPage({
                       <a href={href} className="no-underline block" style={linkStyle}>{c.contractNo}</a>
                     </td>
                     <td className="text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>{c.party ?? "-"}</a>
+                      <a href={href} className="no-underline block" style={linkStyle}>
+                        {c.party ?? "-"}
+                        {c.party && partyCodeByDesc.get(c.party) && (
+                          <span className="block text-[11px] opacity-70">{partyCodeByDesc.get(c.party)}</span>
+                        )}
+                      </a>
                     </td>
                     <td className="mono text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>{c.greyCode ?? "-"}</a>
+                      <a href={href} className="no-underline block" style={linkStyle}>
+                        {c.greyCode ?? "-"}
+                        {c.greyCode && greyDescByCode.get(c.greyCode) && (
+                          <span className="block text-[11px] opacity-70">{greyDescByCode.get(c.greyCode)}</span>
+                        )}
+                      </a>
                     </td>
                     <td className="text-[13px]">
                       <a href={href} className="no-underline block" style={linkStyle}>{c.weave ?? "-"}</a>
