@@ -69,6 +69,22 @@ export default async function GreyConvContractPage({
       reed: schema.greyConstruction.reed,
       pick: schema.greyConstruction.pick,
       width: schema.greyConstruction.width,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      warp3: schema.greyConstruction.warp3,
+      warp4: schema.greyConstruction.warp4,
+      warp5: schema.greyConstruction.warp5,
+      warp6: schema.greyConstruction.warp6,
+      warp7: schema.greyConstruction.warp7,
+      warp8: schema.greyConstruction.warp8,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+      weft3: schema.greyConstruction.weft3,
+      weft4: schema.greyConstruction.weft4,
+      weft5: schema.greyConstruction.weft5,
+      weft6: schema.greyConstruction.weft6,
+      weft7: schema.greyConstruction.weft7,
+      weft8: schema.greyConstruction.weft8,
     })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
@@ -130,8 +146,34 @@ export default async function GreyConvContractPage({
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Picking a Gray Qlty Code fills reed/pick/width + the WARP/WEFT count grid
+  // rows from the greyConstruction record (Oracle: SELECT GC_WARP,GC_WARP1..4,
+  // GC_WEFT,GC_WEFT1..4 FROM WVG_GRAY_CONSTRUCTION WHERE GC_GRAY_CODE=:b1).
   const greyFillMap = Object.fromEntries(
-    greyList.map((g) => [g.code, { read: g.reed, pick: g.pick, width: g.width }])
+    greyList.map((g) => [
+      g.code,
+      {
+        read: g.reed,
+        pick: g.pick,
+        width: g.width,
+        warp_count_1: g.warpCount ?? "",
+        warp_count_2: g.warp2 ?? "",
+        warp_count_3: g.warp3 ?? "",
+        warp_count_4: g.warp4 ?? "",
+        warp_count_5: g.warp5 ?? "",
+        warp_count_6: g.warp6 ?? "",
+        warp_count_7: g.warp7 ?? "",
+        warp_count_8: g.warp8 ?? "",
+        weft_count_1: g.weftCount ?? "",
+        weft_count_2: g.weft2 ?? "",
+        weft_count_3: g.weft3 ?? "",
+        weft_count_4: g.weft4 ?? "",
+        weft_count_5: g.weft5 ?? "",
+        weft_count_6: g.weft6 ?? "",
+        weft_count_7: g.weft7 ?? "",
+        weft_count_8: g.weft8 ?? "",
+      },
+    ])
   );
   const productFillMap = Object.fromEntries(
     productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description }])
@@ -395,7 +437,17 @@ export default async function GreyConvContractPage({
           <form action={saveContract}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <GreyConvCalc />
-            <AutoFill watch="gray_qlty_code" map={greyFillMap} inputs={["read", "pick", "width"]} />
+            <AutoFill
+              watch="gray_qlty_code"
+              map={greyFillMap}
+              inputs={[
+                "read", "pick", "width",
+                "warp_count_1", "warp_count_2", "warp_count_3", "warp_count_4",
+                "warp_count_5", "warp_count_6", "warp_count_7", "warp_count_8",
+                "weft_count_1", "weft_count_2", "weft_count_3", "weft_count_4",
+                "weft_count_5", "weft_count_6", "weft_count_7", "weft_count_8",
+              ]}
+            />
             <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name"]} />
 
             <div className="grid grid-cols-12 gap-3 mb-3">
@@ -475,14 +527,6 @@ export default async function GreyConvContractPage({
                   <div>
                     <label className="label block mb-1">Cost Lakhai Border / Mtr</label>
                     <input name="cost_lakhai_border_mtr" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.costLakhaiBorderMtr ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Weave</label>
-                    <input name="weave" className="input-box mono text-[13px]" defaultValue={formItem?.weaveFrame ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Slv. Name</label>
-                    <input name="slv_name_2" className="input-box mono text-[13px]" defaultValue={formItem?.slvName ?? ""} />
                   </div>
                 </div>
 
