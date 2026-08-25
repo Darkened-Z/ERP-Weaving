@@ -2,11 +2,18 @@ import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
+import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { db, schema } from "@/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
+import { acc } from "@/lib/gl-accounts";
+import {
+  forwardToAudit as fwdAudit,
+  forwardToFinance as fwdFinance,
+  revertApproval as revertAppr,
+} from "@/lib/approvals";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -28,6 +35,12 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const LINE_ROWS = 4;
+
+const assertBalanced = (details: (typeof schema.transDetail.$inferInsert)[]) => {
+  const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+  const c = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+  if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
+};
 
 async function saveReturn(formData: FormData) {
   "use server";
@@ -84,20 +97,34 @@ async function saveReturn(formData: FormData) {
     .limit(1);
   const fyCode = company?.fy ?? "";
 
+  const shouldPostGL = totalAmount > 0;
+  const stockAcc = shouldPostGL ? await acc("PARTS_STOCK") : "";
+  const consAcc = shouldPostGL ? await acc("PARTS_CONSUMPTION") : "";
+  const [ccRow] = shouldPostGL
+    ? await db
+        .select({ code: schema.costCenters.code })
+        .from(schema.costCenters)
+        .where(eq(schema.costCenters.description, department))
+        .limit(1)
+    : [];
+  const ccCode = ccRow?.code != null ? Number(ccRow.code) : null;
+
   let savedId = isNew ? 0 : id;
   let codeExists = false;
   try {
     savedId = await db.transaction(async (tx) => {
       let rid: number;
+      let vno: number;
       if (isNew) {
         const [{ maxN }] = await tx
           .select({ maxN: sql<number>`coalesce(max(return_no), 0)` })
           .from(schema.storeReturns)
           .where(eq(schema.storeReturns.fyCode, fyCode));
+        vno = (maxN ?? 0) + 1;
         const [inserted] = await tx
           .insert(schema.storeReturns)
           .values({
-            returnNo: (maxN ?? 0) + 1,
+            returnNo: vno,
             fyCode,
             returnDate,
             department,
@@ -109,6 +136,12 @@ async function saveReturn(formData: FormData) {
           .returning({ id: schema.storeReturns.id });
         rid = inserted.id;
       } else {
+        const [existing] = await tx
+          .select({ returnNo: schema.storeReturns.returnNo })
+          .from(schema.storeReturns)
+          .where(eq(schema.storeReturns.id, id))
+          .limit(1);
+        vno = existing?.returnNo ?? 0;
         const oldLines = await tx
           .select()
           .from(schema.storeReturnDetail)
@@ -142,6 +175,50 @@ async function saveReturn(formData: FormData) {
           .where(eq(schema.chartParts.code, l.partCode));
       }
 
+      if (shouldPostGL && vno > 0) {
+        await tx
+          .delete(schema.transDetail)
+          .where(and(eq(schema.transDetail.vtype, "SR"), eq(schema.transDetail.vno, vno)));
+        await tx
+          .delete(schema.transMain)
+          .where(and(eq(schema.transMain.vtype, "SR"), eq(schema.transMain.vno, vno)));
+
+        await tx.insert(schema.transMain).values({
+          fyCode,
+          vtype: "SR",
+          vno,
+          vdate: returnDate,
+          accCode: stockAcc,
+          narration: `Ret#${vno} ${department}`.trim(),
+          balanceAmount: totalAmount,
+        });
+
+        const details: (typeof schema.transDetail.$inferInsert)[] = [
+          {
+            fyCode,
+            vtype: "SR",
+            vno,
+            srno: 1,
+            accCode: stockAcc,
+            ccCode,
+            debit: totalAmount,
+            credit: 0,
+          },
+          {
+            fyCode,
+            vtype: "SR",
+            vno,
+            srno: 2,
+            accCode: consAcc,
+            ccCode,
+            debit: 0,
+            credit: totalAmount,
+          },
+        ];
+        assertBalanced(details);
+        await tx.insert(schema.transDetail).values(details);
+      }
+
       return rid;
     });
   } catch (e: unknown) {
@@ -172,7 +249,28 @@ async function deleteReturn(formData: FormData) {
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
 
+  const [existing] = await db
+    .select({
+      returnNo: schema.storeReturns.returnNo,
+      approvalStatus: schema.storeReturns.approvalStatus,
+    })
+    .from(schema.storeReturns)
+    .where(eq(schema.storeReturns.id, id))
+    .limit(1);
+  if (existing?.approvalStatus === "POSTED") {
+    redirect("/store/gatepass?error=posted_delete_warn");
+  }
+  const vno = existing?.returnNo ?? 0;
+
   await db.transaction(async (tx) => {
+    if (vno > 0) {
+      await tx
+        .delete(schema.transDetail)
+        .where(and(eq(schema.transDetail.vtype, "SR"), eq(schema.transDetail.vno, vno)));
+      await tx
+        .delete(schema.transMain)
+        .where(and(eq(schema.transMain.vtype, "SR"), eq(schema.transMain.vno, vno)));
+    }
     const oldLines = await tx
       .select()
       .from(schema.storeReturnDetail)
@@ -195,6 +293,67 @@ async function deleteReturn(formData: FormData) {
   redirect("/store/gatepass");
 }
 
+async function deletePostedReturn(formData: FormData) {
+  "use server";
+  const s = await getSession();
+  if (s?.roleName !== "ADMIN") redirect("/store/gatepass?error=admin_only");
+  const id = parseInt(formData.get("id") as string, 10);
+  if (!Number.isFinite(id)) return;
+
+  const [existing] = await db
+    .select({ returnNo: schema.storeReturns.returnNo })
+    .from(schema.storeReturns)
+    .where(eq(schema.storeReturns.id, id))
+    .limit(1);
+  const vno = existing?.returnNo ?? 0;
+
+  await db.transaction(async (tx) => {
+    if (vno > 0) {
+      await tx
+        .delete(schema.transDetail)
+        .where(and(eq(schema.transDetail.vtype, "SR"), eq(schema.transDetail.vno, vno)));
+      await tx
+        .delete(schema.transMain)
+        .where(and(eq(schema.transMain.vtype, "SR"), eq(schema.transMain.vno, vno)));
+    }
+    const oldLines = await tx
+      .select()
+      .from(schema.storeReturnDetail)
+      .where(eq(schema.storeReturnDetail.returnId, id));
+    for (const ol of oldLines) {
+      await tx
+        .update(schema.chartParts)
+        .set({ currentStock: sql`current_stock - ${ol.qty}` })
+        .where(eq(schema.chartParts.code, ol.partCode));
+    }
+    await tx
+      .delete(schema.storeReturnDetail)
+      .where(eq(schema.storeReturnDetail.returnId, id));
+    await tx.delete(schema.storeReturns).where(eq(schema.storeReturns.id, id));
+  });
+
+  revalidatePath("/store/gatepass");
+  revalidatePath("/store/parts");
+  revalidatePath("/store/stock");
+  redirect("/store/gatepass");
+}
+
+async function retForwardAudit(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await fwdAudit("return", id);
+}
+async function retForwardFinance(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await fwdFinance("return", id);
+}
+async function retRevert(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await revertAppr("return", id);
+}
+
 export default async function GatepassPage({
   searchParams,
 }: {
@@ -202,6 +361,8 @@ export default async function GatepassPage({
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
+  const session = await getSession();
+  const role = session?.roleName;
 
   const rows = await db
     .select()
@@ -394,24 +555,58 @@ export default async function GatepassPage({
             Only ADMIN users can delete store returns.
           </div>
         )}
+        {params.error === "role_denied" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Your role does not permit that approval action.
+          </div>
+        )}
+        {params.error === "bad_state" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Approval status has changed. Reload and try again.
+          </div>
+        )}
+        {params.error === "posted_delete_warn" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            This return is POSTED to Finance. Revert the approval first — deleting it now would leave orphan GL entries.
+          </div>
+        )}
 
         {showForm && (
           <div className="border border-black p-4 mb-3">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-black">
+            <div className="flex flex-wrap items-center justify-between mb-4 pb-2 border-b border-black gap-2">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                 {formItem
                   ? `Edit Return — ${formItem.returnNo}/${formItem.fyCode}`
                   : "New Store Return"}
               </div>
+              {formItem && (
+                <ApprovalActions
+                  kind="return"
+                  id={formItem.id}
+                  status={formItem.approvalStatus}
+                  role={role}
+                  forwardAudit={retForwardAudit}
+                  forwardFinance={retForwardFinance}
+                  revert={retRevert}
+                />
+              )}
               <div className="flex gap-2">
                 <a href="/store/gatepass?adding=1" className="btn btn-outline btn-sm">
                   New
                 </a>
-                {formItem && (
+                {formItem && formItem.approvalStatus !== "POSTED" && (
                   <form action={deleteReturn} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
                     <ConfirmButton message="Delete this return? Returned stock will be reversed.">
                       Del
+                    </ConfirmButton>
+                  </form>
+                )}
+                {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
+                  <form action={deletePostedReturn} className="inline">
+                    <input type="hidden" name="id" value={formItem.id} />
+                    <ConfirmButton message="This return is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                      Del (POSTED)
                     </ConfirmButton>
                   </form>
                 )}
@@ -616,12 +811,13 @@ export default async function GatepassPage({
               <th className="text-right">Items</th>
               <th className="text-right">Amount</th>
               <th>Remarks</th>
+              <th>Approval</th>
             </tr>
           </thead>
           <tbody>
             {returns.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-[var(--muted)]">
+                <td colSpan={8} className="text-center text-[var(--muted)]">
                   No store returns found
                 </td>
               </tr>
@@ -661,6 +857,9 @@ export default async function GatepassPage({
                       {fmt.format(Math.round(r.totalAmount ?? 0))}
                     </td>
                     <td className="text-[13px]">{r.remarks ?? ""}</td>
+                    <td>
+                      <ApprovalBadge status={r.approvalStatus} />
+                    </td>
                   </tr>
                 );
               })

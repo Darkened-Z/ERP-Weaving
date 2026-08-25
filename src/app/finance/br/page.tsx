@@ -1,6 +1,5 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
-import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { VoucherBalance } from "@/components/voucher-balance";
 import { Combobox } from "@/components/combobox";
@@ -609,7 +608,16 @@ export default async function BankReceiptPage({
                   Save
                 </button>
               )}
-              <PrintButton label="Print" />
+              {formVoucher?.id ? (
+                <a
+                  href={`/reports/gpv?v=${VTYPE}&n=${formVoucher.vno}${fyCode ? `&fy=${encodeURIComponent(fyCode)}` : ""}`}
+                  className="btn btn-outline btn-sm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Print
+                </a>
+              ) : null}
               {formVoucher && session?.roleName === "ADMIN" && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formVoucher.id} />
@@ -879,7 +887,16 @@ export default async function BankReceiptPage({
                 <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
                   New
                 </a>
-                <PrintButton label="Print" />
+                {formVoucher?.id ? (
+                  <a
+                    href={`/reports/gpv?v=${VTYPE}&n=${formVoucher.vno}${fyCode ? `&fy=${encodeURIComponent(fyCode)}` : ""}`}
+                    className="btn btn-outline btn-sm"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Print
+                  </a>
+                ) : null}
                 <a href={BASE} className="btn btn-outline btn-sm">
                   Exit
                 </a>

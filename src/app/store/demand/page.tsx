@@ -2,11 +2,18 @@ import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
+import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { db, schema } from "@/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
+import { acc } from "@/lib/gl-accounts";
 import { today } from "@/lib/time";
+import {
+  forwardToAudit as fwdAudit,
+  forwardToFinance as fwdFinance,
+  revertApproval as revertAppr,
+} from "@/lib/approvals";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -28,6 +35,8 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const LINE_ROWS = 4;
+
+const VTYPE = "SV";
 
 async function saveDemand(formData: FormData) {
   "use server";
@@ -91,21 +100,26 @@ async function saveDemand(formData: FormData) {
     .limit(1);
   const fyCode = company?.fy ?? "";
 
+  const partsConsumptionAcc = await acc("PARTS_CONSUMPTION");
+  const partsStockAcc = await acc("PARTS_STOCK");
+
   let savedId = isNew ? 0 : id;
   let codeExists = false;
   let shortPart: string | null = null;
   try {
     savedId = await db.transaction(async (tx) => {
       let did: number;
+      let demandNoVal: number;
       if (isNew) {
         const [{ maxN }] = await tx
           .select({ maxN: sql<number>`coalesce(max(demand_no), 0)` })
           .from(schema.storeDemands)
           .where(eq(schema.storeDemands.fyCode, fyCode));
+        demandNoVal = (maxN ?? 0) + 1;
         const [inserted] = await tx
           .insert(schema.storeDemands)
           .values({
-            demandNo: (maxN ?? 0) + 1,
+            demandNo: demandNoVal,
             fyCode,
             demandDate,
             department,
@@ -117,6 +131,12 @@ async function saveDemand(formData: FormData) {
           .returning({ id: schema.storeDemands.id });
         did = inserted.id;
       } else {
+        const [existingRow] = await tx
+          .select({ demandNo: schema.storeDemands.demandNo })
+          .from(schema.storeDemands)
+          .where(eq(schema.storeDemands.id, id))
+          .limit(1);
+        demandNoVal = existingRow?.demandNo ?? 0;
         const oldLines = await tx
           .select()
           .from(schema.storeDemandDetail)
@@ -157,6 +177,67 @@ async function saveDemand(formData: FormData) {
           .where(eq(schema.chartParts.id, p.id));
       }
 
+      await tx
+        .delete(schema.transDetail)
+        .where(
+          and(
+            eq(schema.transDetail.vtype, VTYPE),
+            eq(schema.transDetail.vno, demandNoVal)
+          )
+        );
+      await tx
+        .delete(schema.transMain)
+        .where(
+          and(
+            eq(schema.transMain.vtype, VTYPE),
+            eq(schema.transMain.vno, demandNoVal)
+          )
+        );
+
+      if (totalAmount > 0) {
+        const ccInt = ccCode ? parseInt(ccCode, 10) : null;
+        const narration = `Dmd#${demandNoVal} ${department}`.trim();
+        await tx.insert(schema.transMain).values({
+          fyCode,
+          vtype: VTYPE,
+          vno: demandNoVal,
+          vdate: demandDate,
+          accCode: partsConsumptionAcc,
+          narration,
+          balanceAmount: totalAmount,
+        });
+        const details: (typeof schema.transDetail.$inferInsert)[] = [
+          {
+            fyCode,
+            vtype: VTYPE,
+            vno: demandNoVal,
+            srno: 1,
+            accCode: partsConsumptionAcc,
+            partyCode: null,
+            ccCode: ccInt,
+            narration,
+            debit: totalAmount,
+            credit: 0,
+          },
+          {
+            fyCode,
+            vtype: VTYPE,
+            vno: demandNoVal,
+            srno: 2,
+            accCode: partsStockAcc,
+            partyCode: null,
+            ccCode: ccInt,
+            narration,
+            debit: 0,
+            credit: totalAmount,
+          },
+        ];
+        const dSum = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+        const cSum = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+        if (Math.abs(dSum - cSum) >= 0.01) throw new Error("Unbalanced voucher");
+        await tx.insert(schema.transDetail).values(details);
+      }
+
       return did;
     });
   } catch (e: unknown) {
@@ -193,7 +274,38 @@ async function deleteDemand(formData: FormData) {
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
 
+  const [existing] = await db
+    .select({
+      approvalStatus: schema.storeDemands.approvalStatus,
+      demandNo: schema.storeDemands.demandNo,
+    })
+    .from(schema.storeDemands)
+    .where(eq(schema.storeDemands.id, id))
+    .limit(1);
+  if (existing?.approvalStatus === "POSTED") {
+    redirect("/store/demand?error=posted_delete_warn");
+  }
+  const demandNoVal = existing?.demandNo ?? 0;
+
   await db.transaction(async (tx) => {
+    if (demandNoVal) {
+      await tx
+        .delete(schema.transDetail)
+        .where(
+          and(
+            eq(schema.transDetail.vtype, VTYPE),
+            eq(schema.transDetail.vno, demandNoVal)
+          )
+        );
+      await tx
+        .delete(schema.transMain)
+        .where(
+          and(
+            eq(schema.transMain.vtype, VTYPE),
+            eq(schema.transMain.vno, demandNoVal)
+          )
+        );
+    }
     const oldLines = await tx
       .select()
       .from(schema.storeDemandDetail)
@@ -216,6 +328,77 @@ async function deleteDemand(formData: FormData) {
   redirect("/store/demand");
 }
 
+async function deletePostedDemand(formData: FormData) {
+  "use server";
+  const s = await getSession();
+  if (s?.roleName !== "ADMIN") redirect("/store/demand?error=admin_only");
+  const id = parseInt(formData.get("id") as string, 10);
+  if (!Number.isFinite(id)) return;
+
+  const [existing] = await db
+    .select({ demandNo: schema.storeDemands.demandNo })
+    .from(schema.storeDemands)
+    .where(eq(schema.storeDemands.id, id))
+    .limit(1);
+  const demandNoVal = existing?.demandNo ?? 0;
+
+  await db.transaction(async (tx) => {
+    if (demandNoVal) {
+      await tx
+        .delete(schema.transDetail)
+        .where(
+          and(
+            eq(schema.transDetail.vtype, VTYPE),
+            eq(schema.transDetail.vno, demandNoVal)
+          )
+        );
+      await tx
+        .delete(schema.transMain)
+        .where(
+          and(
+            eq(schema.transMain.vtype, VTYPE),
+            eq(schema.transMain.vno, demandNoVal)
+          )
+        );
+    }
+    const oldLines = await tx
+      .select()
+      .from(schema.storeDemandDetail)
+      .where(eq(schema.storeDemandDetail.demandId, id));
+    for (const ol of oldLines) {
+      await tx
+        .update(schema.chartParts)
+        .set({ currentStock: sql`current_stock + ${ol.qty}` })
+        .where(eq(schema.chartParts.code, ol.partCode));
+    }
+    await tx
+      .delete(schema.storeDemandDetail)
+      .where(eq(schema.storeDemandDetail.demandId, id));
+    await tx.delete(schema.storeDemands).where(eq(schema.storeDemands.id, id));
+  });
+
+  revalidatePath("/store/demand");
+  revalidatePath("/store/parts");
+  revalidatePath("/store/stock");
+  redirect("/store/demand");
+}
+
+async function demandForwardAudit(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await fwdAudit("demand", id);
+}
+async function demandForwardFinance(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await fwdFinance("demand", id);
+}
+async function demandRevert(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await revertAppr("demand", id);
+}
+
 export default async function DemandPage({
   searchParams,
 }: {
@@ -229,6 +412,8 @@ export default async function DemandPage({
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
+  const session = await getSession();
+  const role = session?.roleName;
 
   const rows = await db
     .select()
@@ -351,24 +536,58 @@ export default async function DemandPage({
             Only ADMIN users can delete demand notes.
           </div>
         )}
+        {params.error === "role_denied" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Your role does not permit that approval action.
+          </div>
+        )}
+        {params.error === "bad_state" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Approval status has changed. Reload and try again.
+          </div>
+        )}
+        {params.error === "posted_delete_warn" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            This demand is POSTED to Finance. Revert the approval first — deleting it now would leave orphan GL entries.
+          </div>
+        )}
 
         {showForm && (
           <div className="border border-black p-4 mb-3">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-black">
+            <div className="flex flex-wrap items-center justify-between mb-4 pb-2 border-b border-black gap-2">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                 {formItem
                   ? `Edit Demand — ${formItem.demandNo}/${formItem.fyCode}`
                   : "New Demand"}
               </div>
+              {formItem && (
+                <ApprovalActions
+                  kind="demand"
+                  id={formItem.id}
+                  status={formItem.approvalStatus}
+                  role={role}
+                  forwardAudit={demandForwardAudit}
+                  forwardFinance={demandForwardFinance}
+                  revert={demandRevert}
+                />
+              )}
               <div className="flex gap-2">
                 <a href="/store/demand?adding=1" className="btn btn-outline btn-sm">
                   New
                 </a>
-                {formItem && (
+                {formItem && formItem.approvalStatus !== "POSTED" && (
                   <form action={deleteDemand} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
                     <ConfirmButton message="Delete this demand? Issued stock will be restored.">
                       Del
+                    </ConfirmButton>
+                  </form>
+                )}
+                {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
+                  <form action={deletePostedDemand} className="inline">
+                    <input type="hidden" name="id" value={formItem.id} />
+                    <ConfirmButton message="This demand is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                      Del (POSTED)
                     </ConfirmButton>
                   </form>
                 )}
@@ -592,12 +811,13 @@ export default async function DemandPage({
               <th className="text-right">Items</th>
               <th className="text-right">Amount</th>
               <th>Status</th>
+              <th>Approval</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-[var(--muted)]">
+                <td colSpan={8} className="text-center text-[var(--muted)]">
                   No demand notes found
                 </td>
               </tr>
@@ -647,6 +867,9 @@ export default async function DemandPage({
                       >
                         {r.status === "P" ? "PENDING" : "APPROVED"}
                       </span>
+                    </td>
+                    <td>
+                      <ApprovalBadge status={r.approvalStatus} />
                     </td>
                   </tr>
                 );

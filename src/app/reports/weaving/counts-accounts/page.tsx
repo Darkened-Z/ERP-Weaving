@@ -22,10 +22,12 @@ function escLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => "\\" + m);
 }
 
+type Section = "all" | "warp" | "weft";
+
 export default async function CountsAccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; count?: string; party?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; count?: string; party?: string; section?: string }>;
 }) {
   const params = await searchParams;
   const today = todayFn();
@@ -33,6 +35,23 @@ export default async function CountsAccountsPage({
   const to = params.to?.trim() || today;
   const countQ = params.count?.trim() || "";
   const partyQ = params.party?.trim() || "";
+  const rawSection = (params.section?.trim() || "all").toLowerCase();
+  const section: Section = rawSection === "warp" || rawSection === "weft" ? rawSection : "all";
+
+  const constructions = section === "all"
+    ? []
+    : await db.select().from(schema.greyConstruction);
+  const warpSet = new Set<string>();
+  const weftSet = new Set<string>();
+  for (const g of constructions) {
+    const w = [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8];
+    const f = [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8];
+    for (const c of w) if (c) warpSet.add(c);
+    for (const c of f) if (c) weftSet.add(c);
+  }
+  const sectionSet = section === "warp" ? warpSet : section === "weft" ? weftSet : null;
+  const inSection = (code: string | null | undefined) =>
+    !sectionSet ? true : !!code && sectionSet.has(code);
 
   const parties = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -82,8 +101,8 @@ export default async function CountsAccountsPage({
   }
 
   const allCounts = new Set<string>();
-  for (const r of receipts) if (r.countCode) allCounts.add(r.countCode);
-  for (const c of consumedMap.keys()) allCounts.add(c);
+  for (const r of receipts) if (r.countCode && inSection(r.countCode)) allCounts.add(r.countCode);
+  for (const c of consumedMap.keys()) if (inSection(c)) allCounts.add(c);
 
   const rows = Array.from(allCounts)
     .sort()
@@ -146,7 +165,7 @@ export default async function CountsAccountsPage({
         <form
           method="GET"
           action=""
-          className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 no-print"
+          className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 no-print"
         >
           <div>
             <label className="label block mb-1">From</label>
@@ -169,6 +188,14 @@ export default async function CountsAccountsPage({
           <div>
             <label className="label block mb-1">Party</label>
             <Combobox name="party" options={partyOpts} defaultValue={partyQ} placeholder="Party" />
+          </div>
+          <div>
+            <label className="label block mb-1">Section</label>
+            <select name="section" defaultValue={section} className="input-box">
+              <option value="all">All</option>
+              <option value="warp">Warp</option>
+              <option value="weft">Weft</option>
+            </select>
           </div>
           <div className="flex items-end gap-2">
             <button type="submit" className="btn btn-sm">

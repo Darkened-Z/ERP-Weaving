@@ -5,7 +5,8 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
-import { eq, ne, sql, desc, inArray } from "drizzle-orm";
+import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
+import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
@@ -442,6 +443,28 @@ export default async function YarnSaleVoucherPage({
 
     const nowIso = new Date().toISOString();
 
+    const [company] = await db
+      .select({ currentFy: schema.companyProfile.currentFy })
+      .from(schema.companyProfile)
+      .limit(1);
+    const fyCode = company?.currentFy ?? "";
+
+    const partyRows = await db
+      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+      .from(schema.chartOfAccounts)
+      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+    const codeByDescMap = new Map(partyRows.map((p) => [p.description, p.code]));
+    const resolvePartyCoa = (desc: string | null | undefined): string => {
+      if (!desc) return "";
+      const s = desc.trim();
+      if (/^\d+(\.\d+)+$/.test(s)) return s;
+      return codeByDescMap.get(s) ?? "";
+    };
+    const partyCoa = resolvePartyCoa(party);
+    const glTotal = round2(validLines.reduce((s, l) => s + (l.amt ?? 0), 0));
+    const doGl = !!fyCode && !!partyCoa && glTotal > 0;
+    const yarnSaleIncomeCoa = doGl ? await acc("YARN_SALE_INCOME") : "";
+
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
 
@@ -464,6 +487,62 @@ export default async function YarnSaleVoucherPage({
             await tx
               .insert(schema.extYarnSalVoucherLine)
               .values(validLines.map((l) => ({ ...l, voucherId: id })));
+          }
+
+          if (doGl) {
+            const lvRow = await tx
+              .select({ lvNo: schema.extYarnSalVoucher.lvNo })
+              .from(schema.extYarnSalVoucher)
+              .where(eq(schema.extYarnSalVoucher.id, id))
+              .limit(1);
+            const vno = lvRow[0]?.lvNo ?? 0;
+            if (vno > 0) {
+              await tx
+                .delete(schema.transDetail)
+                .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, vno)));
+              await tx
+                .delete(schema.transMain)
+                .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, vno)));
+
+              await tx.insert(schema.transMain).values({
+                fyCode,
+                vtype: "YSV",
+                vno,
+                vdate: vDate,
+                accCode: partyCoa,
+                narration: `Cont#${cont ?? ""} ${party ?? ""}`.trim(),
+                balanceAmount: glTotal,
+              });
+              const details: (typeof schema.transDetail.$inferInsert)[] = [
+                {
+                  fyCode,
+                  vtype: "YSV",
+                  vno,
+                  srno: 1,
+                  accCode: partyCoa,
+                  partyCode: partyCoa,
+                  contNo: cont,
+                  narration: `Yarn sale ${cont ?? ""}`,
+                  debit: glTotal,
+                  credit: 0,
+                },
+                {
+                  fyCode,
+                  vtype: "YSV",
+                  vno,
+                  srno: 2,
+                  accCode: yarnSaleIncomeCoa,
+                  partyCode: partyCoa,
+                  contNo: cont,
+                  debit: 0,
+                  credit: glTotal,
+                },
+              ];
+              const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+              const c = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+              if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
+              await tx.insert(schema.transDetail).values(details);
+            }
           }
         });
 
@@ -497,6 +576,55 @@ export default async function YarnSaleVoucherPage({
               await tx
                 .insert(schema.extYarnSalVoucherLine)
                 .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
+            }
+
+            if (doGl) {
+              const vno = nextL;
+              await tx
+                .delete(schema.transDetail)
+                .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, vno)));
+              await tx
+                .delete(schema.transMain)
+                .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, vno)));
+
+              await tx.insert(schema.transMain).values({
+                fyCode,
+                vtype: "YSV",
+                vno,
+                vdate: vDate,
+                accCode: partyCoa,
+                narration: `Cont#${cont ?? ""} ${party ?? ""}`.trim(),
+                balanceAmount: glTotal,
+              });
+              const details: (typeof schema.transDetail.$inferInsert)[] = [
+                {
+                  fyCode,
+                  vtype: "YSV",
+                  vno,
+                  srno: 1,
+                  accCode: partyCoa,
+                  partyCode: partyCoa,
+                  contNo: cont,
+                  narration: `Yarn sale ${cont ?? ""}`,
+                  debit: glTotal,
+                  credit: 0,
+                },
+                {
+                  fyCode,
+                  vtype: "YSV",
+                  vno,
+                  srno: 2,
+                  accCode: yarnSaleIncomeCoa,
+                  partyCode: partyCoa,
+                  contNo: cont,
+                  debit: 0,
+                  credit: glTotal,
+                },
+              ];
+              const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+              const c = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+              if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
+              await tx.insert(schema.transDetail).values(details);
             }
             return insertedId;
           });
@@ -534,7 +662,21 @@ export default async function YarnSaleVoucherPage({
     if (s?.roleName !== "ADMIN") redirect("/external/yarn/sale?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const lvRow = await db
+      .select({ lvNo: schema.extYarnSalVoucher.lvNo })
+      .from(schema.extYarnSalVoucher)
+      .where(eq(schema.extYarnSalVoucher.id, id))
+      .limit(1);
+    const lvNo = lvRow[0]?.lvNo ?? 0;
     await db.transaction(async (tx) => {
+      if (lvNo > 0) {
+        await tx
+          .delete(schema.transDetail)
+          .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, lvNo)));
+        await tx
+          .delete(schema.transMain)
+          .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, lvNo)));
+      }
       await tx.delete(schema.extYarnSalVoucherLine).where(eq(schema.extYarnSalVoucherLine.voucherId, id));
       await tx.delete(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));
     });

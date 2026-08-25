@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function YarnStockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; party?: string; count?: string; location?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; party?: string; count?: string; location?: string; neg?: string }>;
 }) {
   const p = await searchParams;
   const from = p.from?.trim() || sixMonthsAgo();
@@ -27,6 +27,7 @@ export default async function YarnStockPage({
   const party = p.party?.trim() ?? "";
   const count = p.count?.trim() ?? "";
   const location = p.location?.trim() ?? "";
+  const onlyNeg = p.neg === "1";
 
   const [partyOpts, countOpts, countMetaRows] = await Promise.all([
     partyByNameOptions(),
@@ -113,6 +114,7 @@ export default async function YarnStockPage({
       avgRate: r.rcvLbs > 0 ? r.rcvAmt / r.rcvLbs : 0,
     }))
     .filter((r) => r.rcvLbs || r.issLbs)
+    .filter((r) => (onlyNeg ? r.balLbs < 0 || r.balBags < 0 : true))
     .sort((a, b) => a.count.localeCompare(b.count));
 
   const tot = rows.reduce(
@@ -192,9 +194,18 @@ export default async function YarnStockPage({
             <label className="label block mb-1">Location</label>
             <input type="text" name="location" defaultValue={location} className="input-box mono" placeholder="All locations" />
           </div>
-          <div className="sm:col-span-5 flex gap-2">
+          <div className="sm:col-span-5 flex gap-2 flex-wrap items-center">
             <button type="submit" className="btn btn-sm">Apply</button>
             <a href="/reports/yarn/stock" className="btn btn-outline btn-sm">Clear</a>
+            <label className="flex items-center gap-2 text-[12px] mono ml-2">
+              <input
+                type="checkbox"
+                name="neg"
+                value="1"
+                defaultChecked={onlyNeg}
+              />
+              Only Negative Stock
+            </label>
           </div>
         </form>
 

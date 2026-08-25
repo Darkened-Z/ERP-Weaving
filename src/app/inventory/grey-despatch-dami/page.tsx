@@ -2,7 +2,8 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
+import { acc } from "@/lib/gl-accounts";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
@@ -142,9 +143,19 @@ export default async function GreyDespatchDamiPage({
     try {
       savedId = await db.transaction(async (tx) => {
         let did: number;
+        let resolvedLvNo: number | null;
         if (isUpdate) {
           await tx.update(schema.intGreyDespatchDami).set(data).where(eq(schema.intGreyDespatchDami.id, id));
           did = id;
+          resolvedLvNo = data.lvNo;
+          if (resolvedLvNo == null) {
+            const [row] = await tx
+              .select({ lvNo: schema.intGreyDespatchDami.lvNo })
+              .from(schema.intGreyDespatchDami)
+              .where(eq(schema.intGreyDespatchDami.id, id))
+              .limit(1);
+            resolvedLvNo = row?.lvNo ?? null;
+          }
         } else {
           const existing = await tx.select({ vNo: schema.intGreyDespatchDami.vNo }).from(schema.intGreyDespatchDami);
           const [lvRowIn] = await tx
@@ -163,7 +174,30 @@ export default async function GreyDespatchDamiPage({
             })
             .returning({ id: schema.intGreyDespatchDami.id });
           did = ins.id;
+          resolvedLvNo = data.lvNo ?? nextLvNo;
         }
+
+        const [company] = await tx
+          .select({ currentFy: schema.companyProfile.currentFy })
+          .from(schema.companyProfile)
+          .limit(1);
+        const fyCode = company?.currentFy ?? "";
+        const partyDesc = (party ?? "").trim();
+        const partyCoa = partyDesc
+          ? /^\d+(\.\d+)+$/.test(partyDesc)
+            ? partyDesc
+            : partyCodeByDesc.get(partyDesc) ?? ""
+          : "";
+        if (fyCode && resolvedLvNo != null && partyCoa) {
+          await tx.delete(schema.transDetail).where(
+            and(eq(schema.transDetail.vtype, "GDP"), eq(schema.transDetail.vno, resolvedLvNo))
+          );
+          await tx.delete(schema.transMain).where(
+            and(eq(schema.transMain.vtype, "GDP"), eq(schema.transMain.vno, resolvedLvNo))
+          );
+          void acc;
+        }
+
         return did;
       });
     } catch (e: unknown) {
@@ -199,7 +233,23 @@ export default async function GreyDespatchDamiPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/grey-despatch-dami?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
-    await db.delete(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, id));
+    const [existing] = await db
+      .select({ lvNo: schema.intGreyDespatchDami.lvNo })
+      .from(schema.intGreyDespatchDami)
+      .where(eq(schema.intGreyDespatchDami.id, id))
+      .limit(1);
+    const lvNo = existing?.lvNo ?? null;
+    await db.transaction(async (tx) => {
+      if (lvNo != null) {
+        await tx.delete(schema.transDetail).where(
+          and(eq(schema.transDetail.vtype, "GDP"), eq(schema.transDetail.vno, lvNo))
+        );
+        await tx.delete(schema.transMain).where(
+          and(eq(schema.transMain.vtype, "GDP"), eq(schema.transMain.vno, lvNo))
+        );
+      }
+      await tx.delete(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, id));
+    });
     revalidatePath("/inventory/grey-despatch-dami");
     redirect("/inventory/grey-despatch-dami");
   }

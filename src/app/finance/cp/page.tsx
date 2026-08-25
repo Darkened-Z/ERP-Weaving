@@ -1,6 +1,5 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
-import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill } from "@/components/auto-fill";
@@ -569,7 +568,16 @@ export default async function CashPaymentPage({
               <button type="submit" form="cp-save-form" className="btn btn-sm">
                 Save
               </button>
-              <PrintButton label="Print" />
+              {formVoucher?.id ? (
+                <a
+                  href={`/reports/gpv?v=${VTYPE}&n=${formVoucher.vno}${fyCode ? `&fy=${encodeURIComponent(fyCode)}` : ""}`}
+                  className="btn btn-outline btn-sm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Print
+                </a>
+              ) : null}
               {formVoucher && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formVoucher.id} />
@@ -798,7 +806,16 @@ export default async function CashPaymentPage({
               <button type="submit" className="btn btn-sm">
                 Save
               </button>
-              <PrintButton label="Print" />
+              {formVoucher?.id ? (
+                <a
+                  href={`/reports/gpv?v=${VTYPE}&n=${formVoucher.vno}${fyCode ? `&fy=${encodeURIComponent(fyCode)}` : ""}`}
+                  className="btn btn-outline btn-sm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Print
+                </a>
+              ) : null}
               <a href={BASE} className="btn btn-outline btn-sm">
                 Exit
               </a>

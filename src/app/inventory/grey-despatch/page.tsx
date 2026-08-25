@@ -11,10 +11,13 @@ import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
+import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+const VTYPE = "GDP";
 
 const num = (v: FormDataEntryValue | null): number | null => {
   if (v === null || v === undefined || v === "") return null;
@@ -391,13 +394,46 @@ export default async function GreyDespatchPage({
       }
     }
 
+    const [company] = await db
+      .select({ currentFy: schema.companyProfile.currentFy })
+      .from(schema.companyProfile)
+      .limit(1);
+    const fyCode = company?.currentFy ?? "";
+
+    const partyRowsAll = await db
+      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+      .from(schema.chartOfAccounts)
+      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+    const codeByDescGl = new Map(partyRowsAll.map((p) => [p.description, p.code]));
+    const resolvePartyCoa = (partyDesc: string | null | undefined): string => {
+      if (!partyDesc) return "";
+      const s = partyDesc.trim();
+      if (!s) return "";
+      if (/^\d+(\.\d+)+$/.test(s)) return s;
+      return codeByDescGl.get(s) ?? "";
+    };
+    const partyCoa = resolvePartyCoa(data.party);
+    const greySaleAcc = await acc("GREY_SALE_INCOME");
+    const gstOutAcc = await acc("GST_OUTPUT");
+    const furtherTaxAcc = await acc("FURTHER_TAX");
+
     let uniqueError = false;
     let savedId: number | null = null;
 
     try {
       savedId = await db.transaction(async (tx) => {
         let did: number;
+        let vno = 0;
         if (isUpdate) {
+          if (data.lNo == null) {
+            const [existingRow] = await tx
+              .select({ lNo: schema.intGreyDespatch.lNo })
+              .from(schema.intGreyDespatch)
+              .where(eq(schema.intGreyDespatch.id, id));
+            vno = Number(existingRow?.lNo ?? 0);
+          } else {
+            vno = data.lNo;
+          }
           await tx.update(schema.intGreyDespatch).set(data).where(eq(schema.intGreyDespatch.id, id));
           did = id;
           // Reset dlvStatus for serials this voucher previously consumed before rewriting.
@@ -417,16 +453,18 @@ export default async function GreyDespatchPage({
           const nextLNo = Number(lRowIn?.m ?? 0) + 1;
           const providedVNo = txt(formData.get("v_no"));
           const vNo = providedVNo ?? nextVNoFromRows(existing, "IGD");
+          const savedLNo = data.lNo ?? nextLNo;
           const [ins] = await tx
             .insert(schema.intGreyDespatch)
             .values({
               ...data,
               vNo,
-              lNo: data.lNo ?? nextLNo,
+              lNo: savedLNo,
               postedDate: new Date().toISOString(),
             })
             .returning({ id: schema.intGreyDespatch.id });
           did = ins.id;
+          vno = savedLNo;
         }
 
         const lineValues: (typeof schema.intGreyDespatchLine.$inferInsert)[] = [];
@@ -505,6 +543,78 @@ export default async function GreyDespatchPage({
         }
         if (countValues.length) await tx.insert(schema.intGreyDespatchUpdateCount).values(countValues);
 
+        if (partyCoa && fyCode && vno > 0) {
+          await tx.delete(schema.transDetail).where(
+            and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, vno))
+          );
+          await tx.delete(schema.transMain).where(
+            and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
+          );
+
+          await tx.insert(schema.transMain).values({
+            fyCode,
+            vtype: VTYPE,
+            vno,
+            vdate: data.vDate,
+            accCode: partyCoa,
+            narration: `GP#${data.gpNo ?? ""} ${data.party ?? ""}`.trim(),
+            vtime: nowTime(),
+            balanceAmount: data.amtTot,
+          });
+
+          const details: (typeof schema.transDetail.$inferInsert)[] = [];
+          details.push({
+            fyCode,
+            vtype: VTYPE,
+            vno,
+            srno: 1,
+            accCode: partyCoa,
+            partyCode: partyCoa,
+            contNo: data.convContNo,
+            narration: `Grey despatch ${data.gpNo ?? ""}`.trim(),
+            debit: data.amtTot ?? 0,
+            credit: 0,
+          });
+          details.push({
+            fyCode,
+            vtype: VTYPE,
+            vno,
+            srno: 2,
+            accCode: greySaleAcc,
+            partyCode: partyCoa,
+            debit: 0,
+            credit: data.amnt ?? 0,
+          });
+          if ((data.gst ?? 0) > 0) {
+            details.push({
+              fyCode,
+              vtype: VTYPE,
+              vno,
+              srno: 3,
+              accCode: gstOutAcc,
+              partyCode: partyCoa,
+              debit: 0,
+              credit: data.gst ?? 0,
+            });
+          }
+          if ((data.further ?? 0) > 0) {
+            details.push({
+              fyCode,
+              vtype: VTYPE,
+              vno,
+              srno: 4,
+              accCode: furtherTaxAcc,
+              partyCode: partyCoa,
+              debit: 0,
+              credit: data.further ?? 0,
+            });
+          }
+          const totalDebit = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+          const totalCredit = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+          if (Math.abs(totalDebit - totalCredit) >= 0.01) throw new Error("Unbalanced voucher");
+          await tx.insert(schema.transDetail).values(details);
+        }
+
         return did;
       });
     } catch (e: unknown) {
@@ -541,7 +651,19 @@ export default async function GreyDespatchPage({
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
-      // Reset dlvStatus for any thans this voucher consumed.
+      const [voucherRow] = await tx
+        .select({ lNo: schema.intGreyDespatch.lNo })
+        .from(schema.intGreyDespatch)
+        .where(eq(schema.intGreyDespatch.id, id));
+      const vno = Number(voucherRow?.lNo ?? 0);
+      if (vno > 0) {
+        await tx.delete(schema.transDetail).where(
+          and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, vno))
+        );
+        await tx.delete(schema.transMain).where(
+          and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
+        );
+      }
       const oldLines = await tx
         .select({ tSrNo: schema.intGreyDespatchLine.tSrNo })
         .from(schema.intGreyDespatchLine)

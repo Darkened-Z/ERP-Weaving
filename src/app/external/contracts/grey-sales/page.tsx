@@ -415,6 +415,15 @@ export default async function GreySalesContractPage({
               <div className="flex gap-2">
                 <a href="/external/contracts/grey-sales?adding=1" className="btn btn-outline btn-sm">New</a>
                 {formItem && (
+                  <a
+                    href={`/external/contracts/grey-sales/${formItem.id}/print`}
+                    target="_blank"
+                    className="btn btn-outline btn-sm"
+                  >
+                    Print Contract
+                  </a>
+                )}
+                {formItem && (
                   <form action={deleteContract} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
                     <ConfirmButton message="Delete this contract and its delivery schedule? This cannot be undone.">Del</ConfirmButton>

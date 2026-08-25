@@ -5,10 +5,11 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
+import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -197,6 +198,47 @@ async function saveKnotting(formData: FormData) {
 
   const nowIso = new Date().toISOString();
 
+  const [company] = await db
+    .select({ currentFy: schema.companyProfile.currentFy })
+    .from(schema.companyProfile)
+    .limit(1);
+  const fyCode = company?.currentFy ?? "";
+
+  const partyRows = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 4`);
+  const codeByDesc = new Map(partyRows.map((p) => [p.description, p.code]));
+  const resolvePartyCoa = (partyDesc: string | null | undefined): string => {
+    if (!partyDesc) return "";
+    const s = partyDesc.trim();
+    if (/^\d+(\.\d+)+$/.test(s)) return s;
+    return codeByDesc.get(s) ?? "";
+  };
+  const partyCoa = resolvePartyCoa(header.party);
+
+  const total = Math.round(lines.reduce((s, l) => s + (l.netAmt ?? 0), 0) * 100) / 100;
+
+  const expenseKey =
+    header.type === "SARNING"
+      ? "SARNING_EXP"
+      : header.type === "MAROORI"
+      ? "MAROORI_EXP"
+      : "KNOTTING_EXP";
+
+  const canPostGl = fyCode && partyCoa && total > 0;
+  const expenseAccCode = canPostGl ? await acc(expenseKey) : "";
+  const narrationSet = lines[0]?.setNo ?? "";
+  const narrationBeam = lines[0]?.beamNo ?? "";
+  const mainNarration = `KB S#${narrationSet} B#${narrationBeam}`.trim();
+  const expenseNarration = `${header.type ?? "KB"} charges`;
+
+  const assertBalanced = (details: (typeof schema.transDetail.$inferInsert)[]) => {
+    const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+    const c = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+    if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
+  };
+
   if (Number.isFinite(id) && id > 0) {
     await db.transaction(async (tx) => {
       // Snapshot the old mounted lines so we can reverse the side-effects of
@@ -239,6 +281,58 @@ async function saveKnotting(formData: FormData) {
           .insert(schema.intKnottingSarningLine)
           .values(lines.map((l) => ({ ...l, knottingId: id })));
       }
+
+      const [current] = await tx
+        .select({ lvNo: schema.intKnottingSarning.lvNo })
+        .from(schema.intKnottingSarning)
+        .where(eq(schema.intKnottingSarning.id, id));
+      const vno = current?.lvNo ?? 0;
+      if (vno > 0) {
+        await tx
+          .delete(schema.transDetail)
+          .where(and(eq(schema.transDetail.vtype, "KB"), eq(schema.transDetail.vno, vno)));
+        await tx
+          .delete(schema.transMain)
+          .where(and(eq(schema.transMain.vtype, "KB"), eq(schema.transMain.vno, vno)));
+
+        if (canPostGl) {
+          await tx.insert(schema.transMain).values({
+            fyCode,
+            vtype: "KB",
+            vno,
+            vdate: header.vDate,
+            accCode: partyCoa,
+            narration: mainNarration,
+            balanceAmount: total,
+          });
+          const details: (typeof schema.transDetail.$inferInsert)[] = [
+            {
+              fyCode,
+              vtype: "KB",
+              vno,
+              srno: 1,
+              accCode: expenseAccCode,
+              partyCode: partyCoa,
+              narration: expenseNarration,
+              debit: total,
+              credit: 0,
+            },
+            {
+              fyCode,
+              vtype: "KB",
+              vno,
+              srno: 2,
+              accCode: partyCoa,
+              partyCode: partyCoa,
+              narration: expenseNarration,
+              debit: 0,
+              credit: total,
+            },
+          ];
+          assertBalanced(details);
+          await tx.insert(schema.transDetail).values(details);
+        }
+      }
     });
     revalidatePath("/inventory/knotting");
     redirect(`/inventory/knotting?id=${id}`);
@@ -273,6 +367,53 @@ async function saveKnotting(formData: FormData) {
             .insert(schema.intKnottingSarningLine)
             .values(lines.map((l) => ({ ...l, knottingId: insertedId })));
         }
+
+        const vno = nextLv;
+        await tx
+          .delete(schema.transDetail)
+          .where(and(eq(schema.transDetail.vtype, "KB"), eq(schema.transDetail.vno, vno)));
+        await tx
+          .delete(schema.transMain)
+          .where(and(eq(schema.transMain.vtype, "KB"), eq(schema.transMain.vno, vno)));
+
+        if (canPostGl) {
+          await tx.insert(schema.transMain).values({
+            fyCode,
+            vtype: "KB",
+            vno,
+            vdate: header.vDate,
+            accCode: partyCoa,
+            narration: mainNarration,
+            balanceAmount: total,
+          });
+          const details: (typeof schema.transDetail.$inferInsert)[] = [
+            {
+              fyCode,
+              vtype: "KB",
+              vno,
+              srno: 1,
+              accCode: expenseAccCode,
+              partyCode: partyCoa,
+              narration: expenseNarration,
+              debit: total,
+              credit: 0,
+            },
+            {
+              fyCode,
+              vtype: "KB",
+              vno,
+              srno: 2,
+              accCode: partyCoa,
+              partyCode: partyCoa,
+              narration: expenseNarration,
+              debit: 0,
+              credit: total,
+            },
+          ];
+          assertBalanced(details);
+          await tx.insert(schema.transDetail).values(details);
+        }
+
         return insertedId;
       });
     } catch (e: unknown) {
@@ -305,7 +446,20 @@ async function deleteKnotting(formData: FormData) {
   if (session?.roleName !== "ADMIN") redirect("/inventory/knotting?error=admin_only");
   const id = intVal(formData.get("id"));
   if (id === null) return;
+  const [existing] = await db
+    .select({ lvNo: schema.intKnottingSarning.lvNo })
+    .from(schema.intKnottingSarning)
+    .where(eq(schema.intKnottingSarning.id, id));
+  const vno = existing?.lvNo ?? 0;
   await db.transaction(async (tx) => {
+    if (vno > 0) {
+      await tx
+        .delete(schema.transDetail)
+        .where(and(eq(schema.transDetail.vtype, "KB"), eq(schema.transDetail.vno, vno)));
+      await tx
+        .delete(schema.transMain)
+        .where(and(eq(schema.transMain.vtype, "KB"), eq(schema.transMain.vno, vno)));
+    }
     const oldLines = await tx
       .select({
         beamNo: schema.intKnottingSarningLine.beamNo,

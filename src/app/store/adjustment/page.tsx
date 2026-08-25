@@ -1,9 +1,15 @@
 import { Shell } from "@/components/shell";
 import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
+import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { getSession, requireSession } from "@/lib/auth";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { today } from "@/lib/time";
+import {
+  forwardToAudit as fwdAudit,
+  forwardToFinance as fwdFinance,
+  revertApproval as revertAppr,
+} from "@/lib/approvals";
 import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -222,6 +228,15 @@ async function deleteAdjustment(formData: FormData) {
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
 
+  const [existing] = await db
+    .select({ approvalStatus: schema.storeAdjustments.approvalStatus })
+    .from(schema.storeAdjustments)
+    .where(eq(schema.storeAdjustments.id, id))
+    .limit(1);
+  if (existing?.approvalStatus === "POSTED") {
+    redirect("/store/adjustment?error=posted_delete_warn");
+  }
+
   await db.transaction(async (tx) => {
     const oldLines = await tx
       .select()
@@ -245,6 +260,52 @@ async function deleteAdjustment(formData: FormData) {
   redirect("/store/adjustment");
 }
 
+async function deletePostedAdjustment(formData: FormData) {
+  "use server";
+  const s = await getSession();
+  if (s?.roleName !== "ADMIN") redirect("/store/adjustment?error=admin_only");
+  const id = parseInt(formData.get("id") as string, 10);
+  if (!Number.isFinite(id)) return;
+
+  await db.transaction(async (tx) => {
+    const oldLines = await tx
+      .select()
+      .from(schema.storeAdjustmentDetail)
+      .where(eq(schema.storeAdjustmentDetail.adjId, id));
+    for (const ol of oldLines) {
+      await tx
+        .update(schema.chartParts)
+        .set({ currentStock: sql`current_stock - ${ol.qty}` })
+        .where(eq(schema.chartParts.code, ol.partCode));
+    }
+    await tx
+      .delete(schema.storeAdjustmentDetail)
+      .where(eq(schema.storeAdjustmentDetail.adjId, id));
+    await tx.delete(schema.storeAdjustments).where(eq(schema.storeAdjustments.id, id));
+  });
+
+  revalidatePath("/store/adjustment");
+  revalidatePath("/store/parts");
+  revalidatePath("/store/stock");
+  redirect("/store/adjustment");
+}
+
+async function adjForwardAudit(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await fwdAudit("adjustment", id);
+}
+async function adjForwardFinance(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await fwdFinance("adjustment", id);
+}
+async function adjRevert(formData: FormData) {
+  "use server";
+  const id = parseInt(formData.get("id") as string, 10);
+  if (Number.isFinite(id)) await revertAppr("adjustment", id);
+}
+
 export default async function AdjustmentPage({
   searchParams,
 }: {
@@ -262,6 +323,8 @@ export default async function AdjustmentPage({
   const isAdding = params.adding === "1";
   const q = params.q?.trim() ?? "";
   const escQ = q ? escapeLike(q) : "";
+  const session = await getSession();
+  const role = session?.roleName;
 
   const [company] = await db
     .select({ fy: schema.companyProfile.currentFy })
@@ -397,24 +460,58 @@ export default async function AdjustmentPage({
             Only ADMIN users can delete adjustments.
           </div>
         )}
+        {params.error === "role_denied" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Your role does not permit that approval action.
+          </div>
+        )}
+        {params.error === "bad_state" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Approval status has changed. Reload and try again.
+          </div>
+        )}
+        {params.error === "posted_delete_warn" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            This adjustment is POSTED to Finance. Revert the approval first — deleting it now would leave orphan GL entries.
+          </div>
+        )}
 
         {showForm && (
           <div className="border border-black p-4 mb-3">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-black">
+            <div className="flex flex-wrap items-center justify-between mb-4 pb-2 border-b border-black gap-2">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                 {formItem
                   ? `Edit Adjustment — ${formItem.adjNo}/${formItem.fyCode}`
                   : "New Adjustment"}
               </div>
+              {formItem && (
+                <ApprovalActions
+                  kind="adjustment"
+                  id={formItem.id}
+                  status={formItem.approvalStatus}
+                  role={role}
+                  forwardAudit={adjForwardAudit}
+                  forwardFinance={adjForwardFinance}
+                  revert={adjRevert}
+                />
+              )}
               <div className="flex gap-2">
                 <a href="/store/adjustment?adding=1" className="btn btn-outline btn-sm">
                   New
                 </a>
-                {formItem && (
+                {formItem && formItem.approvalStatus !== "POSTED" && (
                   <form action={deleteAdjustment} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
                     <ConfirmButton message="Delete this adjustment? Its stock movements will be reversed.">
                       Del
+                    </ConfirmButton>
+                  </form>
+                )}
+                {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
+                  <form action={deletePostedAdjustment} className="inline">
+                    <input type="hidden" name="id" value={formItem.id} />
+                    <ConfirmButton message="This adjustment is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                      Del (POSTED)
                     </ConfirmButton>
                   </form>
                 )}
@@ -660,12 +757,13 @@ export default async function AdjustmentPage({
               <th>Remarks</th>
               <th className="text-right">Items</th>
               <th className="text-right">Value</th>
+              <th>Approval</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center text-[var(--muted)]">
+                <td colSpan={7} className="text-center text-[var(--muted)]">
                   No adjustments found
                 </td>
               </tr>
@@ -707,6 +805,9 @@ export default async function AdjustmentPage({
                     </td>
                     <td className="mono text-[13px] text-right">
                       {fmt.format(Math.round(r.totalValue ?? 0))}
+                    </td>
+                    <td>
+                      <ApprovalBadge status={r.approvalStatus} />
                     </td>
                   </tr>
                 );

@@ -407,6 +407,15 @@ export default async function YarnSalesContractPage({
               </button>
               <PrintButton label="Print" />
               {formContract && (
+                <a
+                  href={`/external/contracts/yarn-sales/${formContract.id}/print`}
+                  target="_blank"
+                  className="btn btn-outline btn-sm"
+                >
+                  Print Contract
+                </a>
+              )}
+              {formContract && (
                 <form action={deleteContract} className="inline">
                   <input type="hidden" name="id" value={formContract.id} />
                   <ConfirmButton message="Delete this contract and its deliveries?">

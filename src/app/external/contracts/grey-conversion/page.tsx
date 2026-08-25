@@ -853,6 +853,15 @@ export default async function GreyConvContractPage({
               <button type="submit" className="btn btn-sm">Save</button>
               <a href="/external/contracts/grey-conversion?adding=1" className="btn btn-outline btn-sm">New</a>
               <PrintButton />
+              {formItem && (
+                <a
+                  href={`/external/contracts/grey-conversion/${formItem.id}/print`}
+                  target="_blank"
+                  className="btn btn-outline btn-sm"
+                >
+                  Print Contract
+                </a>
+              )}
               <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Exit</a>
               <div className="ml-auto">
                 <label className="label block mb-1">Alt-S Password</label>

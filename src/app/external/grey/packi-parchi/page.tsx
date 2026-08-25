@@ -6,12 +6,13 @@ import { AutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PackiCalc } from "@/components/packi-calc";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { and, eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
+import { acc } from "@/lib/gl-accounts";
 
 export const dynamic = "force-dynamic";
 
@@ -375,6 +376,102 @@ export default async function PackiParchiPage({
 
     const nowIso = new Date().toISOString();
 
+    const [company] = await db
+      .select({ currentFy: schema.companyProfile.currentFy })
+      .from(schema.companyProfile)
+      .limit(1);
+    const fyCode = company?.currentFy ?? "";
+
+    const coaRows = await db
+      .select({
+        code: schema.chartOfAccounts.code,
+        description: schema.chartOfAccounts.description,
+      })
+      .from(schema.chartOfAccounts)
+      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+    const codeByDesc = new Map(coaRows.map((p) => [p.description, p.code]));
+    const resolvePartyCoa = (s: string | null | undefined): string => {
+      if (!s) return "";
+      const t = s.trim();
+      if (/^\d+(\.\d+)+$/.test(t)) return t;
+      return codeByDesc.get(t) ?? "";
+    };
+    const partyCoa = resolvePartyCoa(saleParty);
+
+    const canPostGl = !!(fyCode && partyCoa && greyAmtSal > 0);
+    const greyCommissionCode = canPostGl ? await acc("GREY_COMMISSION_INCOME") : "";
+
+    const parseVno = (v: string | null | undefined): number => {
+      if (!v) return 0;
+      const m = /(\d+)\s*$/.exec(v);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+
+    const postGl = async (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      vNoForGl: string
+    ) => {
+      if (!canPostGl) return;
+      const vno = parseVno(vNoForGl);
+      if (vno <= 0) return;
+      await tx
+        .delete(schema.transDetail)
+        .where(and(eq(schema.transDetail.vtype, "GPV"), eq(schema.transDetail.vno, vno)));
+      await tx
+        .delete(schema.transMain)
+        .where(and(eq(schema.transMain.vtype, "GPV"), eq(schema.transMain.vno, vno)));
+
+      await tx.insert(schema.transMain).values({
+        fyCode,
+        vtype: "GPV",
+        vno,
+        vdate: vDate,
+        accCode: partyCoa,
+        narration: `PP#${vNoForGl ?? ""} KP#${kpNo ?? ""}`.trim(),
+        balanceAmount: greyAmtSal,
+      });
+
+      const details: (typeof schema.transDetail.$inferInsert)[] = [
+        {
+          fyCode,
+          vtype: "GPV",
+          vno,
+          srno: 1,
+          accCode: partyCoa,
+          partyCode: partyCoa,
+          debit: greyAmtSal,
+          credit: 0,
+        },
+        {
+          fyCode,
+          vtype: "GPV",
+          vno,
+          srno: 2,
+          accCode: greyCommissionCode,
+          partyCode: partyCoa,
+          debit: 0,
+          credit: commissionTotalC,
+        },
+      ];
+      const clearDiff = greyAmtSal - commissionTotalC;
+      if (Math.abs(clearDiff) >= 0.01) {
+        details.push({
+          fyCode,
+          vtype: "GPV",
+          vno,
+          srno: 3,
+          accCode: partyCoa,
+          partyCode: partyCoa,
+          debit: 0,
+          credit: clearDiff,
+        });
+      }
+      const dSum = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+      const cSum = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+      if (Math.abs(dSum - cSum) >= 0.01) throw new Error("Unbalanced voucher");
+      await tx.insert(schema.transDetail).values(details);
+    };
+
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
 
@@ -423,6 +520,8 @@ export default async function PackiParchiPage({
         if (validCounts.length) {
           await tx.insert(schema.extPackiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: id })));
         }
+
+        if (curVNo) await postGl(tx, curVNo);
       });
 
       revalidatePath("/external/grey/packi-parchi");
@@ -468,6 +567,8 @@ export default async function PackiParchiPage({
           if (validCounts.length) {
             await tx.insert(schema.extPackiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: insertedId })));
           }
+
+          await postGl(tx, vNo);
           return insertedId;
         });
       } catch (e: unknown) {
@@ -514,6 +615,16 @@ export default async function PackiParchiPage({
           .update(schema.extKachiParchi)
           .set({ ppVno: null })
           .where(eq(schema.extKachiParchi.ppVno, cur[0].vNo));
+      }
+      const m = cur[0]?.vNo ? /(\d+)\s*$/.exec(cur[0].vNo) : null;
+      const delVno = m ? parseInt(m[1], 10) : 0;
+      if (delVno > 0) {
+        await tx
+          .delete(schema.transDetail)
+          .where(and(eq(schema.transDetail.vtype, "GPV"), eq(schema.transDetail.vno, delVno)));
+        await tx
+          .delete(schema.transMain)
+          .where(and(eq(schema.transMain.vtype, "GPV"), eq(schema.transMain.vno, delVno)));
       }
       await tx.delete(schema.extPackiParchiBag).where(eq(schema.extPackiParchiBag.parchiId, id));
       await tx.delete(schema.extPackiParchiCount).where(eq(schema.extPackiParchiCount.parchiId, id));

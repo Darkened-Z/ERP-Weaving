@@ -9,11 +9,12 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export default async function StockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; nz?: string; asOf?: string }>;
+  searchParams: Promise<{ category?: string; nz?: string; asOf?: string; loc?: string }>;
 }) {
-  const { category, nz, asOf } = await searchParams;
+  const { category, nz, asOf, loc } = await searchParams;
   const hideZero = nz === "1";
   const asOfDate = asOf && /^\d{4}-\d{2}-\d{2}$/.test(asOf) ? asOf : undefined;
+  const location = loc?.trim() ?? "";
 
   const allParts = await db
     .select()
@@ -21,6 +22,10 @@ export default async function StockPage({
     .orderBy(schema.chartParts.category, schema.chartParts.code);
 
   const categories = [...new Set(allParts.map((p) => p.category))].filter(
+    Boolean
+  ) as string[];
+
+  const locationList = [...new Set(allParts.map((p) => p.location))].filter(
     Boolean
   ) as string[];
 
@@ -78,6 +83,7 @@ export default async function StockPage({
 
   const parts = allParts
     .filter((p) => (category ? p.category === category : true))
+    .filter((p) => (location ? p.location === location : true))
     .filter((p) => (hideZero ? stockOf(p) !== 0 : true));
 
   const totalValue = parts.reduce((sum, p) => sum + stockOf(p) * p.avgCost, 0);
@@ -87,6 +93,7 @@ export default async function StockPage({
       category,
       nz,
       asOf: asOfDate,
+      loc: location || undefined,
       ...over,
     };
     const q = new URLSearchParams();
@@ -113,12 +120,30 @@ export default async function StockPage({
                   defaultValue={asOfDate ?? ""}
                 />
               </div>
+              {locationList.length > 0 && (
+                <div>
+                  <label className="label block mb-1">Location</label>
+                  <select name="loc" defaultValue={location} className="input-box">
+                    <option value="">All</option>
+                    {locationList.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <button type="submit" className="btn btn-sm">
                 Go
               </button>
               {asOfDate && (
                 <a href={qs({ asOf: undefined })} className="btn btn-outline btn-sm">
                   Today
+                </a>
+              )}
+              {location && (
+                <a href={qs({ loc: undefined })} className="btn btn-outline btn-sm">
+                  All Loc
                 </a>
               )}
             </form>

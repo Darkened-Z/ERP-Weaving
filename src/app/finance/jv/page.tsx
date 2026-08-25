@@ -1,6 +1,5 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
-import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -663,7 +662,16 @@ export default async function JournalVoucherPage({
                   Save
                 </button>
               )}
-              <PrintButton label="Print" />
+              {formMain?.id ? (
+                <a
+                  href={`/reports/gpv?v=${VTYPE}&n=${formMain.vno}${formMain.fyCode ? `&fy=${encodeURIComponent(formMain.fyCode)}` : ""}`}
+                  className="btn btn-outline btn-sm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Print
+                </a>
+              ) : null}
               {formMain && session?.roleName === "ADMIN" && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formMain.id} />
@@ -964,7 +972,16 @@ export default async function JournalVoucherPage({
                   <button type="submit" className="btn btn-sm">
                     Save
                   </button>
-                  <PrintButton label="Print" />
+                  {formMain?.id ? (
+                    <a
+                      href={`/reports/gpv?v=${VTYPE}&n=${formMain.vno}${formMain.fyCode ? `&fy=${encodeURIComponent(formMain.fyCode)}` : ""}`}
+                      className="btn btn-outline btn-sm"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Print
+                    </a>
+                  ) : null}
                   <a href="/finance/jv" className="btn btn-outline btn-sm">
                     Exit
                   </a>

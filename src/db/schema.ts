@@ -15,9 +15,21 @@ export const companyProfile = sqliteTable("company_profile", {
   address: text("address"),
   city: text("city"),
   phone: text("phone"),
+  email: text("email"),
+  ntn: text("ntn"),
+  gstNo: text("gst_no"),
+  logoDataUrl: text("logo_data_url"),
   currentFy: text("current_fy").notNull(),
   fyStart: text("fy_start").notNull(),
   fyEnd: text("fy_end").notNull(),
+});
+
+export const postingAccounts = sqliteTable("posting_accounts", {
+  key: text("key").primaryKey(),
+  accCode: text("acc_code").notNull(),
+  label: text("label").notNull(),
+  vtype: text("vtype"),
+  updatedAt: text("updated_at"),
 });
 
 export const fiscalYears = sqliteTable("fiscal_years", {
@@ -333,6 +345,11 @@ export const storeAdjustments = sqliteTable("store_adjustments", {
   remarks: text("remarks"),
   itemCount: integer("item_count"),
   totalValue: real("total_value"),
+  approvalStatus: text("approval_status").notNull().default("STORE"),
+  auditedBy: integer("audited_by"),
+  auditedAt: text("audited_at"),
+  postedBy: integer("posted_by"),
+  postedAt: text("posted_at"),
 }, (t) => ({
   uxFyAdj: uniqueIndex("ux_store_adj_fy_no").on(t.fyCode, t.adjNo),
 }));
@@ -580,6 +597,11 @@ export const storeDemands = sqliteTable("store_demands", {
   totalAmount: real("total_amount"),
   status: text("status").notNull().default("P"),
   remarks: text("remarks"),
+  approvalStatus: text("approval_status").notNull().default("STORE"),
+  auditedBy: integer("audited_by"),
+  auditedAt: text("audited_at"),
+  postedBy: integer("posted_by"),
+  postedAt: text("posted_at"),
 });
 
 export const storeGrn = sqliteTable("store_grn", {
@@ -593,6 +615,11 @@ export const storeGrn = sqliteTable("store_grn", {
   itemCount: integer("item_count"),
   totalAmount: real("total_amount"),
   status: text("status").notNull().default("A"),
+  approvalStatus: text("approval_status").notNull().default("STORE"),
+  auditedBy: integer("audited_by"),
+  auditedAt: text("audited_at"),
+  postedBy: integer("posted_by"),
+  postedAt: text("posted_at"),
 });
 
 export const storeGrnDetail = sqliteTable("store_grn_detail", {
@@ -635,6 +662,11 @@ export const storeReturns = sqliteTable("store_returns", {
   itemCount: integer("item_count"),
   totalAmount: real("total_amount"),
   remarks: text("remarks"),
+  approvalStatus: text("approval_status").notNull().default("STORE"),
+  auditedBy: integer("audited_by"),
+  auditedAt: text("audited_at"),
+  postedBy: integer("posted_by"),
+  postedAt: text("posted_at"),
 }, (t) => ({
   uxFyNo: uniqueIndex("ux_store_returns_fy_no").on(t.fyCode, t.returnNo),
 }));

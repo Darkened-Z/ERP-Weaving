@@ -15,16 +15,23 @@ import {
 
 export const dynamic = "force-dynamic";
 
+type StatusFilter = "all" | "open" | "consumed" | "closed";
+
 export default async function YarnPurContractHistoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; party?: string; cont?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; party?: string; cont?: string; status?: string }>;
 }) {
   const p = await searchParams;
   const from = p.from?.trim() || sixMonthsAgo();
   const to = p.to?.trim() || todayIso();
   const party = p.party?.trim() ?? "";
   const cont = p.cont?.trim() ?? "";
+  const rawStatus = (p.status?.trim() || "all").toLowerCase();
+  const statusFilter: StatusFilter =
+    rawStatus === "open" || rawStatus === "consumed" || rawStatus === "closed"
+      ? (rawStatus as StatusFilter)
+      : "all";
 
   const [partyOpts, accountRows, countMetaRows] = await Promise.all([
     partyByNameOptions(),
@@ -89,7 +96,7 @@ export default async function YarnPurContractHistoryPage({
 
   const delMap = new Map(delivered.map((d) => [d.contNo, d]));
 
-  const rows = contracts.map((c) => {
+  const allRows = contracts.map((c) => {
     const d = delMap.get(c.contNo);
     const delBags = d?.bags ?? 0;
     const delLbs = d?.lbs ?? 0;
@@ -97,6 +104,12 @@ export default async function YarnPurContractHistoryPage({
     const remBags = (c.qtyBags ?? 0) - delBags;
     const remLbs = (c.qtyLbs ?? 0) - delLbs;
     const pctBags = (c.qtyBags ?? 0) > 0 ? (delBags / (c.qtyBags ?? 1)) * 100 : 0;
+    const computedStatus: StatusFilter =
+      (c.status ?? "").toUpperCase() === "X" || (c.status ?? "").toUpperCase() === "F"
+        ? "closed"
+        : pctBags >= 100
+        ? "consumed"
+        : "open";
     return {
       ...c,
       delBags,
@@ -107,8 +120,13 @@ export default async function YarnPurContractHistoryPage({
       pctBags,
       deliveries: d?.deliveries ?? 0,
       lastDate: d?.lastDate ?? "-",
+      computedStatus,
     };
   });
+
+  const rows = allRows.filter((r) =>
+    statusFilter === "all" ? true : r.computedStatus === statusFilter
+  );
 
   const totals = rows.reduce(
     (t, r) => ({
@@ -179,7 +197,7 @@ export default async function YarnPurContractHistoryPage({
           </div>
         </div>
 
-        <form method="GET" action="" className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-4 no-print">
+        <form method="GET" action="" className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-5 gap-4 no-print">
           <div>
             <label className="label block mb-1">Contract Date From</label>
             <input type="date" name="from" defaultValue={from} className="input-box mono" />
@@ -196,7 +214,16 @@ export default async function YarnPurContractHistoryPage({
             <label className="label block mb-1">Contract #</label>
             <input type="text" name="cont" defaultValue={cont} className="input-box mono" placeholder="Contract no" />
           </div>
-          <div className="sm:col-span-4 flex gap-2">
+          <div>
+            <label className="label block mb-1">Status</label>
+            <select name="status" defaultValue={statusFilter} className="input-box">
+              <option value="all">All</option>
+              <option value="open">Open</option>
+              <option value="consumed">Consumed (100%)</option>
+              <option value="closed">Closed (F/X)</option>
+            </select>
+          </div>
+          <div className="sm:col-span-5 flex gap-2">
             <button type="submit" className="btn btn-sm">Apply</button>
             <a href="/reports/yarn/pur-contract-history" className="btn btn-outline btn-sm">Clear</a>
           </div>

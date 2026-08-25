@@ -6,12 +6,15 @@ import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { and, eq, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
+import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+
+const VTYPE_GL = "EXT";
 
 export const dynamic = "force-dynamic";
 
@@ -258,14 +261,57 @@ export default async function WarpedBeamReceivingPage({
 
     const nowIso = new Date().toISOString();
 
+    const [company] = await db
+      .select({ currentFy: schema.companyProfile.currentFy })
+      .from(schema.companyProfile)
+      .limit(1);
+    const fyCode = company?.currentFy ?? "";
+    if (!fyCode) throw new Error("No current FY");
+
+    const partyRows = await db
+      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+      .from(schema.chartOfAccounts)
+      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+    const codeByDesc = new Map(partyRows.map((p) => [p.description, String(p.code)]));
+    const codeSet = new Set(partyRows.map((p) => String(p.code)));
+    const rawParty = header.beamReceivingFrom?.trim() ?? "";
+    let partyCoa = "";
+    if (rawParty) {
+      if (codeSet.has(rawParty) || /^\d+(\.\d+)+$/.test(rawParty)) partyCoa = rawParty;
+      else partyCoa = codeByDesc.get(rawParty) ?? "";
+    }
+
+    const glNet = Math.round((header.totalAmountFinal ?? 0) * 100) / 100;
+    const glTotalGross = Math.round((header.amtTot ?? 0) * 100) / 100;
+    const glGst = Math.max(0, Math.round((glTotalGross - glNet) * 100) / 100);
+    const glFurther = 0;
+    const glTotal = Math.round((glNet + glGst + glFurther) * 100) / 100;
+    const shouldPostGl = !!partyCoa && glTotal > 0;
+
+    const warpingSizingCoa = shouldPostGl ? await acc("WARPING_SIZING_EXP") : "";
+    const gstOutputCoa = shouldPostGl && glGst > 0 ? await acc("GST_OUTPUT") : "";
+    const furtherTaxCoa = shouldPostGl && glFurther > 0 ? await acc("FURTHER_TAX") : "";
+
+    const firstBeam = validLines[0]?.beamNo ?? "";
+    const firstCont = validLines[0]?.warpingCntNo ?? "";
+    const glNarration = `EXT Beam#${firstBeam} Cont#${firstCont}`.trim();
+
+    const assertBalanced = (details: (typeof schema.transDetail.$inferInsert)[]) => {
+      const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
+      const c = details.reduce((s, x) => s + (x.credit ?? 0), 0);
+      if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
+    };
+
     try {
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
           const cur = await tx
-            .select({ vNo: schema.intWarpedBeamReceiving.vNo })
+            .select({ vNo: schema.intWarpedBeamReceiving.vNo, lvNo: schema.intWarpedBeamReceiving.lvNo })
             .from(schema.intWarpedBeamReceiving)
             .where(eq(schema.intWarpedBeamReceiving.id, id));
           const vNo = cur[0]?.vNo ?? "";
+          const lvNo = cur[0]?.lvNo ?? 0;
+
           const oldLines = await tx
             .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })
             .from(schema.intWarpedBeamReceivingLine)
@@ -308,6 +354,74 @@ export default async function WarpedBeamReceivingPage({
               .set({ statusWrk: "EMPTY", receivedDate: null, brVno: null, brDate: null })
               .where(eq(schema.beams.beamNo, ob));
           }
+
+          if (shouldPostGl && lvNo > 0) {
+            await tx.delete(schema.transDetail).where(
+              and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, lvNo)),
+            );
+            await tx.delete(schema.transMain).where(
+              and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, lvNo)),
+            );
+
+            await tx.insert(schema.transMain).values({
+              fyCode,
+              vtype: VTYPE_GL,
+              vno: lvNo,
+              vdate: header.vDate,
+              accCode: partyCoa,
+              narration: glNarration,
+              balanceAmount: glTotal,
+            });
+
+            const details: (typeof schema.transDetail.$inferInsert)[] = [];
+            let sr = 1;
+            details.push({
+              fyCode,
+              vtype: VTYPE_GL,
+              vno: lvNo,
+              srno: sr++,
+              accCode: warpingSizingCoa,
+              partyCode: partyCoa,
+              debit: glNet,
+              credit: 0,
+            });
+            if (glGst > 0) {
+              details.push({
+                fyCode,
+                vtype: VTYPE_GL,
+                vno: lvNo,
+                srno: sr++,
+                accCode: gstOutputCoa,
+                partyCode: partyCoa,
+                debit: glGst,
+                credit: 0,
+              });
+            }
+            if (glFurther > 0) {
+              details.push({
+                fyCode,
+                vtype: VTYPE_GL,
+                vno: lvNo,
+                srno: sr++,
+                accCode: furtherTaxCoa,
+                partyCode: partyCoa,
+                debit: glFurther,
+                credit: 0,
+              });
+            }
+            details.push({
+              fyCode,
+              vtype: VTYPE_GL,
+              vno: lvNo,
+              srno: sr++,
+              accCode: partyCoa,
+              partyCode: partyCoa,
+              debit: 0,
+              credit: glTotal,
+            });
+            assertBalanced(details);
+            await tx.insert(schema.transDetail).values(details);
+          }
         });
         revalidatePath("/inventory/warped-beam");
         redirect(`/inventory/warped-beam?id=${id}`);
@@ -345,6 +459,75 @@ export default async function WarpedBeamReceivingPage({
               })
               .where(eq(schema.beams.beamNo, l.beamNo));
           }
+
+          if (shouldPostGl && nextLv > 0) {
+            await tx.delete(schema.transDetail).where(
+              and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, nextLv)),
+            );
+            await tx.delete(schema.transMain).where(
+              and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, nextLv)),
+            );
+
+            await tx.insert(schema.transMain).values({
+              fyCode,
+              vtype: VTYPE_GL,
+              vno: nextLv,
+              vdate: header.vDate,
+              accCode: partyCoa,
+              narration: glNarration,
+              balanceAmount: glTotal,
+            });
+
+            const details: (typeof schema.transDetail.$inferInsert)[] = [];
+            let sr = 1;
+            details.push({
+              fyCode,
+              vtype: VTYPE_GL,
+              vno: nextLv,
+              srno: sr++,
+              accCode: warpingSizingCoa,
+              partyCode: partyCoa,
+              debit: glNet,
+              credit: 0,
+            });
+            if (glGst > 0) {
+              details.push({
+                fyCode,
+                vtype: VTYPE_GL,
+                vno: nextLv,
+                srno: sr++,
+                accCode: gstOutputCoa,
+                partyCode: partyCoa,
+                debit: glGst,
+                credit: 0,
+              });
+            }
+            if (glFurther > 0) {
+              details.push({
+                fyCode,
+                vtype: VTYPE_GL,
+                vno: nextLv,
+                srno: sr++,
+                accCode: furtherTaxCoa,
+                partyCode: partyCoa,
+                debit: glFurther,
+                credit: 0,
+              });
+            }
+            details.push({
+              fyCode,
+              vtype: VTYPE_GL,
+              vno: nextLv,
+              srno: sr++,
+              accCode: partyCoa,
+              partyCode: partyCoa,
+              debit: 0,
+              credit: glTotal,
+            });
+            assertBalanced(details);
+            await tx.insert(schema.transDetail).values(details);
+          }
+
           return insertedId;
         });
         revalidatePath("/inventory/warped-beam");
@@ -372,7 +555,22 @@ export default async function WarpedBeamReceivingPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/warped-beam?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
+
+    const head = await db
+      .select({ lvNo: schema.intWarpedBeamReceiving.lvNo })
+      .from(schema.intWarpedBeamReceiving)
+      .where(eq(schema.intWarpedBeamReceiving.id, id));
+    const lvNo = head[0]?.lvNo ?? 0;
+
     await db.transaction(async (tx) => {
+      if (lvNo > 0) {
+        await tx.delete(schema.transDetail).where(
+          and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, lvNo)),
+        );
+        await tx.delete(schema.transMain).where(
+          and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, lvNo)),
+        );
+      }
       const oldLines = await tx
         .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })
         .from(schema.intWarpedBeamReceivingLine)
