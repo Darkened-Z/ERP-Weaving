@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { AutoFill } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
@@ -92,6 +92,35 @@ export default async function GreyConvContractPage({
     .select({ code: schema.products.code, description: schema.products.description })
     .from(schema.products)
     .orderBy(schema.products.description);
+
+  // Yarn count master — used by the WARP/WEFT grid so entering a count auto-fills
+  // its description and blend/brand (Oracle-parity behavior).
+  const yarnCountList = await db
+    .select({
+      countCode: schema.yarnCounts.countCode,
+      description: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const yarnCountFillMap: Record<string, Record<string, string>> = {};
+  for (const c of yarnCountList) {
+    yarnCountFillMap[String(c.countCode)] = {
+      descr: c.description ?? "",
+      brand: c.type ?? "",
+    };
+  }
+  const warpCountFillMap: Record<string, Record<string, string>> = {};
+  const weftCountFillMap: Record<string, Record<string, string>> = {};
+  for (const [code, v] of Object.entries(yarnCountFillMap)) {
+    for (let i = 1; i <= 8; i++) {
+      (warpCountFillMap[code] ??= {})[`warp_descr_${i}`] = v.descr;
+      (warpCountFillMap[code] ??= {})[`warp_brand_${i}`] = v.brand;
+      (weftCountFillMap[code] ??= {})[`weft_descr_${i}`] = v.descr;
+      (weftCountFillMap[code] ??= {})[`weft_brand_${i}`] = v.brand;
+    }
+  }
 
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = `%${escFind}%`;
@@ -434,6 +463,14 @@ export default async function GreyConvContractPage({
         )}
 
         <div className="border border-black p-5 mb-6">
+          <datalist id="gc-yarn-counts">
+            {yarnCountList.map((c) => (
+              <option key={c.countCode} value={String(c.countCode)}>
+                {c.description}
+                {c.type ? ` — ${c.type}` : ""}
+              </option>
+            ))}
+          </datalist>
           <form action={saveContract}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <GreyConvCalc />
@@ -449,6 +486,13 @@ export default async function GreyConvContractPage({
               ]}
             />
             <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name"]} />
+            {/* Each row's Count cell → auto-fill that row's Desc + Brand from yarn_counts */}
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <RowAutoFill key={`warp-cf-${i}`} watch={`warp_count_${i}`} map={warpCountFillMap} />
+            ))}
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <RowAutoFill key={`weft-cf-${i}`} watch={`weft_count_${i}`} map={weftCountFillMap} />
+            ))}
 
             <div className="grid grid-cols-12 gap-3 mb-3">
               <div className="col-span-8">
@@ -725,7 +769,7 @@ export default async function GreyConvContractPage({
                         return (
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
@@ -772,7 +816,7 @@ export default async function GreyConvContractPage({
                         return (
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
