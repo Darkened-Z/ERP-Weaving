@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,12 @@ export default async function VouchersPage({
   const params = await searchParams;
   const activeType = params.type || null;
 
+  const [profile] = await db
+    .select({ currentFy: schema.companyProfile.currentFy })
+    .from(schema.companyProfile)
+    .limit(1);
+  const currentFy = profile?.currentFy ?? null;
+
   const voucherTypes = await db.select().from(schema.voucherTypes).orderBy(schema.voucherTypes.sortOrder);
 
   const typeCounts = await db
@@ -21,6 +27,7 @@ export default async function VouchersPage({
       count: sql<number>`count(*)`,
     })
     .from(schema.transMain)
+    .where(currentFy ? eq(schema.transMain.fyCode, currentFy) : undefined)
     .groupBy(schema.transMain.vtype);
 
   const countMap = new Map(typeCounts.map((tc) => [tc.vtype, tc.count]));
@@ -45,7 +52,12 @@ export default async function VouchersPage({
         totalDebit: sql<number>`(SELECT coalesce(sum(debit), 0) FROM trans_detail WHERE fy_code = trans_main.fy_code AND vtype = trans_main.vtype AND vno = trans_main.vno)`,
       })
       .from(schema.transMain)
-      .where(eq(schema.transMain.vtype, activeType))
+      .where(
+        and(
+          eq(schema.transMain.vtype, activeType),
+          currentFy ? eq(schema.transMain.fyCode, currentFy) : undefined,
+        ),
+      )
       .orderBy(sql`vdate DESC, vno DESC`);
   }
 
@@ -59,12 +71,19 @@ export default async function VouchersPage({
             <h1 className="page-title">Vouchers</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
               {voucherTypes.length} types &middot; {typeCounts.reduce((s, tc) => s + tc.count, 0)} total entries
+              {currentFy ? ` · FY ${currentFy}` : ""}
             </p>
           </div>
           <Link href="/vouchers/new" className="btn btn-sm">
             + New Voucher
           </Link>
         </div>
+
+        {!currentFy && (
+          <div className="border-2 border-[var(--warning,#b45309)] px-4 py-2 mb-4 text-[12px] font-semibold mono">
+            No current fiscal year is configured in Company Profile — showing all fiscal years.
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 mb-8">
           <Link

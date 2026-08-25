@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { schema } from "@/db";
+import { today, monthsAgo } from "@/lib/time";
 
 export const fmt = (n: number) =>
   new Intl.NumberFormat("en-PK").format(Math.round(n));
@@ -15,13 +16,11 @@ function escLike(s: string): string {
 }
 
 function sixMonthsAgo(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 6);
-  return d.toISOString().slice(0, 10);
+  return monthsAgo(6);
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return today();
 }
 
 export type Filters = {

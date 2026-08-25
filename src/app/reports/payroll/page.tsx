@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { sql, and, gte, lte, isNotNull } from "drizzle-orm";
+import { toKarachiDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -19,17 +20,17 @@ function isoWeekBounds(w: string): { from: string; to: string } | null {
   const iso = new Date(simple);
   if (dow <= 4) iso.setUTCDate(simple.getUTCDate() - simple.getUTCDay() + 1);
   else iso.setUTCDate(simple.getUTCDate() + 8 - simple.getUTCDay());
-  const from = iso.toISOString().slice(0, 10);
+  const from = toKarachiDate(iso);
   const end = new Date(iso);
   end.setUTCDate(iso.getUTCDate() + 6);
-  const to = end.toISOString().slice(0, 10);
+  const to = toKarachiDate(end);
   return { from, to };
 }
 
 function daysBackFrom(d: string, n: number): string {
   const dt = new Date(d + "T00:00:00Z");
   dt.setUTCDate(dt.getUTCDate() - (n - 1));
-  return dt.toISOString().slice(0, 10);
+  return toKarachiDate(dt);
 }
 
 export default async function PayrollPage({

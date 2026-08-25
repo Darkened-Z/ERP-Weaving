@@ -9,6 +9,9 @@ import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today as pkToday } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +32,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => pkToday();
 
 const TYPE_OPTIONS = ["OK", "REJ"];
 const TYPE_REJ_OPTIONS = ["OK", "REJ", "MIX"];
@@ -39,7 +42,7 @@ const COUNT_ROWS = 4;
 export default async function PackiParchiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -134,22 +137,40 @@ export default async function PackiParchiPage({
   }
 
   const convContracts = await db
-    .select({ contNo: schema.extGreyConvContract.contNo, party: schema.extGreyConvContract.party })
+    .select()
     .from(schema.extGreyConvContract)
     .orderBy(desc(schema.extGreyConvContract.contNo));
   const convOpts = convContracts.map((c) => ({
     value: c.contNo,
     label: c.party ? `${c.contNo} — ${c.party}` : c.contNo,
   }));
+  const convContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    convContracts.map((c) => [
+      c.contNo,
+      {
+        purchase_party: c.party ?? "",
+      },
+    ])
+  );
 
   const salContracts = await db
-    .select({ contractNo: schema.extGreySalContract.contractNo, party: schema.extGreySalContract.party })
+    .select()
     .from(schema.extGreySalContract)
     .orderBy(desc(schema.extGreySalContract.contractNo));
   const salContractOpts = salContracts.map((c) => ({
     value: c.contractNo,
     label: c.party ? `${c.contractNo} — ${c.party}` : c.contractNo,
   }));
+  const salContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    salContracts.map((c) => [
+      c.contractNo,
+      {
+        grey_rate_kp: c.ratePerMtr ?? "",
+        broker_name_sale: c.broker ?? "",
+        sale_party: c.party ?? "",
+      },
+    ])
+  );
 
   const nextVNoRow = await db
     .select({
@@ -235,6 +256,8 @@ export default async function PackiParchiPage({
     const kpLinkId = kpRows[0].id;
     const kpNo = kpRows[0].vNo;
 
+    // Oracle-parity: PP-form's monetary calcs use Round(...) to whole rupees / whole meters.
+    // Keep integer rounding here rather than 2dp because that's what Oracle reports.
     const rnd = Math.round;
     const cumiDiv = (d: number) => (d === 5 ? 400 : 800);
     const mRe = meterRe ?? 0;
@@ -352,6 +375,9 @@ export default async function PackiParchiPage({
 
     const nowIso = new Date().toISOString();
 
+    try {
+      await assertPeriodOpen(vDate, "INVENTORY");
+
     if (Number.isFinite(id) && id > 0) {
       await db.transaction(async (tx) => {
         const cur = await tx
@@ -460,10 +486,22 @@ export default async function PackiParchiPage({
       revalidatePath("/external/grey/packi-parchi");
       redirect(`/external/grey/packi-parchi?id=${newId}`);
     }
+    } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
+      const msg = (e as { message?: string })?.message ?? "";
+      const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (m) {
+        redirect(`/external/grey/packi-parchi?error=period_locked&thru=${m[1]}`);
+      }
+      throw e;
+    }
   }
 
   async function deleteParchi(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/grey/packi-parchi?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
@@ -552,6 +590,16 @@ export default async function PackiParchiPage({
         {params.error === "meter_net" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Meter Net must be greater than 0. Check KP.Meter and deductions.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete records.
           </div>
         )}
 
@@ -935,6 +983,11 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.convContNo ?? ""}
                   placeholder="Conv contract…"
                 />
+                <AutoFill
+                  watch="conv_cont_no"
+                  map={convContractMap}
+                  combos={["purchase_party"]}
+                />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Checkery</label>
@@ -982,6 +1035,12 @@ export default async function PackiParchiPage({
                   options={salContractOpts}
                   defaultValue={formItem?.convContNoSale ?? ""}
                   placeholder="Sale contract…"
+                />
+                <AutoFill
+                  watch="conv_cont_no_sale"
+                  map={salContractMap}
+                  combos={["broker_name_sale", "sale_party"]}
+                  inputs={["grey_rate_kp"]}
                 />
               </div>
               <div className="lg:col-span-3">

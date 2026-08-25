@@ -8,6 +8,10 @@ import { db, schema } from "@/db";
 import { eq, ne, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today as pkToday } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { ConfirmButton } from "@/components/confirm-button";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +26,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => pkToday();
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -45,7 +49,7 @@ function nextVNo(rows: { vNo: string }[], prefix: string): string {
 export default async function YarnPurchaseVoucherPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -179,8 +183,8 @@ export default async function YarnPurchaseVoucherPage({
   if (formVoucher?.party) {
     const agg = await db
       .select({
-        wsum: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag} * ${schema.extYarnSalVoucherLine.rate}), 0)`,
-        bsum: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+        wsum: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs} * ${schema.extYarnSalVoucherLine.rate}), 0)`,
+        bsum: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
       })
       .from(schema.extYarnSalVoucherLine)
       .innerJoin(
@@ -311,78 +315,96 @@ export default async function YarnPurchaseVoucherPage({
 
     const nowIso = new Date().toISOString();
 
-    if (Number.isFinite(id) && id > 0) {
-      await db.transaction(async (tx) => {
-        await tx
-          .update(schema.extYarnPurVoucher)
-          .set({
-            vDate, type, loomType, bmParty, party, broker, term, dueDate, posting, img, cont, pur, bal,
-            salAvgRate, purAvgRate, percent, perBag, rkd, lotNo, pendingFinance,
-            modifiedDate: nowIso,
-          })
-          .where(eq(schema.extYarnPurVoucher.id, id));
+    try {
+      await assertPeriodOpen(vDate, "INVENTORY");
 
-        await tx
-          .delete(schema.extYarnPurVoucherLine)
-          .where(eq(schema.extYarnPurVoucherLine.voucherId, id));
-
-        if (validLines.length) {
+      if (Number.isFinite(id) && id > 0) {
+        await db.transaction(async (tx) => {
           await tx
-            .insert(schema.extYarnPurVoucherLine)
-            .values(validLines.map((l) => ({ ...l, voucherId: id })));
-        }
-      });
-
-      revalidatePath("/external/yarn/purchase");
-      redirect(`/external/yarn/purchase?id=${id}`);
-    } else {
-      const providedVNo = ((formData.get("v_no") as string) || "").trim();
-
-      let newId = 0;
-      let codeExists = false;
-      try {
-        newId = await db.transaction(async (tx) => {
-          const existingRows = await tx.select({ vNo: schema.extYarnPurVoucher.vNo }).from(schema.extYarnPurVoucher);
-          const vNo = providedVNo || nextVNo(existingRows, "YPV");
-          const nextL = existingRows.length + 1;
-
-          const inserted = await tx
-            .insert(schema.extYarnPurVoucher)
-            .values({
-              vNo, lvNo: nextL, vDate, type, posting, loomType, bmParty, party, broker,
-              term, dueDate, img, cont, pur, bal, salAvgRate, purAvgRate, percent, perBag, rkd, lotNo,
-              pendingFinance, postedDate: nowIso,
+            .update(schema.extYarnPurVoucher)
+            .set({
+              vDate, type, loomType, bmParty, party, broker, term, dueDate, posting, img, cont, pur, bal,
+              salAvgRate, purAvgRate, percent, perBag, rkd, lotNo, pendingFinance,
+              modifiedDate: nowIso,
             })
-            .returning({ id: schema.extYarnPurVoucher.id });
-          const insertedId = inserted[0].id;
+            .where(eq(schema.extYarnPurVoucher.id, id));
+
+          await tx
+            .delete(schema.extYarnPurVoucherLine)
+            .where(eq(schema.extYarnPurVoucherLine.voucherId, id));
 
           if (validLines.length) {
             await tx
               .insert(schema.extYarnPurVoucherLine)
-              .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
+              .values(validLines.map((l) => ({ ...l, voucherId: id })));
           }
-          return insertedId;
         });
-      } catch (e: unknown) {
-        const msg = (e as { message?: string })?.message ?? "";
-        if (/UNIQUE|constraint/i.test(msg)) {
-          codeExists = true;
-        } else {
-          throw e;
+
+        revalidatePath("/external/yarn/purchase");
+        redirect(`/external/yarn/purchase?id=${id}`);
+      } else {
+        const providedVNo = ((formData.get("v_no") as string) || "").trim();
+
+        let newId = 0;
+        let codeExists = false;
+        try {
+          newId = await db.transaction(async (tx) => {
+            const existingRows = await tx.select({ vNo: schema.extYarnPurVoucher.vNo }).from(schema.extYarnPurVoucher);
+            const vNo = providedVNo || nextVNo(existingRows, "YPV");
+            const lvRow = await tx
+              .select({ m: sql<number>`coalesce(max(${schema.extYarnPurVoucher.lvNo}), 0)` })
+              .from(schema.extYarnPurVoucher);
+            const nextL = (lvRow[0]?.m ?? 0) + 1;
+
+            const inserted = await tx
+              .insert(schema.extYarnPurVoucher)
+              .values({
+                vNo, lvNo: nextL, vDate, type, posting, loomType, bmParty, party, broker,
+                term, dueDate, img, cont, pur, bal, salAvgRate, purAvgRate, percent, perBag, rkd, lotNo,
+                pendingFinance, postedDate: nowIso,
+              })
+              .returning({ id: schema.extYarnPurVoucher.id });
+            const insertedId = inserted[0].id;
+
+            if (validLines.length) {
+              await tx
+                .insert(schema.extYarnPurVoucherLine)
+                .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
+            }
+            return insertedId;
+          });
+        } catch (e: unknown) {
+          const msg = (e as { message?: string })?.message ?? "";
+          if (/UNIQUE|constraint/i.test(msg)) {
+            codeExists = true;
+          } else {
+            throw e;
+          }
         }
-      }
 
-      if (codeExists) {
-        redirect(`/external/yarn/purchase?error=code_exists`);
-      }
+        if (codeExists) {
+          redirect(`/external/yarn/purchase?error=code_exists`);
+        }
 
-      revalidatePath("/external/yarn/purchase");
-      redirect(`/external/yarn/purchase?id=${newId}`);
+        revalidatePath("/external/yarn/purchase");
+        redirect(`/external/yarn/purchase?id=${newId}`);
+      }
+    } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
+      const msg = (e as { message?: string })?.message ?? "";
+      const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (m) {
+        redirect(`/external/yarn/purchase?error=period_locked&thru=${m[1]}`);
+      }
+      throw e;
     }
   }
 
   async function deleteVoucher(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/yarn/purchase?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
@@ -499,6 +521,16 @@ export default async function YarnPurchaseVoucherPage({
             At least one line with Bag or Lbs is required. Nothing was saved.
           </div>
         )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete vouchers.
+          </div>
+        )}
 
         <datalist id="ypv-parties">
           {partyAccounts.map((p) => (
@@ -551,9 +583,7 @@ export default async function YarnPurchaseVoucherPage({
                   {formVoucher && (
                     <form action={deleteVoucher} className="inline">
                       <input type="hidden" name="id" value={formVoucher.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">
-                        Del
-                      </button>
+                      <ConfirmButton>Del</ConfirmButton>
                     </form>
                   )}
                   <a href="/external/yarn/purchase" className="btn btn-outline btn-sm">
@@ -608,6 +638,7 @@ export default async function YarnPurchaseVoucherPage({
                     >
                       <option value="PUR">PURCHASE</option>
                       <option value="RET">RETURN</option>
+                      <option value="CON">CONSIGNMENT</option>
                     </select>
                   </div>
                   <div className="lg:col-span-1">
@@ -1083,13 +1114,10 @@ export default async function YarnPurchaseVoucherPage({
                     Exit
                   </a>
                   {formVoucher && (
-                    <button
-                      type="submit"
-                      formAction={deleteVoucher}
-                      className="btn btn-outline btn-sm"
-                    >
-                      Del
-                    </button>
+                    <form action={deleteVoucher} className="inline">
+                      <input type="hidden" name="id" value={formVoucher.id} />
+                      <ConfirmButton>Del</ConfirmButton>
+                    </form>
                   )}
                   <div className="ml-auto flex items-end gap-2">
                     <div>
@@ -1103,9 +1131,7 @@ export default async function YarnPurchaseVoucherPage({
               {formVoucher && (
                 <form action={deleteVoucher} className="inline mt-3">
                   <input type="hidden" name="id" value={formVoucher.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
-                    Delete
-                  </button>
+                  <ConfirmButton>Delete</ConfirmButton>
                 </form>
               )}
             </div>

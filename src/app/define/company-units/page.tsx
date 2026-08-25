@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function CompanyUnitsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const units = await db.select().from(schema.companyUnits);
@@ -66,12 +67,17 @@ export default async function CompanyUnitsPage({
               {selected && (
                 <form action={deleteUnit} className="inline">
                   <input type="hidden" name="code" value={selected.code} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton>Delete</ConfirmButton>
                 </form>
               )}
             </div>
           </div>
 
+          {params.error === "in_use" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              This company unit is referenced elsewhere and cannot be deleted.
+            </div>
+          )}
           <form action={saveUnit}>
             {selected && <input type="hidden" name="edit_code" value={selected.code} />}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">

@@ -4,9 +4,12 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -26,8 +29,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
-const today = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 5);
 
 function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
   const nums = rows
@@ -130,10 +131,11 @@ export default async function WarpedBeamReceivingPage({
     try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
-    await assertPeriodOpen(txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10), "INVENTORY");
+    const vDate = txt(formData.get("vDate")) ?? today();
+    await assertPeriodOpen(vDate, "INVENTORY");
 
     const header = {
-      vDate: txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10),
+      vDate,
       time: txt(formData.get("time")),
       type: txt(formData.get("type")) ?? "SZG",
       gpNo: txt(formData.get("gpNo")),
@@ -264,6 +266,12 @@ export default async function WarpedBeamReceivingPage({
             .from(schema.intWarpedBeamReceiving)
             .where(eq(schema.intWarpedBeamReceiving.id, id));
           const vNo = cur[0]?.vNo ?? "";
+          const oldLines = await tx
+            .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })
+            .from(schema.intWarpedBeamReceivingLine)
+            .where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
+          const oldBeams = oldLines.map((r) => r.beamNo).filter((b): b is string => !!b);
+
           await tx
             .update(schema.intWarpedBeamReceiving)
             .set({ ...header, modifiedDate: nowIso })
@@ -291,6 +299,14 @@ export default async function WarpedBeamReceivingPage({
                 ...(l.beamLength != null ? { length: l.beamLength } : {}),
               })
               .where(eq(schema.beams.beamNo, l.beamNo));
+          }
+          const newBeams = new Set(validLines.map((l) => l.beamNo).filter((b): b is string => !!b));
+          for (const ob of oldBeams) {
+            if (newBeams.has(ob)) continue;
+            await tx
+              .update(schema.beams)
+              .set({ statusWrk: "EMPTY", receivedDate: null, brVno: null, brDate: null })
+              .where(eq(schema.beams.beamNo, ob));
           }
         });
         revalidatePath("/inventory/warped-beam");
@@ -352,9 +368,22 @@ export default async function WarpedBeamReceivingPage({
 
   async function deleteAction(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/warped-beam?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {
+      const oldLines = await tx
+        .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })
+        .from(schema.intWarpedBeamReceivingLine)
+        .where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
+      for (const l of oldLines) {
+        if (!l.beamNo) continue;
+        await tx
+          .update(schema.beams)
+          .set({ statusWrk: "EMPTY", receivedDate: null, brVno: null, brDate: null })
+          .where(eq(schema.beams.beamNo, l.beamNo));
+      }
       await tx.delete(schema.intWarpedBeamReceivingLine).where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
       await tx.delete(schema.intWarpedBeamReceiving).where(eq(schema.intWarpedBeamReceiving.id, id));
     });
@@ -440,6 +469,11 @@ export default async function WarpedBeamReceivingPage({
             .
           </div>
         )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete vouchers.
+          </div>
+        )}
 
         <div className="border border-black p-6 mb-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -453,7 +487,7 @@ export default async function WarpedBeamReceivingPage({
               {editing && (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message={`Delete warped-beam voucher ${editing.vNo}? This reverts the beams it loaded.`}>Delete</ConfirmButton>
                 </form>
               )}
               <a href="/inventory/warped-beam" className="btn btn-outline btn-sm">Exit</a>
@@ -721,7 +755,7 @@ export default async function WarpedBeamReceivingPage({
                   {editing && (
                     <form action={deleteAction} className="inline">
                       <input type="hidden" name="id" value={editing.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                      <ConfirmButton message={`Delete warped-beam voucher ${editing.vNo}? This reverts the beams it loaded.`}>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>

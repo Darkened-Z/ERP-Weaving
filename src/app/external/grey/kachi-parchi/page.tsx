@@ -10,6 +10,9 @@ import { db, schema } from "@/db";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today as pkToday } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +33,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => pkToday();
 
 const TYPE_OPTIONS = ["STOCK", "SALE", "TRANSFER"];
 const LINE_ROWS = 14;
@@ -39,7 +42,7 @@ const COUNT_ROWS = 4;
 export default async function KachiParchiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -245,9 +248,14 @@ export default async function KachiParchiPage({
     const elCumiDen = intVal(formData.get("el_cumi_den"));
     const badCumiNum = intVal(formData.get("bad_cumi_num"));
     const badCumiDen = intVal(formData.get("bad_cumi_den"));
-    const elMeter = num(formData.get("el_meter"));
-    const baadMeter = num(formData.get("baad_meter"));
-    const totalElBadMtrs = num(formData.get("total_el_bad_mtrs"));
+    const meterVal = meter ?? 0;
+    const elMeter = Math.round(
+      (meterVal * (elCumiNum ?? 0)) / ((elCumiDen ?? 0) === 5 ? 400 : 800)
+    );
+    const baadMeter = Math.round(
+      (meterVal * (badCumiNum ?? 0)) / ((badCumiDen ?? 0) === 5 ? 400 : 800)
+    );
+    const totalElBadMtrs = elMeter + baadMeter;
     const printingName = txt(formData.get("printing_name"));
     const brokerName = txt(formData.get("broker_name"));
     const remarks = txt(formData.get("remarks"));
@@ -322,85 +330,59 @@ export default async function KachiParchiPage({
 
     const nowIso = new Date().toISOString();
 
-    if (Number.isFinite(id) && id > 0) {
-      await db.transaction(async (tx) => {
-        const prevLines = await tx
-          .select({ g: schema.extKachiParchiLine.gdnLineId })
-          .from(schema.extKachiParchiLine)
-          .where(eq(schema.extKachiParchiLine.parchiId, id));
-        const prevGdnIds = prevLines.map((l) => l.g).filter((g): g is number => g != null);
-        if (prevGdnIds.length) {
-          await tx
-            .update(schema.extGodownStockLine)
-            .set({ status: "N" })
-            .where(inArray(schema.extGodownStockLine.id, prevGdnIds));
-        }
+    try {
+      await assertPeriodOpen(vDate, "INVENTORY");
 
-        await tx
-          .update(schema.extKachiParchi)
-          .set({
-            vDate, kpNo, type, purchaseParty, contNo, salDate, saleParty, dspQuality,
-            qualityPrint, than, meter, convRate, greyRate,
-            ratePur, rateSal, elCumiNum, elCumiDen, badCumiNum, badCumiDen, elMeter,
-            baadMeter, totalElBadMtrs, printingName, brokerName, remarks, term, dueDate, imgNo,
-            modifiedDate: nowIso,
-          })
-          .where(eq(schema.extKachiParchi.id, id));
+      if (Number.isFinite(id) && id > 0) {
+        const prevOwnedIds = (
+          await db
+            .select({ g: schema.extKachiParchiLine.gdnLineId })
+            .from(schema.extKachiParchiLine)
+            .where(eq(schema.extKachiParchiLine.parchiId, id))
+        )
+          .map((l) => l.g)
+          .filter((g): g is number => g != null);
 
-        await tx.delete(schema.extKachiParchiLine).where(eq(schema.extKachiParchiLine.parchiId, id));
-        await tx.delete(schema.extKachiParchiCount).where(eq(schema.extKachiParchiCount.parchiId, id));
-
-        if (validLines.length) {
-          await tx.insert(schema.extKachiParchiLine).values(validLines.map((l) => ({ ...l, parchiId: id })));
-        }
-        if (validCounts.length) {
-          await tx.insert(schema.extKachiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: id })));
-        }
         if (newGdnIds.length) {
-          await tx
-            .update(schema.extGodownStockLine)
-            .set({ status: "Y" })
-            .where(inArray(schema.extGodownStockLine.id, newGdnIds));
+          const foreignTaken = newGdnIds.filter((g) => !prevOwnedIds.includes(g));
+          if (foreignTaken.length) {
+            const conflicts = await db
+              .select({ id: schema.extGodownStockLine.id, status: schema.extGodownStockLine.status })
+              .from(schema.extGodownStockLine)
+              .where(inArray(schema.extGodownStockLine.id, foreignTaken));
+            if (conflicts.some((c) => c.status === "Y")) {
+              redirect(`/external/grey/kachi-parchi?id=${id}&error=gdn_line_taken`);
+            }
+          }
         }
-      });
 
-      revalidatePath("/external/grey/kachi-parchi");
-      redirect(`/external/grey/kachi-parchi?id=${id}`);
-    } else {
-      const providedVNo = ((formData.get("v_no") as string) || "").trim();
+        await db.transaction(async (tx) => {
+          if (prevOwnedIds.length) {
+            await tx
+              .update(schema.extGodownStockLine)
+              .set({ status: "N" })
+              .where(inArray(schema.extGodownStockLine.id, prevOwnedIds));
+          }
 
-      let newId = 0;
-      let codeExists = false;
-      try {
-        newId = await db.transaction(async (tx) => {
-          const existingRows = await tx
-            .select({
-              m: sql<number>`coalesce(max(CAST(SUBSTR(${schema.extKachiParchi.vNo}, 4) AS INTEGER)), 0)`,
-            })
-            .from(schema.extKachiParchi);
-          const vNo = providedVNo || "KP-" + String((existingRows[0]?.m ?? 0) + 1).padStart(4, "0");
-          const lvRow = await tx
-            .select({ m: sql<number>`coalesce(max(${schema.extKachiParchi.lvNo}), 0)` })
-            .from(schema.extKachiParchi);
-          const nextL = (lvRow[0]?.m ?? 0) + 1;
-
-          const inserted = await tx
-            .insert(schema.extKachiParchi)
-            .values({
-              vNo, lvNo: nextL, vDate, kpNo, type, purchaseParty, contNo, salDate, saleParty,
-              dspQuality, qualityPrint, than, meter, convRate, greyRate,
+          await tx
+            .update(schema.extKachiParchi)
+            .set({
+              vDate, kpNo, type, purchaseParty, contNo, salDate, saleParty, dspQuality,
+              qualityPrint, than, meter, convRate, greyRate,
               ratePur, rateSal, elCumiNum, elCumiDen, badCumiNum, badCumiDen, elMeter,
               baadMeter, totalElBadMtrs, printingName, brokerName, remarks, term, dueDate, imgNo,
-              postedDate: nowIso,
+              modifiedDate: nowIso,
             })
-            .returning({ id: schema.extKachiParchi.id });
-          const insertedId = inserted[0].id;
+            .where(eq(schema.extKachiParchi.id, id));
+
+          await tx.delete(schema.extKachiParchiLine).where(eq(schema.extKachiParchiLine.parchiId, id));
+          await tx.delete(schema.extKachiParchiCount).where(eq(schema.extKachiParchiCount.parchiId, id));
 
           if (validLines.length) {
-            await tx.insert(schema.extKachiParchiLine).values(validLines.map((l) => ({ ...l, parchiId: insertedId })));
+            await tx.insert(schema.extKachiParchiLine).values(validLines.map((l) => ({ ...l, parchiId: id })));
           }
           if (validCounts.length) {
-            await tx.insert(schema.extKachiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: insertedId })));
+            await tx.insert(schema.extKachiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: id })));
           }
           if (newGdnIds.length) {
             await tx
@@ -408,28 +390,96 @@ export default async function KachiParchiPage({
               .set({ status: "Y" })
               .where(inArray(schema.extGodownStockLine.id, newGdnIds));
           }
-          return insertedId;
         });
-      } catch (e: unknown) {
-        const msg = (e as { message?: string })?.message ?? "";
-        if (/UNIQUE|constraint/i.test(msg)) {
-          codeExists = true;
-        } else {
-          throw e;
+
+        revalidatePath("/external/grey/kachi-parchi");
+        redirect(`/external/grey/kachi-parchi?id=${id}`);
+      } else {
+        const providedVNo = ((formData.get("v_no") as string) || "").trim();
+
+        if (newGdnIds.length) {
+          const conflicts = await db
+            .select({ id: schema.extGodownStockLine.id, status: schema.extGodownStockLine.status })
+            .from(schema.extGodownStockLine)
+            .where(inArray(schema.extGodownStockLine.id, newGdnIds));
+          if (conflicts.some((c) => c.status === "Y")) {
+            redirect(`/external/grey/kachi-parchi?error=gdn_line_taken`);
+          }
         }
-      }
 
-      if (codeExists) {
-        redirect(`/external/grey/kachi-parchi?error=code_exists`);
-      }
+        let newId = 0;
+        let codeExists = false;
+        try {
+          newId = await db.transaction(async (tx) => {
+            const existingRows = await tx
+              .select({
+                m: sql<number>`coalesce(max(CAST(SUBSTR(${schema.extKachiParchi.vNo}, 4) AS INTEGER)), 0)`,
+              })
+              .from(schema.extKachiParchi);
+            const vNo = providedVNo || "KP-" + String((existingRows[0]?.m ?? 0) + 1).padStart(4, "0");
+            const lvRow = await tx
+              .select({ m: sql<number>`coalesce(max(${schema.extKachiParchi.lvNo}), 0)` })
+              .from(schema.extKachiParchi);
+            const nextL = (lvRow[0]?.m ?? 0) + 1;
 
-      revalidatePath("/external/grey/kachi-parchi");
-      redirect(`/external/grey/kachi-parchi?id=${newId}`);
+            const inserted = await tx
+              .insert(schema.extKachiParchi)
+              .values({
+                vNo, lvNo: nextL, vDate, kpNo, type, purchaseParty, contNo, salDate, saleParty,
+                dspQuality, qualityPrint, than, meter, convRate, greyRate,
+                ratePur, rateSal, elCumiNum, elCumiDen, badCumiNum, badCumiDen, elMeter,
+                baadMeter, totalElBadMtrs, printingName, brokerName, remarks, term, dueDate, imgNo,
+                postedDate: nowIso,
+              })
+              .returning({ id: schema.extKachiParchi.id });
+            const insertedId = inserted[0].id;
+
+            if (validLines.length) {
+              await tx.insert(schema.extKachiParchiLine).values(validLines.map((l) => ({ ...l, parchiId: insertedId })));
+            }
+            if (validCounts.length) {
+              await tx.insert(schema.extKachiParchiCount).values(validCounts.map((c) => ({ ...c, parchiId: insertedId })));
+            }
+            if (newGdnIds.length) {
+              await tx
+                .update(schema.extGodownStockLine)
+                .set({ status: "Y" })
+                .where(inArray(schema.extGodownStockLine.id, newGdnIds));
+            }
+            return insertedId;
+          });
+        } catch (e: unknown) {
+          const msg = (e as { message?: string })?.message ?? "";
+          if (/UNIQUE|constraint/i.test(msg)) {
+            codeExists = true;
+          } else {
+            throw e;
+          }
+        }
+
+        if (codeExists) {
+          redirect(`/external/grey/kachi-parchi?error=code_exists`);
+        }
+
+        revalidatePath("/external/grey/kachi-parchi");
+        redirect(`/external/grey/kachi-parchi?id=${newId}`);
+      }
+    } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
+      const msg = (e as { message?: string })?.message ?? "";
+      const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (m) {
+        redirect(`/external/grey/kachi-parchi?error=period_locked&thru=${m[1]}`);
+      }
+      throw e;
     }
   }
 
   async function deleteParchi(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/grey/kachi-parchi?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
@@ -512,6 +562,21 @@ export default async function KachiParchiPage({
         {params.error === "qty_required" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Than and Meter are required.
+          </div>
+        )}
+        {params.error === "gdn_line_taken" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            One or more selected godown lines are already consumed by another parchi.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete records.
           </div>
         )}
 

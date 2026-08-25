@@ -7,6 +7,9 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { IntConvCalc } from "@/components/int-conv-calc";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today as todayFn } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -38,6 +41,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   read_required: "Read must be greater than 0.",
   pick_required: "Pick must be greater than 0.",
   width_required: "Width must be greater than 0.",
+  period_locked: "Period is locked. Cannot save for this date.",
+  admin_only: "Only ADMIN can delete contracts.",
 };
 
 const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
@@ -47,7 +52,7 @@ const SEASON_TYPES = ["SUMMER", "WINTER", "ALL SEASON", "SPRING", "AUTUMN"];
 export default async function IntGreyConversionContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -112,7 +117,7 @@ export default async function IntGreyConversionContractPage({
   const warpGrid = Array.from({ length: 9 }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
   const weftGrid = Array.from({ length: 9 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const [lRow] = await db
     .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
     .from(schema.intGreyConversionContract);
@@ -133,10 +138,13 @@ export default async function IntGreyConversionContractPage({
 
   async function saveContract(formData: FormData) {
     "use server";
+    try {
     const idStr = formData.get("id") as string;
     const idParsed = idStr ? parseInt(idStr, 10) : NaN;
     const isUpdate = Number.isFinite(idParsed);
     const backQ = isUpdate ? `?id=${idParsed}` : `?adding=1`;
+    const contDateStr = txt(formData.get("cont_date")) ?? todayFn();
+    await assertPeriodOpen(contDateStr, "INVENTORY");
 
     const ratePerPick = num(formData.get("rate_per_pick"));
     const rateMtr = num(formData.get("rate_mtr"));
@@ -211,18 +219,11 @@ export default async function IntGreyConversionContractPage({
         : round((rateMtr ?? 0) + clb, 4);
     const grayRatePerMtr = round(costPerMtr + convRatePerMtr, 2);
 
-    let contNo = (formData.get("cont_no") as string)?.trim() || "";
-    if (!isUpdate) {
-      const rows = await db
-        .select({ maxNum: sql<number>`coalesce(max(CAST(SUBSTR(cont_no, 6) AS INTEGER)), 0)` })
-        .from(schema.intGreyConversionContract);
-      const maxNum = rows[0]?.maxNum ?? 0;
-      contNo = `IGCC-${String(maxNum + 1).padStart(4, "0")}`;
-    }
+    const providedContNo = (formData.get("cont_no") as string)?.trim() || "";
 
     const data = {
-      contNo,
-      contDate: txt(formData.get("cont_date")) ?? new Date().toISOString().slice(0, 10),
+      contNo: providedContNo,
+      contDate: contDateStr,
       expDate: txt(formData.get("exp_date")),
       status: txt(formData.get("status")) ?? "R",
       type: "CONV",
@@ -281,12 +282,16 @@ export default async function IntGreyConversionContractPage({
           await tx.delete(schema.intGreyConversionWarp).where(eq(schema.intGreyConversionWarp.contractId, cid));
           await tx.delete(schema.intGreyConversionWeft).where(eq(schema.intGreyConversionWeft.contractId, cid));
         } else {
+          const [rows] = await tx
+            .select({ maxNum: sql<number>`coalesce(max(CAST(SUBSTR(cont_no, 6) AS INTEGER)), 0)` })
+            .from(schema.intGreyConversionContract);
+          const contNo = data.contNo || `IGCC-${String((rows?.maxNum ?? 0) + 1).padStart(4, "0")}`;
           const [lr] = await tx
             .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
             .from(schema.intGreyConversionContract);
           const [inserted] = await tx
             .insert(schema.intGreyConversionContract)
-            .values({ ...data, lContNo: (lr?.maxL ?? 0) + 1, postedDate: new Date().toISOString() })
+            .values({ ...data, contNo, lContNo: (lr?.maxL ?? 0) + 1, postedDate: new Date().toISOString() })
             .returning({ id: schema.intGreyConversionContract.id });
           cid = inserted.id;
         }
@@ -316,10 +321,19 @@ export default async function IntGreyConversionContractPage({
 
     revalidatePath("/inventory/contracts/grey-conversion");
     redirect(`/inventory/contracts/grey-conversion?id=${contractId}`);
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/contracts/grey-conversion?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteContract(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/contracts/grey-conversion?error=admin_only");
     const idParsed = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(idParsed)) return;
     await db.transaction(async (tx) => {

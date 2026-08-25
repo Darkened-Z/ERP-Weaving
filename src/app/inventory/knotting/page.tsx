@@ -7,6 +7,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -28,8 +30,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
@@ -199,6 +199,32 @@ async function saveKnotting(formData: FormData) {
 
   if (Number.isFinite(id) && id > 0) {
     await db.transaction(async (tx) => {
+      // Snapshot the old mounted lines so we can reverse the side-effects of
+      // mountBeam (looms + beams) for every line that had a loom assigned.
+      const oldLines = await tx
+        .select({
+          beamNo: schema.intKnottingSarningLine.beamNo,
+          lmHash: schema.intKnottingSarningLine.lmHash,
+        })
+        .from(schema.intKnottingSarningLine)
+        .where(eq(schema.intKnottingSarningLine.knottingId, id));
+
+      for (const ol of oldLines) {
+        const loomNo = ol.lmHash ? parseInt(ol.lmHash, 10) : NaN;
+        if (Number.isFinite(loomNo)) {
+          await tx
+            .update(schema.looms)
+            .set({ statusWrk: "S", currentBeam: null, currentContract: null })
+            .where(eq(schema.looms.loomNo, loomNo));
+        }
+        if (ol.beamNo) {
+          await tx
+            .update(schema.beams)
+            .set({ statusWrk: "LOADED", loomNo: null, knVno: null, knDate: null })
+            .where(eq(schema.beams.beamNo, ol.beamNo));
+        }
+      }
+
       await tx
         .update(schema.intKnottingSarning)
         .set({ ...header, modifiedDate: nowIso })
@@ -275,9 +301,33 @@ async function saveKnotting(formData: FormData) {
 
 async function deleteKnotting(formData: FormData) {
   "use server";
+  const session = await getSession();
+  if (session?.roleName !== "ADMIN") redirect("/inventory/knotting?error=admin_only");
   const id = intVal(formData.get("id"));
   if (id === null) return;
   await db.transaction(async (tx) => {
+    const oldLines = await tx
+      .select({
+        beamNo: schema.intKnottingSarningLine.beamNo,
+        lmHash: schema.intKnottingSarningLine.lmHash,
+      })
+      .from(schema.intKnottingSarningLine)
+      .where(eq(schema.intKnottingSarningLine.knottingId, id));
+    for (const ol of oldLines) {
+      const loomNo = ol.lmHash ? parseInt(ol.lmHash, 10) : NaN;
+      if (Number.isFinite(loomNo)) {
+        await tx
+          .update(schema.looms)
+          .set({ statusWrk: "S", currentBeam: null, currentContract: null })
+          .where(eq(schema.looms.loomNo, loomNo));
+      }
+      if (ol.beamNo) {
+        await tx
+          .update(schema.beams)
+          .set({ statusWrk: "LOADED", loomNo: null, knVno: null, knDate: null })
+          .where(eq(schema.beams.beamNo, ol.beamNo));
+      }
+    }
     await tx
       .delete(schema.intKnottingSarningLine)
       .where(eq(schema.intKnottingSarningLine.knottingId, id));
@@ -539,6 +589,11 @@ export default async function KnottingPage({
               <> — locked through <span className="mono">{params.thru}</span></>
             )}
             .
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete vouchers.
           </div>
         )}
 

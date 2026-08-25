@@ -3,6 +3,10 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today } from "@/lib/time";
+import { ConfirmButton } from "@/components/confirm-button";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -23,8 +27,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
   const nums = rows
     .map((r) => {
@@ -39,7 +41,7 @@ function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
 export default async function GreyDespatchDamiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -95,9 +97,12 @@ export default async function GreyDespatchDamiPage({
 
   async function saveDami(formData: FormData) {
     "use server";
+    try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
+    const vDate = txt(formData.get("v_date")) ?? today();
+    await assertPeriodOpen(vDate, "INVENTORY");
 
     const originalDespatchId = intVal(formData.get("original_despatch_id"));
     let party: string | null = txt(formData.get("party"));
@@ -119,7 +124,7 @@ export default async function GreyDespatchDamiPage({
     }
 
     const data = {
-      vDate: txt(formData.get("v_date")) ?? today(),
+      vDate,
       lvNo: intVal(formData.get("lv_no")),
       originalDespatchId,
       party,
@@ -142,6 +147,10 @@ export default async function GreyDespatchDamiPage({
           did = id;
         } else {
           const existing = await tx.select({ vNo: schema.intGreyDespatchDami.vNo }).from(schema.intGreyDespatchDami);
+          const [lvRowIn] = await tx
+            .select({ m: sql<number>`COALESCE(MAX(${schema.intGreyDespatchDami.lvNo}),0)` })
+            .from(schema.intGreyDespatchDami);
+          const nextLvNo = Number(lvRowIn?.m ?? 0) + 1;
           const providedVNo = txt(formData.get("v_no"));
           const vNo = providedVNo ?? nextVNoFromRows(existing, "IGDD");
           const [ins] = await tx
@@ -149,7 +158,7 @@ export default async function GreyDespatchDamiPage({
             .values({
               ...data,
               vNo,
-              lvNo: data.lvNo ?? existing.length + 1,
+              lvNo: data.lvNo ?? nextLvNo,
               postedDate: new Date().toISOString(),
             })
             .returning({ id: schema.intGreyDespatchDami.id });
@@ -175,10 +184,19 @@ export default async function GreyDespatchDamiPage({
 
     revalidatePath("/inventory/grey-despatch-dami");
     redirect(`/inventory/grey-despatch-dami?id=${savedId}`);
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/grey-despatch-dami?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteDami(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/grey-despatch-dami?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.delete(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, id));
@@ -253,6 +271,20 @@ export default async function GreyDespatchDamiPage({
             V.No already exists. Try again.
           </div>
         )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period is locked. Cannot save for this date
+            {params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
+            .
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete vouchers.
+          </div>
+        )}
 
         <form id="dami-find-form" method="GET" action="/inventory/grey-despatch-dami" className="hidden"></form>
 
@@ -273,7 +305,7 @@ export default async function GreyDespatchDamiPage({
               {formItem && (
                 <form action={deleteDami} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message={`Delete dami slip ${formItem.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
                 </form>
               )}
             </div>
@@ -369,7 +401,7 @@ export default async function GreyDespatchDamiPage({
               {formItem && (
                 <form action={deleteDami} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message={`Delete dami slip ${formItem.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
                 </form>
               )}
             </div>

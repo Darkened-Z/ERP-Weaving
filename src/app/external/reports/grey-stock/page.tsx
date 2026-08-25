@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { and, gte, lte, sql } from "drizzle-orm";
+import { today as todayFn, monthsAgo } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,7 @@ function escLike(s: string): string {
 }
 
 function sixMonthsAgo(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 6);
-  return d.toISOString().slice(0, 10);
+  return monthsAgo(6);
 }
 
 function qs(params: Record<string, string>): string {
@@ -33,7 +32,7 @@ export default async function GreyStockPage({
 }) {
   const params = await searchParams;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const from = params.from?.trim() || sixMonthsAgo();
   const to = params.to?.trim() || today;
   const dspQuality = params.dspQuality?.trim() ?? "";

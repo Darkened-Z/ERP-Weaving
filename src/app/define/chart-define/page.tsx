@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ChartDefinePage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const charts = await db.select().from(schema.chartDefine);
@@ -52,6 +53,24 @@ export default async function ChartDefinePage({
     "use server";
     const id = parseInt(formData.get("id") as string, 10);
     if (!id || Number.isNaN(id)) return;
+
+    const [row] = await db
+      .select({ code: schema.chartDefine.code })
+      .from(schema.chartDefine)
+      .where(eq(schema.chartDefine.id, id))
+      .limit(1);
+    if (!row) redirect("/define/chart-define");
+
+    const [coaRef] = await db
+      .select({ code: schema.chartOfAccounts.code })
+      .from(schema.chartOfAccounts)
+      .where(eq(schema.chartOfAccounts.codeHead, String(row.code)))
+      .limit(1);
+
+    if (coaRef) {
+      redirect(`/define/chart-define?id=${id}&error=in_use`);
+    }
+
     await db
       .delete(schema.chartDefine)
       .where(eq(schema.chartDefine.id, id));
@@ -74,12 +93,17 @@ export default async function ChartDefinePage({
               {selected && (
                 <form action={deleteChart} className="inline">
                   <input type="hidden" name="id" value={selected.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton>Delete</ConfirmButton>
                 </form>
               )}
             </div>
           </div>
 
+          {params.error === "in_use" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              This chart head is referenced by chart of accounts and cannot be deleted.
+            </div>
+          )}
           <form action={saveChart}>
             {selected && <input type="hidden" name="id" value={selected.id} />}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">

@@ -5,6 +5,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, inArray, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -23,7 +25,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const LINE_ROWS = 8;
@@ -166,6 +167,8 @@ async function saveReturn(formData: FormData) {
 
 async function deleteReturn(formData: FormData) {
   "use server";
+  const s = await getSession();
+  if (s?.roleName !== "ADMIN") redirect("/store/gatepass?error=admin_only");
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
 
@@ -384,6 +387,11 @@ export default async function GatepassPage({
               <> — locked through <span className="mono">{params.thru}</span></>
             )}
             .
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Only ADMIN users can delete store returns.
           </div>
         )}
 

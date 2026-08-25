@@ -4,10 +4,9 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { and, eq, gte, lte, isNotNull } from "drizzle-orm";
+import { today } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
-
-const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
 
 type Row = {

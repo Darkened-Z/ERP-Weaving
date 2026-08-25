@@ -9,6 +9,9 @@ import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today as pkToday } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +27,7 @@ const int = (v: FormDataEntryValue | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => pkToday();
 
 function nextContNoFromRows(rows: { contNo: string }[], prefix: string): string {
   const nums = rows
@@ -40,7 +43,7 @@ function nextContNoFromRows(rows: { contNo: string }[], prefix: string): string 
 export default async function YarnPurchaseContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -181,82 +184,97 @@ export default async function YarnPurchaseContractPage({
 
     const nowIso = new Date().toISOString();
 
-    if (Number.isFinite(id) && id > 0) {
-      await db.transaction(async (tx) => {
-        await tx
-          .update(schema.extYarnPurContract)
-          .set({
-            contDate, expdDate, refno, partyCode, broker, agePercent, brokagePerBag,
-            countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount, days, remarks, img, status,
-            modifiedDate: nowIso,
-          })
-          .where(eq(schema.extYarnPurContract.id, id));
+    try {
+      await assertPeriodOpen(contDate, "INVENTORY");
 
-        await tx
-          .delete(schema.extYarnPurContractDelivery)
-          .where(eq(schema.extYarnPurContractDelivery.contractId, id));
-
-        if (validDeliveries.length) {
+      if (Number.isFinite(id) && id > 0) {
+        await db.transaction(async (tx) => {
           await tx
-            .insert(schema.extYarnPurContractDelivery)
-            .values(validDeliveries.map((d) => ({ ...d, contractId: id })));
-        }
-      });
-      revalidatePath("/external/contracts/yarn-purchase");
-      redirect(`/external/contracts/yarn-purchase?id=${id}`);
-    } else {
-      const providedContNo = ((formData.get("cont_no") as string) || "").trim();
-
-      let newId = 0;
-      let codeExists = false;
-      try {
-        newId = await db.transaction(async (tx) => {
-          const existingRows = await tx
-            .select({ contNo: schema.extYarnPurContract.contNo })
-            .from(schema.extYarnPurContract);
-          const contNo = providedContNo || nextContNoFromRows(existingRows, "YPC");
-          const [{ maxL }] = await tx
-            .select({ maxL: sql<number>`coalesce(max(${schema.extYarnPurContract.lContNo}), 0)` })
-            .from(schema.extYarnPurContract);
-          const nextL = maxL + 1;
-
-          const inserted = await tx
-            .insert(schema.extYarnPurContract)
-            .values({
-              contNo, lContNo: nextL, contDate, expdDate, refno, partyCode, broker,
-              agePercent, brokagePerBag, countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount,
-              days, remarks, img, status,
-              postedDate: nowIso,
+            .update(schema.extYarnPurContract)
+            .set({
+              contDate, expdDate, refno, partyCode, broker, agePercent, brokagePerBag,
+              countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount, days, remarks, img, status,
+              modifiedDate: nowIso,
             })
-            .returning({ id: schema.extYarnPurContract.id });
-          const insertedId = inserted[0].id;
+            .where(eq(schema.extYarnPurContract.id, id));
+
+          await tx
+            .delete(schema.extYarnPurContractDelivery)
+            .where(eq(schema.extYarnPurContractDelivery.contractId, id));
 
           if (validDeliveries.length) {
             await tx
               .insert(schema.extYarnPurContractDelivery)
-              .values(validDeliveries.map((d) => ({ ...d, contractId: insertedId })));
+              .values(validDeliveries.map((d) => ({ ...d, contractId: id })));
           }
-          return insertedId;
         });
-      } catch (e: unknown) {
-        const msg = (e as { message?: string })?.message ?? "";
-        if (/UNIQUE|constraint/i.test(msg)) {
-          codeExists = true;
-        } else {
-          throw e;
-        }
-      }
+        revalidatePath("/external/contracts/yarn-purchase");
+        redirect(`/external/contracts/yarn-purchase?id=${id}`);
+      } else {
+        const providedContNo = ((formData.get("cont_no") as string) || "").trim();
 
-      if (codeExists) {
-        redirect(`/external/contracts/yarn-purchase?error=code_exists`);
+        let newId = 0;
+        let codeExists = false;
+        try {
+          newId = await db.transaction(async (tx) => {
+            const existingRows = await tx
+              .select({ contNo: schema.extYarnPurContract.contNo })
+              .from(schema.extYarnPurContract);
+            const contNo = providedContNo || nextContNoFromRows(existingRows, "YPC");
+            const [{ maxL }] = await tx
+              .select({ maxL: sql<number>`coalesce(max(${schema.extYarnPurContract.lContNo}), 0)` })
+              .from(schema.extYarnPurContract);
+            const nextL = maxL + 1;
+
+            const inserted = await tx
+              .insert(schema.extYarnPurContract)
+              .values({
+                contNo, lContNo: nextL, contDate, expdDate, refno, partyCode, broker,
+                agePercent, brokagePerBag, countCode, ratio, brand, qtyBags, qtyLbs, ratePerLbs, amount,
+                days, remarks, img, status,
+                postedDate: nowIso,
+              })
+              .returning({ id: schema.extYarnPurContract.id });
+            const insertedId = inserted[0].id;
+
+            if (validDeliveries.length) {
+              await tx
+                .insert(schema.extYarnPurContractDelivery)
+                .values(validDeliveries.map((d) => ({ ...d, contractId: insertedId })));
+            }
+            return insertedId;
+          });
+        } catch (e: unknown) {
+          const msg = (e as { message?: string })?.message ?? "";
+          if (/UNIQUE|constraint/i.test(msg)) {
+            codeExists = true;
+          } else {
+            throw e;
+          }
+        }
+
+        if (codeExists) {
+          redirect(`/external/contracts/yarn-purchase?error=code_exists`);
+        }
+        revalidatePath("/external/contracts/yarn-purchase");
+        redirect(`/external/contracts/yarn-purchase?id=${newId}`);
       }
-      revalidatePath("/external/contracts/yarn-purchase");
-      redirect(`/external/contracts/yarn-purchase?id=${newId}`);
+    } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
+      const msg = (e as { message?: string })?.message ?? "";
+      const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (m) {
+        redirect(`/external/contracts/yarn-purchase?error=period_locked&thru=${m[1]}`);
+      }
+      throw e;
     }
   }
 
   async function deleteContract(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/contracts/yarn-purchase?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
@@ -358,6 +376,16 @@ export default async function YarnPurchaseContractPage({
         {params.error === "qty_tolerance" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Delivery bags total must be within ±5% of contract qty.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete contracts.
           </div>
         )}
 

@@ -88,6 +88,46 @@ export default async function LoomsPage({
     "use server";
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
+
+    const [loom] = await db
+      .select({ id: schema.looms.id, loomNo: schema.looms.loomNo, currentBeam: schema.looms.currentBeam })
+      .from(schema.looms)
+      .where(eq(schema.looms.id, id))
+      .limit(1);
+    if (!loom) redirect("/weaving/looms");
+
+    if (loom.currentBeam) {
+      redirect(`/weaving/looms?id=${id}&error=in_use`);
+    }
+
+    const [beamRef] = await db
+      .select({ id: schema.beams.id })
+      .from(schema.beams)
+      .where(eq(schema.beams.loomNo, loom.loomNo))
+      .limit(1);
+    const [dpRef] = await db
+      .select({ id: schema.dailyProduction.id })
+      .from(schema.dailyProduction)
+      .where(eq(schema.dailyProduction.loomNo, loom.loomNo))
+      .limit(1);
+    const [ktRef] = await db
+      .select({ id: schema.knottingTransactions.id })
+      .from(schema.knottingTransactions)
+      .where(eq(schema.knottingTransactions.loomNo, loom.loomNo))
+      .limit(1);
+    // int_daily_production references looms indirectly via set → beams → loom.
+    // Approximation: any beam in the daily production set that carries this loom.
+    const [intDpRef] = await db
+      .select({ id: schema.intDailyProductionSet.id })
+      .from(schema.intDailyProductionSet)
+      .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
+      .where(eq(schema.beams.loomNo, loom.loomNo))
+      .limit(1);
+
+    if (beamRef || dpRef || ktRef || intDpRef) {
+      redirect(`/weaving/looms?id=${id}&error=in_use`);
+    }
+
     await db.delete(schema.looms).where(eq(schema.looms.id, id));
     revalidatePath("/weaving/looms");
     redirect("/weaving/looms");
@@ -150,6 +190,11 @@ export default async function LoomsPage({
           {params.error === "dup" && (
             <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold">
               That loom number is already in use — pick a different one. The Code stays fixed.
+            </div>
+          )}
+          {params.error === "in_use" && (
+            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold">
+              This loom is referenced by beams, production records, or has a current beam assigned. Clear the references before deleting.
             </div>
           )}
           <form action={saveLoom}>

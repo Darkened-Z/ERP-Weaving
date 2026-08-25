@@ -8,6 +8,10 @@ import { db, schema } from "@/db";
 import { eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today as pkToday } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { ConfirmButton } from "@/components/confirm-button";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +26,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => pkToday();
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -45,7 +49,7 @@ function nextVNo(rows: { vNo: string }[], prefix: string): string {
 export default async function YarnSaleVoucherPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -295,8 +299,8 @@ export default async function YarnSaleVoucherPage({
   if (formVoucher && voucherCounts.length) {
     const pv = await db
       .select({
-        wsum: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
-        bsum: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+        wsum: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+        bsum: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
       })
       .from(schema.extYarnPurVoucherLine)
       .where(inArray(schema.extYarnPurVoucherLine.count, voucherCounts));
@@ -399,12 +403,13 @@ export default async function YarnSaleVoucherPage({
       const u = (units[i] || "").trim();
       const dp = (dspParties[i] || "").trim();
       const rt = num(rates[i]);
-      const am = num(amts[i]);
       const rm = (rmks[i] || "").trim();
 
-      if (!c && !ct && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && !u && !dp && rt == null && am == null && !rm) {
+      if (!c && !ct && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && !u && !dp && rt == null && !rm) {
         continue;
       }
+
+      const recomputedAmt = l != null && rt != null ? Math.round(l * rt * 100) / 100 : null;
 
       validLines.push({
         contNo: c || null,
@@ -420,10 +425,12 @@ export default async function YarnSaleVoucherPage({
         unit: u || null,
         despatchParty: dp || null,
         rate: rt,
-        amt: am,
+        amt: recomputedAmt,
         remarks: rm || null,
       });
     }
+    // client-supplied line_amt values are ignored on purpose — amt is derived from lbs*rate
+    void amts;
 
     if (!validLines.some((l) => (l.bag ?? 0) > 0 || (l.lbs ?? 0) > 0)) {
       redirect(
@@ -435,78 +442,96 @@ export default async function YarnSaleVoucherPage({
 
     const nowIso = new Date().toISOString();
 
-    if (Number.isFinite(id) && id > 0) {
-      await db.transaction(async (tx) => {
-        await tx
-          .update(schema.extYarnSalVoucher)
-          .set({
-            vDate, type, loomType, party, broker, term, dueDate, posting, img, cont, pur, bal,
-            stockBag, stockCon, stockLbs, ratePv, amtPv, pl, avgRate, remarks, pendingFinance,
-            modifiedDate: nowIso,
-          })
-          .where(eq(schema.extYarnSalVoucher.id, id));
+    try {
+      await assertPeriodOpen(vDate, "INVENTORY");
 
-        await tx
-          .delete(schema.extYarnSalVoucherLine)
-          .where(eq(schema.extYarnSalVoucherLine.voucherId, id));
-
-        if (validLines.length) {
+      if (Number.isFinite(id) && id > 0) {
+        await db.transaction(async (tx) => {
           await tx
-            .insert(schema.extYarnSalVoucherLine)
-            .values(validLines.map((l) => ({ ...l, voucherId: id })));
-        }
-      });
-
-      revalidatePath("/external/yarn/sale");
-      redirect(`/external/yarn/sale?id=${id}`);
-    } else {
-      const providedVNo = ((formData.get("v_no") as string) || "").trim();
-
-      let newId = 0;
-      let codeExists = false;
-      try {
-        newId = await db.transaction(async (tx) => {
-          const existingRows = await tx.select({ vNo: schema.extYarnSalVoucher.vNo }).from(schema.extYarnSalVoucher);
-          const vNo = providedVNo || nextVNo(existingRows, "YSV");
-          const nextL = existingRows.length + 1;
-
-          const inserted = await tx
-            .insert(schema.extYarnSalVoucher)
-            .values({
-              vNo, lvNo: nextL, vDate, type, posting, loomType, party, broker, term, dueDate, img,
-              cont, pur, bal, stockBag, stockCon, stockLbs, ratePv, amtPv, pl, avgRate,
-              remarks, pendingFinance, postedDate: nowIso,
+            .update(schema.extYarnSalVoucher)
+            .set({
+              vDate, type, loomType, party, broker, term, dueDate, posting, img, cont, pur, bal,
+              stockBag, stockCon, stockLbs, ratePv, amtPv, pl, avgRate, remarks, pendingFinance,
+              modifiedDate: nowIso,
             })
-            .returning({ id: schema.extYarnSalVoucher.id });
-          const insertedId = inserted[0].id;
+            .where(eq(schema.extYarnSalVoucher.id, id));
+
+          await tx
+            .delete(schema.extYarnSalVoucherLine)
+            .where(eq(schema.extYarnSalVoucherLine.voucherId, id));
 
           if (validLines.length) {
             await tx
               .insert(schema.extYarnSalVoucherLine)
-              .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
+              .values(validLines.map((l) => ({ ...l, voucherId: id })));
           }
-          return insertedId;
         });
-      } catch (e: unknown) {
-        const msg = (e as { message?: string })?.message ?? "";
-        if (/UNIQUE|constraint/i.test(msg)) {
-          codeExists = true;
-        } else {
-          throw e;
+
+        revalidatePath("/external/yarn/sale");
+        redirect(`/external/yarn/sale?id=${id}`);
+      } else {
+        const providedVNo = ((formData.get("v_no") as string) || "").trim();
+
+        let newId = 0;
+        let codeExists = false;
+        try {
+          newId = await db.transaction(async (tx) => {
+            const existingRows = await tx.select({ vNo: schema.extYarnSalVoucher.vNo }).from(schema.extYarnSalVoucher);
+            const vNo = providedVNo || nextVNo(existingRows, "YSV");
+            const lvRow = await tx
+              .select({ m: sql<number>`coalesce(max(${schema.extYarnSalVoucher.lvNo}), 0)` })
+              .from(schema.extYarnSalVoucher);
+            const nextL = (lvRow[0]?.m ?? 0) + 1;
+
+            const inserted = await tx
+              .insert(schema.extYarnSalVoucher)
+              .values({
+                vNo, lvNo: nextL, vDate, type, posting, loomType, party, broker, term, dueDate, img,
+                cont, pur, bal, stockBag, stockCon, stockLbs, ratePv, amtPv, pl, avgRate,
+                remarks, pendingFinance, postedDate: nowIso,
+              })
+              .returning({ id: schema.extYarnSalVoucher.id });
+            const insertedId = inserted[0].id;
+
+            if (validLines.length) {
+              await tx
+                .insert(schema.extYarnSalVoucherLine)
+                .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
+            }
+            return insertedId;
+          });
+        } catch (e: unknown) {
+          const msg = (e as { message?: string })?.message ?? "";
+          if (/UNIQUE|constraint/i.test(msg)) {
+            codeExists = true;
+          } else {
+            throw e;
+          }
         }
-      }
 
-      if (codeExists) {
-        redirect(`/external/yarn/sale?error=code_exists`);
-      }
+        if (codeExists) {
+          redirect(`/external/yarn/sale?error=code_exists`);
+        }
 
-      revalidatePath("/external/yarn/sale");
-      redirect(`/external/yarn/sale?id=${newId}`);
+        revalidatePath("/external/yarn/sale");
+        redirect(`/external/yarn/sale?id=${newId}`);
+      }
+    } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
+      const msg = (e as { message?: string })?.message ?? "";
+      const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (m) {
+        redirect(`/external/yarn/sale?error=period_locked&thru=${m[1]}`);
+      }
+      throw e;
     }
   }
 
   async function deleteVoucher(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/yarn/sale?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
@@ -621,6 +646,16 @@ export default async function YarnSaleVoucherPage({
             At least one line with Bag or Lbs is required. Nothing was saved.
           </div>
         )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete vouchers.
+          </div>
+        )}
 
         <datalist id="ysv-parties">
           {partyAccounts.map((p) => (
@@ -678,9 +713,7 @@ export default async function YarnSaleVoucherPage({
                   {formVoucher && (
                     <form action={deleteVoucher} className="inline">
                       <input type="hidden" name="id" value={formVoucher.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">
-                        Del
-                      </button>
+                      <ConfirmButton>Del</ConfirmButton>
                     </form>
                   )}
                   <a href="/external/yarn/sale" className="btn btn-outline btn-sm">
@@ -1218,13 +1251,10 @@ export default async function YarnSaleVoucherPage({
                     Exit
                   </a>
                   {formVoucher && (
-                    <button
-                      type="submit"
-                      formAction={deleteVoucher}
-                      className="btn btn-outline btn-sm"
-                    >
-                      Del
-                    </button>
+                    <form action={deleteVoucher} className="inline">
+                      <input type="hidden" name="id" value={formVoucher.id} />
+                      <ConfirmButton>Del</ConfirmButton>
+                    </form>
                   )}
                   <div className="ml-auto flex items-end gap-2">
                     <div>
@@ -1238,9 +1268,7 @@ export default async function YarnSaleVoucherPage({
               {formVoucher && (
                 <form action={deleteVoucher} className="inline mt-3">
                   <input type="hidden" name="id" value={formVoucher.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
-                    Delete
-                  </button>
+                  <ConfirmButton>Delete</ConfirmButton>
                 </form>
               )}
             </div>

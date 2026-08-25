@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function StaffPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const staff = await db
@@ -56,9 +57,42 @@ export default async function StaffPage({
     "use server";
     const id = formData.get("id") as string;
     if (!id) return;
+    const numId = parseInt(id);
+
+    const [row] = await db
+      .select({ name: schema.productionStaff.name, nameShort: schema.productionStaff.nameShort })
+      .from(schema.productionStaff)
+      .where(eq(schema.productionStaff.id, numId))
+      .limit(1);
+    if (!row) redirect("/define/staff");
+    const name = row.name;
+
+    const [dpRef] = await db
+      .select({ id: schema.dailyProduction.id })
+      .from(schema.dailyProduction)
+      .where(eq(schema.dailyProduction.shiftIncharge, name))
+      .limit(1);
+    const [intDpRef] = await db
+      .select({ id: schema.intDailyProduction.id })
+      .from(schema.intDailyProduction)
+      .where(
+        or(
+          eq(schema.intDailyProduction.shiftInchargeTm, name),
+          eq(schema.intDailyProduction.shiftInchargePm, name),
+          eq(schema.intDailyProduction.shiftInchargeA, name),
+          eq(schema.intDailyProduction.shiftInchargeB, name),
+          eq(schema.intDailyProduction.shiftInchargeC, name),
+        ),
+      )
+      .limit(1);
+
+    if (dpRef || intDpRef) {
+      redirect(`/define/staff?id=${id}&error=in_use`);
+    }
+
     await db
       .delete(schema.productionStaff)
-      .where(eq(schema.productionStaff.id, parseInt(id)));
+      .where(eq(schema.productionStaff.id, numId));
     revalidatePath("/define/staff");
     redirect("/define/staff");
   }
@@ -87,12 +121,17 @@ export default async function StaffPage({
                   {selected && (
                     <form action={remove} className="inline">
                       <input type="hidden" name="id" value={selected.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                      <ConfirmButton>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>
               </div>
 
+              {params.error === "in_use" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  This staff member is referenced by daily production shift-incharge fields and cannot be deleted.
+                </div>
+              )}
               <form action={save}>
                 {selected && <input type="hidden" name="id" value={selected.id} />}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">

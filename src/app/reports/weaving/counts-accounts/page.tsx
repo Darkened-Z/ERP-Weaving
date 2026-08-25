@@ -4,6 +4,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
+import { today as todayFn } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function CountsAccountsPage({
   searchParams: Promise<{ from?: string; to?: string; count?: string; party?: string }>;
 }) {
   const params = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const from = params.from?.trim() || monthsBackFrom(today, 3);
   const to = params.to?.trim() || today;
   const countQ = params.count?.trim() || "";

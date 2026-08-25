@@ -3,6 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { sql, and, gte, lte, eq } from "drizzle-orm";
+import { today as todayFn } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +83,7 @@ export default async function WeavingCountsReportPage({
   }>;
 }) {
   const params = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const from = (params.from?.trim()) || monthsBackFrom(today, 6);
   const to = (params.to?.trim()) || today;
 

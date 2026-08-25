@@ -9,6 +9,9 @@ import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +42,7 @@ const DELIVERY_EMPTY_MIN = 4;
 export default async function GreySalesContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
@@ -78,7 +81,7 @@ export default async function GreySalesContractPage({
         .orderBy(schema.extGreySalContractDelivery.id)
     : [];
 
-  const today = new Date().toISOString().slice(0, 10);
+  const todayVal = today();
 
   const nextContractNo = (() => {
     const maxN = contracts.reduce((max, c) => {
@@ -129,17 +132,9 @@ export default async function GreySalesContractPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isNew = !Number.isFinite(id);
 
-    let contractNo = (formData.get("contract_no") as string)?.trim();
-    if (isNew || !contractNo) {
-      const [{ maxN }] = await db
-        .select({
-          maxN: sql<number>`coalesce(max(CAST(SUBSTR(contract_no, 5) AS INTEGER)), 0)`,
-        })
-        .from(schema.extGreySalContract);
-      contractNo = `GSC-${String((maxN ?? 0) + 1).padStart(4, "0")}`;
-    }
+    const providedContractNo = (formData.get("contract_no") as string)?.trim();
 
-    const contractDate = (formData.get("contract_date") as string)?.trim() || today;
+    const contractDate = (formData.get("contract_date") as string)?.trim() || today();
     const expDate = (formData.get("exp_date") as string)?.trim() || null;
     const partyRefNo = (formData.get("party_ref_no") as string)?.trim() || null;
     const party = (formData.get("party") as string)?.trim() || null;
@@ -152,7 +147,7 @@ export default async function GreySalesContractPage({
     const quantityMtr = num(formData.get("quantity_mtr"));
     const ratePerMtr = num(formData.get("rate_per_mtr"));
     const extMtr = num(formData.get("ext_mtr"));
-    const amount = ((quantityMtr ?? 0) + (extMtr ?? 0)) * (ratePerMtr ?? 0);
+    const amount = Math.round(((quantityMtr ?? 0) + (extMtr ?? 0)) * (ratePerMtr ?? 0) * 100) / 100;
     const extDate = (formData.get("ext_date") as string)?.trim() || null;
     const gstRate = num(formData.get("gst_rate"));
     const days = intVal(formData.get("days"));
@@ -164,8 +159,7 @@ export default async function GreySalesContractPage({
     const status = (formData.get("status") as string)?.trim() || "R";
     const nowIso = new Date().toISOString();
 
-    const data = {
-      contractNo,
+    const dataBase = {
       contractDate,
       expDate,
       partyRefNo,
@@ -223,9 +217,19 @@ export default async function GreySalesContractPage({
     let uniqueError = false;
 
     try {
+      await assertPeriodOpen(contractDate, "INVENTORY");
       contractId = await db.transaction(async (tx) => {
         let cid: number | null = Number.isFinite(id) ? id : null;
         if (isNew) {
+          let contractNo = providedContractNo;
+          if (!contractNo) {
+            const [{ maxN }] = await tx
+              .select({
+                maxN: sql<number>`coalesce(max(CAST(SUBSTR(contract_no, 5) AS INTEGER)), 0)`,
+              })
+              .from(schema.extGreySalContract);
+            contractNo = `GSC-${String((maxN ?? 0) + 1).padStart(4, "0")}`;
+          }
           const [{ maxL }] = await tx
             .select({
               maxL: sql<number>`coalesce(max(l_cont_no), 0)`,
@@ -234,7 +238,8 @@ export default async function GreySalesContractPage({
           const [inserted] = await tx
             .insert(schema.extGreySalContract)
             .values({
-              ...data,
+              ...dataBase,
+              contractNo,
               lContNo: (maxL ?? 0) + 1,
               postedDate: nowIso,
             })
@@ -243,7 +248,7 @@ export default async function GreySalesContractPage({
         } else {
           await tx
             .update(schema.extGreySalContract)
-            .set(data)
+            .set(dataBase)
             .where(eq(schema.extGreySalContract.id, id));
         }
 
@@ -262,8 +267,14 @@ export default async function GreySalesContractPage({
         return cid;
       });
     } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
       const msg = String((e as { message?: string })?.message ?? "");
       const errCode = String((e as { code?: string })?.code ?? "");
+      const lockMatch = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (lockMatch) {
+        redirect(`/external/contracts/grey-sales?error=period_locked&thru=${lockMatch[1]}`);
+      }
       if (msg.includes("UNIQUE") || errCode === "SQLITE_CONSTRAINT_UNIQUE") {
         uniqueError = true;
       } else {
@@ -284,6 +295,8 @@ export default async function GreySalesContractPage({
 
   async function deleteContract(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/contracts/grey-sales?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
 
@@ -382,6 +395,16 @@ export default async function GreySalesContractPage({
             Delivery schedule total must be within ±5% of contract quantity plus ext meters.
           </div>
         )}
+        {params.error === "period_locked" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Only ADMIN can delete contracts.
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 mb-8">
           <div className="border border-black p-4">
@@ -410,7 +433,7 @@ export default async function GreySalesContractPage({
                     name="contract_date"
                     type="date"
                     className="input-box mono"
-                    defaultValue={formItem?.contractDate ?? today}
+                    defaultValue={formItem?.contractDate ?? todayVal}
                     required
                   />
                 </div>

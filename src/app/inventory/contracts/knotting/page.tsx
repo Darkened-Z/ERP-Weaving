@@ -5,6 +5,9 @@ import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -27,12 +30,10 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 export default async function KnottingContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -79,9 +80,11 @@ export default async function KnottingContractPage({
 
   async function saveContract(formData: FormData) {
     "use server";
+    try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const contDate = txt(formData.get("cont_date")) ?? today();
+    await assertPeriodOpen(contDate, "INVENTORY");
     const expDate = txt(formData.get("exp_date"));
     const party = txt(formData.get("party"));
     const type = txt(formData.get("type"));
@@ -165,10 +168,19 @@ export default async function KnottingContractPage({
       revalidatePath("/inventory/contracts/knotting");
       redirect(`/inventory/contracts/knotting?id=${newId}`);
     }
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/contracts/knotting?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteContract(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/contracts/knotting?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db
@@ -235,6 +247,20 @@ export default async function KnottingContractPage({
         {params.error === "rate_required" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             At least one of Rate Per Ends or Rate Per Beam must be greater than zero.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period is locked. Cannot save for this date
+            {params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
+            .
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete contracts.
           </div>
         )}
 

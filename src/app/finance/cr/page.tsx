@@ -10,6 +10,7 @@ import { db, schema } from "@/db";
 import { and, eq, gte, sql, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -32,8 +33,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 8);
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
 async function saveVoucher(formData: FormData) {
@@ -564,7 +563,7 @@ export default async function CashReceiptPage({
                   </form>
                 </>
               )}
-              <button type="button" className="btn btn-outline btn-sm cursor-default" title="Brows (Oracle)">
+              <button type="button" disabled title="Coming soon" className="btn btn-outline btn-sm opacity-50">
                 Brows …
               </button>
               <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
@@ -734,7 +733,6 @@ export default async function CashReceiptPage({
                           </td>
                           <td>
                             <input
-                              name="line_title"
                               className="input-box mono text-[12px] bg-gray-50"
                               defaultValue={acc?.description ?? ""}
                               readOnly
@@ -817,10 +815,6 @@ export default async function CashReceiptPage({
                 Exit
               </a>
               <div className="ml-auto flex items-end gap-3">
-                <div>
-                  <label className="label block mb-1">Password</label>
-                  <input type="password" name="pswd" className="input-box mono w-36" tabIndex={-1} />
-                </div>
                 <div className="w-44">
                   <label className="label block mb-1 text-right">Balance Amount</label>
                   <VoucherBalance

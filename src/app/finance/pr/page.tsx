@@ -10,6 +10,7 @@ import { db, schema } from "@/db";
 import { and, eq, gte, sql, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -37,14 +38,6 @@ const intVal = (v: FormDataEntryValue | null): number | null => {
 const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
-};
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-const nowTime = () => {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
@@ -652,7 +645,6 @@ export default async function PettyCashReceiptPage({
                             </td>
                             <td>
                               <input
-                                name="line_title"
                                 className="input-box mono text-[12px] bg-gray-100"
                                 defaultValue={l ? acctMap.get(l.accCode) ?? "" : ""}
                                 readOnly
@@ -734,10 +726,6 @@ export default async function PettyCashReceiptPage({
                   Exit
                 </a>
                 <div className="ml-auto flex items-end gap-3 flex-wrap">
-                  <div>
-                    <label className="label block mb-1">Password</label>
-                    <input type="password" name="pswd" className="input-box mono w-36" />
-                  </div>
                   <div className="w-44">
                     <label className="label block mb-1">Balance Amount</label>
                     <VoucherBalance initial={balanceAmount} fieldName="line_amount" />

@@ -1,4 +1,5 @@
 import { db, schema } from "@/db";
+import { today, monthsAgo } from "@/lib/time";
 
 export const fmt = (n: number | null | undefined) =>
   n == null ? "—" : new Intl.NumberFormat("en-PK").format(Math.round(n));
@@ -16,13 +17,11 @@ export function escLike(s: string): string {
 }
 
 export function sixMonthsAgo(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 6);
-  return d.toISOString().slice(0, 10);
+  return monthsAgo(6);
 }
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return today();
 }
 
 export async function partyOptions() {

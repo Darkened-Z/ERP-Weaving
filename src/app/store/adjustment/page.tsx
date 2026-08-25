@@ -1,7 +1,9 @@
 import { Shell } from "@/components/shell";
 import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
-import { requireSession } from "@/lib/auth";
+import { getSession, requireSession } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { today } from "@/lib/time";
 import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -22,7 +24,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
@@ -33,6 +34,7 @@ const REASONS = new Set(["FOUND", "DAMAGED", "LOST", "RECOUNT"]);
 async function saveAdjustment(formData: FormData) {
   "use server";
   await requireSession();
+  try {
 
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
@@ -40,6 +42,7 @@ async function saveAdjustment(formData: FormData) {
   const back = isNew ? "?adding=1" : `?id=${id}`;
 
   const adjDate = txt(formData.get("adj_date")) ?? today();
+  await assertPeriodOpen(adjDate, "STORE");
   const typeRaw = txt(formData.get("type")) ?? "ADJ";
   const type = TYPES.has(typeRaw) ? typeRaw : "ADJ";
   const remarks = txt(formData.get("remarks"));
@@ -202,11 +205,19 @@ async function saveAdjustment(formData: FormData) {
   revalidatePath("/store/parts");
   revalidatePath("/store/stock");
   redirect(`/store/adjustment?id=${savedId}`);
+  } catch (e) {
+    const err = e as { message?: string; digest?: string };
+    if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+    const thru = parseLockedThroughFromError(err.message ?? "");
+    if (thru) redirect(`/store/adjustment?error=period_locked&thru=${thru}`);
+    throw e;
+  }
 }
 
 async function deleteAdjustment(formData: FormData) {
   "use server";
-  await requireSession();
+  const s = await getSession();
+  if (s?.roleName !== "ADMIN") redirect("/store/adjustment?error=admin_only");
 
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
@@ -244,6 +255,7 @@ export default async function AdjustmentPage({
     part?: string;
     q?: string;
     year?: string;
+    thru?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -369,6 +381,20 @@ export default async function AdjustmentPage({
         {params.error === "code_exists" && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             Adjustment No already exists. Try saving again.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Period is locked. Cannot save for this date
+            {params.thru && (
+              <> — locked through <span className="mono">{params.thru}</span></>
+            )}
+            .
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Only ADMIN users can delete adjustments.
           </div>
         )}
 

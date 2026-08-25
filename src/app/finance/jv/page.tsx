@@ -9,6 +9,7 @@ import { db, schema } from "@/db";
 import { eq, and, sql, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -38,8 +39,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 5);
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
 type ParsedLine = {
@@ -955,16 +954,6 @@ export default async function JournalVoucherPage({
               </div>
 
               <div className="flex items-end gap-3 mt-6 flex-wrap">
-                <div className="no-print">
-                  <label className="label block mb-1">Password</label>
-                  <input
-                    type="password"
-                    name="password"
-                    className="input-box mono"
-                    placeholder="password"
-                    style={{ maxWidth: 150 }}
-                  />
-                </div>
                 <div className="flex gap-2 no-print">
                   <a
                     href="/finance/jv?adding=1"

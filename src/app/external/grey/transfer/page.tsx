@@ -2,10 +2,14 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,14 +30,12 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 const GREY_TYPES = ["FRS", "REJ"];
 
 export default async function GreyTransferPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -155,53 +157,78 @@ export default async function GreyTransferPage({
 
     const nowIso = new Date().toISOString();
 
-    if (Number.isFinite(id) && id > 0) {
-      await db
-        .update(schema.extGreyTransfer)
-        .set({
-          vDate, greyType, partyFrom, qualityFrom, than, meters,
-          partyTo, qualityTo, remarks, modifiedDate: nowIso,
-        })
-        .where(eq(schema.extGreyTransfer.id, id));
+    try {
+      await assertPeriodOpen(vDate, "INVENTORY");
 
-      revalidatePath("/external/grey/transfer");
-      redirect(`/external/grey/transfer?id=${id}`);
-    } else {
-      const existingRows = await db
-        .select({
-          m: sql<number>`coalesce(max(CAST(SUBSTR(${schema.extGreyTransfer.vNo}, 5) AS INTEGER)), 0)`,
-        })
-        .from(schema.extGreyTransfer);
-      const maxN = existingRows[0]?.m ?? 0;
-      const vNo = "GTR-" + String(maxN + 1).padStart(4, "0");
-      const cntAll = await db.select({ c: sql<number>`count(*)` }).from(schema.extGreyTransfer);
-      const nextL = (cntAll[0]?.c ?? 0) + 1;
-
-      let newId = 0;
-      try {
-        const inserted = await db
-          .insert(schema.extGreyTransfer)
-          .values({
-            vNo, lvNo: nextL, vDate, greyType, partyFrom, qualityFrom, than, meters,
-            partyTo, qualityTo, remarks, postedDate: nowIso,
+      if (Number.isFinite(id) && id > 0) {
+        await db
+          .update(schema.extGreyTransfer)
+          .set({
+            vDate, greyType, partyFrom, qualityFrom, than, meters,
+            partyTo, qualityTo, remarks, modifiedDate: nowIso,
           })
-          .returning({ id: schema.extGreyTransfer.id });
-        newId = inserted[0].id;
-      } catch (e: unknown) {
-        const msg = (e as { message?: string })?.message ?? "";
-        if (/UNIQUE|constraint/i.test(msg)) {
+          .where(eq(schema.extGreyTransfer.id, id));
+
+        revalidatePath("/external/grey/transfer");
+        redirect(`/external/grey/transfer?id=${id}`);
+      } else {
+        let newId = 0;
+        let codeExists = false;
+        try {
+          newId = await db.transaction(async (tx) => {
+            const existingRows = await tx
+              .select({
+                m: sql<number>`coalesce(max(CAST(SUBSTR(${schema.extGreyTransfer.vNo}, 5) AS INTEGER)), 0)`,
+              })
+              .from(schema.extGreyTransfer);
+            const maxN = existingRows[0]?.m ?? 0;
+            const vNo = "GTR-" + String(maxN + 1).padStart(4, "0");
+            const lvRow = await tx
+              .select({ m: sql<number>`coalesce(max(${schema.extGreyTransfer.lvNo}), 0)` })
+              .from(schema.extGreyTransfer);
+            const nextL = (lvRow[0]?.m ?? 0) + 1;
+
+            const inserted = await tx
+              .insert(schema.extGreyTransfer)
+              .values({
+                vNo, lvNo: nextL, vDate, greyType, partyFrom, qualityFrom, than, meters,
+                partyTo, qualityTo, remarks, postedDate: nowIso,
+              })
+              .returning({ id: schema.extGreyTransfer.id });
+            return inserted[0].id;
+          });
+        } catch (e: unknown) {
+          const msg = (e as { message?: string })?.message ?? "";
+          if (/UNIQUE|constraint/i.test(msg)) {
+            codeExists = true;
+          } else {
+            throw e;
+          }
+        }
+
+        if (codeExists) {
           redirect(`/external/grey/transfer?error=code_exists`);
         }
-        throw e;
-      }
 
-      revalidatePath("/external/grey/transfer");
-      redirect(`/external/grey/transfer?id=${newId}`);
+        revalidatePath("/external/grey/transfer");
+        redirect(`/external/grey/transfer?id=${newId}`);
+      }
+    } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
+      const msg = (e as { message?: string })?.message ?? "";
+      const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (m) {
+        redirect(`/external/grey/transfer?error=period_locked&thru=${m[1]}`);
+      }
+      throw e;
     }
   }
 
   async function deleteTransfer(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/grey/transfer?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.delete(schema.extGreyTransfer).where(eq(schema.extGreyTransfer.id, id));
@@ -261,6 +288,16 @@ export default async function GreyTransferPage({
             Than and Meters are required.
           </div>
         )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete records.
+          </div>
+        )}
 
         <form id="gt-find-form" method="GET" action="/external/grey/transfer" className="hidden"></form>
 
@@ -287,9 +324,7 @@ export default async function GreyTransferPage({
               {formTransfer && (
                 <form action={deleteTransfer} className="inline">
                   <input type="hidden" name="id" value={formTransfer.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">
-                    Del
-                  </button>
+                  <ConfirmButton>Del</ConfirmButton>
                 </form>
               )}
             </div>
@@ -367,7 +402,10 @@ export default async function GreyTransferPage({
 
                 <div className="col-span-12">
                   <label className="label block mb-1">Quality</label>
-                  <Combobox name="quality_from" options={greyOpts} defaultValue={formTransfer?.qualityFrom ?? ""} placeholder="Select quality" />
+                  <div className="grid grid-cols-[1fr_1fr] gap-2">
+                    <Combobox name="quality_from" options={greyOpts} defaultValue={formTransfer?.qualityFrom ?? ""} placeholder="Select quality" descTargetId="gt-qfrom-desc" />
+                    <input id="gt-qfrom-desc" className={roCls} readOnly tabIndex={-1} defaultValue={formTransfer?.qualityFrom ? greyDescByCode.get(formTransfer.qualityFrom) ?? "" : ""} />
+                  </div>
                 </div>
 
                 <div className="col-span-3">
@@ -414,7 +452,10 @@ export default async function GreyTransferPage({
                 </div>
                 <div className="col-span-6">
                   <label className="label block mb-1">Quality</label>
-                  <Combobox name="quality_to" options={greyOpts} defaultValue={formTransfer?.qualityTo ?? ""} placeholder="Select quality" />
+                  <div className="grid grid-cols-[1fr_1fr] gap-2">
+                    <Combobox name="quality_to" options={greyOpts} defaultValue={formTransfer?.qualityTo ?? ""} placeholder="Select quality" descTargetId="gt-qto-desc" />
+                    <input id="gt-qto-desc" className={roCls} readOnly tabIndex={-1} defaultValue={formTransfer?.qualityTo ? greyDescByCode.get(formTransfer.qualityTo) ?? "" : ""} />
+                  </div>
                 </div>
                 <div className="col-span-8">
                   <label className="label block mb-1">Remarks</label>
@@ -433,13 +474,10 @@ export default async function GreyTransferPage({
               <PrintButton label="Print" />
               <a href="/external/grey/transfer" className="btn btn-outline btn-sm">Exit</a>
               {formTransfer && (
-                <button
-                  type="submit"
-                  formAction={deleteTransfer}
-                  className="btn btn-outline btn-sm"
-                >
-                  Del
-                </button>
+                <form action={deleteTransfer} className="inline">
+                  <input type="hidden" name="id" value={formTransfer.id} />
+                  <ConfirmButton>Del</ConfirmButton>
+                </form>
               )}
             </div>
           </form>

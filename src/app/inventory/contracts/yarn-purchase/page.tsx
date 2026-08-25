@@ -6,6 +6,9 @@ import { AutoAmount } from "@/components/auto-amount";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -28,11 +31,11 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 const ERROR_MESSAGES: Record<string, string> = {
   code_exists: "Contract number already exists. Try again.",
   qty_rate_required: "Qty (Bags) and Rate/Lbs are both required.",
+  period_locked: "Period is locked. Cannot save for this date.",
+  admin_only: "Only ADMIN can delete contracts.",
 };
 
 export default async function IntYarnPurchaseContractPage({
@@ -89,7 +92,6 @@ export default async function IntYarnPurchaseContractPage({
     .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
     .from(schema.intYarnPurchaseContract);
   const maxLContNo = lRow[0]?.maxL ?? 0;
-  const upcomingLContNo = maxLContNo + 1;
 
   const parties = await db
     .select({
@@ -119,12 +121,14 @@ export default async function IntYarnPurchaseContractPage({
 
   async function saveContract(formData: FormData) {
     "use server";
+    try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
     const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
 
     const contDate = txt(formData.get("cont_date")) ?? today();
+    await assertPeriodOpen(contDate, "INVENTORY");
     const expdDate = txt(formData.get("expd_date"));
     const refno = txt(formData.get("refno"));
     const partyCode = txt(formData.get("party_code"));
@@ -268,10 +272,19 @@ export default async function IntYarnPurchaseContractPage({
       revalidatePath("/inventory/contracts/yarn-purchase");
       redirect(`/inventory/contracts/yarn-purchase?id=${newId}`);
     }
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/contracts/yarn-purchase?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteContract(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/contracts/yarn-purchase?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {
@@ -437,7 +450,7 @@ export default async function IntYarnPurchaseContractPage({
                 <label className="label block mb-1">LCont No</label>
                 <input
                   className="input-box mono bg-gray-100 text-center"
-                  defaultValue={formContract?.lContNo ?? upcomingLContNo}
+                  defaultValue={formContract?.lContNo ?? maxLContNo}
                   readOnly
                   tabIndex={-1}
                 />

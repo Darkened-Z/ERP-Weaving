@@ -10,6 +10,9 @@ import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today as pkToday } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +33,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => pkToday();
 
 const TYPE_OPTIONS = ["STOCK", "OTHERS"];
 const STATUS_OPTIONS = ["", "OK", "REJ"];
@@ -43,7 +46,7 @@ const COUNT_ROWS = 4;
 export default async function GodownStockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -135,21 +138,40 @@ export default async function GodownStockPage({
   );
 
   const purContracts = await db
-    .select({ contractNo: schema.extGreyPurContract.contractNo, party: schema.extGreyPurContract.party })
+    .select()
     .from(schema.extGreyPurContract)
     .orderBy(desc(schema.extGreyPurContract.id));
   const purOpts = purContracts.map((c) => ({
     value: c.contractNo,
     label: `${c.contractNo} — ${c.party ?? ""}`,
   }));
+  const purMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    purContracts.map((c) => [
+      c.contractNo,
+      {
+        purchase_party: c.party ?? "",
+        contact_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
+      },
+    ])
+  );
   const salContracts = await db
-    .select({ contractNo: schema.extGreySalContract.contractNo, party: schema.extGreySalContract.party })
+    .select()
     .from(schema.extGreySalContract)
     .orderBy(desc(schema.extGreySalContract.id));
   const salOpts = salContracts.map((c) => ({
     value: c.contractNo,
     label: `${c.contractNo} — ${c.party ?? ""}`,
   }));
+  const salMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    salContracts.map((c) => [
+      c.contractNo,
+      {
+        rate_sal: c.ratePerMtr ?? "",
+        grey_sale_cont: c.contractNo,
+        contact_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
+      },
+    ])
+  );
 
   const warpRows = await db
     .select()
@@ -324,7 +346,26 @@ export default async function GodownStockPage({
 
     const nowIso = new Date().toISOString();
 
+    try {
+      await assertPeriodOpen(vDate, "INVENTORY");
+
     if (Number.isFinite(id) && id > 0) {
+      const existingLines = await db
+        .select()
+        .from(schema.extGodownStockLine)
+        .where(eq(schema.extGodownStockLine.stockId, id))
+        .orderBy(schema.extGodownStockLine.srNo);
+      const existingBySr = new Map(existingLines.map((l) => [l.srNo, l]));
+
+      const consumedRemovedSr: number[] = [];
+      for (const old of existingLines) {
+        const match = validLines.find((v) => v.srNo === old.srNo);
+        if (!match && old.status === "Y") consumedRemovedSr.push(old.srNo ?? 0);
+      }
+      if (consumedRemovedSr.length) {
+        redirect(`/external/grey/godown-stock?id=${id}&error=cant_remove_consumed_line`);
+      }
+
       await db.transaction(async (tx) => {
         await tx
           .update(schema.extGodownStock)
@@ -337,11 +378,29 @@ export default async function GodownStockPage({
           })
           .where(eq(schema.extGodownStock.id, id));
 
-        await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.stockId, id));
         await tx.delete(schema.extGodownStockCount).where(eq(schema.extGodownStockCount.stockId, id));
 
-        if (validLines.length) {
-          await tx.insert(schema.extGodownStockLine).values(validLines.map((l) => ({ ...l, stockId: id })));
+        const seenSr = new Set<number>();
+        for (const line of validLines) {
+          seenSr.add(line.srNo);
+          const prev = existingBySr.get(line.srNo);
+          if (prev) {
+            await tx
+              .update(schema.extGodownStockLine)
+              .set({
+                than: line.than,
+                mtr: line.mtr,
+                status: prev.status ?? line.status,
+              })
+              .where(eq(schema.extGodownStockLine.id, prev.id));
+          } else {
+            await tx.insert(schema.extGodownStockLine).values({ ...line, stockId: id });
+          }
+        }
+        for (const old of existingLines) {
+          if (!seenSr.has(old.srNo ?? -1) && old.status !== "Y") {
+            await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.id, old.id));
+          }
         }
         if (validCounts.length) {
           await tx.insert(schema.extGodownStockCount).values(validCounts.map((c) => ({ ...c, stockId: id })));
@@ -403,12 +462,33 @@ export default async function GodownStockPage({
       revalidatePath("/external/grey/godown-stock");
       redirect(`/external/grey/godown-stock?id=${newId}`);
     }
+    } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
+      const msg = (e as { message?: string })?.message ?? "";
+      const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (m) {
+        redirect(`/external/grey/godown-stock?error=period_locked&thru=${m[1]}`);
+      }
+      throw e;
+    }
   }
 
   async function deleteStock(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/grey/godown-stock?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+
+    const lineRows = await db
+      .select({ status: schema.extGodownStockLine.status })
+      .from(schema.extGodownStockLine)
+      .where(eq(schema.extGodownStockLine.stockId, id));
+    if (lineRows.some((r) => r.status === "Y")) {
+      redirect(`/external/grey/godown-stock?id=${id}&error=in_use`);
+    }
+
     await db.transaction(async (tx) => {
       await tx.delete(schema.extGodownStockCount).where(eq(schema.extGodownStockCount.stockId, id));
       await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.stockId, id));
@@ -508,6 +588,26 @@ export default async function GodownStockPage({
         {params.error === "qty_required" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Than and Meter are required.
+          </div>
+        )}
+        {params.error === "in_use" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Cannot delete: one or more lines are consumed by a Kachi Parchi.
+          </div>
+        )}
+        {params.error === "cant_remove_consumed_line" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Cannot remove a line that is already consumed by a Kachi Parchi.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period locked through {params.thru ?? "?"}. Nothing was saved.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete records.
           </div>
         )}
 
@@ -664,6 +764,12 @@ export default async function GodownStockPage({
                       defaultValue={formStock?.purContNo ?? ""}
                       placeholder="Pur contract #…"
                     />
+                    <AutoFill
+                      watch="pur_cont_no"
+                      map={purMap}
+                      combos={["purchase_party"]}
+                      inputs={["contact_quality"]}
+                    />
                   </div>
 
                   <div className="col-span-12">
@@ -721,6 +827,11 @@ export default async function GodownStockPage({
                       options={salOpts}
                       defaultValue={formStock?.salContNo ?? ""}
                       placeholder="Sal contract #…"
+                    />
+                    <AutoFill
+                      watch="sal_cont_no"
+                      map={salMap}
+                      inputs={["rate_sal", "grey_sale_cont", "contact_quality"]}
                     />
                   </div>
                   <div className="col-span-6">

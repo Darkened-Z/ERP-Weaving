@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { sql, eq } from "drizzle-orm";
+import { today } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function DailyActivityPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const params = await searchParams;
-  const date = params.date || new Date().toISOString().split("T")[0];
+  const date = params.date || today();
 
   const vouchers = await db
     .select({

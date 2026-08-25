@@ -3,6 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
+import { today as todayFn } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function FoldingFabricPage({
   searchParams: Promise<{ from?: string; to?: string; quality?: string }>;
 }) {
   const params = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const to = params.to?.trim() || today;
   const from = params.from?.trim() || daysBackFrom(to, 30);
   const qualityQ = params.quality?.trim() || "";

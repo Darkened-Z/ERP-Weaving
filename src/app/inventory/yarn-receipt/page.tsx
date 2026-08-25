@@ -9,6 +9,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -32,11 +34,6 @@ const round = (v: number, d: number) => {
   const p = 10 ** d;
   return Math.round(v * p) / p;
 };
-const today = () => new Date().toISOString().slice(0, 10);
-const nowHm = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
 
 const ERROR_MESSAGES: Record<string, string> = {
   code_exists: "Voucher number already exists. Try again.",
@@ -44,6 +41,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   purcont_required: "Pur.Cont No is required.",
   lbs_mismatch: "Header Qty Lbs does not match the carton total. Clear it to auto-fill, or fix the cartons.",
   period_locked: "Period is locked. Cannot save for this date.",
+  admin_only: "Only ADMIN can delete vouchers.",
 };
 
 export default async function YarnReceiptPage({
@@ -132,6 +130,9 @@ export default async function YarnReceiptPage({
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}` }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
+  const countBrandMap: Record<string, Record<string, string>> = Object.fromEntries(
+    countList.map((c) => [c.code, { brand: c.description ?? "" }])
+  );
   const purOpts = purContracts.map((c) => ({
     value: c.contNo,
     label: `${c.contNo}${c.partyCode ? ` — ${partyDescByCode[c.partyCode] ?? c.partyCode}` : ""}${c.countCode ? ` [${c.countCode}]` : ""}`,
@@ -191,7 +192,7 @@ export default async function YarnReceiptPage({
     const isUpdate = Number.isFinite(id) && id > 0;
     const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
 
-    const vDate = txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10);
+    const vDate = txt(formData.get("vDate")) ?? today();
     await assertPeriodOpen(vDate, "INVENTORY");
     const purContNo = txt(formData.get("purContNo"));
     if (!purContNo) {
@@ -246,9 +247,8 @@ export default async function YarnReceiptPage({
     }
 
     const ratePerLbs = num(formData.get("ratePerLbs"));
-    const amountRaw = num(formData.get("amount"));
-    const amount =
-      amountRaw != null ? amountRaw : ratePerLbs != null ? round((qtyLbs ?? 0) * ratePerLbs, 2) : null;
+    // Always recompute amount server-side; ignore any client-submitted value.
+    const amount = ratePerLbs != null ? round((qtyLbs ?? 0) * ratePerLbs, 2) : null;
 
     const header = {
       vDate,
@@ -356,6 +356,8 @@ export default async function YarnReceiptPage({
 
   async function deleteAction(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/yarn-receipt?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {
@@ -476,6 +478,7 @@ export default async function YarnReceiptPage({
                 map={convMap}
                 inputs={["yarnPartyTo", "ratePerLbsTo"]}
               />
+              <AutoFill watch="countCode" map={countBrandMap} inputs={["brand"]} />
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
@@ -497,7 +500,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
-                        <input name="time" className="input-box mono" defaultValue={editing?.time ?? nowHm()} />
+                        <input name="time" className="input-box mono" defaultValue={editing?.time ?? nowTime()} />
                       </div>
 
                       <div className="md:col-span-4">
@@ -569,7 +572,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
-                        <input name="timeTo" className="input-box mono" defaultValue={editing?.timeTo ?? nowHm()} />
+                        <input name="timeTo" className="input-box mono" defaultValue={editing?.timeTo ?? nowTime()} />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Rate / Lbs To</label>

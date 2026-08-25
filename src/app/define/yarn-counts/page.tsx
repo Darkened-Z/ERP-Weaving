@@ -1,7 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -81,6 +81,75 @@ export default async function YarnCountsPage({
     "use server";
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
+
+    const [row] = await db
+      .select({ countCode: schema.yarnCounts.countCode, id: schema.yarnCounts.id })
+      .from(schema.yarnCounts)
+      .where(eq(schema.yarnCounts.id, id))
+      .limit(1);
+    if (!row) redirect("/define/yarn-counts");
+    const code = row.countCode;
+    const codeN = parseInt(code, 10);
+
+    const [purCon] = await db
+      .select({ id: schema.extYarnPurContract.id })
+      .from(schema.extYarnPurContract)
+      .where(eq(schema.extYarnPurContract.countCode, code))
+      .limit(1);
+    const [salCon] = await db
+      .select({ id: schema.extYarnSalContract.id })
+      .from(schema.extYarnSalContract)
+      .where(eq(schema.extYarnSalContract.countCode, code))
+      .limit(1);
+    const pcRef = Number.isFinite(codeN)
+      ? (
+          await db
+            .select({ id: schema.partyCounts.id })
+            .from(schema.partyCounts)
+            .where(eq(schema.partyCounts.countCode, codeN))
+            .limit(1)
+        )[0]
+      : null;
+    const [extWarp] = await db
+      .select({ id: schema.extGreyConvWarp.id })
+      .from(schema.extGreyConvWarp)
+      .where(eq(schema.extGreyConvWarp.count, code))
+      .limit(1);
+    const [extWeft] = await db
+      .select({ id: schema.extGreyConvWeft.id })
+      .from(schema.extGreyConvWeft)
+      .where(eq(schema.extGreyConvWeft.count, code))
+      .limit(1);
+    const [intWarp] = await db
+      .select({ id: schema.intGreyConversionWarp.id })
+      .from(schema.intGreyConversionWarp)
+      .where(eq(schema.intGreyConversionWarp.count, code))
+      .limit(1);
+    const [intWeft] = await db
+      .select({ id: schema.intGreyConversionWeft.id })
+      .from(schema.intGreyConversionWeft)
+      .where(eq(schema.intGreyConversionWeft.count, code))
+      .limit(1);
+    const [purVL] = await db
+      .select({ id: schema.extYarnPurVoucherLine.id })
+      .from(schema.extYarnPurVoucherLine)
+      .where(
+        or(
+          eq(schema.extYarnPurVoucherLine.count, code),
+          eq(schema.extYarnPurVoucherLine.partyCount, code),
+        ),
+      )
+      .limit(1);
+    const [salVL] = await db
+      .select({ id: schema.extYarnSalVoucherLine.id })
+      .from(schema.extYarnSalVoucherLine)
+      .where(eq(schema.extYarnSalVoucherLine.count, code))
+      .limit(1);
+
+    if (purCon || salCon || pcRef || extWarp || extWeft || intWarp || intWeft || purVL || salVL) {
+      redirect(`/define/yarn-counts?id=${id}&error=in_use`);
+    }
+
     await db.delete(schema.yarnCounts).where(eq(schema.yarnCounts.id, id));
     revalidatePath("/define/yarn-counts");
     redirect("/define/yarn-counts");
@@ -117,6 +186,11 @@ export default async function YarnCountsPage({
               {params.error === "dup_desc_blend" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   A count with this description and blend already exists.
+                </div>
+              )}
+              {params.error === "in_use" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  This yarn count is referenced by contracts, party counts, or voucher lines and cannot be deleted.
                 </div>
               )}
               <form action={saveCount}>

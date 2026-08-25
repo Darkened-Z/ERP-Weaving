@@ -3,7 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -132,6 +132,60 @@ export default async function GreyConstructionPage({
     "use server";
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+
+    const [row] = await db
+      .select({ code: schema.greyConstruction.code })
+      .from(schema.greyConstruction)
+      .where(eq(schema.greyConstruction.id, id))
+      .limit(1);
+    if (!row) redirect("/define/grey-construction");
+    const code = row.code;
+
+    const [extConvRef] = await db
+      .select({ id: schema.extGreyConvContract.id })
+      .from(schema.extGreyConvContract)
+      .where(
+        or(
+          eq(schema.extGreyConvContract.grayCode, code),
+          eq(schema.extGreyConvContract.grayQltyCode, code),
+        ),
+      )
+      .limit(1);
+    const [intConvRef] = await db
+      .select({ id: schema.intGreyConversionContract.id })
+      .from(schema.intGreyConversionContract)
+      .where(
+        or(
+          eq(schema.intGreyConversionContract.grayCode, code),
+          eq(schema.intGreyConversionContract.grayQltyCode, code),
+        ),
+      )
+      .limit(1);
+    const [dpRef] = await db
+      .select({ id: schema.dailyProduction.id })
+      .from(schema.dailyProduction)
+      .where(eq(schema.dailyProduction.greyCode, code))
+      .limit(1);
+    const [gpRef] = await db
+      .select({ id: schema.greyDespatch.id })
+      .from(schema.greyDespatch)
+      .where(eq(schema.greyDespatch.product, code))
+      .limit(1);
+    const [intGdRef] = await db
+      .select({ id: schema.intGreyDespatch.id })
+      .from(schema.intGreyDespatch)
+      .where(eq(schema.intGreyDespatch.greyCode, code))
+      .limit(1);
+    const [invRef] = await db
+      .select({ id: schema.inventoryOpening.id })
+      .from(schema.inventoryOpening)
+      .where(eq(schema.inventoryOpening.grayConstruction, code))
+      .limit(1);
+
+    if (extConvRef || intConvRef || dpRef || gpRef || intGdRef || invRef) {
+      redirect(`/define/grey-construction?id=${id}&error=in_use`);
+    }
+
     await db.delete(schema.greyConstruction).where(eq(schema.greyConstruction.id, id));
     revalidatePath("/define/grey-construction");
     redirect("/define/grey-construction");
@@ -180,6 +234,11 @@ export default async function GreyConstructionPage({
           {params.error === "code_exists" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               Gray Code already exists. Choose a different code.
+            </div>
+          )}
+          {params.error === "in_use" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              This gray construction is referenced by contracts, production, or despatch records and cannot be deleted.
             </div>
           )}
           <form action={saveConstruction}>

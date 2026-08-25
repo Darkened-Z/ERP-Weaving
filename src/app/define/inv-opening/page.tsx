@@ -1,5 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { ConfirmButton } from "@/components/confirm-button";
+import { getSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -18,7 +20,7 @@ const TAB_MAP: Record<string, string> = { YARN: "yarn", GREY: "grey", BEAM: "bea
 export default async function InventoryOpeningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; id?: string; adding?: string }>;
+  searchParams: Promise<{ tab?: string; id?: string; adding?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const tab = params.tab || "yarn";
@@ -118,11 +120,16 @@ export default async function InventoryOpeningPage({
 
   async function deleteEntry(formData: FormData) {
     "use server";
+    const session = await getSession();
+    const tab = (formData.get("tab") as string) || "yarn";
+    if (session?.roleName !== "ADMIN") {
+      redirect(`/define/inv-opening?tab=${tab}&error=admin_only`);
+    }
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
     await db.delete(schema.inventoryOpening).where(eq(schema.inventoryOpening.id, id));
     revalidatePath("/define/inv-opening");
-    redirect("/define/inv-opening?tab=" + (formData.get("tab") as string || "yarn"));
+    redirect(`/define/inv-opening?tab=${tab}`);
   }
 
   const formatNum = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
@@ -239,11 +246,17 @@ export default async function InventoryOpeningPage({
                 <form action={deleteEntry} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <input type="hidden" name="tab" value={tab} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton message="Delete this opening balance entry? This cannot be undone.">Delete</ConfirmButton>
                 </form>
               )}
             </div>
           </div>
+
+          {params.error === "admin_only" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              Only ADMIN users can delete opening balance entries.
+            </div>
+          )}
 
           <form action={saveEntry}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}

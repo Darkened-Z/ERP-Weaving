@@ -3,6 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { sql, and, gte, lte } from "drizzle-orm";
+import { today as todayFn } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function KoraPendingPage({
   }>;
 }) {
   const params = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const from = (params.from && params.from.trim()) || monthsBackFrom(today, 6);
   const to = (params.to && params.to.trim()) || today;
   const purParty = (params.purParty ?? "").trim();

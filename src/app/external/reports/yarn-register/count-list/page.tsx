@@ -2,6 +2,7 @@ import { db, schema } from "@/db";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
+import { today as todayFn, monthsAgo } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,7 @@ function escLike(s: string): string {
 }
 
 function sixMonthsAgo(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 6);
-  return d.toISOString().slice(0, 10);
+  return monthsAgo(6);
 }
 
 type Row = {
@@ -38,7 +37,7 @@ export default async function CountListPage({
   await requireSession();
 
   const params = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const from = params.from?.trim() || sixMonthsAgo();
   const to = params.to?.trim() || today;
   const code = params.code?.trim() ?? "";

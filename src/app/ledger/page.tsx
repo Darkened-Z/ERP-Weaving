@@ -3,14 +3,11 @@ import { Combobox } from "@/components/combobox";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
+import { today } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
-const today = () => new Date().toISOString().slice(0, 10);
-const yearStart = () => {
-  const y = new Date().getFullYear();
-  return `${y}-01-01`;
-};
+const yearStart = () => `${today().slice(0, 4)}-01-01`;
 
 export default async function LedgerPage({
   searchParams,

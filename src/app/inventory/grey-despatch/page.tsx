@@ -9,6 +9,8 @@ import { DespatchAmountCalc, CountGridFiller } from "@/components/production-cal
 import { db, schema } from "@/db";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -28,14 +30,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
-
-const today = () => new Date().toISOString().slice(0, 10);
-// Local wall-clock HH:MM — the previous toISOString() version reported UTC and
-// silently drifted by the browser's TZ offset (~5 hours in Pakistan).
-const nowTime = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+const round2 = (v: number) => Math.round(v * 100) / 100;
 
 function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
   const nums = rows
@@ -274,14 +269,15 @@ export default async function GreyDespatchPage({
       doParty: txt(formData.get("do_party")),
       thanQty: num(formData.get("than_qty")),
       convRate: num(formData.get("conv_rate")),
-      amnt: num(formData.get("amnt")),
-      gst: num(formData.get("gst")),
-      further: num(formData.get("further")),
+      // amnt / gst / further / amt_tot are always recomputed server-side below.
+      amnt: 0 as number | null,
+      gst: 0 as number | null,
+      further: 0 as number | null,
       gpNo: txt(formData.get("gp_no")),
       gpDate: txt(formData.get("gp_date")),
       dateFrom: txt(formData.get("date_from")),
       dateTo: txt(formData.get("date_to")),
-      amtTot: num(formData.get("amt_tot")),
+      amtTot: 0 as number | null,
       ftWeave: txt(formData.get("ft_weave")),
       designNo: txt(formData.get("design_no")),
       lbMtr: num(formData.get("lb_mtr")),
@@ -337,6 +333,20 @@ export default async function GreyDespatchPage({
       const q = isUpdate ? `?id=${id}&error=mtrs_mismatch` : `?adding=1&error=mtrs_mismatch`;
       redirect("/inventory/grey-despatch" + q);
     }
+
+    // Server-authoritative recompute — ignore any amnt/gst/further/amt_tot the
+    // client submitted. Meters come from summedMtrs (Σ line lengths).
+    const gstRate = num(formData.get("gst_rate")) ?? 0;
+    const ftxRate = num(formData.get("ftx_rate")) ?? 0;
+    const convRateVal = data.convRate ?? 0;
+    const amntVal = round2(summedMtrs * convRateVal);
+    const gstVal = round2((amntVal * gstRate) / 100);
+    const furtherVal = round2((amntVal * ftxRate) / 100);
+    const amtTotVal = round2(amntVal + gstVal + furtherVal);
+    data.amnt = amntVal;
+    data.gst = gstVal;
+    data.further = furtherVal;
+    data.amtTot = amtTotVal;
 
     const inputThanSerials = inLines.map((l) => l.tSrNo).filter((s): s is string => !!s);
     const seenSerials = new Set<string>();
@@ -396,6 +406,10 @@ export default async function GreyDespatchPage({
           await tx.delete(schema.intGreyDespatchUpdateCount).where(eq(schema.intGreyDespatchUpdateCount.despatchId, did));
         } else {
           const existing = await tx.select({ vNo: schema.intGreyDespatch.vNo }).from(schema.intGreyDespatch);
+          const [lRowIn] = await tx
+            .select({ m: sql<number>`COALESCE(MAX(${schema.intGreyDespatch.lNo}),0)` })
+            .from(schema.intGreyDespatch);
+          const nextLNo = Number(lRowIn?.m ?? 0) + 1;
           const providedVNo = txt(formData.get("v_no"));
           const vNo = providedVNo ?? nextVNoFromRows(existing, "IGD");
           const [ins] = await tx
@@ -403,7 +417,7 @@ export default async function GreyDespatchPage({
             .values({
               ...data,
               vNo,
-              lNo: data.lNo ?? existing.length + 1,
+              lNo: data.lNo ?? nextLNo,
               postedDate: new Date().toISOString(),
             })
             .returning({ id: schema.intGreyDespatch.id });
@@ -512,6 +526,8 @@ export default async function GreyDespatchPage({
 
   async function deleteDespatch(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/grey-despatch?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db.transaction(async (tx) => {
@@ -643,6 +659,11 @@ export default async function GreyDespatchPage({
               <> — locked through <span className="mono">{params.thru}</span></>
             )}
             .
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete vouchers.
           </div>
         )}
 
@@ -1149,7 +1170,7 @@ export default async function GreyDespatchPage({
                 {formItem && (
                   <form action={deleteDespatch} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                    <ConfirmButton message={`Delete despatch ${formItem.vNo}? This releases its consumed than serials.`}>Delete</ConfirmButton>
                   </form>
                 )}
               </div>

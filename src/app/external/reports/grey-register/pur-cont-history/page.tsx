@@ -2,12 +2,19 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
+import { today as todayFn, toKarachiDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
 const fmt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
 const fmt2 = (n: number) =>
   new Intl.NumberFormat("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+function fmtKarachi(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : toKarachiDate(d);
+}
 
 export default async function PurContHistoryPage({
   searchParams,
@@ -17,7 +24,7 @@ export default async function PurContHistoryPage({
   await requireSession();
   const params = await searchParams;
   const contNo = params.contNo?.trim() ?? "";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
 
   const companyRows = await db.select().from(schema.companyProfile).limit(1);
   const company = companyRows[0];
@@ -223,11 +230,11 @@ export default async function PurContHistoryPage({
                 </div>
                 <div className="info-row">
                   <span className="info-label">Posted Date</span>
-                  <span className="info-value">{contract.postedDate ?? "-"}</span>
+                  <span className="info-value">{fmtKarachi(contract.postedDate)}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Modified Date</span>
-                  <span className="info-value">{contract.modifiedDate ?? "-"}</span>
+                  <span className="info-value">{fmtKarachi(contract.modifiedDate)}</span>
                 </div>
                 <div className="info-row" style={{ gridColumn: "1 / -1" }}>
                   <span className="info-label">Payment Term</span>

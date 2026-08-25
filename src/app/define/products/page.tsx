@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const products = await db.select().from(schema.products).orderBy(schema.products.description);
@@ -46,6 +47,50 @@ export default async function ProductsPage({
     "use server";
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
+
+    const [prod] = await db
+      .select({ description: schema.products.description, code: schema.products.code })
+      .from(schema.products)
+      .where(eq(schema.products.id, id))
+      .limit(1);
+    if (!prod) redirect("/define/products");
+
+    const [extConvRef] = await db
+      .select({ id: schema.extGreyConvContract.id })
+      .from(schema.extGreyConvContract)
+      .where(eq(schema.extGreyConvContract.productName, prod.description))
+      .limit(1);
+    const [intConvRef] = await db
+      .select({ id: schema.intGreyConversionContract.id })
+      .from(schema.intGreyConversionContract)
+      .where(eq(schema.intGreyConversionContract.productName, prod.description))
+      .limit(1);
+    const [contractRef] = await db
+      .select({ id: schema.contracts.id })
+      .from(schema.contracts)
+      .where(eq(schema.contracts.product, prod.description))
+      .limit(1);
+    // Daily production tables carry prod_code (product master code), not name.
+    const [dpRef] = await db
+      .select({ id: schema.dailyProduction.id })
+      .from(schema.dailyProduction)
+      .where(eq(schema.dailyProduction.prdCode, String(prod.code)))
+      .limit(1);
+    const [intDpRef] = await db
+      .select({ id: schema.intDailyProduction.id })
+      .from(schema.intDailyProduction)
+      .where(
+        or(
+          eq(schema.intDailyProduction.prodCode, String(prod.code)),
+          eq(schema.intDailyProduction.prodCode, prod.description),
+        ),
+      )
+      .limit(1);
+
+    if (extConvRef || intConvRef || contractRef || dpRef || intDpRef) {
+      redirect(`/define/products?id=${id}&error=in_use`);
+    }
+
     await db.delete(schema.products).where(eq(schema.products.id, id));
     revalidatePath("/define/products");
     redirect("/define/products");
@@ -73,12 +118,17 @@ export default async function ProductsPage({
                   {formItem && (
                     <form action={deleteProduct} className="inline">
                       <input type="hidden" name="id" value={formItem.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                      <ConfirmButton>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>
               </div>
 
+              {params.error === "in_use" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  This product is referenced by contracts or daily production and cannot be deleted.
+                </div>
+              )}
               <form action={saveProduct}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
                 <div className="grid grid-cols-1 gap-y-3">

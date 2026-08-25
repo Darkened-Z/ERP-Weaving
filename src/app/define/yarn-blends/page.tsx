@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function YarnBlendsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; find?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const allBlends = await db
@@ -51,9 +52,39 @@ export default async function YarnBlendsPage({
     "use server";
     const id = formData.get("id") as string;
     if (!id) return;
+    const numId = Number(id);
+
+    const [row] = await db
+      .select({ description: schema.yarnBlends.description })
+      .from(schema.yarnBlends)
+      .where(eq(schema.yarnBlends.id, numId))
+      .limit(1);
+    if (!row) redirect("/define/yarn-blends");
+    const blend = row.description;
+
+    const [ycRef] = await db
+      .select({ id: schema.yarnCounts.id })
+      .from(schema.yarnCounts)
+      .where(eq(schema.yarnCounts.type, blend))
+      .limit(1);
+    const [gcRef] = await db
+      .select({ id: schema.greyConstruction.id })
+      .from(schema.greyConstruction)
+      .where(eq(schema.greyConstruction.blend, blend))
+      .limit(1);
+    const [invRef] = await db
+      .select({ id: schema.inventoryOpening.id })
+      .from(schema.inventoryOpening)
+      .where(eq(schema.inventoryOpening.blend, blend))
+      .limit(1);
+
+    if (ycRef || gcRef || invRef) {
+      redirect(`/define/yarn-blends?id=${id}&error=in_use`);
+    }
+
     await db
       .delete(schema.yarnBlends)
-      .where(eq(schema.yarnBlends.id, Number(id)));
+      .where(eq(schema.yarnBlends.id, numId));
     revalidatePath("/define/yarn-blends");
     redirect("/define/yarn-blends");
   }
@@ -73,12 +104,17 @@ export default async function YarnBlendsPage({
               {selected && (
                 <form action={deleteBlend} className="inline">
                   <input type="hidden" name="id" value={selected.id} />
-                  <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                  <ConfirmButton>Delete</ConfirmButton>
                 </form>
               )}
             </div>
           </div>
 
+          {params.error === "in_use" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              This blend is referenced by yarn counts, grey construction, or inventory openings and cannot be deleted.
+            </div>
+          )}
           <form action={saveBlend}>
             {selected && <input type="hidden" name="id" value={selected.id} />}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">

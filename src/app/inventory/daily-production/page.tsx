@@ -8,6 +8,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -26,11 +28,6 @@ const intVal = (v: FormDataEntryValue | null): number | null => {
 const txt = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
-};
-const today = () => new Date().toISOString().slice(0, 10);
-const nowHm = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
 const SET_ROWS = 8;
@@ -213,7 +210,7 @@ export default async function DailyProductionPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
 
     const header = {
-      vDate: txt(formData.get("vDate")) ?? new Date().toISOString().slice(0, 10),
+      vDate: txt(formData.get("vDate")) ?? today(),
       lvNo: intVal(formData.get("lvNo")),
       time: txt(formData.get("time")),
       shedNo: txt(formData.get("shedNo")),
@@ -349,52 +346,23 @@ export default async function DailyProductionPage({
       redirect(`/inventory/daily-production${q}`);
     }
 
-    // ---- auto-generate mm/Than Sr No for blanks (MON-<seq>-YY) ----
-    const vDateStr = header.vDate || new Date().toISOString().slice(0, 10);
+    const vDateStr = header.vDate || today();
     const dParts = vDateStr.split("-");
     const yy = dParts[0] ? dParts[0].slice(-2) : "00";
     const monIdx = dParts[1] ? parseInt(dParts[1], 10) - 1 : 0;
     const monAbbr = MONTH_ABBR[monIdx] ?? "JAN";
     const monthPrefix = `${monAbbr}-`;
     const monthSuffix = `-${yy}`;
-    const monthMaxRow = await db
-      .select({
-        m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
-      })
-      .from(schema.intDailyProductionSet)
-      .where(
-        sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
-      );
-    let seq = Number(monthMaxRow[0]?.m ?? 0);
-    for (const s of validSets) {
-      if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-        seq += 1;
-        s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(4, "0")}-${yy}`;
-      }
-    }
 
-    // ---- duplicate mm/Than Sr No check ----
-    // Reject collisions against ANY previously saved row not in the current voucher.
-    const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
-    const seen = new Set<string>();
-    for (const s of inputSerials) {
-      if (seen.has(s)) {
+    // Cheap up-front duplicate check within the submitted grid (per row).
+    const submittedSeen = new Set<string>();
+    for (const s of validSets) {
+      if (!s.mmThanSrNo) continue;
+      if (submittedSeen.has(s.mmThanSrNo)) {
         const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
         redirect(`/inventory/daily-production${q}`);
       }
-      seen.add(s);
-    }
-    if (inputSerials.length) {
-      const dupRows = await db
-        .select({ mm: schema.intDailyProductionSet.mmThanSrNo, pid: schema.intDailyProductionSet.productionId })
-        .from(schema.intDailyProductionSet)
-        .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputSerials));
-      for (const d of dupRows) {
-        if (!d.mm) continue;
-        if (Number.isFinite(id) && id > 0 && d.pid === id) continue;
-        const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
-        redirect(`/inventory/daily-production${q}`);
-      }
+      submittedSeen.add(s.mmThanSrNo);
     }
 
     const detailDateArr = formData.getAll("detailDate") as string[];
@@ -445,6 +413,26 @@ export default async function DailyProductionPage({
     try {
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
+          // Snapshot old sets so we can (a) revert beam.statusWrk for beams the
+          // new grid drops, (b) re-apply dlv_status='Y' for than serials this
+          // voucher previously delivered, (c) collide-check mmThanSrNo against
+          // ANY row not in this voucher.
+          const oldSets = await tx
+            .select({
+              beamNo: schema.intDailyProductionSet.beamNo,
+              beamStatus: schema.intDailyProductionSet.beamStatus,
+              mmThanSrNo: schema.intDailyProductionSet.mmThanSrNo,
+              dlvStatus: schema.intDailyProductionSet.dlvStatus,
+            })
+            .from(schema.intDailyProductionSet)
+            .where(eq(schema.intDailyProductionSet.productionId, id));
+          const oldBeamStatus = new Map<string, string | null>();
+          const oldDelivered = new Map<string, string | null>();
+          for (const os of oldSets) {
+            if (os.beamNo) oldBeamStatus.set(os.beamNo, os.beamStatus ?? null);
+            if (os.mmThanSrNo) oldDelivered.set(os.mmThanSrNo, os.dlvStatus ?? null);
+          }
+
           await tx
             .update(schema.intDailyProduction)
             .set({ ...header, modifiedDate: nowIso })
@@ -455,6 +443,38 @@ export default async function DailyProductionPage({
           await tx
             .delete(schema.intDailyProductionDetail)
             .where(eq(schema.intDailyProductionDetail.productionId, id));
+
+          // Generate mmThanSrNo inside the tx so the seq lookup and the insert
+          // are atomic; unique collisions bubble out as UNIQUE errors.
+          const monthMaxRow = await tx
+            .select({
+              m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
+            })
+            .from(schema.intDailyProductionSet)
+            .where(
+              sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
+            );
+          let seq = Number(monthMaxRow[0]?.m ?? 0);
+          for (const s of validSets) {
+            if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
+              seq += 1;
+              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(4, "0")}-${yy}`;
+            }
+          }
+
+          const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
+          if (inputSerials.length) {
+            const dupRows = await tx
+              .select({ mm: schema.intDailyProductionSet.mmThanSrNo, pid: schema.intDailyProductionSet.productionId })
+              .from(schema.intDailyProductionSet)
+              .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputSerials));
+            for (const d of dupRows) {
+              if (!d.mm) continue;
+              if (d.pid === id) continue;
+              throw new Error("DUP_THAN");
+            }
+          }
+
           if (validSets.length) {
             await tx
               .insert(schema.intDailyProductionSet)
@@ -465,12 +485,38 @@ export default async function DailyProductionPage({
               .insert(schema.intDailyProductionDetail)
               .values(validDetails.map((d) => ({ ...d, productionId: id })));
           }
-          // Beam lifecycle writes: set beams.statusWrk from each set row's beam status.
+
+          // Re-stamp dlvStatus='Y' where the old voucher already delivered.
+          const reDeliver = validSets
+            .map((s) => s.mmThanSrNo)
+            .filter((m): m is string => !!m && oldDelivered.get(m) === "Y");
+          if (reDeliver.length) {
+            await tx
+              .update(schema.intDailyProductionSet)
+              .set({ dlvStatus: "Y" })
+              .where(
+                and(
+                  eq(schema.intDailyProductionSet.productionId, id),
+                  inArray(schema.intDailyProductionSet.mmThanSrNo, reDeliver)
+                )
+              );
+          }
+
+          // Beam lifecycle: apply this voucher's beam statuses, then revert
+          // beams the new grid dropped back to EMPTY (no history to restore to).
           for (const s of validSets) {
             if (!s.beamNo || !s.beamStatus) continue;
             const patch: { statusWrk: string; loomNo?: number | null } = { statusWrk: s.beamStatus };
             if (s.beamStatus.toUpperCase() === "EMPTY") patch.loomNo = null;
             await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
+          }
+          const newBeams = new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b));
+          for (const [oldBeam] of oldBeamStatus) {
+            if (newBeams.has(oldBeam)) continue;
+            await tx
+              .update(schema.beams)
+              .set({ statusWrk: "EMPTY", loomNo: null })
+              .where(eq(schema.beams.beamNo, oldBeam));
           }
         });
         revalidatePath("/inventory/daily-production");
@@ -489,6 +535,32 @@ export default async function DailyProductionPage({
             const n = (maxRes[0]?.maxNum ?? 0) + 1;
             vNo = `IDP-${String(n).padStart(4, "0")}`;
           }
+
+          const monthMaxRow = await tx
+            .select({
+              m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
+            })
+            .from(schema.intDailyProductionSet)
+            .where(
+              sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
+            );
+          let seq = Number(monthMaxRow[0]?.m ?? 0);
+          for (const s of validSets) {
+            if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
+              seq += 1;
+              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(4, "0")}-${yy}`;
+            }
+          }
+
+          const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
+          if (inputSerials.length) {
+            const dupRows = await tx
+              .select({ mm: schema.intDailyProductionSet.mmThanSrNo })
+              .from(schema.intDailyProductionSet)
+              .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputSerials));
+            if (dupRows.some((r) => !!r.mm)) throw new Error("DUP_THAN");
+          }
+
           const inserted = await tx
             .insert(schema.intDailyProduction)
             .values({ ...header, vNo, postedDate: nowIso })
@@ -517,7 +589,15 @@ export default async function DailyProductionPage({
       }
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message ?? "unknown";
+      if (msg === "DUP_THAN") {
+        const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
+        redirect(`/inventory/daily-production${q}`);
+      }
       if (/UNIQUE|constraint/i.test(msg)) {
+        if (/mm_than_sr_no|mmThanSrNo/i.test(msg)) {
+          const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
+          redirect(`/inventory/daily-production${q}`);
+        }
         redirect(`/inventory/daily-production?error=code_exists`);
       }
       throw e;
@@ -533,9 +613,22 @@ export default async function DailyProductionPage({
 
   async function deleteAction(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/daily-production?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {
+      const oldSets = await tx
+        .select({ beamNo: schema.intDailyProductionSet.beamNo })
+        .from(schema.intDailyProductionSet)
+        .where(eq(schema.intDailyProductionSet.productionId, id));
+      for (const os of oldSets) {
+        if (!os.beamNo) continue;
+        await tx
+          .update(schema.beams)
+          .set({ statusWrk: "EMPTY", loomNo: null })
+          .where(eq(schema.beams.beamNo, os.beamNo));
+      }
       await tx.delete(schema.intDailyProductionSet).where(eq(schema.intDailyProductionSet.productionId, id));
       await tx.delete(schema.intDailyProductionDetail).where(eq(schema.intDailyProductionDetail.productionId, id));
       await tx.delete(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));
@@ -626,6 +719,11 @@ export default async function DailyProductionPage({
             Total grade production must be greater than 0.
           </div>
         )}
+        {params.error === "admin_only" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Only ADMIN can delete vouchers.
+          </div>
+        )}
 
         <form id="idp-find-form" method="GET" action="/inventory/daily-production" className="hidden" />
 
@@ -678,7 +776,7 @@ export default async function DailyProductionPage({
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Time</label>
-                    <input name="time" className="input-box mono bg-gray-100" defaultValue={editing?.time ?? nowHm()} readOnly />
+                    <input name="time" className="input-box mono bg-gray-100" defaultValue={editing?.time ?? nowTime()} readOnly />
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Posted</label>

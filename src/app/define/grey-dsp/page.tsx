@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function GreyDspPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const parties = await db
@@ -52,9 +53,44 @@ export default async function GreyDspPage({
     "use server";
     const id = formData.get("id") as string;
     if (!id) return;
+    const numId = parseInt(id);
+
+    const [row] = await db
+      .select({ name: schema.greyDspChart.name })
+      .from(schema.greyDspChart)
+      .where(eq(schema.greyDspChart.id, numId))
+      .limit(1);
+    if (!row) redirect("/define/grey-dsp");
+    const name = row.name;
+
+    const [gdRef] = await db
+      .select({ id: schema.greyDespatch.id })
+      .from(schema.greyDespatch)
+      .where(eq(schema.greyDespatch.party, name))
+      .limit(1);
+    const [intGdRef] = await db
+      .select({ id: schema.intGreyDespatch.id })
+      .from(schema.intGreyDespatch)
+      .where(eq(schema.intGreyDespatch.party, name))
+      .limit(1);
+    const [kpRef] = await db
+      .select({ id: schema.extKachiParchi.id })
+      .from(schema.extKachiParchi)
+      .where(eq(schema.extKachiParchi.purchaseParty, name))
+      .limit(1);
+    const [ppRef] = await db
+      .select({ id: schema.extPackiParchi.id })
+      .from(schema.extPackiParchi)
+      .where(eq(schema.extPackiParchi.purchaseParty, name))
+      .limit(1);
+
+    if (gdRef || intGdRef || kpRef || ppRef) {
+      redirect(`/define/grey-dsp?id=${id}&error=in_use`);
+    }
+
     await db
       .delete(schema.greyDspChart)
-      .where(eq(schema.greyDspChart.id, parseInt(id)));
+      .where(eq(schema.greyDspChart.id, numId));
     revalidatePath("/define/grey-dsp");
     redirect("/define/grey-dsp");
   }
@@ -83,12 +119,17 @@ export default async function GreyDspPage({
                   {selected && (
                     <form action={remove} className="inline">
                       <input type="hidden" name="id" value={selected.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                      <ConfirmButton>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>
               </div>
 
+              {params.error === "in_use" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  This party is referenced by grey despatch, kachi parchi, or packi parchi records and cannot be deleted.
+                </div>
+              )}
               <form action={save}>
                 {selected && <input type="hidden" name="id" value={selected.id} />}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">

@@ -2,10 +2,14 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { BeamWtCalc } from "@/components/int-conv-calc";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
+import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -35,11 +39,11 @@ const round = (v: number, d: number) => {
   return Math.round(v * p) / p;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 const ERROR_MESSAGES: Record<string, string> = {
   code_exists: "Contract number already exists. Try again.",
   wt_zero: "Detail rows present but computed WT is zero. Fix Cal Count / Ends / No. of Width.",
+  period_locked: "Period is locked. Cannot save for this date.",
+  admin_only: "Only ADMIN can delete contracts.",
 };
 
 export default async function BeamContractExtWsPage({
@@ -104,12 +108,22 @@ export default async function BeamContractExtWsPage({
     .orderBy(schema.chartOfAccounts.description);
 
   const countList = await db
-    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .select({
+      code: schema.yarnCounts.countCode,
+      description: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
 
   const greyList = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      width: schema.greyConstruction.width,
+    })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
 
@@ -123,14 +137,38 @@ export default async function BeamContractExtWsPage({
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
+  const greyFillMap: Record<string, Record<string, string | number>> = Object.fromEntries(
+    greyList.map((g) => [
+      g.code,
+      { read: g.reed ?? "", pick: g.pick ?? "", width: g.width ?? "" },
+    ])
+  );
+  const productFillMap: Record<string, Record<string, string>> = Object.fromEntries(
+    productList.map((p) => [
+      p.description,
+      { product_quality: p.description ?? "", slv_name: p.description ?? "" },
+    ])
+  );
+  const rowCountFillMap: Record<string, Record<string, string>> = {};
+  for (const c of countList) {
+    const row: Record<string, string> = {};
+    for (let i = 1; i <= DETAIL_ROWS; i++) {
+      row[`d_brand_${i}`] = c.type ?? "";
+      row[`d_desc_${i}`] = c.description ?? "";
+    }
+    rowCountFillMap[c.code] = row;
+  }
+
   async function saveContract(formData: FormData) {
     "use server";
+    try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
     const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
 
     const contDate = txt(formData.get("cont_date")) ?? today();
+    await assertPeriodOpen(contDate, "INVENTORY");
     const expDate = txt(formData.get("exp_date"));
     const sizingParty = txt(formData.get("sizing_party"));
     const warpingParty = txt(formData.get("warping_party"));
@@ -267,10 +305,19 @@ export default async function BeamContractExtWsPage({
       revalidatePath("/inventory/contracts/beam-ext-ws");
       redirect(`/inventory/contracts/beam-ext-ws?id=${newId}`);
     }
+    } catch (e) {
+      const err = e as { message?: string; digest?: string };
+      if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
+      const thru = parseLockedThroughFromError(err.message ?? "");
+      if (thru) redirect(`/inventory/contracts/beam-ext-ws?error=period_locked&thru=${thru}`);
+      throw e;
+    }
   }
 
   async function deleteContract(formData: FormData) {
     "use server";
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect("/inventory/contracts/beam-ext-ws?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {
@@ -401,6 +448,11 @@ export default async function BeamContractExtWsPage({
             <form id="ibws-save-form" action={saveContract}>
               {formContract && <input type="hidden" name="id" value={formContract.id} />}
               <BeamWtCalc />
+              <AutoFill watch="wrp_code" map={greyFillMap} inputs={["read", "pick", "width"]} />
+              <AutoFill watch="prd_code" map={productFillMap} inputs={["product_quality", "slv_name"]} />
+              {Array.from({ length: DETAIL_ROWS }, (_, i) => i + 1).map((i) => (
+                <RowAutoFill key={`ibws-cf-${i}`} watch={`d_count_code_${i}`} map={rowCountFillMap} />
+              ))}
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3">
                 <div className="lg:col-span-3">

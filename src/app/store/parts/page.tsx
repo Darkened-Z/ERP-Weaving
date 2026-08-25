@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
+import { getSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -90,6 +91,8 @@ async function savePart(formData: FormData) {
 
 async function deletePart(formData: FormData) {
   "use server";
+  const s = await getSession();
+  if (s?.roleName !== "ADMIN") redirect("/store/parts?error=admin_only");
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
 
@@ -191,6 +194,11 @@ export default async function PartsPage({
         {params.error === "in_use" && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             This part is referenced by GRN, demand or return vouchers and cannot be deleted.
+          </div>
+        )}
+        {params.error === "admin_only" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Only ADMIN users can delete parts.
           </div>
         )}
 

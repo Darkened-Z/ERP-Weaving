@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { and, eq, sql } from "drizzle-orm";
+import { today as todayFn } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function GreyAgingPage() {
     .from(schema.inventoryOpening)
     .where(and(eq(schema.inventoryOpening.itemType, "GREY"), eq(schema.inventoryOpening.status, "A")));
 
-  const today = maxRow?.maxDate ? addDays(maxRow.maxDate, 1) : new Date().toISOString().slice(0, 10);
+  const today = maxRow?.maxDate ? addDays(maxRow.maxDate, 1) : todayFn();
 
   const enriched = rows.map((r) => {
     const days = r.entryDate ? daysBetween(r.entryDate, today) : 0;

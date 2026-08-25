@@ -114,26 +114,41 @@ export default async function ChartOfAccountPage({
       redirect(`/accounts?code=${submittedCode}`);
     }
 
-    // New account — auto-generate the code under the selected Acc. Head (parent).
     if (!accHead) return;
     const parentRows = await db.select().from(schema.chartOfAccounts).where(eq(schema.chartOfAccounts.code, accHead)).limit(1);
     if (!parentRows.length) return;
     const parentCode = parentRows[0].code;
-    const all = await db.select({ code: schema.chartOfAccounts.code }).from(schema.chartOfAccounts);
-    const depth = parentCode.split(".").length;
-    const children = all.filter((a) => a.code.startsWith(parentCode + ".") && a.code.split(".").length === depth + 1);
-    const maxN = children.reduce((m, c) => { const n = parseInt(c.code.split(".").pop() || "0", 10); return Number.isFinite(n) && n > m ? n : m; }, 0);
-    const width = children.length ? Math.max(...children.map((c) => (c.code.split(".").pop() || "").length)) : 4;
-    const newCode = `${parentCode}.${String(maxN + 1).padStart(width, "0")}`;
-    const level = newCode.split(".").length;
-    await db.insert(schema.chartOfAccounts).values({
-      code: newCode, codeHead: parentCode, level, description, descShort, address, city,
-      phone, mobile, fax, email, gstNo, ntn, nic, creditLimit, remarks,
-      contactPerson1, contactDesig1, contactNo1,
-      contactPerson2, contactDesig2, contactNo2,
-      contactPerson3, contactDesig3, contactNo3,
-      status,
-    });
+
+    let newCode = "";
+    let codeExists = false;
+    try {
+      newCode = await db.transaction(async (tx) => {
+        const depth = parentCode.split(".").length;
+        const siblings = await tx
+          .select({ code: schema.chartOfAccounts.code })
+          .from(schema.chartOfAccounts)
+          .where(sql`${schema.chartOfAccounts.code} LIKE ${parentCode + ".%"} ESCAPE '\\'`);
+        const children = siblings.filter((a) => a.code.split(".").length === depth + 1);
+        const maxN = children.reduce((m, c) => { const n = parseInt(c.code.split(".").pop() || "0", 10); return Number.isFinite(n) && n > m ? n : m; }, 0);
+        const width = children.length ? Math.max(...children.map((c) => (c.code.split(".").pop() || "").length)) : 4;
+        const code = `${parentCode}.${String(maxN + 1).padStart(width, "0")}`;
+        const level = code.split(".").length;
+        await tx.insert(schema.chartOfAccounts).values({
+          code, codeHead: parentCode, level, description, descShort, address, city,
+          phone, mobile, fax, email, gstNo, ntn, nic, creditLimit, remarks,
+          contactPerson1, contactDesig1, contactNo1,
+          contactPerson2, contactDesig2, contactNo2,
+          contactPerson3, contactDesig3, contactNo3,
+          status,
+        });
+        return code;
+      });
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message ?? "";
+      if (/UNIQUE|constraint/i.test(msg)) codeExists = true;
+      else throw e;
+    }
+    if (codeExists) redirect(`/accounts?error=code_exists&adding=1`);
     revalidatePath("/accounts");
     redirect(`/accounts?code=${newCode}`);
   }
@@ -188,6 +203,11 @@ export default async function ChartOfAccountPage({
         {params.error === "in_use" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Account cannot be deleted: it has child accounts or is used in transactions.
+          </div>
+        )}
+        {params.error === "code_exists" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Account code was just taken by another save. Try again.
           </div>
         )}
         <div className="hidden">
@@ -448,10 +468,6 @@ export default async function ChartOfAccountPage({
                 </div>
 
                 <div className="flex gap-2 mt-6">
-                  <div className="flex items-center gap-1 mr-2">
-                    <label className="label">Password</label>
-                    <input type="password" name="pswd" className="input-box mono w-28" tabIndex={-1} />
-                  </div>
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href="/accounts" className="btn btn-outline btn-sm">Cancel</a>
                 </div>

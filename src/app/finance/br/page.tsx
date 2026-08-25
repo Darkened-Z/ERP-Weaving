@@ -10,6 +10,7 @@ import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -49,8 +50,6 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 5);
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 const formatNum = (n?: number | null) =>
   n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
@@ -805,7 +804,6 @@ export default async function BankReceiptPage({
                             </td>
                             <td>
                               <input
-                                name="line_title"
                                 className="input-box mono text-[12px] bg-gray-50"
                                 defaultValue={title}
                                 readOnly
@@ -886,10 +884,6 @@ export default async function BankReceiptPage({
                   Exit
                 </a>
                 <div className="ml-auto flex items-end gap-4">
-                  <div>
-                    <label className="label block mb-1">Password</label>
-                    <input type="password" name="pswd" className="input-box mono w-40" />
-                  </div>
                   <div>
                     <label className="label block mb-1">Balance Amount</label>
                     <VoucherBalance initial={headVoucher?.balanceAmount ?? 0} />

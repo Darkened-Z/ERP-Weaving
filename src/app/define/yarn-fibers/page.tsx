@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function YarnFibersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const fibers = await db
@@ -54,6 +55,35 @@ export default async function YarnFibersPage({
     "use server";
     const id = parseInt(formData.get("id") as string, 10);
     if (!id || Number.isNaN(id)) return;
+
+    const [row] = await db
+      .select({ description: schema.yarnFibers.description, type: schema.yarnFibers.type })
+      .from(schema.yarnFibers)
+      .where(eq(schema.yarnFibers.id, id))
+      .limit(1);
+    if (!row) redirect("/define/yarn-fibers");
+
+    // yarnCounts.type holds the fibre/blend name (COTTON, POLYESTER, etc.).
+    // Guard against either the fibre's `type` or `description` being referenced.
+    const [ycByDesc] = await db
+      .select({ id: schema.yarnCounts.id })
+      .from(schema.yarnCounts)
+      .where(eq(schema.yarnCounts.type, row.description))
+      .limit(1);
+    const ycByType = row.type
+      ? (
+          await db
+            .select({ id: schema.yarnCounts.id })
+            .from(schema.yarnCounts)
+            .where(eq(schema.yarnCounts.type, row.type))
+            .limit(1)
+        )[0]
+      : null;
+
+    if (ycByDesc || ycByType) {
+      redirect(`/define/yarn-fibers?id=${id}&error=in_use`);
+    }
+
     await db
       .delete(schema.yarnFibers)
       .where(eq(schema.yarnFibers.id, id));
@@ -85,12 +115,17 @@ export default async function YarnFibersPage({
                   {selected && (
                     <form action={remove} className="inline">
                       <input type="hidden" name="id" value={selected.id} />
-                      <button type="submit" className="btn btn-outline btn-sm">Delete</button>
+                      <ConfirmButton>Delete</ConfirmButton>
                     </form>
                   )}
                 </div>
               </div>
 
+              {params.error === "in_use" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  This fiber is referenced by yarn counts and cannot be deleted.
+                </div>
+              )}
               <form action={save}>
                 {selected && <input type="hidden" name="id" value={selected.id} />}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">

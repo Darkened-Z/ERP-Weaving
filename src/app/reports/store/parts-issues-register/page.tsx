@@ -4,6 +4,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { and, gte, lte, eq } from "drizzle-orm";
+import { today as todayFn } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function PartsIssuesRegisterPage({
   searchParams: Promise<{ from?: string; to?: string; department?: string; part?: string }>;
 }) {
   const params = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayFn();
   const from = params.from?.trim() || monthsBackFrom(today, 1);
   const to = params.to?.trim() || today;
   const departmentQ = params.department?.trim() || "";

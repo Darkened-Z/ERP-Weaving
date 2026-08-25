@@ -9,6 +9,9 @@ import { db, schema } from "@/db";
 import { and, eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { today as pkToday } from "@/lib/time";
+import { assertPeriodOpen } from "@/lib/period-lock";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +44,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   read_required: "Read must be greater than 0.",
   pick_required: "Pick must be greater than 0.",
   width_required: "Width must be greater than 0.",
+  period_locked: "Period locked. Nothing was saved.",
+  admin_only: "Only ADMIN can delete contracts.",
 };
 
 const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
@@ -166,7 +171,7 @@ export default async function GreyConvContractPage({
   const warpGrid = Array.from({ length: 4 }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
   const weftGrid = Array.from({ length: 4 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = pkToday();
   const [lRow] = await db
     .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
     .from(schema.extGreyConvContract);
@@ -291,18 +296,11 @@ export default async function GreyConvContractPage({
         : round((rateMtr ?? 0) + clb, 4);
     const grayRatePerMtr = round(costPerMtr + convRatePerMtr, 2);
 
-    let contNo = (formData.get("cont_no") as string)?.trim() || "";
-    if (!isUpdate) {
-      const rows = await db
-        .select({ maxNum: sql<number>`coalesce(max(CAST(SUBSTR(cont_no, 5) AS INTEGER)), 0)` })
-        .from(schema.extGreyConvContract);
-      const maxNum = rows[0]?.maxNum ?? 0;
-      contNo = `GCC-${String(maxNum + 1).padStart(4, "0")}`;
-    }
+    const providedContNo = (formData.get("cont_no") as string)?.trim() || "";
 
-    const data = {
-      contNo,
-      contDate: txt(formData.get("cont_date")) ?? new Date().toISOString().slice(0, 10),
+    const contDate = txt(formData.get("cont_date")) ?? pkToday();
+    const dataBase = {
+      contDate,
       expDate: txt(formData.get("exp_date")),
       status: txt(formData.get("status")) ?? "R",
       type: "CONV",
@@ -350,23 +348,32 @@ export default async function GreyConvContractPage({
     let uniqueError = false;
 
     try {
+      await assertPeriodOpen(contDate, "INVENTORY");
       contractId = await db.transaction(async (tx) => {
         let cid: number;
         if (isUpdate) {
           await tx
             .update(schema.extGreyConvContract)
-            .set(data)
+            .set(dataBase)
             .where(eq(schema.extGreyConvContract.id, idParsed));
           cid = idParsed;
           await tx.delete(schema.extGreyConvWarp).where(eq(schema.extGreyConvWarp.contractId, cid));
           await tx.delete(schema.extGreyConvWeft).where(eq(schema.extGreyConvWeft.contractId, cid));
         } else {
+          let contNo = providedContNo;
+          if (!contNo) {
+            const rows = await tx
+              .select({ maxNum: sql<number>`coalesce(max(CAST(SUBSTR(cont_no, 5) AS INTEGER)), 0)` })
+              .from(schema.extGreyConvContract);
+            const maxNum = rows[0]?.maxNum ?? 0;
+            contNo = `GCC-${String(maxNum + 1).padStart(4, "0")}`;
+          }
           const [lr] = await tx
             .select({ maxL: sql<number>`coalesce(max(l_cont_no), 0)` })
             .from(schema.extGreyConvContract);
           const [inserted] = await tx
             .insert(schema.extGreyConvContract)
-            .values({ ...data, lContNo: (lr?.maxL ?? 0) + 1 })
+            .values({ ...dataBase, contNo, lContNo: (lr?.maxL ?? 0) + 1 })
             .returning({ id: schema.extGreyConvContract.id });
           cid = inserted.id;
         }
@@ -379,8 +386,14 @@ export default async function GreyConvContractPage({
         return cid;
       });
     } catch (e: unknown) {
+      const digest = (e as { digest?: string })?.digest ?? "";
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
       const msg = String((e as { message?: string })?.message ?? "");
       const errCode = String((e as { code?: string })?.code ?? "");
+      const lockMatch = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
+      if (lockMatch) {
+        redirect(`/external/contracts/grey-conversion?error=period_locked&thru=${lockMatch[1]}`);
+      }
       if (msg.includes("UNIQUE") || errCode === "SQLITE_CONSTRAINT_UNIQUE") {
         uniqueError = true;
       } else {
@@ -400,6 +413,8 @@ export default async function GreyConvContractPage({
 
   async function deleteContract(formData: FormData) {
     "use server";
+    const s = await getSession();
+    if (s?.roleName !== "ADMIN") redirect("/external/contracts/grey-conversion?error=admin_only");
     const idParsed = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(idParsed)) return;
     await db.transaction(async (tx) => {
