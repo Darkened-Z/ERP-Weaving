@@ -33,7 +33,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const LOOM_TYPES = ["SULZER", "RAPIER", "AIRJET", "PROJECTILE"];
 const POSTING_OPTIONS = ["Y", "N"];
 
-const LINE_ROWS = 6;
+const LINE_ROWS = 4;
 
 function nextVNo(rows: { vNo: string }[], prefix: string): string {
   const nums = rows
@@ -460,7 +460,7 @@ export default async function YarnPurchaseVoucherPage({
   return (
     <Shell active="ext-yp-vch">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">YARN PURCHASE</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -496,7 +496,7 @@ export default async function YarnPurchaseVoucherPage({
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-3">
           <div className="bg-white p-4">
             <div className="mono text-xl font-bold">{vouchers.length}</div>
             <div className="stat-label">Total Vouchers</div>
@@ -561,9 +561,9 @@ export default async function YarnPurchaseVoucherPage({
           className="hidden"
         ></form>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-3">
           <div className="lg:col-span-3">
-            <div className="border border-black p-6">
+            <div className="border border-black p-4">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                   {isAdding

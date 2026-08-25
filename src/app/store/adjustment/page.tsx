@@ -27,7 +27,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
-const LINE_ROWS = 8;
+const LINE_ROWS = 4;
 const TYPES = new Set(["ADJ", "DAMAGE"]);
 const REASONS = new Set(["FOUND", "DAMAGED", "LOST", "RECOUNT"]);
 
@@ -337,7 +337,7 @@ export default async function AdjustmentPage({
   return (
     <Shell active="adjustment">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <h1 className="page-title">
             Parts Adjustment{" "}
             <span className="text-[var(--muted)] text-lg font-normal">
@@ -399,7 +399,7 @@ export default async function AdjustmentPage({
         )}
 
         {showForm && (
-          <div className="border border-black p-4 mb-8">
+          <div className="border border-black p-4 mb-3">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-black">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                 {formItem
@@ -608,7 +608,7 @@ export default async function AdjustmentPage({
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-3">
           <div className="bg-white p-4">
             <div className="stat-value">{total}</div>
             <div className="stat-label">Adjustments</div>

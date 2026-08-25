@@ -27,7 +27,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-const LINE_ROWS = 8;
+const LINE_ROWS = 4;
 
 async function saveReturn(formData: FormData) {
   "use server";
@@ -278,7 +278,7 @@ export default async function GatepassPage({
   return (
     <Shell active="gatepass">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <h1 className="page-title">
             Gate Pass{" "}
             <span className="text-[var(--muted)] text-lg font-normal">
@@ -287,7 +287,7 @@ export default async function GatepassPage({
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-3">
           <div className="bg-white p-4">
             <div className="stat-value">{total}</div>
             <div className="stat-label">Total Gate Passes</div>
@@ -353,7 +353,7 @@ export default async function GatepassPage({
         </table>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <h2 className="page-title">
             Store Returns (SR){" "}
             <span className="text-[var(--muted)] text-lg font-normal">
@@ -396,7 +396,7 @@ export default async function GatepassPage({
         )}
 
         {showForm && (
-          <div className="border border-black p-4 mb-8">
+          <div className="border border-black p-4 mb-3">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-black">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                 {formItem

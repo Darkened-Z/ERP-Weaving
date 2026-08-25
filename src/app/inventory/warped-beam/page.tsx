@@ -405,7 +405,7 @@ export default async function WarpedBeamReceivingPage({
     redirect(`/inventory/warped-beam?id=${id}`);
   }
 
-  const ROWS = Math.max(12, lines.length + 2);
+  const ROWS = Math.max(3, lines.length + 2);
   const gridCellCls = "input-box mono text-[11px]";
   const gridCellNumCls = "input-box mono text-[11px] text-right";
   const roCls = "input-box mono text-[13px] bg-gray-100";
@@ -413,7 +413,7 @@ export default async function WarpedBeamReceivingPage({
   return (
     <Shell active="warped-beam">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">WARPED BEAM RECEIVING FROM EXTERNAL PARTIES (WVG)</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -475,7 +475,7 @@ export default async function WarpedBeamReceivingPage({
           </div>
         )}
 
-        <div className="border border-black p-6 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding ? "New — WARPED BEAM RECEIVING" : editing ? `Edit — ${editing.vNo}` : "WARPED BEAM RECEIVING"}

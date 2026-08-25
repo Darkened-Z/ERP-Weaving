@@ -44,7 +44,7 @@ function nextVNoFromRows(rows: { vNo: string }[]): string {
   return "IKS-" + String(next).padStart(4, "0");
 }
 
-const LINE_ROWS = 15;
+const LINE_ROWS = 4;
 
 async function saveKnotting(formData: FormData) {
   "use server";
@@ -539,7 +539,7 @@ export default async function KnottingPage({
   return (
     <Shell active="knotting">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">KNOTTING / MAROORI / SARNING BILL (WVG)</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -604,7 +604,7 @@ export default async function KnottingPage({
           className="hidden"
         ></form>
 
-        <div className="border border-black p-6 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding

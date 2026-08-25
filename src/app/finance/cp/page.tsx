@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 const VTYPE = "CP";
 const BASE = "/finance/cp";
 const TITLE = "CASH\u00A0\u00A0PAYMENTS (WVG)";
-const LINE_ROWS = 12;
+const LINE_ROWS = 4;
 const TRN_TYPES = ["CASH", "CHEQUE", "ONLINE", "ADJUSTMENT"];
 
 const num = (v: FormDataEntryValue | null): number | null => {
@@ -471,7 +471,7 @@ export default async function CashPaymentPage({
   return (
     <Shell active="fin-cp">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">{TITLE}</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -533,7 +533,7 @@ export default async function CashPaymentPage({
 
         <form id="cp-find-form" method="GET" action={BASE} className="hidden"></form>
 
-        <div className="border border-black p-6 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding

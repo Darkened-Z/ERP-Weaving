@@ -254,7 +254,7 @@ export default async function GreyTransferPage({
   return (
     <Shell active="ext-gt">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">GREY TRANSFER</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -301,7 +301,7 @@ export default async function GreyTransferPage({
 
         <form id="gt-find-form" method="GET" action="/external/grey/transfer" className="hidden"></form>
 
-        <div className="border border-black p-5 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding

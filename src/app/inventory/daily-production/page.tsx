@@ -30,8 +30,8 @@ const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
-const SET_ROWS = 8;
-const DETAIL_ROWS = 8;
+const SET_ROWS = 3;
+const DETAIL_ROWS = 3;
 
 const MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -642,7 +642,7 @@ export default async function DailyProductionPage({
   return (
     <Shell active="production">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">DAILY PRODUCTION ( WVG )</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -727,7 +727,7 @@ export default async function DailyProductionPage({
 
         <form id="idp-find-form" method="GET" action="/inventory/daily-production" className="hidden" />
 
-        <div className="border border-black p-6 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding ? "New — DAILY PRODUCTION" : editing ? `Edit — ${editing.vNo}` : "DAILY PRODUCTION"}
@@ -759,7 +759,7 @@ export default async function DailyProductionPage({
                 ))}
               </datalist>
 
-              <div className="border border-black p-4 mb-6">
+              <div className="border border-black p-4 mb-3">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">HEADER</div>
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
                   <div className="md:col-span-2">
@@ -826,7 +826,7 @@ export default async function DailyProductionPage({
                 </div>
               </div>
 
-              <div className="border border-black mb-6">
+              <div className="border border-black mb-3">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
                   SET# GRID — mm/Than Sr No, Counts, Beam Details
                 </div>

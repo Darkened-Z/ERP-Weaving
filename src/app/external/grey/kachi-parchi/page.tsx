@@ -36,7 +36,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const today = () => pkToday();
 
 const TYPE_OPTIONS = ["STOCK", "SALE", "TRANSFER"];
-const LINE_ROWS = 14;
+const LINE_ROWS = 4;
 const COUNT_ROWS = 4;
 
 export default async function KachiParchiPage({
@@ -522,7 +522,7 @@ export default async function KachiParchiPage({
   return (
     <Shell active="ext-kp">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">KACHI PARCHI</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -582,9 +582,9 @@ export default async function KachiParchiPage({
 
         <form id="kp-find-form" method="GET" action="/external/grey/kachi-parchi" className="hidden"></form>
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 mb-3">
           <div className="xl:col-span-3">
-            <div className="border border-black p-6">
+            <div className="border border-black p-4">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                   {isAdding

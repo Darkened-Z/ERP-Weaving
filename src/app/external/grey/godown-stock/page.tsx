@@ -40,7 +40,7 @@ const STATUS_OPTIONS = ["", "OK", "REJ"];
 const EL_METER_MODE_OPTIONS = ["", "1/5", "1/10"];
 const CONV_GREY_TYPES = ["", "CONV", "GREY"];
 
-const LINE_ROWS = 12;
+const LINE_ROWS = 4;
 const COUNT_ROWS = 4;
 
 export default async function GodownStockPage({
@@ -523,11 +523,11 @@ export default async function GodownStockPage({
   }
 
   const lineGridRows: (typeof lines[number] | null)[] = Array.from(
-    { length: LINE_ROWS },
+    { length: Math.max(LINE_ROWS, lines.length) },
     (_, i) => lines[i] ?? null
   );
   const countGridRows: (typeof counts[number] | null)[] = Array.from(
-    { length: COUNT_ROWS },
+    { length: Math.max(COUNT_ROWS, counts.length) },
     (_, i) => counts[i] ?? null
   );
 
@@ -554,7 +554,7 @@ export default async function GodownStockPage({
   return (
     <Shell active="ext-godown">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">GODOWN STOCK</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -613,9 +613,9 @@ export default async function GodownStockPage({
 
         <form id="gdn-find-form" method="GET" action="/external/grey/godown-stock" className="hidden"></form>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-3">
           <div className="lg:col-span-3">
-            <div className="border border-black p-5">
+            <div className="border border-black p-4">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                   {isAdding

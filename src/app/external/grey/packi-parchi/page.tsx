@@ -541,7 +541,7 @@ export default async function PackiParchiPage({
   return (
     <Shell active="ext-pp">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">PACKI PARCHI</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -605,7 +605,7 @@ export default async function PackiParchiPage({
 
         <form id="pp-find-form" method="GET" action="/external/grey/packi-parchi" className="hidden"></form>
 
-        <div className="border border-black p-5 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding

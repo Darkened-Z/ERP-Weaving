@@ -368,7 +368,7 @@ export default async function YarnReceiptPage({
     redirect(`/inventory/yarn-receipt`);
   }
 
-  const ROWS = Math.max(18, lines.length + 3);
+  const ROWS = Math.max(3, lines.length + 3);
   const showForm = !!editing || isAdding;
   const lvDisplay = editing?.lvNo ?? lastLvNo ?? "";
   const doDateDefault = editing?.doDate ?? (isAdding ? today() : "");
@@ -379,7 +379,7 @@ export default async function YarnReceiptPage({
   return (
     <Shell active="yarn-receipt">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">YARN RECEIPT/RETURN ( WVG )</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -440,7 +440,7 @@ export default async function YarnReceiptPage({
 
         <form id="iyr-find-form" method="GET" action="/inventory/yarn-receipt" className="hidden" />
 
-        <div className="border border-black p-6 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding ? "New — YARN RECEIPT/RETURN" : editing ? `Edit — ${editing.vNo}` : "YARN RECEIPT/RETURN"}

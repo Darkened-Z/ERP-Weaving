@@ -43,7 +43,7 @@ function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
   return prefix + "-" + String(next).padStart(4, "0");
 }
 
-const LINE_ROWS = 15;
+const LINE_ROWS = 4;
 const COUNT_ROWS = 5;
 
 export default async function GreyDespatchPage({
@@ -96,8 +96,8 @@ export default async function GreyDespatchPage({
         .orderBy(schema.intGreyDespatchUpdateCount.id)
     : [];
 
-  const lineGrid = Array.from({ length: LINE_ROWS }, (_, i) => lineRows[i] ?? null);
-  const countGrid = Array.from({ length: COUNT_ROWS }, (_, i) => countRows[i] ?? null);
+  const lineGrid = Array.from({ length: Math.max(LINE_ROWS, lineRows.length) }, (_, i) => lineRows[i] ?? null);
+  const countGrid = Array.from({ length: Math.max(COUNT_ROWS, countRows.length) }, (_, i) => countRows[i] ?? null);
 
   const meterSums = await db
     .select({
@@ -304,7 +304,12 @@ export default async function GreyDespatchPage({
     // Collect line rows once so we can validate + drive than consumption below.
     type LineIn = { i: number; tSrNo: string | null; a: number | null; b: number | null; c: number | null; cp: number | null; rej: number | null; lengthMtrs: number | null };
     const inLines: LineIn[] = [];
-    for (let i = 1; i <= LINE_ROWS; i++) {
+    let maxLineIdx = LINE_ROWS;
+    for (const key of formData.keys()) {
+      const m = key.match(/^line_t_sr_(\d+)$/);
+      if (m) maxLineIdx = Math.max(maxLineIdx, parseInt(m[1], 10));
+    }
+    for (let i = 1; i <= maxLineIdx; i++) {
       const raw = (formData.get(`line_t_sr_${i}`) as string | null)?.trim() ?? "";
       const tSrNo = raw || null;
       const a = num(formData.get(`line_a_${i}`));
@@ -452,7 +457,12 @@ export default async function GreyDespatchPage({
         }
 
         const countValues: (typeof schema.intGreyDespatchUpdateCount.$inferInsert)[] = [];
-        for (let i = 1; i <= COUNT_ROWS; i++) {
+        let maxCountIdx = COUNT_ROWS;
+        for (const key of formData.keys()) {
+          const mm = key.match(/^uc_code_(\d+)$/);
+          if (mm) maxCountIdx = Math.max(maxCountIdx, parseInt(mm[1], 10));
+        }
+        for (let i = 1; i <= maxCountIdx; i++) {
           const countCode = txt(formData.get(`uc_code_${i}`));
           const countDescription = txt(formData.get(`uc_desc_${i}`));
           const type = txt(formData.get(`uc_type_${i}`));
@@ -571,7 +581,7 @@ export default async function GreyDespatchPage({
   return (
     <Shell active="grey-despatch">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-3 gap-4">
           <div>
             <h1 className="page-title">GREY CLOTH DESPATCH (WVG)</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -607,7 +617,7 @@ export default async function GreyDespatchPage({
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-3">
           <div className="bg-white p-4">
             <div className="mono text-xl font-bold">{despatches.length}</div>
             <div className="stat-label">Total Despatches</div>
@@ -670,7 +680,7 @@ export default async function GreyDespatchPage({
         <form id="gd-find-form" method="GET" action="/inventory/grey-despatch" className="hidden"></form>
 
         {pendingContract && (
-          <div className="border border-black mb-6">
+          <div className="border border-black mb-3">
             <div className="flex items-center justify-between px-4 py-2 border-b-2 border-black bg-gray-50">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
                 Pending Thans — contract {pendingContract} · party {pendingParty ?? "-"}
@@ -715,7 +725,7 @@ export default async function GreyDespatchPage({
           </div>
         )}
 
-        <div className="border border-black p-5 mb-6">
+        <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
               {isAdding
@@ -778,7 +788,7 @@ export default async function GreyDespatchPage({
               ))}
             </datalist>
 
-            <div className="grid grid-cols-12 gap-3 mb-4">
+            <div className="grid grid-cols-12 gap-3 mb-2">
               <div className="col-span-2">
                 <label className="label block mb-1">Date</label>
                 <input name="v_date" type="date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
@@ -811,7 +821,7 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <div className="border border-black p-3 mb-4 bg-gray-50">
+            <div className="border border-black p-3 mb-2 bg-gray-50">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">DO-DETAIL</div>
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-2">
@@ -832,7 +842,7 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-12 gap-4 mb-4">
+            <div className="grid grid-cols-12 gap-4 mb-2">
               <div className="col-span-7">
                 <div className="border border-black">
                   <table className="w-full text-[11px]">
@@ -1006,7 +1016,7 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-12 gap-3 mb-4">
+            <div className="grid grid-cols-12 gap-3 mb-3">
               <div className="col-span-2">
                 <label className="label block mb-1">F.T Weave</label>
                 <input name="ft_weave" className="input-box mono text-[12px]" defaultValue={formItem?.ftWeave ?? ""} />
