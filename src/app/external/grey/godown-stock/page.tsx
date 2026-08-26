@@ -129,10 +129,23 @@ export default async function GodownStockPage({
     .from(schema.extGreyConvContract)
     .orderBy(desc(schema.extGreyConvContract.id));
   const constructions = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width })
     .from(schema.greyConstruction);
   const qualityByCode: Record<string, string> = Object.fromEntries(
     constructions.map((c) => [c.code, c.description])
+  );
+  const qualityCodeByDesc: Record<string, string> = Object.fromEntries(
+    constructions.map((c) => [c.description, c.code])
+  );
+  const greyCodeOpts = constructions.map((c) => ({
+    value: c.code,
+    label: c.width ? `${c.code} — ${c.width}" ${c.description}` : `${c.code} — ${c.description}`,
+  }));
+  const contactQualityFillMap: Record<string, Record<string, string>> = Object.fromEntries(
+    constructions.map((c) => [c.code, { contact_quality: c.description ?? "" }])
+  );
+  const dspQualityFillMap: Record<string, Record<string, string>> = Object.fromEntries(
+    constructions.map((c) => [c.code, { dsp_quality: c.description ?? "" }])
   );
   const contractOpts = convContracts.map((c) => ({
     value: c.contNo,
@@ -144,6 +157,9 @@ export default async function GodownStockPage({
       {
         rate_conversion: c.rateMtr ?? c.convRatePerMtr,
         contact_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
+        dsp_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
+        _contact_quality_pick: c.grayQltyCode ?? "",
+        _dsp_quality_pick: c.grayQltyCode ?? "",
       },
     ])
   );
@@ -162,6 +178,9 @@ export default async function GodownStockPage({
       {
         purchase_party: c.party ?? "",
         contact_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
+        dsp_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
+        _contact_quality_pick: c.greyCode ?? "",
+        _dsp_quality_pick: c.greyCode ?? "",
       },
     ])
   );
@@ -180,6 +199,9 @@ export default async function GodownStockPage({
         rate_sal: c.ratePerMtr ?? "",
         grey_sale_cont: c.contractNo,
         contact_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
+        dsp_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
+        _contact_quality_pick: c.greyCode ?? "",
+        _dsp_quality_pick: c.greyCode ?? "",
       },
     ])
   );
@@ -708,7 +730,11 @@ export default async function GodownStockPage({
                     </div>
                   </div>
 
-                  <div className="col-span-5">
+                  <div className="col-span-1">
+                    <label className="label block mb-1">Code</label>
+                    <input className={roCls} value={partyCodeByDesc.get(formStock?.purchaseParty ?? "") ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                  <div className="col-span-4">
                     <label className="label block mb-1">Purchase Party</label>
                     <Combobox
                       name="purchase_party"
@@ -743,7 +769,11 @@ export default async function GodownStockPage({
                     <input className={roCls} defaultValue={formStock?.pendingFinance ?? ""} readOnly tabIndex={-1} />
                   </div>
 
-                  <div className="col-span-12">
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Gdn Code</label>
+                    <input className={roCls} value={partyCodeByDesc.get(formStock?.gdnParty ?? "") ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                  <div className="col-span-10">
                     <label className="label block mb-1">Gdn Party</label>
                     <Combobox
                       name="gdn_party"
@@ -783,14 +813,34 @@ export default async function GodownStockPage({
                     />
                   </div>
 
-                  <div className="col-span-12">
+                  <div className="col-span-2">
+                    <label className="label block mb-1">CQ Code</label>
+                    <Combobox
+                      name="_contact_quality_pick"
+                      options={greyCodeOpts}
+                      defaultValue={qualityCodeByDesc[formStock?.contactQuality ?? ""] ?? ""}
+                      placeholder="F9…"
+                    />
+                    <AutoFill watch="_contact_quality_pick" map={contactQualityFillMap} inputs={["contact_quality"]} />
+                  </div>
+                  <div className="col-span-10">
                     <label className="label block mb-1">Contact Quality</label>
-                    <input name="contact_quality" className="input-box mono" defaultValue={formStock?.contactQuality ?? ""} />
+                    <input name="contact_quality" className="input-box mono" defaultValue={formStock?.contactQuality ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} />
                   </div>
 
-                  <div className="col-span-12">
+                  <div className="col-span-2">
+                    <label className="label block mb-1">DQ Code</label>
+                    <Combobox
+                      name="_dsp_quality_pick"
+                      options={greyCodeOpts}
+                      defaultValue={qualityCodeByDesc[formStock?.dspQuality ?? ""] ?? ""}
+                      placeholder="F9…"
+                    />
+                    <AutoFill watch="_dsp_quality_pick" map={dspQualityFillMap} inputs={["dsp_quality"]} />
+                  </div>
+                  <div className="col-span-10">
                     <label className="label block mb-1">Dsp. Quality</label>
-                    <input name="dsp_quality" className="input-box mono" defaultValue={formStock?.dspQuality ?? ""} />
+                    <input name="dsp_quality" className="input-box mono" defaultValue={formStock?.dspQuality ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} />
                   </div>
 
                   <div className="col-span-3">
