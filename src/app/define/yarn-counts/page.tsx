@@ -14,7 +14,6 @@ export default async function YarnCountsPage({
 }) {
   const params = await searchParams;
   const counts = await db.select().from(schema.yarnCounts).orderBy(schema.yarnCounts.countCode);
-  const blends = await db.select().from(schema.yarnBlends);
   const nextCode = String(
     counts.reduce((max, c) => {
       const n = parseInt(c.countCode ?? "", 10);
@@ -44,7 +43,6 @@ export default async function YarnCountsPage({
     const description = (formData.get("desc") as string)?.trim();
     if (!description) return;
 
-    const type = (formData.get("blend") as string)?.trim() || "COTTON";
     const status = (formData.get("status") as string)?.trim() || "A";
 
     const existing = await db.select().from(schema.yarnCounts);
@@ -52,17 +50,16 @@ export default async function YarnCountsPage({
     const dup = existing.some(
       (c) =>
         c.id !== ownId &&
-        c.description.trim().toLowerCase() === description.toLowerCase() &&
-        c.type === type
+        c.description.trim().toLowerCase() === description.toLowerCase()
     );
     if (dup) {
-      redirect("/define/yarn-counts?" + (id ? `id=${id}&` : "adding=1&") + "error=dup_desc_blend");
+      redirect("/define/yarn-counts?" + (id ? `id=${id}&` : "adding=1&") + "error=dup_desc");
     }
 
     if (id) {
       // code is locked — never changed after creation
       await db.update(schema.yarnCounts).set({
-        description, type, status,
+        description, status,
       }).where(eq(schema.yarnCounts.id, parseInt(id)));
     } else {
       const nextN = existing.reduce((m, r) => {
@@ -70,7 +67,7 @@ export default async function YarnCountsPage({
         return Number.isFinite(n) && n > m ? n : m;
       }, 0) + 1;
       await db.insert(schema.yarnCounts).values({
-        countCode: String(nextN), description, type, status,
+        countCode: String(nextN), description, status,
       });
     }
     revalidatePath("/define/yarn-counts");
@@ -183,9 +180,9 @@ export default async function YarnCountsPage({
                 </div>
               </div>
 
-              {params.error === "dup_desc_blend" && (
+              {params.error === "dup_desc" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
-                  A count with this description and blend already exists.
+                  A count with this description already exists.
                 </div>
               )}
               {params.error === "in_use" && (
@@ -203,15 +200,6 @@ export default async function YarnCountsPage({
                   <div>
                     <label className="label block mb-1">Code Desc</label>
                     <input name="desc" className="input-box" defaultValue={formItem?.description ?? ""} required autoFocus />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Blend</label>
-                    <select name="blend" className="input-box" defaultValue={formItem?.type ?? ""}>
-                      <option value="">--</option>
-                      {blends.map((b) => (
-                        <option key={b.id} value={b.description}>{b.description}</option>
-                      ))}
-                    </select>
                   </div>
                   <div>
                     <label className="label block mb-1">Status</label>
@@ -246,7 +234,6 @@ export default async function YarnCountsPage({
                 <thead>
                   <tr>
                     <th>Desc</th>
-                    <th>Blend</th>
                     <th>Code</th>
                   </tr>
                 </thead>
@@ -260,7 +247,6 @@ export default async function YarnCountsPage({
                             {c.description}
                           </a>
                         </td>
-                        <td>{c.type ?? "-"}</td>
                         <td className="mono text-[13px]">{c.countCode}</td>
                       </tr>
                     );

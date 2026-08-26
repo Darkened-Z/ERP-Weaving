@@ -164,13 +164,13 @@ export default async function YarnSaleVoucherPage({
   }
 
   const countList = await db
-    .select({ code: schema.yarnCounts.countCode, type: schema.yarnCounts.type })
+    .select({ code: schema.yarnCounts.countCode, type: schema.yarnCounts.type, description: schema.yarnCounts.description })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
   const countBlendByCode: Record<string, string> = {};
   for (const c of countList) {
-    countDefaultMap[String(c.code)] = { line_pack: 24 };
+    countDefaultMap[String(c.code)] = { line_pack: 24, line_count_desc: c.description ?? "" };
     if (c.type) countBlendByCode[String(c.code)] = c.type;
   }
 
@@ -257,7 +257,8 @@ export default async function YarnSaleVoucherPage({
     for (const r of pcRows) {
       if (r.ratePerLbs == null) continue;
       const k = String(r.countCode);
-      countDefaultMap[k] = { ...(countDefaultMap[k] ?? { line_pack: 24 }), line_rate: r.ratePerLbs };
+      const countDesc = countList.find((c) => String(c.code) === k)?.description ?? "";
+      countDefaultMap[k] = { ...(countDefaultMap[k] ?? { line_pack: 24, line_count_desc: countDesc }), line_rate: r.ratePerLbs };
     }
   }
 
@@ -1222,6 +1223,7 @@ export default async function YarnSaleVoucherPage({
                           <th>Cont.#</th>
                           <th title="Pick a purchased count in stock — auto-fills the row">Stock</th>
                           <th>Count</th>
+                          <th>Count Desc</th>
                           <th>Bld</th>
                           <th>Pack</th>
                           <th>Brand</th>
@@ -1266,6 +1268,17 @@ export default async function YarnSaleVoucherPage({
                                 list="ysv-count-list"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.count ?? ""}
+                                style={{ width: 60 }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                name="line_count_desc"
+                                className="input-box mono text-[12px] bg-gray-50"
+                                defaultValue={row?.count ? (countList.find((c) => String(c.code) === String(row.count))?.description ?? "") : ""}
+                                readOnly
+                                tabIndex={-1}
+                                style={{ minWidth: 160 }}
                               />
                             </td>
                             <td>

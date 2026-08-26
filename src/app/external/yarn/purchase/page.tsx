@@ -198,7 +198,7 @@ export default async function YarnPurchaseVoucherPage({
   }
 
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
-  for (const c of countList) countDefaultMap[String(c.code)] = { line_pack: 24 };
+  for (const c of countList) countDefaultMap[String(c.code)] = { line_pack: 24, line_count_desc: c.description ?? "" };
 
   async function saveVoucher(formData: FormData) {
     "use server";
@@ -1057,6 +1057,7 @@ export default async function YarnPurchaseVoucherPage({
                           <th style={{ width: "30px" }}>#</th>
                           <th>Cont.#</th>
                           <th>Count</th>
+                          <th>Count Desc</th>
                           <th>Party Count</th>
                           <th>Bld</th>
                           <th>Pack</th>
@@ -1085,6 +1086,7 @@ export default async function YarnPurchaseVoucherPage({
                                 list="ypv-contracts"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.contNo ?? ""}
+                                style={{ width: 65 }}
                               />
                             </td>
                             <td>
@@ -1093,6 +1095,17 @@ export default async function YarnPurchaseVoucherPage({
                                 list="ypv-counts"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.count ?? ""}
+                                style={{ width: 60 }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                name="line_count_desc"
+                                className="input-box mono text-[12px] bg-gray-50"
+                                defaultValue={row?.count ? (countList.find((c) => String(c.code) === String(row.count))?.description ?? "") : ""}
+                                readOnly
+                                tabIndex={-1}
+                                style={{ minWidth: 160 }}
                               />
                             </td>
                             <td>
@@ -1100,6 +1113,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_party_count"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.partyCount ?? ""}
+                                style={{ width: 65 }}
                               />
                             </td>
                             <td>
@@ -1107,6 +1121,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_bld"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.bld ?? ""}
+                                style={{ width: 55 }}
                               />
                             </td>
                             <td>
@@ -1114,6 +1129,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_pack"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.pack ?? ""}
+                                style={{ width: 60 }}
                               />
                             </td>
                             <td>
@@ -1121,6 +1137,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_brand"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.brand ?? ""}
+                                style={{ width: 70 }}
                               />
                             </td>
                             <td>
@@ -1128,6 +1145,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_do_no"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.doNo ?? ""}
+                                style={{ width: 70 }}
                               />
                             </td>
                             <td>
@@ -1135,8 +1153,9 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_qty"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.qty ?? ""}
+                                style={{ width: 70 }}
                               />
                             </td>
                             <td>
@@ -1144,8 +1163,9 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_bag"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.bag ?? ""}
+                                style={{ width: 65 }}
                               />
                             </td>
                             <td>
@@ -1153,8 +1173,9 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_con"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.con ?? ""}
+                                style={{ width: 60 }}
                               />
                             </td>
                             <td>
@@ -1162,8 +1183,9 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_lbs"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.lbs ?? ""}
+                                style={{ width: 75 }}
                               />
                             </td>
                             <td>
@@ -1171,6 +1193,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_unit"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.unit ?? ""}
+                                style={{ width: 55 }}
                               />
                             </td>
                             <td>
@@ -1178,6 +1201,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_despatch_party"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.despatchParty ?? ""}
+                                style={{ minWidth: 160 }}
                               />
                             </td>
                             <td>
@@ -1185,8 +1209,9 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_rate"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.rate ?? ""}
+                                style={{ width: 80 }}
                               />
                             </td>
                             <td>
@@ -1194,8 +1219,9 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_rate_sv"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.rateSv ?? ""}
+                                style={{ width: 80 }}
                               />
                             </td>
                             <td>
@@ -1203,7 +1229,7 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_amt"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px] bg-gray-100"
+                                className="input-box mono text-[12px] bg-gray-100 text-right"
                                 defaultValue={
                                   row?.lbs != null && row?.rate != null
                                     ? round2(row.lbs * row.rate)
@@ -1211,6 +1237,7 @@ export default async function YarnPurchaseVoucherPage({
                                 }
                                 readOnly
                                 tabIndex={-1}
+                                style={{ width: 100 }}
                               />
                             </td>
                           </tr>
