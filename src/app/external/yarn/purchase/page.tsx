@@ -1101,11 +1101,11 @@ export default async function YarnPurchaseVoucherPage({
                             <td>
                               <input
                                 name="line_count_desc"
-                                className="input-box mono text-[12px] bg-gray-50"
+                                className="input-box mono text-[12px]"
                                 defaultValue={row?.count ? (countList.find((c) => String(c.code) === String(row.count))?.description ?? "") : ""}
                                 readOnly
                                 tabIndex={-1}
-                                style={{ minWidth: 160 }}
+                                style={{ minWidth: 160, background: "#f3f4f6" }}
                               />
                             </td>
                             <td>
