@@ -52,7 +52,7 @@ export async function greyQualityOptions() {
   const rows = await db.select().from(schema.greyConstruction);
   return rows.map((g) => ({
     value: g.code,
-    label: `${g.code} — ${g.description}`,
+    label: g.width ? `${g.code} — ${g.width}" ${g.description}` : `${g.code} — ${g.description}`,
     desc: g.description,
   }));
 }

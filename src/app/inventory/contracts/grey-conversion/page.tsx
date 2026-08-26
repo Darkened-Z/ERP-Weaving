@@ -124,7 +124,7 @@ export default async function IntGreyConversionContractPage({
   const maxLContNo = lRow?.maxL ?? 0;
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
+  const greyOpts = greyList.map((g) => ({ value: g.code, label: g.width ? `${g.code} — ${g.width}" ${g.description}` : `${g.code} — ${g.description}` }));
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));

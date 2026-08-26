@@ -178,7 +178,7 @@ export default async function GreyConvContractPage({
   const maxLContNo = lRow?.maxL ?? 0;
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
+  const greyOpts = greyList.map((g) => ({ value: g.code, label: g.width ? `${g.code} — ${g.width}" ${g.description}` : `${g.code} — ${g.description}` }));
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   // Picking a Gray Qlty Code fills reed/pick/width + the WARP/WEFT count grid
   // rows from the greyConstruction record (Oracle: SELECT GC_WARP,GC_WARP1..4,

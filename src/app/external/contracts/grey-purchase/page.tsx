@@ -101,13 +101,13 @@ export default async function GreyPurchaseContractPage({
     .where(sql`${schema.chartOfAccounts.level} >= 4`)
     .orderBy(schema.chartOfAccounts.description);
   const greyList = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width })
     .from(schema.greyConstruction)
     .where(eq(schema.greyConstruction.status, "A"))
     .orderBy(schema.greyConstruction.code);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  const greyOpts = greyList.map((g) => ({ value: g.code, label: `${g.code} — ${g.description}` }));
+  const greyOpts = greyList.map((g) => ({ value: g.code, label: g.width ? `${g.code} — ${g.width}" ${g.description}` : `${g.code} — ${g.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
 
