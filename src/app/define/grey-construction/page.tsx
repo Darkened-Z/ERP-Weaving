@@ -68,6 +68,7 @@ export default async function GreyConstructionPage({
 
     const reed = num(formData.get("reed"));
     const pick = num(formData.get("pick"));
+    const width = num(formData.get("width"));
     const warpCount = (formData.get("warp_count") as string)?.trim() || null;
     const warp2 = (formData.get("warp_2") as string)?.trim() || null;
     const warp3 = (formData.get("warp_3") as string)?.trim() || null;
@@ -88,7 +89,7 @@ export default async function GreyConstructionPage({
     const status = (formData.get("status") as string)?.trim() || "A";
 
     const data = {
-      code, description, reed, pick,
+      code, description, reed, pick, width,
       warpCount, warp2, warp3, warp4, warp5, warp6, warp7, warp8,
       weftCount, weft2, weft3, weft4, weft5, weft6, weft7, weft8,
       blend, status,
@@ -220,6 +221,7 @@ export default async function GreyConstructionPage({
               { key: "description", label: "Description" },
               { key: "reed", label: "Read" },
               { key: "pick", label: "Pick" },
+              { key: "width", label: "Width (inch)" },
               { key: "warpCount", label: "Warp Count" },
               { key: "weftCount", label: "Weft Count" },
               { key: "blend", label: "Blend" },
@@ -244,7 +246,7 @@ export default async function GreyConstructionPage({
           <form action={saveConstruction}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-4 gap-4 mb-4">
               <div>
                 <label className="label block mb-1">Read</label>
                 <input name="reed" type="number" step="any" className="input-box mono" defaultValue={formItem?.reed ?? ""} />
@@ -252,6 +254,10 @@ export default async function GreyConstructionPage({
               <div>
                 <label className="label block mb-1">Pick</label>
                 <input name="pick" type="number" step="any" className="input-box mono" defaultValue={formItem?.pick ?? ""} />
+              </div>
+              <div>
+                <label className="label block mb-1">Width (inch)</label>
+                <input name="width" type="number" step="any" className="input-box mono" defaultValue={formItem?.width ?? ""} placeholder="63" />
               </div>
               <div>
                 <label className="label block mb-1">Gray Code</label>
@@ -349,6 +355,7 @@ export default async function GreyConstructionPage({
               <tr>
                 <th>Read</th>
                 <th>Pick</th>
+                <th>Width</th>
                 <th>Warp</th>
                 <th>Gray Code</th>
                 <th>Weft</th>
@@ -370,6 +377,11 @@ export default async function GreyConstructionPage({
                     <td className="mono">
                       <a href={href} className="no-underline block" style={linkStyle}>
                         {r.pick ?? "-"}
+                      </a>
+                    </td>
+                    <td className="mono">
+                      <a href={href} className="no-underline block" style={linkStyle}>
+                        {r.width ? `${r.width}"` : "-"}
                       </a>
                     </td>
                     <td className="mono text-[13px]">
