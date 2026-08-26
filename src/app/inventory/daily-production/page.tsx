@@ -831,30 +831,30 @@ export default async function DailyProductionPage({
                   SET# GRID — mm/Than Sr No, Counts, Beam Details
                 </div>
                 <div className="overflow-x-auto">
-                  <table>
+                  <table style={{ minWidth: "1800px" }}>
                     <thead>
                       <tr>
-                        <th style={{ width: "34px" }}>Sr#</th>
-                        <th>Set#</th>
-                        <th>mm/Than Sr No</th>
-                        <th className="text-right">A</th>
-                        <th className="text-right">B</th>
-                        <th className="text-right">C</th>
-                        <th className="text-right">CP</th>
-                        <th className="text-right">PPC</th>
-                        <th className="text-right">Total</th>
-                        <th className="text-right">Rej</th>
-                        <th>Beam Set#</th>
-                        <th>Type</th>
-                        <th>K/S/M Date</th>
-                        <th>Beam Status</th>
-                        <th className="text-right">Wast WT KG</th>
-                        <th>Beam #</th>
-                        <th className="text-right">Ends</th>
-                        <th className="text-right">B.Length</th>
-                        <th className="text-right">Rcvd/Mtr</th>
-                        <th className="text-right">Diff</th>
-                        <th className="text-right">Shrinkage</th>
+                        <th style={{ width: 34 }}>Sr#</th>
+                        <th style={{ width: 70 }}>Set#</th>
+                        <th style={{ width: 110 }}>mm/Than Sr No</th>
+                        <th className="text-right" style={{ width: 55 }}>A</th>
+                        <th className="text-right" style={{ width: 55 }}>B</th>
+                        <th className="text-right" style={{ width: 55 }}>C</th>
+                        <th className="text-right" style={{ width: 55 }}>CP</th>
+                        <th className="text-right" style={{ width: 55 }}>PPC</th>
+                        <th className="text-right" style={{ width: 65 }}>Total</th>
+                        <th className="text-right" style={{ width: 55 }}>Rej</th>
+                        <th style={{ width: 80 }}>Beam Set#</th>
+                        <th style={{ width: 55 }}>Type</th>
+                        <th style={{ width: 115 }}>K/S/M Date</th>
+                        <th style={{ width: 100 }}>Beam Status</th>
+                        <th className="text-right" style={{ width: 75 }}>Wast WT KG</th>
+                        <th style={{ width: 80 }}>Beam #</th>
+                        <th className="text-right" style={{ width: 60 }}>Ends</th>
+                        <th className="text-right" style={{ width: 75 }}>B.Length</th>
+                        <th className="text-right" style={{ width: 75 }}>Rcvd/Mtr</th>
+                        <th className="text-right" style={{ width: 65 }}>Diff</th>
+                        <th className="text-right" style={{ width: 75 }}>Shrinkage</th>
                       </tr>
                     </thead>
                     <tbody>
