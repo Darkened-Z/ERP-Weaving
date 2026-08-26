@@ -672,6 +672,7 @@ export default async function BeamContractExtWsPage({
                       <tr className="bg-gray-50">
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 30 }}>Sr#</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Count Code</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Count Desc</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
                         <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
                         <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
@@ -690,6 +691,17 @@ export default async function BeamContractExtWsPage({
                                 list="ibws-count-list"
                                 className={gridCellCls}
                                 defaultValue={r?.countCode ?? ""}
+                                style={{ width: 60 }}
+                              />
+                            </td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]">
+                              <input
+                                name={`d_desc_${i}`}
+                                className={gridCellCls}
+                                defaultValue={r?.countCode ? (countList.find((c) => c.code === r.countCode)?.description ?? "") : ""}
+                                readOnly
+                                tabIndex={-1}
+                                style={{ minWidth: 160, background: "#f3f4f6" }}
                               />
                             </td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]">

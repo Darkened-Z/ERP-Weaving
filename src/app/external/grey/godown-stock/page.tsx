@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { AutoFill } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
@@ -112,6 +112,17 @@ export default async function GodownStockPage({
   const godownParty =
     partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
   const partyCodeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
+
+  const yarnCountList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const gsCountFillMap: Record<string, Record<string, string>> = {};
+  for (const c of yarnCountList) {
+    gsCountFillMap[String(c.countCode)] = { count_desc: c.description ?? "", count_type: c.type ?? "" };
+  }
+  const gsCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
 
   const convContracts = await db
     .select()
@@ -833,6 +844,12 @@ export default async function GodownStockPage({
                       map={salMap}
                       inputs={["rate_sal", "grey_sale_cont", "contact_quality"]}
                     />
+                    <RowAutoFill watch="count_code" map={gsCountFillMap} />
+                    <datalist id="gs-yarn-counts">
+                      {yarnCountList.map((c) => (
+                        <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+                      ))}
+                    </datalist>
                   </div>
                   <div className="col-span-6">
                     <label className="label block mb-1">Grey Sale Cont</label>
@@ -1041,11 +1058,12 @@ export default async function GodownStockPage({
                     Update Count ({COUNT_ROWS} rows)
                   </div>
                   <div className="overflow-x-auto border border-black">
-                    <table className="w-full text-[11px]" style={{ minWidth: "900px" }}>
+                    <table className="w-full text-[13px]" style={{ minWidth: "1000px" }}>
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="px-1 py-1 border-b border-black" style={{ width: 28 }}>#</th>
                           <th className="px-1 py-1 border-b border-black">Code</th>
+                          <th className="px-1 py-1 border-b border-black">Count Desc</th>
                           <th className="px-1 py-1 border-b border-black">Type</th>
                           <th className="px-1 py-1 border-b border-black text-right">Cal Count</th>
                           <th className="px-1 py-1 border-b border-black text-right">Ends</th>
@@ -1060,10 +1078,13 @@ export default async function GodownStockPage({
                           <tr key={r?.id ?? `c-${i}`}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i + 1}</td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name="count_code" className={gridCellCls} defaultValue={r?.code ?? ""} />
+                              <input name="count_code" list="gs-yarn-counts" className={gridCellCls} defaultValue={r?.code ?? ""} style={{ width: 60 }} />
                             </td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name="count_type" className={gridCellCls} defaultValue={r?.type ?? ""} />
+                              <input name="count_desc" className={gridCellCls} defaultValue={r?.code ? (gsCountDescByCode.get(String(r.code)) ?? "") : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
+                            </td>
+                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                              <input name="count_type" className={gridCellCls} defaultValue={r?.type ?? ""} style={{ width: 80 }} />
                             </td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                               <input name="count_cal_count" type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} />

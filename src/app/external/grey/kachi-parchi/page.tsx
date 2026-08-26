@@ -98,6 +98,17 @@ export default async function KachiParchiPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
 
+  const yarnCountList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const kpCountFillMap: Record<string, Record<string, string>> = {};
+  for (const c of yarnCountList) {
+    kpCountFillMap[String(c.countCode)] = { count_desc: c.description ?? "", count_type: c.type ?? "" };
+  }
+  const kpCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
+
   const partyAccounts = parties.filter((p) => p.level >= 4);
   const partyOpts = partyAccounts.map((p) => ({
     value: p.description,
@@ -993,11 +1004,12 @@ export default async function KachiParchiPage({
                     Update Count ({COUNT_ROWS} rows)
                   </div>
                   <div className="overflow-x-auto border border-black">
-                    <table style={{ minWidth: "900px" }}>
+                    <table style={{ minWidth: "1000px" }}>
                       <thead>
                         <tr>
                           <th style={{ width: "30px" }}>#</th>
                           <th>Code</th>
+                          <th>Count Desc</th>
                           <th>Type</th>
                           <th className="text-right">Cal Count</th>
                           <th className="text-right">Ends</th>
@@ -1011,8 +1023,9 @@ export default async function KachiParchiPage({
                         {countGrid.map((row, i) => (
                           <tr key={row?.id ?? `ec-${i}`}>
                             <td className="mono text-[11px] text-center text-[var(--muted)]">{i + 1}</td>
-                            <td><input name="count_code" className={gridCellCls} defaultValue={row?.code ?? ""} /></td>
-                            <td><input name="count_type" className={gridCellCls} defaultValue={row?.type ?? ""} /></td>
+                            <td><input name="count_code" list="kp-yarn-counts" className={gridCellCls} defaultValue={row?.code ?? ""} style={{ width: 60 }} /></td>
+                            <td><input name="count_desc" className={gridCellCls} defaultValue={row?.code ? (kpCountDescByCode.get(String(row.code)) ?? "") : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} /></td>
+                            <td><input name="count_type" className={gridCellCls} defaultValue={row?.type ?? ""} style={{ width: 80 }} /></td>
                             <td><input name="count_cal" type="number" step="any" className={gridCellNumCls} defaultValue={row?.calCount ?? ""} /></td>
                             <td><input name="count_ends" type="number" step="1" className={gridCellNumCls} defaultValue={row?.ends ?? ""} /></td>
                             <td><input name="count_rate" type="number" step="any" className={gridCellNumCls} defaultValue={row?.ratePerLbs ?? ""} /></td>
@@ -1057,6 +1070,12 @@ export default async function KachiParchiPage({
               </div>
               <div className="overflow-x-auto" style={{ maxHeight: "780px", overflowY: "auto" }}>
                 <RowAutoFill watch="line_gdn_id" map={gdnLineFillMap} />
+                <RowAutoFill watch="count_code" map={kpCountFillMap} />
+                <datalist id="kp-yarn-counts">
+                  {yarnCountList.map((c) => (
+                    <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+                  ))}
+                </datalist>
                 <table className="w-full text-[11px]" style={{ minWidth: "320px" }}>
                   <thead>
                     <tr className="bg-gray-50">

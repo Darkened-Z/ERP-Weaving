@@ -1251,15 +1251,17 @@ export default async function YarnSaleVoucherPage({
                                 list="ysv-contracts"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.contNo ?? ""}
+                                style={{ width: 65 }}
                               />
                             </td>
-                            <td style={{ minWidth: "180px" }}>
+                            <td>
                               <input
                                 name="line_stock_key"
                                 list="ysv-stock-list"
                                 className="input-box mono text-[11px]"
                                 placeholder="pick from stock…"
                                 defaultValue=""
+                                style={{ minWidth: 180 }}
                               />
                             </td>
                             <td>
@@ -1286,6 +1288,7 @@ export default async function YarnSaleVoucherPage({
                                 name="line_bld"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.bld ?? ""}
+                                style={{ width: 55 }}
                               />
                             </td>
                             <td>
@@ -1293,6 +1296,7 @@ export default async function YarnSaleVoucherPage({
                                 name="line_pack"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.pack ?? ""}
+                                style={{ width: 60 }}
                               />
                             </td>
                             <td>
@@ -1300,6 +1304,7 @@ export default async function YarnSaleVoucherPage({
                                 name="line_brand"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.brand ?? ""}
+                                style={{ width: 70 }}
                               />
                             </td>
                             <td>
@@ -1307,6 +1312,7 @@ export default async function YarnSaleVoucherPage({
                                 name="line_do_no"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.doNo ?? ""}
+                                style={{ width: 70 }}
                               />
                             </td>
                             <td>
@@ -1314,8 +1320,9 @@ export default async function YarnSaleVoucherPage({
                                 name="line_qty"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.qty ?? ""}
+                                style={{ width: 70 }}
                               />
                             </td>
                             <td>
@@ -1323,8 +1330,9 @@ export default async function YarnSaleVoucherPage({
                                 name="line_bag"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.bag ?? ""}
+                                style={{ width: 65 }}
                               />
                             </td>
                             <td>
@@ -1332,8 +1340,9 @@ export default async function YarnSaleVoucherPage({
                                 name="line_cons"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.cons ?? ""}
+                                style={{ width: 60 }}
                               />
                             </td>
                             <td>
@@ -1341,8 +1350,9 @@ export default async function YarnSaleVoucherPage({
                                 name="line_lbs"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.lbs ?? ""}
+                                style={{ width: 75 }}
                               />
                             </td>
                             <td>
@@ -1350,6 +1360,7 @@ export default async function YarnSaleVoucherPage({
                                 name="line_unit"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.unit ?? ""}
+                                style={{ width: 55 }}
                               />
                             </td>
                             <td>
@@ -1357,6 +1368,7 @@ export default async function YarnSaleVoucherPage({
                                 name="line_despatch_party"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.despatchParty ?? ""}
+                                style={{ minWidth: 160 }}
                               />
                             </td>
                             <td>
@@ -1364,8 +1376,9 @@ export default async function YarnSaleVoucherPage({
                                 name="line_rate"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.rate ?? ""}
+                                style={{ width: 80 }}
                               />
                             </td>
                             <td>
@@ -1373,8 +1386,9 @@ export default async function YarnSaleVoucherPage({
                                 name="line_amt"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.amt ?? ""}
+                                style={{ width: 100 }}
                               />
                             </td>
                             <td>
@@ -1382,6 +1396,7 @@ export default async function YarnSaleVoucherPage({
                                 name="line_remarks"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.remarks ?? ""}
+                                style={{ minWidth: 140 }}
                               />
                             </td>
                           </tr>

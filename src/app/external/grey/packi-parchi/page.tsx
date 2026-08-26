@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { AutoFill } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PackiCalc } from "@/components/packi-calc";
 import { db, schema } from "@/db";
@@ -106,6 +106,17 @@ export default async function PackiParchiPage({
     .filter((p) => p.level >= 4)
     .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}`, desc: p.code }));
   const partyCodeByDesc = new Map(parties.filter((p) => p.level >= 4).map((p) => [p.description, p.code]));
+
+  const yarnCountList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const ppCountFillMap: Record<string, Record<string, string>> = {};
+  for (const c of yarnCountList) {
+    ppCountFillMap[String(c.countCode)] = { count_desc: c.description ?? "", count_type: c.type ?? "" };
+  }
+  const ppCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
 
   const kachiParchis = await db
     .select()
@@ -1153,6 +1164,12 @@ export default async function PackiParchiPage({
                   combos={["broker_name_sale", "sale_party"]}
                   inputs={["grey_rate_kp"]}
                 />
+                <RowAutoFill watch="count_code" map={ppCountFillMap} />
+                <datalist id="pp-yarn-counts">
+                  {yarnCountList.map((c) => (
+                    <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+                  ))}
+                </datalist>
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission</label>
@@ -1399,6 +1416,7 @@ export default async function PackiParchiPage({
                     <tr>
                       <th style={{ width: "30px" }}>#</th>
                       <th>Count Code</th>
+                      <th>Count Desc</th>
                       <th>Type</th>
                       <th className="text-right">Cal Count</th>
                       <th className="text-right">Ends</th>
@@ -1413,8 +1431,9 @@ export default async function PackiParchiPage({
                     {countGrid.map((row, i) => (
                       <tr key={row?.id ?? `ec-${i}`}>
                         <td className="mono text-[11px] text-center text-[var(--muted)]">{i + 1}</td>
-                        <td><input name="count_code" className={gridCellCls} defaultValue={row?.code ?? ""} /></td>
-                        <td><input name="count_type" className={gridCellCls} defaultValue={row?.type ?? ""} /></td>
+                        <td><input name="count_code" list="pp-yarn-counts" className={gridCellCls} defaultValue={row?.code ?? ""} style={{ width: 60 }} /></td>
+                        <td><input name="count_desc" className={gridCellCls} defaultValue={row?.code ? (ppCountDescByCode.get(String(row.code)) ?? "") : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} /></td>
+                        <td><input name="count_type" className={gridCellCls} defaultValue={row?.type ?? ""} style={{ width: 80 }} /></td>
                         <td><input name="count_cal" type="number" step="any" className={gridCellNumCls} defaultValue={row?.calCount ?? ""} /></td>
                         <td><input name="count_ends" type="number" step="1" className={gridCellNumCls} defaultValue={row?.ends ?? ""} /></td>
                         <td><input name="count_rate" type="number" step="any" className={gridCellNumCls} defaultValue={row?.ratePerLbs ?? ""} /></td>

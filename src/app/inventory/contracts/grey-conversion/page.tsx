@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { AutoFill } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntConvCalc } from "@/components/int-conv-calc";
 import { db, schema } from "@/db";
@@ -75,6 +75,25 @@ export default async function IntGreyConversionContractPage({
     })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
+  const yarnCountList = await db
+    .select({
+      countCode: schema.yarnCounts.countCode,
+      description: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const warpCountFillMap: Record<string, Record<string, string>> = {};
+  const weftCountFillMap: Record<string, Record<string, string>> = {};
+  for (const c of yarnCountList) {
+    for (let i = 1; i <= 9; i++) {
+      (warpCountFillMap[String(c.countCode)] ??= {})[`warp_descr_${i}`] = c.description ?? "";
+      (warpCountFillMap[String(c.countCode)] ??= {})[`warp_brand_${i}`] = c.type ?? "";
+      (weftCountFillMap[String(c.countCode)] ??= {})[`weft_descr_${i}`] = c.description ?? "";
+      (weftCountFillMap[String(c.countCode)] ??= {})[`weft_brand_${i}`] = c.type ?? "";
+    }
+  }
   const productList = await db
     .select({ code: schema.products.code, description: schema.products.description })
     .from(schema.products)
@@ -423,6 +442,17 @@ export default async function IntGreyConversionContractPage({
               <IntConvCalc />
               <AutoFill watch="gray_qlty_code" map={greyFillMap} inputs={["read", "pick", "width"]} />
               <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name"]} />
+              {Array.from({ length: 9 }, (_, k) => k + 1).map((i) => (
+                <RowAutoFill key={`warp-cf-${i}`} watch={`warp_count_${i}`} map={warpCountFillMap} />
+              ))}
+              {Array.from({ length: 9 }, (_, k) => k + 1).map((i) => (
+                <RowAutoFill key={`weft-cf-${i}`} watch={`weft_count_${i}`} map={weftCountFillMap} />
+              ))}
+              <datalist id="igcc-yarn-counts">
+                {yarnCountList.map((c) => (
+                  <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+                ))}
+              </datalist>
 
               <div className="grid grid-cols-12 gap-3 mb-3">
                 <div className="col-span-8">
@@ -699,8 +729,8 @@ export default async function IntGreyConversionContractPage({
                           return (
                             <tr key={i}>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="igcc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
@@ -746,8 +776,8 @@ export default async function IntGreyConversionContractPage({
                           return (
                             <tr key={i}>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="igcc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>

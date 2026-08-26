@@ -3,7 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { WhatsAppModal } from "@/components/whatsapp-modal";
 import { Combobox } from "@/components/combobox";
-import { AutoFill } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DespatchAmountCalc, CountGridFiller } from "@/components/production-calc";
 import { db, schema } from "@/db";
@@ -127,6 +127,19 @@ export default async function GreyDespatchPage({
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+
+  const yarnCountList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const ucCountFillMap: Record<string, Record<string, string>> = {};
+  for (const c of yarnCountList) {
+    for (let i = 1; i <= 12; i++) {
+      (ucCountFillMap[String(c.countCode)] ??= {})[`uc_desc_${i}`] = c.description ?? "";
+      (ucCountFillMap[String(c.countCode)] ??= {})[`uc_type_${i}`] = c.type ?? "";
+    }
+  }
 
   // Running conv contracts + warp/weft rows for count-grid auto-populate.
   const contracts = await db
@@ -697,8 +710,8 @@ export default async function GreyDespatchPage({
     { than: 0, amt: 0 }
   );
 
-  const gCls = "input-box mono text-[11px]";
-  const gCellNum = "input-box mono text-[11px] text-right";
+  const gCls = "input-box mono text-[13px] py-1";
+  const gCellNum = "input-box mono text-[13px] py-1 text-right";
 
   return (
     <Shell active="grey-despatch">
@@ -909,6 +922,14 @@ export default async function GreyDespatchPage({
                 <option key={r.v ?? ""} value={r.v ?? ""} />
               ))}
             </datalist>
+            <datalist id="gd-yarn-counts">
+              {yarnCountList.map((c) => (
+                <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+              ))}
+            </datalist>
+            {Array.from({ length: 12 }, (_, k) => k + 1).map((i) => (
+              <RowAutoFill key={`uc-cf-${i}`} watch={`uc_code_${i}`} map={ucCountFillMap} />
+            ))}
 
             <div className="grid grid-cols-12 gap-3 mb-2">
               <div className="col-span-2">
@@ -1249,10 +1270,10 @@ export default async function GreyDespatchPage({
                       return (
                         <tr key={i}>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                            <input name={`uc_code_${i}`} className={gCls} defaultValue={r?.countCode ?? ""} />
+                            <input name={`uc_code_${i}`} list="gd-yarn-counts" className={gCls} defaultValue={r?.countCode ?? ""} style={{ width: 60 }} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                            <input name={`uc_desc_${i}`} className={gCls} defaultValue={r?.countDescription ?? ""} />
+                            <input name={`uc_desc_${i}`} className={gCls} defaultValue={r?.countDescription ?? ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                             <input name={`uc_type_${i}`} className={gCls} defaultValue={r?.type ?? ""} />
