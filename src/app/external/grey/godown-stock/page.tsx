@@ -536,8 +536,8 @@ export default async function GodownStockPage({
 
   const roCls = "input-box mono bg-gray-100";
   const greenCls = "input-box mono bg-green-50";
-  const gridCellCls = "input-box mono text-[12px]";
-  const gridCellNumCls = "input-box mono text-[12px] text-right";
+  const gridCellCls = "input-box mono text-[13px] py-1";
+  const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
 
   const excelRows = stocks.map((s) => ({
     vNo: s.vNo,

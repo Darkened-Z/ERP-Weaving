@@ -343,9 +343,9 @@ export default async function BeamContractExtWsPage({
     n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
   const showForm = !!formContract || isAdding;
-  const gridCellCls = "input-box mono text-[12px]";
-  const gridCellNumCls = "input-box mono text-[12px] text-right";
-  const gridCellCalcCls = "input-box mono text-[12px] text-right bg-gray-100";
+  const gridCellCls = "input-box mono text-[13px] py-1";
+  const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
+  const gridCellCalcCls = "input-box mono text-[13px] py-1 text-right bg-gray-100";
 
   return (
     <Shell active="int-c-bews">
@@ -670,12 +670,12 @@ export default async function BeamContractExtWsPage({
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="bg-gray-50">
-                        <th className="px-1 py-1 border-b border-black" style={{ width: 30 }}>Sr#</th>
-                        <th className="px-1 py-1 border-b border-black">Count Code</th>
-                        <th className="px-1 py-1 border-b border-black">Brand</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Cal Count</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Ends</th>
-                        <th className="px-1 py-1 border-b border-black text-right">WT/Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 30 }}>Sr#</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Count Code</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">WT/Mtr</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -684,7 +684,7 @@ export default async function BeamContractExtWsPage({
                         return (
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]">
                               <input
                                 name={`d_count_code_${i}`}
                                 list="ibws-count-list"
@@ -692,14 +692,14 @@ export default async function BeamContractExtWsPage({
                                 defaultValue={r?.countCode ?? ""}
                               />
                             </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]">
                               <input
                                 name={`d_brand_${i}`}
                                 className={gridCellCls}
                                 defaultValue={r?.brand ?? ""}
                               />
                             </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]">
                               <input
                                 name={`d_cal_count_${i}`}
                                 type="number"
@@ -708,7 +708,7 @@ export default async function BeamContractExtWsPage({
                                 defaultValue={r?.calCount ?? ""}
                               />
                             </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]">
                               <input
                                 name={`d_ends_${i}`}
                                 type="number"
@@ -717,7 +717,7 @@ export default async function BeamContractExtWsPage({
                                 defaultValue={r?.ends ?? ""}
                               />
                             </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]">
                               <input
                                 name={`d_wt_${i}`}
                                 type="number"

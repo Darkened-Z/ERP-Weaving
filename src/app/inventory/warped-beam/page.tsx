@@ -604,8 +604,8 @@ export default async function WarpedBeamReceivingPage({
   }
 
   const ROWS = Math.max(3, lines.length + 2);
-  const gridCellCls = "input-box mono text-[11px]";
-  const gridCellNumCls = "input-box mono text-[11px] text-right";
+  const gridCellCls = "input-box mono text-[13px] py-1";
+  const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
   const roCls = "input-box mono text-[13px] bg-gray-100";
 
   return (

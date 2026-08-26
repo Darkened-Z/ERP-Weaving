@@ -426,9 +426,9 @@ export default async function GreyConvContractPage({
     redirect("/external/contracts/grey-conversion");
   }
 
-  const gridCellCls = "input-box mono text-[12px]";
-  const gridCellNumCls = "input-box mono text-[12px] text-right";
-  const gridCellCalcCls = "input-box mono text-[12px] text-right bg-gray-100";
+  const gridCellCls = "input-box mono text-[13px] py-1";
+  const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
+  const gridCellCalcCls = "input-box mono text-[13px] py-1 text-right bg-gray-100";
   const roCls = "input-box mono text-[13px] bg-gray-100";
   const yellowCls = "input-box mono text-[13px]";
   const greenCls = "input-box mono text-[13px] bg-green-50";
@@ -763,19 +763,19 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[11px]">
+                  <table className="w-full text-[13px]">
                     <thead>
                       <tr className="bg-gray-50">
-                        <th className="px-1 py-1 border-b border-black" style={{ width: 28 }}>Sr#</th>
-                        <th className="px-1 py-1 border-b border-black">Count</th>
-                        <th className="px-1 py-1 border-b border-black">Desc</th>
-                        <th className="px-1 py-1 border-b border-black">Brand</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Cal Count</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Ends</th>
-                        <th className="px-1 py-1 border-b border-black text-right">WT Per Mtr</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Rate Per Lbs</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Cost Per Mtr</th>
-                        <th className="px-1 py-1 border-b border-black" style={{ width: 22 }}></th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">WT Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cost Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 22 }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -784,15 +784,15 @@ export default async function GreyConvContractPage({
                         return (
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
                           </tr>
                         );
                       })}
@@ -810,19 +810,19 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[11px]">
+                  <table className="w-full text-[13px]">
                     <thead>
                       <tr className="bg-gray-50">
-                        <th className="px-1 py-1 border-b border-black" style={{ width: 28 }}>Sr#</th>
-                        <th className="px-1 py-1 border-b border-black">Count</th>
-                        <th className="px-1 py-1 border-b border-black">Desc</th>
-                        <th className="px-1 py-1 border-b border-black">Brand</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Cal Count</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Ends</th>
-                        <th className="px-1 py-1 border-b border-black text-right">WT Per Mtr</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Rate Per Lbs</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Cost Per Mtr</th>
-                        <th className="px-1 py-1 border-b border-black" style={{ width: 22 }}></th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">WT Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cost Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 22 }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -831,15 +831,15 @@ export default async function GreyConvContractPage({
                         return (
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
                           </tr>
                         );
                       })}

@@ -643,8 +643,8 @@ export default async function PackiParchiPage({
     n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
   const roCls = "input-box mono bg-gray-100";
-  const gridCellCls = "input-box mono text-[12px]";
-  const gridCellNumCls = "input-box mono text-[12px] text-right";
+  const gridCellCls = "input-box mono text-[13px] py-1";
+  const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
 
   const bagTotalAmount =
     (warpBag?.amount ?? 0) + (weftBag?.amount ?? 0);
