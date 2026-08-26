@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Opt = { value: string; label: string; desc?: string };
+type Opt = { value: string; label: string; desc?: string; filterKey?: string };
 
 /**
  * Editable searchable dropdown. Submits `value` via a hidden field named `name`,
@@ -18,6 +18,7 @@ export function Combobox({
   placeholder,
   className = "input-box mono",
   descTargetId,
+  filterByField,
 }: {
   name: string;
   options: Opt[];
@@ -25,7 +26,37 @@ export function Combobox({
   placeholder?: string;
   className?: string;
   descTargetId?: string;
+  /** Name of another form field whose current value must equal option.filterKey for the option to be shown. Empty other-field = show all. */
+  filterByField?: string;
 }) {
+  const [filterVal, setFilterVal] = useState<string>("");
+  useEffect(() => {
+    if (!filterByField) return;
+    const readVal = () => {
+      const el = document.querySelector(`[name="${filterByField}"]`) as HTMLInputElement | null;
+      setFilterVal((el?.value ?? "").trim());
+    };
+    readVal();
+    const onCombo = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string };
+      if (d?.name === filterByField) setFilterVal((d.value ?? "").trim());
+    };
+    const onInput = (e: Event) => {
+      const t = e.target as HTMLInputElement;
+      if (t?.name === filterByField) setFilterVal((t.value ?? "").trim());
+    };
+    document.addEventListener("combobox:change", onCombo);
+    document.addEventListener("input", onInput, true);
+    document.addEventListener("change", onInput, true);
+    return () => {
+      document.removeEventListener("combobox:change", onCombo);
+      document.removeEventListener("input", onInput, true);
+      document.removeEventListener("change", onInput, true);
+    };
+  }, [filterByField]);
+  const visibleOptions = !filterByField || !filterVal
+    ? options
+    : options.filter((o) => !o.filterKey || o.filterKey === filterVal);
   const mirrorDesc = (v: string) => {
     if (!descTargetId) return;
     const t = document.getElementById(descTargetId) as HTMLInputElement | null;
@@ -41,7 +72,7 @@ export function Combobox({
   const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
   const display = typed !== null ? typed : val ? labelFor(val) : "";
   const q = (typed ?? "").trim().toLowerCase();
-  const filtered = !q ? options : options.filter((o) => `${o.label} ${o.value}`.toLowerCase().includes(q));
+  const filtered = !q ? visibleOptions : visibleOptions.filter((o) => `${o.label} ${o.value}`.toLowerCase().includes(q));
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {

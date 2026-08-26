@@ -150,6 +150,7 @@ export default async function GodownStockPage({
   const contractOpts = convContracts.map((c) => ({
     value: c.contNo,
     label: `${c.contNo} — ${c.party ?? ""}`,
+    filterKey: c.party ?? "",
   }));
   const contractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     convContracts.map((c) => [
@@ -171,6 +172,7 @@ export default async function GodownStockPage({
   const purOpts = purContracts.map((c) => ({
     value: c.contractNo,
     label: `${c.contractNo} — ${c.party ?? ""}`,
+    filterKey: c.party ?? "",
   }));
   const purMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     purContracts.map((c) => [
@@ -784,12 +786,13 @@ export default async function GodownStockPage({
                   </div>
 
                   <div className="col-span-6">
-                    <label className="label block mb-1">Cont #</label>
+                    <label className="label block mb-1">Cont # <span className="text-[9px] text-[var(--muted)]">(filtered by party)</span></label>
                     <Combobox
                       name="cont_no"
                       options={contractOpts}
                       defaultValue={formStock?.contNo ?? ""}
                       placeholder="Contract #…"
+                      filterByField="purchase_party"
                     />
                     <AutoFill
                       watch="cont_no"
@@ -798,12 +801,13 @@ export default async function GodownStockPage({
                     />
                   </div>
                   <div className="col-span-6">
-                    <label className="label block mb-1">Pur Cont #</label>
+                    <label className="label block mb-1">Pur Cont # <span className="text-[9px] text-[var(--muted)]">(filtered by party)</span></label>
                     <Combobox
                       name="pur_cont_no"
                       options={purOpts}
                       defaultValue={formStock?.purContNo ?? ""}
                       placeholder="Pur contract #…"
+                      filterByField="purchase_party"
                     />
                     <AutoFill
                       watch="pur_cont_no"
