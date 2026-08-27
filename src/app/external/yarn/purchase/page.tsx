@@ -136,6 +136,7 @@ export default async function YarnPurchaseVoucherPage({
     .map((c) => ({
       value: c.contNo,
       label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
+      filterKey: c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "",
     }));
   // Picking a contract in the header auto-fills the party/broker (comboboxes),
   // the brokerage %/bag, received/balance, and the read-only contract-info strip.
@@ -197,8 +198,37 @@ export default async function YarnPurchaseVoucherPage({
     salAvgRateCalc = bsum > 0 ? round2(wsum / bsum) : null;
   }
 
+  // Default godown party — first party account whose description contains "GODOWN"
+  const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
-  for (const c of countList) countDefaultMap[String(c.code)] = { line_pack: 24, line_count_desc: c.description ?? "" };
+  for (const c of countList) {
+    countDefaultMap[String(c.code)] = {
+      line_pack: 24,
+      line_count_desc: c.description ?? "",
+      line_unit: "GDN",
+      line_despatch_party: godownParty,
+    };
+  }
+  // Party-specific rates — when the voucher's party has partyCounts entries,
+  // picking a count code auto-fills the negotiated rate for that party+count.
+  const savedPartyCode = formVoucher?.party
+    ? partyAccounts.find((p) => p.description === formVoucher.party)?.code
+    : undefined;
+  if (savedPartyCode) {
+    const pcRows = await db
+      .select()
+      .from(schema.partyCounts)
+      .where(eq(schema.partyCounts.partyCode, savedPartyCode));
+    for (const r of pcRows) {
+      if (r.ratePerLbs == null) continue;
+      const k = String(r.countCode);
+      countDefaultMap[k] = {
+        ...(countDefaultMap[k] ?? { line_pack: 24, line_unit: "GDN", line_despatch_party: godownParty }),
+        line_rate: r.ratePerLbs,
+      };
+    }
+  }
 
   async function saveVoucher(formData: FormData) {
     "use server";
@@ -901,12 +931,13 @@ export default async function YarnPurchaseVoucherPage({
                   </div>
 
                   <div className="lg:col-span-2">
-                    <label className="label block mb-1">Cont</label>
+                    <label className="label block mb-1">Cont <span className="text-[9px] text-[var(--muted)]">(party's running)</span></label>
                     <Combobox
                       name="cont"
                       options={contractOpts}
                       defaultValue={formVoucher?.cont ?? ""}
                       placeholder="Contract #…"
+                      filterByField="party"
                     />
                     <AutoFill
                       watch="cont"
