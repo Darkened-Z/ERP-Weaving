@@ -163,7 +163,9 @@ export default async function YarnPurchaseVoucherPage({
   const countDescByCode = new Map(countList.map((c) => [String(c.code), c.description ?? ""]));
   const lineContractMap: Record<string, Record<string, string | number>> = {};
   for (const c of purContracts) {
-    const baseDesc = c.countCode ? countDescByCode.get(String(c.countCode)) ?? "" : "";
+    // Master desc if the code matches, otherwise fall back to the raw countCode
+    // itself (some contracts store a description-like value in countCode).
+    const baseDesc = c.countCode ? countDescByCode.get(String(c.countCode)) || String(c.countCode) : "";
     const blend = c.ratio ?? "";
     lineContractMap[c.contNo] = {
       line_count: c.countCode ?? "",
