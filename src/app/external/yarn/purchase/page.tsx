@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql, desc } from "drizzle-orm";
@@ -161,6 +162,8 @@ export default async function YarnPurchaseVoucherPage({
   // Count desc combines the yarn count master description with the contract's
   // ratio field so the row shows e.g. "30/S MVS PV 65:35" instead of just "30/S MVS".
   const countDescByCode = new Map(countList.map((c) => [String(c.code), c.description ?? ""]));
+  const blendByContract: Record<string, string> = {};
+  for (const c of purContracts) if (c.ratio) blendByContract[c.contNo] = c.ratio;
   const lineContractMap: Record<string, Record<string, string | number>> = {};
   for (const c of purContracts) {
     // Master desc if the code matches, otherwise fall back to the raw countCode
@@ -1094,6 +1097,13 @@ export default async function YarnPurchaseVoucherPage({
                 <div className="mt-6">
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
+                  <CountBlendEnricher
+                    watchLineCount="line_count"
+                    descField="line_count_desc"
+                    rowContractField="line_cont_no"
+                    headerContractField="cont"
+                    blendByContract={blendByContract}
+                  />
                   <RowCalc target="line_lbs" a="line_bag" factor={100} round={0} onlyWhenEmpty />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">

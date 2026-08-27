@@ -151,6 +151,7 @@ export default async function GreyDespatchPage({
     value: c.contNo,
     label: `${c.contNo} — ${c.party ?? ""}`,
     desc: c.party ?? "",
+    filterKey: c.party ?? "",
   }));
   const contractFillMap: Record<string, Record<string, string | number | null>> = {};
   const contractPartyMap: Record<string, string | null> = {};
@@ -1067,6 +1068,7 @@ export default async function GreyDespatchPage({
                       defaultValue={formItem?.convContNo ?? ""}
                       placeholder="Select conv contract"
                       className="input-box mono text-[12px]"
+                      filterByField="party"
                     />
                   </div>
                 </div>

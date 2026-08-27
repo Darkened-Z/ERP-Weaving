@@ -137,6 +137,7 @@ export default async function KachiParchiPage({
   const contractOpts = convContracts.map((c) => ({
     value: c.contNo,
     label: `${c.contNo} — ${c.party ?? ""}`,
+    filterKey: c.party ?? "",
   }));
   const contractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     convContracts.map((c) => [
@@ -699,12 +700,13 @@ export default async function KachiParchiPage({
                   </div>
 
                   <div className="lg:col-span-4">
-                    <label className="label block mb-1">Cont #</label>
+                    <label className="label block mb-1">Cont # <span className="text-[9px] text-[var(--muted)]">(party's)</span></label>
                     <Combobox
                       name="cont_no"
                       options={contractOpts}
                       defaultValue={formItem?.contNo ?? ""}
                       placeholder="Contract #…"
+                      filterByField="purchase_party"
                     />
                     <AutoFill
                       watch="cont_no"

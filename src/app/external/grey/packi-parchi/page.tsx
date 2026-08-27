@@ -155,6 +155,7 @@ export default async function PackiParchiPage({
   const convOpts = convContracts.map((c) => ({
     value: c.contNo,
     label: c.party ? `${c.contNo} — ${c.party}` : c.contNo,
+    filterKey: c.party ?? "",
   }));
   const convContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     convContracts.map((c) => [
@@ -172,6 +173,7 @@ export default async function PackiParchiPage({
   const salContractOpts = salContracts.map((c) => ({
     value: c.contractNo,
     label: c.party ? `${c.contractNo} — ${c.party}` : c.contractNo,
+    filterKey: c.party ?? "",
   }));
   const salContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     salContracts.map((c) => [
@@ -1104,6 +1106,7 @@ export default async function PackiParchiPage({
                   options={convOpts}
                   defaultValue={formItem?.convContNo ?? ""}
                   placeholder="Conv contract…"
+                  filterByField="purchase_party"
                 />
                 <AutoFill
                   watch="conv_cont_no"
@@ -1157,6 +1160,7 @@ export default async function PackiParchiPage({
                   options={salContractOpts}
                   defaultValue={formItem?.convContNoSale ?? ""}
                   placeholder="Sale contract…"
+                  filterByField="sale_party"
                 />
                 <AutoFill
                   watch="conv_cont_no_sale"

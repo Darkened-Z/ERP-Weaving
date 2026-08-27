@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
@@ -124,19 +125,15 @@ export default async function YarnSaleVoucherPage({
   const salBagsByCont: Record<string, number> = {};
   for (const r of salAggByCont) if (r.contNo) salBagsByCont[r.contNo] = r.bags;
 
-  // Scope the contract picker to the currently-chosen party (Oracle: contracts open
-  // only for their own party). When no party is chosen, show all open contracts.
-  const savedPartyDesc = formVoucher?.party ?? "";
+  // Contract picker is scoped to the currently-chosen party via the Combobox's
+  // filterByField prop — options carry filterKey = party name; when the header
+  // party field is empty, all running contracts show.
   const contractOpts = salContracts
     .filter((c) => c.status === "R")
-    .filter(
-      (c) =>
-        !savedPartyDesc ||
-        (c.partyCode && (descByCode[c.partyCode] === savedPartyDesc || c.partyCode === savedPartyDesc))
-    )
     .map((c) => ({
       value: c.contNo,
       label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
+      filterKey: c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "",
     }));
   const contractMap: Record<string, Record<string, string | number>> = {};
   for (const c of salContracts) {
@@ -154,10 +151,23 @@ export default async function YarnSaleVoucherPage({
       ci_remarks: c.remarks ?? "",
     };
   }
+  const blendByContract: Record<string, string> = {};
+  for (const c of salContracts) if (c.ratio) blendByContract[c.contNo] = c.ratio;
   const lineContractMap: Record<string, Record<string, string | number>> = {};
+  // countDescByCode is built below, but we need it here — precompute inline.
+  const salCountDescByCode: Record<string, string> = {};
+  // We build the same map used below to enrich line_count_desc with blend.
+  // (yarnCounts is fetched after this block, so read direct from the DB now.)
+  const _yarnCountsForMap = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .from(schema.yarnCounts);
+  for (const y of _yarnCountsForMap) salCountDescByCode[String(y.code)] = y.description ?? "";
   for (const c of salContracts) {
+    const baseDesc = c.countCode ? salCountDescByCode[String(c.countCode)] || String(c.countCode) : "";
+    const blend = c.ratio ?? "";
     lineContractMap[c.contNo] = {
       line_count: c.countCode ?? "",
+      line_count_desc: [baseDesc, blend].filter(Boolean).join(" ").trim(),
       line_brand: c.brand ?? "",
       line_rate: c.ratePerLbs ?? "",
     };
@@ -167,10 +177,16 @@ export default async function YarnSaleVoucherPage({
     .select({ code: schema.yarnCounts.countCode, type: schema.yarnCounts.type, description: schema.yarnCounts.description })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
+  const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
   const countBlendByCode: Record<string, string> = {};
   for (const c of countList) {
-    countDefaultMap[String(c.code)] = { line_pack: 24, line_count_desc: c.description ?? "" };
+    countDefaultMap[String(c.code)] = {
+      line_pack: 24,
+      line_count_desc: c.description ?? "",
+      line_unit: "GDN",
+      line_despatch_party: godownParty,
+    };
     if (c.type) countBlendByCode[String(c.code)] = c.type;
   }
 
@@ -1044,12 +1060,13 @@ export default async function YarnSaleVoucherPage({
                   </div>
 
                   <div className="lg:col-span-2">
-                    <label className="label block mb-1">Cont</label>
+                    <label className="label block mb-1">Cont <span className="text-[9px] text-[var(--muted)]">(party's running)</span></label>
                     <Combobox
                       name="cont"
                       options={contractOpts}
                       defaultValue={formVoucher?.cont ?? ""}
                       placeholder="Contract #…"
+                      filterByField="party"
                     />
                     <AutoFill
                       watch="cont"
@@ -1209,6 +1226,13 @@ export default async function YarnSaleVoucherPage({
                 <div className="mt-6">
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
+                  <CountBlendEnricher
+                    watchLineCount="line_count"
+                    descField="line_count_desc"
+                    rowContractField="line_cont_no"
+                    headerContractField="cont"
+                    blendByContract={blendByContract}
+                  />
                   <RowAutoFill watch="line_stock_key" map={countStockFillMap} />
                   <RowCalc target="line_lbs" a="line_bag" factor={100} round={0} onlyWhenEmpty />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
