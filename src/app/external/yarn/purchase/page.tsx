@@ -158,10 +158,16 @@ export default async function YarnPurchaseVoucherPage({
     };
   }
   // Line-grid fills: picking a contract # in a row fills that row's count/brand/rate.
+  // Count desc combines the yarn count master description with the contract's
+  // ratio field so the row shows e.g. "30/S MVS PV 65:35" instead of just "30/S MVS".
+  const countDescByCode = new Map(countList.map((c) => [String(c.code), c.description ?? ""]));
   const lineContractMap: Record<string, Record<string, string | number>> = {};
   for (const c of purContracts) {
+    const baseDesc = c.countCode ? countDescByCode.get(String(c.countCode)) ?? "" : "";
+    const blend = c.ratio ?? "";
     lineContractMap[c.contNo] = {
       line_count: c.countCode ?? "",
+      line_count_desc: [baseDesc, blend].filter(Boolean).join(" ").trim(),
       line_brand: c.brand ?? "",
       line_rate: c.ratePerLbs ?? "",
     };
@@ -907,13 +913,33 @@ export default async function YarnPurchaseVoucherPage({
                     />
                   </div>
 
-                  <div className="lg:col-span-12">
+                  <div className="lg:col-span-8">
                     <label className="label block mb-1">Broaker</label>
                     <Combobox
                       name="broker"
                       options={partyOpts}
                       defaultValue={formVoucher?.broker ?? ""}
                       placeholder="Select broker…"
+                    />
+                  </div>
+                  <div className="lg:col-span-2">
+                    <label className="label block mb-1">%</label>
+                    <input
+                      name="percent"
+                      type="number"
+                      step="any"
+                      className="input-box mono text-right"
+                      defaultValue={formVoucher?.percent ?? ""}
+                    />
+                  </div>
+                  <div className="lg:col-span-2">
+                    <label className="label block mb-1">%/Bag</label>
+                    <input
+                      name="per_bag"
+                      type="number"
+                      step="any"
+                      className="input-box mono text-right"
+                      defaultValue={formVoucher?.perBag ?? ""}
                     />
                   </div>
 
@@ -980,16 +1006,6 @@ export default async function YarnPurchaseVoucherPage({
                     />
                   </div>
                   <div className="lg:col-span-2">
-                    <label className="label block mb-1">%/Bag</label>
-                    <input
-                      name="per_bag"
-                      type="number"
-                      step="any"
-                      className="input-box mono"
-                      defaultValue={formVoucher?.perBag ?? ""}
-                    />
-                  </div>
-                  <div className="lg:col-span-2">
                     <label className="label block mb-1">R.K.D</label>
                     <input
                       name="rkd"
@@ -1024,10 +1040,10 @@ export default async function YarnPurchaseVoucherPage({
                       readOnly
                     />
                   </div>
-                  <div className="lg:col-span-3">
+                  <div className="lg:col-span-3 hidden">
                     <label className="label block mb-1">%</label>
                     <input
-                      name="percent"
+                      name="_percent_old"
                       type="number"
                       step="any"
                       className="input-box mono"
