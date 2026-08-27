@@ -1305,7 +1305,11 @@ export default async function YarnSaleVoucherPage({
                               <input
                                 name="line_count_desc"
                                 className="input-box mono text-[12px]"
-                                defaultValue={row?.count ? (countList.find((c) => String(c.code) === String(row.count))?.description ?? "") : ""}
+                                defaultValue={(() => {
+                                  if (!row?.count) return "";
+                                  const found = countList.find((c) => String(c.code) === String(row.count));
+                                  return [found?.description ?? "", found?.type ?? ""].filter(Boolean).join(" ").trim();
+                                })()}
                                 readOnly
                                 tabIndex={-1}
                                 style={{ minWidth: 160, background: "#f3f4f6" }}
