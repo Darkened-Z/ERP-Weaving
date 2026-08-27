@@ -44,6 +44,7 @@ export default async function YarnCountsPage({
     if (!description) return;
 
     const status = (formData.get("status") as string)?.trim() || "A";
+    const blend = (formData.get("blend") as string)?.trim() || null;
 
     const existing = await db.select().from(schema.yarnCounts);
     const ownId = id ? parseInt(id) : null;
@@ -59,7 +60,7 @@ export default async function YarnCountsPage({
     if (id) {
       // code is locked — never changed after creation
       await db.update(schema.yarnCounts).set({
-        description, status,
+        description, status, ...(blend != null ? { type: blend } : {}),
       }).where(eq(schema.yarnCounts.id, parseInt(id)));
     } else {
       const nextN = existing.reduce((m, r) => {
@@ -67,7 +68,7 @@ export default async function YarnCountsPage({
         return Number.isFinite(n) && n > m ? n : m;
       }, 0) + 1;
       await db.insert(schema.yarnCounts).values({
-        countCode: String(nextN), description, status,
+        countCode: String(nextN), description, status, type: blend ?? "COTTON",
       });
     }
     revalidatePath("/define/yarn-counts");
@@ -200,6 +201,10 @@ export default async function YarnCountsPage({
                   <div>
                     <label className="label block mb-1">Code Desc</label>
                     <input name="desc" className="input-box" defaultValue={formItem?.description ?? ""} required autoFocus />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Blend / Ratio <span className="text-[10px] text-[var(--muted)]">(e.g. PV 65:35 — appears after count in line items)</span></label>
+                    <input name="blend" className="input-box mono" defaultValue={formItem?.type ?? ""} placeholder="PV 65:35" />
                   </div>
                   <div>
                     <label className="label block mb-1">Status</label>
