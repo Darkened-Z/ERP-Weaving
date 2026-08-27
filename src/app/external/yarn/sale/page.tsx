@@ -178,12 +178,23 @@ export default async function YarnSaleVoucherPage({
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
   const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+  // Most-common blend per count code across sale contracts — so typing a count
+  // alone still shows blend info before any contract is picked in the header.
+  const blendByCount: Record<string, string> = {};
+  for (const c of salContracts) {
+    if (!c.countCode || !c.ratio) continue;
+    const k = String(c.countCode);
+    if (!blendByCount[k]) blendByCount[k] = c.ratio;
+  }
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
   const countBlendByCode: Record<string, string> = {};
   for (const c of countList) {
+    const baseDesc = c.description ?? "";
+    const guessedBlend = blendByCount[String(c.code)] ?? "";
+    const combined = [baseDesc, guessedBlend].filter(Boolean).join(" ").trim();
     countDefaultMap[String(c.code)] = {
       line_pack: 24,
-      line_count_desc: c.description ?? "",
+      line_count_desc: combined,
       line_unit: "GDN",
       line_despatch_party: godownParty,
     };

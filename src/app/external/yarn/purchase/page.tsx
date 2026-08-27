@@ -212,11 +212,25 @@ export default async function YarnPurchaseVoucherPage({
   // Default godown party — first party account whose description contains "GODOWN"
   const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
 
+  // For every yarn count code, pick the most common blend/ratio seen across
+  // its contracts. So typing a count code alone still shows the blend info
+  // even before the operator picks a header contract (e.g. count '2' →
+  // '30/S MVS PV 65:35' instead of just '30/S MVS').
+  const blendByCount: Record<string, string> = {};
+  for (const c of purContracts) {
+    if (!c.countCode || !c.ratio) continue;
+    const k = String(c.countCode);
+    if (!blendByCount[k]) blendByCount[k] = c.ratio;
+  }
+
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
   for (const c of countList) {
+    const baseDesc = c.description ?? "";
+    const guessedBlend = blendByCount[String(c.code)] ?? "";
+    const combined = [baseDesc, guessedBlend].filter(Boolean).join(" ").trim();
     countDefaultMap[String(c.code)] = {
       line_pack: 24,
-      line_count_desc: c.description ?? "",
+      line_count_desc: combined,
       line_unit: "GDN",
       line_despatch_party: godownParty,
     };
