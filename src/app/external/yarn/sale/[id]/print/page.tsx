@@ -45,6 +45,13 @@ export default async function YarnSaleVoucherPrint({
       )[0] ?? null
     : null;
 
+  const countList = await db
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(
+    countList.map((c) => [String(c.code), [c.description ?? "", c.type ?? ""].filter(Boolean).join(" ").trim()])
+  );
+
   const rows = lines.map((l, i) => {
     const lbs = l.lbs ?? 0;
     const rate = l.rate ?? 0;
@@ -114,7 +121,7 @@ export default async function YarnSaleVoucherPrint({
               <tr key={l.id}>
                 <td className="border border-black px-1 py-1 text-center">{i}</td>
                 <td className="border border-black px-1 py-1">
-                  {[l.count, l.brand, l.bld, l.pack && `Pack ${l.pack}`, l.despatchParty && `Dspt: ${l.despatchParty}`]
+                  {[l.count, l.count ? countDescByCode.get(String(l.count)) : "", l.brand, l.bld, l.pack && `Pack ${l.pack}`, l.despatchParty && `Dspt: ${l.despatchParty}`]
                     .filter(Boolean).join(" · ")}
                   {l.contNo ? <div className="text-[9px] text-[var(--muted)]">Cont: {l.contNo}</div> : null}
                   {l.remarks ? <div className="text-[9px] text-[var(--muted)]">{l.remarks}</div> : null}

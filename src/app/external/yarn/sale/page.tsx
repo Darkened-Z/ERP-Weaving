@@ -1273,13 +1273,14 @@ export default async function YarnSaleVoucherPage({
                             <td className="mono text-[11px] text-center text-[var(--muted)]">
                               {i + 1}
                             </td>
-                            <td>
-                              <input
+                            <td style={{ minWidth: 90 }}>
+                              <Combobox
                                 name="line_cont_no"
-                                list="ysv-contracts"
-                                className="input-box mono text-[12px]"
+                                options={contractOpts}
                                 defaultValue={row?.contNo ?? ""}
-                                style={{ width: 65 }}
+                                placeholder="cont…"
+                                className="input-box mono text-[12px]"
+                                filterByField="party"
                               />
                             </td>
                             <td>

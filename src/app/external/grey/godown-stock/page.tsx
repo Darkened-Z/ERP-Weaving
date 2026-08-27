@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { TypeToggle } from "@/components/type-toggle";
 import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
@@ -36,7 +37,7 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const today = () => pkToday();
 
 const TYPE_OPTIONS = ["STOCK", "OTHERS"];
-const STATUS_OPTIONS = ["", "OK", "REJ"];
+const STATUS_OPTIONS = ["", "OK", "REJ", "Y"];
 const EL_METER_MODE_OPTIONS = ["", "1/5", "1/10"];
 const CONV_GREY_TYPES = ["", "CONV", "GREY"];
 
@@ -1066,6 +1067,15 @@ export default async function GodownStockPage({
                               <option key={c} value={c}>{c || "—"}</option>
                             ))}
                           </select>
+                          <div className="mt-1">
+                            <TypeToggle
+                              targetName="conv_grey_type"
+                              values={[
+                                { label: "Sal", value: "GREY" },
+                                { label: "Conv", value: "CONV" },
+                              ]}
+                            />
+                          </div>
                         </div>
                         <div className="col-span-3">
                           <label className="label block mb-1">Rate</label>
