@@ -296,7 +296,7 @@ export default async function ChartOfAccountPage({
                         tabIndex={-1}
                       />
                     ) : (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1" data-picker-target="acc_head">
                         <div className="flex-1"><Combobox name="acc_head" options={headOpts} placeholder="Select parent head" descTargetId="acct-code" /></div>
                         <AccountPicker
                           targetName="acc_head"

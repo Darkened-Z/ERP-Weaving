@@ -92,6 +92,33 @@ export function AccountPicker({
     if (open) setTimeout(() => inputRef.current?.focus(), 20);
   }, [open]);
 
+  // F9 shortcut — opens the picker when the target input (by name) has focus.
+  // Also closes with Escape when open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open) {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "F9") return;
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return;
+      // Match if focus is on any element with name=targetName, or its wrapper
+      const targetName2 = targetName;
+      const named = active.getAttribute?.("name") === targetName2;
+      const insideTarget = active.closest?.(`[data-picker-target="${targetName2}"]`);
+      if (named || insideTarget || open) {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen((s) => !s);
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, targetName]);
+
   const pick = (node: Node) => {
     if (pickLevel != null && node.level !== pickLevel) return;
     const els = document.querySelectorAll(`[name="${targetName}"]`) as NodeListOf<HTMLInputElement>;
