@@ -244,52 +244,33 @@ export default async function StaffPage({
                 <tbody>
                   {staff.map((s) => {
                     const isSelected = selected?.id === s.id;
+                    const href = `/define/staff?id=${s.id}`;
+                    const style = { color: isSelected ? "white" : "inherit" };
+                    const dash = <span className="text-[var(--muted)]">&mdash;</span>;
                     return (
                       <tr
                         key={s.id}
                         className={isSelected ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
                       >
-                        <td className="mono text-[13px]">
-                          <a
-                            href={`/define/staff?id=${s.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {s.code}
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.code}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.level}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.name}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.nameShort || dash}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.cell || dash}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.phone || dash}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.shed ?? dash}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{s.shift || dash}</a></td>
+                        <td className="p-0">
+                          <a href={href} className="no-underline block px-2 py-1" style={style}>
+                            <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase"
+                              style={{
+                                background: isSelected ? "white" : s.status === "A" ? "black" : "transparent",
+                                color: isSelected ? "black" : s.status === "A" ? "white" : "black",
+                              }}
+                            >
+                              {s.status}
+                            </span>
                           </a>
-                        </td>
-                        <td className="mono text-[13px]">
-                          <a
-                            href={`/define/staff?id=${s.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {s.level}
-                          </a>
-                        </td>
-                        <td>
-                          <a
-                            href={`/define/staff?id=${s.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {s.name}
-                          </a>
-                        </td>
-                        <td>{s.nameShort || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td className="mono text-[13px]">{s.cell || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td className="mono text-[13px]">{s.phone || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td className="mono text-[13px]">{s.shed ?? <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td>{s.shift || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td>
-                          <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase"
-                            style={{
-                              background: isSelected ? "white" : s.status === "A" ? "black" : "transparent",
-                              color: isSelected ? "black" : s.status === "A" ? "white" : "black",
-                            }}
-                          >
-                            {s.status}
-                          </span>
                         </td>
                       </tr>
                     );

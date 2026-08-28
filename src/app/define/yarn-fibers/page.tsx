@@ -197,32 +197,18 @@ export default async function YarnFibersPage({
                 <tbody>
                   {fibers.map((f) => {
                     const isSelected = selected?.id === f.id;
+                    const href = `/define/yarn-fibers?id=${f.id}`;
+                    const style = { color: isSelected ? "white" : "inherit" };
                     return (
                       <tr
                         key={f.id}
                         className={isSelected ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
                       >
-                        <td className="mono font-bold">
-                          <a
-                            href={`/define/yarn-fibers?id=${f.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {f.code}
-                          </a>
-                        </td>
-                        <td>
-                          <a
-                            href={`/define/yarn-fibers?id=${f.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {f.type ?? "-"}
-                          </a>
-                        </td>
-                        <td>{f.description}</td>
-                        <td className="mono">{f.denier ?? "-"}</td>
-                        <td className="mono">{f.length ?? "-"}</td>
+                        <td className="p-0 mono font-bold"><a href={href} className="no-underline block px-2 py-1" style={style}>{f.code}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{f.type ?? "-"}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{f.description}</a></td>
+                        <td className="p-0 mono"><a href={href} className="no-underline block px-2 py-1" style={style}>{f.denier ?? "-"}</a></td>
+                        <td className="p-0 mono"><a href={href} className="no-underline block px-2 py-1" style={style}>{f.length ?? "-"}</a></td>
                       </tr>
                     );
                   })}

@@ -123,7 +123,7 @@ export default async function GreyDespatchPage({
   const parties = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
@@ -417,7 +417,7 @@ export default async function GreyDespatchPage({
     const partyRowsAll = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
       .from(schema.chartOfAccounts)
-      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+      .where(sql`${schema.chartOfAccounts.level} >= 5`);
     const codeByDescGl = new Map(partyRowsAll.map((p) => [p.description, p.code]));
     const resolvePartyCoa = (partyDesc: string | null | undefined): string => {
       if (!partyDesc) return "";

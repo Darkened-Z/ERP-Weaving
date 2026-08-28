@@ -93,7 +93,7 @@ export default async function GreyDespatchDamiPage({
   const parties = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`);
+    .where(sql`${schema.chartOfAccounts.level} >= 5`);
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
   async function saveDami(formData: FormData) {

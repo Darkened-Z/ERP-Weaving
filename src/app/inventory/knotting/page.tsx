@@ -207,7 +207,7 @@ async function saveKnotting(formData: FormData) {
   const partyRows = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`);
+    .where(sql`${schema.chartOfAccounts.level} >= 5`);
   const codeByDesc = new Map(partyRows.map((p) => [p.description, p.code]));
   const resolvePartyCoa = (partyDesc: string | null | undefined): string => {
     if (!partyDesc) return "";
@@ -650,7 +650,7 @@ export default async function KnottingPage({
   const partyAccounts = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`);
+    .where(sql`${schema.chartOfAccounts.level} >= 5`);
   const partyDescByCode = new Map(partyAccounts.map((p) => [String(p.code), p.description]));
 
   const loadedBeams = await db

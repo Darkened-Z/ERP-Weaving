@@ -109,7 +109,7 @@ export default async function KachiParchiPage({
   }
   const kpCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
 
-  const partyAccounts = parties.filter((p) => p.level >= 4);
+  const partyAccounts = parties.filter((p) => p.level >= 5);
   const partyOpts = partyAccounts.map((p) => ({
     value: p.description,
     label: `${p.code} — ${p.description}`,

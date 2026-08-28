@@ -104,7 +104,7 @@ export default async function BeamContractExtWsPage({
       description: schema.chartOfAccounts.description,
     })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
 
   const countList = await db
@@ -402,7 +402,7 @@ export default async function BeamContractExtWsPage({
 
         <datalist id="ibws-count-list">
           {countList.map((c) => (
-            <option key={c.code} value={c.code}>{c.description}</option>
+            <option key={c.code} value={c.code}>{c.description}{c.type ? ` ${c.type}` : ""}</option>
           ))}
         </datalist>
 

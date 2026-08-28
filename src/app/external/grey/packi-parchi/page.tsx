@@ -103,9 +103,9 @@ export default async function PackiParchiPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties
-    .filter((p) => p.level >= 4)
+    .filter((p) => p.level >= 5)
     .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}`, desc: p.code }));
-  const partyCodeByDesc = new Map(parties.filter((p) => p.level >= 4).map((p) => [p.description, p.code]));
+  const partyCodeByDesc = new Map(parties.filter((p) => p.level >= 5).map((p) => [p.description, p.code]));
 
   const yarnCountList = await db
     .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
@@ -401,7 +401,7 @@ export default async function PackiParchiPage({
         description: schema.chartOfAccounts.description,
       })
       .from(schema.chartOfAccounts)
-      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+      .where(sql`${schema.chartOfAccounts.level} >= 5`);
     const codeByDesc = new Map(coaRows.map((p) => [p.description, p.code]));
     const resolvePartyCoa = (s: string | null | undefined): string => {
       if (!s) return "";

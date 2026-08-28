@@ -104,7 +104,7 @@ export default async function GodownStockPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
 
-  const partyAccounts = parties.filter((p) => p.level >= 4);
+  const partyAccounts = parties.filter((p) => p.level >= 5);
   const partyOpts = partyAccounts.map((p) => ({
     value: p.description,
     label: `${p.code} — ${p.description}`,

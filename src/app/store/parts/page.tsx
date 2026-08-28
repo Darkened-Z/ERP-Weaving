@@ -365,29 +365,33 @@ export default async function PartsPage({
                           : undefined
                       }
                     >
-                      <td className="mono text-[13px]">
-                        <a href={href} className="no-underline block" style={linkStyle}>
+                      <td className="p-0 mono text-[13px]">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>
                           {p.code}
                         </a>
                       </td>
-                      <td>
-                        <a href={href} className="no-underline block" style={linkStyle}>
+                      <td className="p-0">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>
                           {p.description}
                         </a>
                       </td>
-                      <td className="mono text-[13px]">{p.unit}</td>
-                      <td className="text-[13px]">{p.location ?? ""}</td>
-                      <td className="mono text-[13px] text-right">
-                        {fmt.format(p.minStock)}
+                      <td className="p-0 mono text-[13px]">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>{p.unit}</a>
                       </td>
-                      <td className="mono text-[13px] text-right">
-                        {fmt.format(p.currentStock)}
+                      <td className="p-0 text-[13px]">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>{p.location ?? ""}</a>
                       </td>
-                      <td className="mono text-[13px] text-right">
-                        {fmt.format(Math.round(p.avgCost))}
+                      <td className="p-0 mono text-[13px] text-right">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>{fmt.format(p.minStock)}</a>
                       </td>
-                      <td className="mono text-[13px]">
-                        {p.lastPurchaseDate ?? ""}
+                      <td className="p-0 mono text-[13px] text-right">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>{fmt.format(p.currentStock)}</a>
+                      </td>
+                      <td className="p-0 mono text-[13px] text-right">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>{fmt.format(Math.round(p.avgCost))}</a>
+                      </td>
+                      <td className="p-0 mono text-[13px]">
+                        <a href={href} className="no-underline block px-2 py-1" style={linkStyle}>{p.lastPurchaseDate ?? ""}</a>
                       </td>
                     </tr>
                   );

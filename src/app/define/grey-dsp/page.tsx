@@ -201,32 +201,19 @@ export default async function GreyDspPage({
                 <tbody>
                   {parties.map((p) => {
                     const isSelected = selected?.id === p.id;
+                    const href = `/define/grey-dsp?id=${p.id}`;
+                    const style = { color: isSelected ? "white" : "inherit" };
+                    const dash = <span className="text-[var(--muted)]">&mdash;</span>;
                     return (
                       <tr
                         key={p.id}
                         className={isSelected ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
                       >
-                        <td className="mono text-[13px]">
-                          <a
-                            href={`/define/grey-dsp?id=${p.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {p.code}
-                          </a>
-                        </td>
-                        <td>
-                          <a
-                            href={`/define/grey-dsp?id=${p.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {p.name}
-                          </a>
-                        </td>
-                        <td>{p.nameShort || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td className="mono text-[13px]">{p.cell || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td className="mono text-[13px]">{p.phone || <span className="text-[var(--muted)]">&mdash;</span>}</td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.code}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.name}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.nameShort || dash}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.cell || dash}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.phone || dash}</a></td>
                       </tr>
                     );
                   })}

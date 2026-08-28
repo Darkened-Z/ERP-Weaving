@@ -210,33 +210,20 @@ export default async function WeaversPage({
                 <tbody>
                   {weavers.map((w) => {
                     const isSelected = selected?.id === w.id;
+                    const href = `/define/weavers?id=${w.id}`;
+                    const style = { color: isSelected ? "white" : "inherit" };
+                    const dash = <span className="text-[var(--muted)]">&mdash;</span>;
                     return (
                       <tr
                         key={w.id}
                         className={isSelected ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
                       >
-                        <td className="mono text-[13px]">
-                          <a
-                            href={`/define/weavers?id=${w.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {w.code}
-                          </a>
-                        </td>
-                        <td>
-                          <a
-                            href={`/define/weavers?id=${w.id}`}
-                            className="no-underline"
-                            style={{ color: isSelected ? "white" : "inherit" }}
-                          >
-                            {w.name}
-                          </a>
-                        </td>
-                        <td>{w.nameShort || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td className="mono text-[13px]">{w.cell || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td className="mono text-[13px]">{w.phone || <span className="text-[var(--muted)]">&mdash;</span>}</td>
-                        <td>{w.address || <span className="text-[var(--muted)]">&mdash;</span>}</td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{w.code}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{w.name}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{w.nameShort || dash}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{w.cell || dash}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{w.phone || dash}</a></td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{w.address || dash}</a></td>
                       </tr>
                     );
                   })}

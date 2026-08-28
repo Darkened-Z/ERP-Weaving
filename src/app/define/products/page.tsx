@@ -179,16 +179,14 @@ export default async function ProductsPage({
                 <tbody>
                   {products.map((p) => {
                     const isSel = p.id === selected?.id;
+                    const href = `/define/products?id=${p.id}`;
+                    const style = { color: isSel ? "white" : "inherit" };
                     return (
                       <tr key={p.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                        <td>
-                          <a href={`/define/products?id=${p.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
-                            {p.description}
-                          </a>
-                        </td>
-                        <td className="mono text-[13px]">{p.mainDesc ?? "-"}</td>
-                        <td className="mono text-[13px]">{p.subDesc ?? "-"}</td>
-                        <td className="mono text-[13px] text-right">{p.code}</td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.description}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.mainDesc ?? "-"}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.subDesc ?? "-"}</a></td>
+                        <td className="p-0 mono text-[13px] text-right"><a href={href} className="no-underline block px-2 py-1" style={style}>{p.code}</a></td>
                       </tr>
                     );
                   })}

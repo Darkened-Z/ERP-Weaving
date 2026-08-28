@@ -99,11 +99,11 @@ export default async function IntYarnPurchaseContractPage({
       description: schema.chartOfAccounts.description,
     })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
 
   const countList = await db
-    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
     .from(schema.yarnCounts)
     .where(eq(schema.yarnCounts.status, "A"))
     .orderBy(schema.yarnCounts.countCode);
@@ -114,7 +114,7 @@ export default async function IntYarnPurchaseContractPage({
     .orderBy(schema.yarnBrands.name);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}`, desc: c.description }));
+  const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}`, desc: c.description }));
   const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));

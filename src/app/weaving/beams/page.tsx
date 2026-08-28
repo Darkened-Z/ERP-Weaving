@@ -34,7 +34,7 @@ export default async function BeamsPage({
   // Beams store party names as free text (seed never set them), so the option
   // value is the account description, not the account code.
   const partyOpts = accounts
-    .filter((a) => a.level >= 4)
+    .filter((a) => a.level >= 5)
     .map((a) => ({ value: a.description, label: `${a.code} — ${a.description}` }));
 
   const f = {
@@ -319,37 +319,40 @@ export default async function BeamsPage({
             <tbody>
               {listed.map((r) => {
                 const isSel = r.id === selected?.id;
+                const rowHref = `/weaving/beams?id=${r.id}${filterQS ? `&${filterQS}` : ""}`;
+                const linkCls = "block px-2 py-1 no-underline";
+                const linkStyle = { color: isSel ? "white" : "inherit" };
                 return (
                 <tr key={r.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                  <td className="mono font-bold">
-                    <a href={`/weaving/beams?id=${r.id}${filterQS ? `&${filterQS}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>{r.beamNo}</a>
-                  </td>
-                  <td className="text-[13px]">{r.partyTrade ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.codeConv ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.contractNo ?? "-"}</td>
-                  <td className="text-[13px]">{r.statusLoc ?? "-"}</td>
-                  <td className="text-[13px]">{r.szgParty ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.shed ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.loomNo ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.setNo ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.beamSetNo ?? "-"}</td>
-                  <td className="text-[13px]">{r.setStatus ?? "-"}</td>
-                  <td>{r.type}</td>
-                  <td className="mono text-[13px]">{r.brVno ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.brDate ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.knVno ?? "-"}</td>
-                  <td className="mono text-[13px]">{r.knDate ?? "-"}</td>
-                  <td>
-                    <span
-                      className="inline-block px-2 py-0.5 text-[11px] font-bold uppercase"
-                      style={{
-                        background: r.statusWrk === "RUNNING" ? "black" : "transparent",
-                        color: r.statusWrk === "RUNNING" ? "white" : "black",
-                        border: "1px solid black",
-                      }}
-                    >
-                      {r.statusWrk}
-                    </span>
+                  <td className="p-0 mono font-bold"><a href={rowHref} className={linkCls} style={linkStyle}>{r.beamNo}</a></td>
+                  <td className="p-0 text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.partyTrade ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.codeConv ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.contractNo ?? "-"}</a></td>
+                  <td className="p-0 text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.statusLoc ?? "-"}</a></td>
+                  <td className="p-0 text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.szgParty ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.shed ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.loomNo ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.setNo ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.beamSetNo ?? "-"}</a></td>
+                  <td className="p-0 text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.setStatus ?? "-"}</a></td>
+                  <td className="p-0"><a href={rowHref} className={linkCls} style={linkStyle}>{r.type}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.brVno ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.brDate ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.knVno ?? "-"}</a></td>
+                  <td className="p-0 mono text-[13px]"><a href={rowHref} className={linkCls} style={linkStyle}>{r.knDate ?? "-"}</a></td>
+                  <td className="p-0">
+                    <a href={rowHref} className={linkCls} style={linkStyle}>
+                      <span
+                        className="inline-block px-2 py-0.5 text-[11px] font-bold uppercase"
+                        style={{
+                          background: r.statusWrk === "RUNNING" ? "black" : "transparent",
+                          color: r.statusWrk === "RUNNING" ? "white" : "black",
+                          border: "1px solid black",
+                        }}
+                      >
+                        {r.statusWrk}
+                      </span>
+                    </a>
                   </td>
                 </tr>
                 );

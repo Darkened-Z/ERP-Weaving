@@ -245,14 +245,12 @@ export default async function YarnCountsPage({
                 <tbody>
                   {listed.map((c) => {
                     const isSel = c.id === selected?.id;
+                    const href = `/define/yarn-counts?id=${c.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+                    const style = { color: isSel ? "white" : "inherit" };
                     return (
                       <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                        <td>
-                          <a href={`/define/yarn-counts?id=${c.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
-                            {c.description}
-                          </a>
-                        </td>
-                        <td className="mono text-[13px]">{c.countCode}</td>
+                        <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{c.description}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{c.countCode}</a></td>
                       </tr>
                     );
                   })}

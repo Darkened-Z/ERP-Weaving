@@ -95,7 +95,7 @@ export default async function WarpedBeamReceivingPage({
   const parties = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
   const partyDescByCode = new Map(parties.map((p) => [String(p.code), p.description]));
@@ -271,7 +271,7 @@ export default async function WarpedBeamReceivingPage({
     const partyRows = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
       .from(schema.chartOfAccounts)
-      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+      .where(sql`${schema.chartOfAccounts.level} >= 5`);
     const codeByDesc = new Map(partyRows.map((p) => [p.description, String(p.code)]));
     const codeSet = new Set(partyRows.map((p) => String(p.code)));
     const rawParty = header.beamReceivingFrom?.trim() ?? "";
