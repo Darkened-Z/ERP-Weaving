@@ -40,17 +40,19 @@ export default async function ChartOfAccountPage({
 
   const cities = await db.select().from(schema.cities);
 
-  // All accounts as potential parent "Acc. Head" options; each carries the next auto code
-  // it would generate for a child (mirrored into the Code field on select).
+  // Parent "Acc. Head" options. Level 5 parties are excluded — a party cannot
+  // be a parent of another party; only L1–L4 heads can host children.
   const allAccounts = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.code);
   const accDescByCode = new Map(allAccounts.map((a) => [a.code, a.description]));
-  const headOpts = allAccounts.map((a) => {
-    const depth = a.code.split(".").length;
-    const kids = allAccounts.filter((x) => x.code.startsWith(a.code + ".") && x.code.split(".").length === depth + 1);
-    const maxN = kids.reduce((m, c) => { const n = parseInt(c.code.split(".").pop() || "0", 10); return Number.isFinite(n) && n > m ? n : m; }, 0);
-    const width = kids.length ? Math.max(...kids.map((c) => (c.code.split(".").pop() || "").length)) : 4;
-    return { value: a.code, label: `${a.code} — ${a.description}`, desc: `${a.code}.${String(maxN + 1).padStart(width, "0")}` };
-  });
+  const headOpts = allAccounts
+    .filter((a) => (a.level ?? a.code.split(".").length) <= 4)
+    .map((a) => {
+      const depth = a.code.split(".").length;
+      const kids = allAccounts.filter((x) => x.code.startsWith(a.code + ".") && x.code.split(".").length === depth + 1);
+      const maxN = kids.reduce((m, c) => { const n = parseInt(c.code.split(".").pop() || "0", 10); return Number.isFinite(n) && n > m ? n : m; }, 0);
+      const width = kids.length ? Math.max(...kids.map((c) => (c.code.split(".").pop() || "").length)) : 4;
+      return { value: a.code, label: `${a.code} — ${a.description}`, desc: `${a.code}.${String(maxN + 1).padStart(width, "0")}` };
+    });
 
   const selected = params.code
     ? accounts.find((a) => a.code === params.code) ?? null
@@ -119,6 +121,10 @@ export default async function ChartOfAccountPage({
     const parentRows = await db.select().from(schema.chartOfAccounts).where(eq(schema.chartOfAccounts.code, accHead)).limit(1);
     if (!parentRows.length) return;
     const parentCode = parentRows[0].code;
+    // Guard: only L1–L4 heads can be parents. L5 parties cannot have children.
+    if (parentCode.split(".").length >= 5) {
+      redirect(`/accounts?adding=1&error=parent_too_deep`);
+    }
 
     let newCode = "";
     let codeExists = false;
@@ -209,6 +215,11 @@ export default async function ChartOfAccountPage({
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Account code was just taken by another save. Try again.
+          </div>
+        )}
+        {params.error === "parent_too_deep" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Parent must be a Level 1–4 head. A Level 5 party cannot host children.
           </div>
         )}
         <div className="hidden">
@@ -312,8 +323,10 @@ export default async function ChartOfAccountPage({
                         <div className="flex-1"><Combobox name="acc_head" options={headOpts} placeholder="Select parent head" descTargetId="acct-code" /></div>
                         <AccountPicker
                           targetName="acc_head"
-                          options={allAccounts.map((a) => ({ code: a.code, description: a.description, level: a.level ?? 1 }))}
-                          label="Select Parent Account Head"
+                          options={allAccounts
+                            .filter((a) => (a.level ?? a.code.split(".").length) <= 4)
+                            .map((a) => ({ code: a.code, description: a.description, level: a.level ?? 1 }))}
+                          label="Select Parent Account Head (L1–L4 only)"
                         />
                       </div>
                     )}
