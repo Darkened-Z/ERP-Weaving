@@ -471,33 +471,38 @@ export default async function LoomsPage({
                         </td>
                       </tr>
                     )}
-                    <tr key={l.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                      <td className="mono font-bold">
-                        <a href={`/weaving/looms?id=${l.id}${q ? `&q=${encodeURIComponent(q)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
-                          {l.id}
-                        </a>
-                      </td>
-                      <td className="mono text-[13px]">{l.loomNo}</td>
-                      <td className="mono text-[13px]">{l.shed}</td>
-                      <td>{l.type}</td>
-                      <td className="text-right mono">{l.rpm ?? "-"}</td>
-                      <td className="mono text-[13px]">{l.currentContract ?? "-"}</td>
-                      <td>{l.weaverName ?? "-"}</td>
-                      <td className="text-center">{l.group ?? "-"}</td>
-                      <td>
-                        <span
-                          className="inline-block px-2 py-0.5 text-[11px] font-bold uppercase"
-                          style={{
-                            background: l.status === "A" ? "black" : "transparent",
-                            color: l.status === "A" ? "white" : isSel ? "white" : "black",
-                            border: isSel ? "1px solid white" : "1px solid black",
-                          }}
-                        >
-                          {l.status}
-                        </span>
-                      </td>
-                      <td className="text-right mono">{l.actRpm ?? "-"}</td>
-                    </tr>
+                    {(() => {
+                      const href = `/weaving/looms?id=${l.id}${q ? `&q=${encodeURIComponent(q)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}`;
+                      const linkCls = "no-underline block px-2 py-1";
+                      const linkStyle = { color: isSel ? "white" : "inherit" };
+                      return (
+                        <tr key={l.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-100"}>
+                          <td className="mono font-bold p-0"><a href={href} className={linkCls} style={linkStyle}>{l.id}</a></td>
+                          <td className="mono text-[13px] p-0"><a href={href} className={linkCls} style={linkStyle}>{l.loomNo}</a></td>
+                          <td className="mono text-[13px] p-0"><a href={href} className={linkCls} style={linkStyle}>{l.shed}</a></td>
+                          <td className="p-0"><a href={href} className={linkCls} style={linkStyle}>{l.type}</a></td>
+                          <td className="text-right mono p-0"><a href={href} className={linkCls + " text-right"} style={linkStyle}>{l.rpm ?? "-"}</a></td>
+                          <td className="mono text-[13px] p-0"><a href={href} className={linkCls} style={linkStyle}>{l.currentContract ?? "-"}</a></td>
+                          <td className="p-0"><a href={href} className={linkCls} style={linkStyle}>{l.weaverName ?? "-"}</a></td>
+                          <td className="text-center p-0"><a href={href} className={linkCls + " text-center"} style={linkStyle}>{l.group ?? "-"}</a></td>
+                          <td className="p-0">
+                            <a href={href} className={linkCls} style={linkStyle}>
+                              <span
+                                className="inline-block px-2 py-0.5 text-[11px] font-bold uppercase"
+                                style={{
+                                  background: l.status === "A" ? "black" : "transparent",
+                                  color: l.status === "A" ? "white" : isSel ? "white" : "black",
+                                  border: isSel ? "1px solid white" : "1px solid black",
+                                }}
+                              >
+                                {l.status}
+                              </span>
+                            </a>
+                          </td>
+                          <td className="text-right mono p-0"><a href={href} className={linkCls + " text-right"} style={linkStyle}>{l.actRpm ?? "-"}</a></td>
+                        </tr>
+                      );
+                    })()}
                   </>
                 );
               })}
