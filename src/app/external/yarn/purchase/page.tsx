@@ -112,16 +112,18 @@ export default async function YarnPurchaseVoucherPage({
   const codeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
 
   const countList = await db
-    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .select({ id: schema.yarnCounts.id, code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
-  // Party-scoped count options — driven by party_counts master. Each row becomes
-  // a (party desc, count code) pair the DatalistPartyFilter uses to trim the
-  // Line-Item Count datalist when the header Party is picked.
+  // Party-scoped count options — driven by party_counts master. party_counts.countCode
+  // stores yarn_counts.id (PK), not .countCode — so we match on id first, and fall back
+  // to code-as-string in case some rows stored the visible code.
   const partyCountsRows = await db.select().from(schema.partyCounts);
   const partyScopedCounts: { code: string; description: string; party: string }[] = [];
   for (const pc of partyCountsRows) {
-    const yc = countList.find((c) => String(c.code) === String(pc.countCode));
+    const yc =
+      countList.find((c) => c.id === pc.countCode) ??
+      countList.find((c) => String(c.code) === String(pc.countCode));
     if (!yc) continue;
     const partyDesc = descByCode[pc.partyCode];
     if (!partyDesc) continue;

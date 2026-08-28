@@ -175,14 +175,16 @@ export default async function YarnSaleVoucherPage({
   }
 
   const countList = await db
-    .select({ code: schema.yarnCounts.countCode, type: schema.yarnCounts.type, description: schema.yarnCounts.description })
+    .select({ id: schema.yarnCounts.id, code: schema.yarnCounts.countCode, type: schema.yarnCounts.type, description: schema.yarnCounts.description })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
-  // Party-scoped count options — from party_counts master. Same shape as Yarn Purchase.
+  // Party-scoped count options — party_counts.countCode stores yarn_counts.id (PK), not code.
   const partyCountsRows = await db.select().from(schema.partyCounts);
   const partyScopedCounts: { code: string; description: string; party: string }[] = [];
   for (const pc of partyCountsRows) {
-    const yc = countList.find((c) => String(c.code) === String(pc.countCode));
+    const yc =
+      countList.find((c) => c.id === pc.countCode) ??
+      countList.find((c) => String(c.code) === String(pc.countCode));
     if (!yc) continue;
     const partyDesc = descByCode[pc.partyCode];
     if (!partyDesc) continue;
