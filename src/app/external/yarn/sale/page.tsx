@@ -196,6 +196,31 @@ export default async function YarnSaleVoucherPage({
     partyScopedCounts.push({ code: String(yc.code), description: label, party: "" });
   }
   const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+
+  // Historical brand inference — most recent brand ever used on that count, preferring party match.
+  const recentSaleLines = await db
+    .select({
+      count: schema.extYarnSalVoucherLine.count,
+      brand: schema.extYarnSalVoucherLine.brand,
+      party: schema.extYarnSalVoucher.party,
+    })
+    .from(schema.extYarnSalVoucherLine)
+    .innerJoin(schema.extYarnSalVoucher, eq(schema.extYarnSalVoucherLine.voucherId, schema.extYarnSalVoucher.id))
+    .orderBy(desc(schema.extYarnSalVoucherLine.id))
+    .limit(500);
+  const brandByCount: Record<string, string> = {};
+  const brandByPartyCount: Record<string, Record<string, string>> = {};
+  for (const r of recentSaleLines) {
+    if (!r.count || !r.brand) continue;
+    const c = String(r.count);
+    if (!brandByCount[c]) brandByCount[c] = r.brand;
+    const p = r.party ?? "";
+    if (p) {
+      if (!brandByPartyCount[p]) brandByPartyCount[p] = {};
+      if (!brandByPartyCount[p][c]) brandByPartyCount[p][c] = r.brand;
+    }
+  }
+
   // Blend from yarn_counts.type — used as the default when no contract picked.
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
   const countBlendByCode: Record<string, string> = {};
@@ -203,11 +228,16 @@ export default async function YarnSaleVoucherPage({
     const baseDesc = c.description ?? "";
     const masterBlend = c.type ?? "";
     const combined = [baseDesc, masterBlend].filter(Boolean).join(" ").trim();
-    countDefaultMap[String(c.code)] = {
+    const codeKey = String(c.code);
+    const partyBrand = formVoucher?.party ? brandByPartyCount[formVoucher.party]?.[codeKey] : undefined;
+    const anyBrand = brandByCount[codeKey];
+    const fallbackBrand = partyBrand ?? anyBrand ?? "";
+    countDefaultMap[codeKey] = {
       line_pack: 24,
       line_count_desc: combined,
       line_unit: "GDN",
       line_despatch_party: godownParty,
+      line_brand: fallbackBrand,
     };
     if (c.type) countBlendByCode[String(c.code)] = c.type;
   }

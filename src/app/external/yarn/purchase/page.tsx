@@ -235,6 +235,32 @@ export default async function YarnPurchaseVoucherPage({
   // Default godown party — first party account whose description contains "GODOWN"
   const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
 
+  // Historical brand inference — from past yarn purchase voucher lines. When a
+  // count is picked in a row, we fill line_brand with the most recent brand ever
+  // used on that count (globally) and prefer a party-specific match if any.
+  const recentLines = await db
+    .select({
+      count: schema.extYarnPurVoucherLine.count,
+      brand: schema.extYarnPurVoucherLine.brand,
+      party: schema.extYarnPurVoucher.party,
+    })
+    .from(schema.extYarnPurVoucherLine)
+    .innerJoin(schema.extYarnPurVoucher, eq(schema.extYarnPurVoucherLine.voucherId, schema.extYarnPurVoucher.id))
+    .orderBy(desc(schema.extYarnPurVoucherLine.id))
+    .limit(500);
+  const brandByCount: Record<string, string> = {};
+  const brandByPartyCount: Record<string, Record<string, string>> = {};
+  for (const r of recentLines) {
+    if (!r.count || !r.brand) continue;
+    const c = String(r.count);
+    if (!brandByCount[c]) brandByCount[c] = r.brand;
+    const p = r.party ?? "";
+    if (p) {
+      if (!brandByPartyCount[p]) brandByPartyCount[p] = {};
+      if (!brandByPartyCount[p][c]) brandByPartyCount[p][c] = r.brand;
+    }
+  }
+
   // Blend is stored on yarn_counts.type (the "Blend" column that was hidden
   // from the master UI). Contracts can override with their own ratio, but
   // the default typing '2' will still show '30/S MVS PV 65:35' if the master
@@ -244,11 +270,16 @@ export default async function YarnPurchaseVoucherPage({
     const baseDesc = c.description ?? "";
     const masterBlend = c.type ?? "";
     const combined = [baseDesc, masterBlend].filter(Boolean).join(" ").trim();
-    countDefaultMap[String(c.code)] = {
+    const codeKey = String(c.code);
+    const partyBrand = formVoucher?.party ? brandByPartyCount[formVoucher.party]?.[codeKey] : undefined;
+    const anyBrand = brandByCount[codeKey];
+    const fallbackBrand = partyBrand ?? anyBrand ?? "";
+    countDefaultMap[codeKey] = {
       line_pack: 24,
       line_count_desc: combined,
       line_unit: "GDN",
       line_despatch_party: godownParty,
+      line_brand: fallbackBrand,
     };
   }
   // Party-specific rates — when the voucher's party has partyCounts entries,
