@@ -115,6 +115,7 @@ export default async function YarnPurchaseVoucherPage({
     .select({ id: schema.yarnCounts.id, code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
+  const brandList = await db.select().from(schema.yarnBrands).orderBy(schema.yarnBrands.name);
   // Party-scoped count options — driven by party_counts master. party_counts.countCode
   // stores yarn_counts.id (PK), not .countCode — so we match on id first, and fall back
   // to code-as-string in case some rows stored the visible code.
@@ -769,6 +770,11 @@ export default async function YarnPurchaseVoucherPage({
             </option>
           ))}
         </datalist>
+        <datalist id="ypv-brands">
+          {brandList.map((b) => (
+            <option key={b.id} value={b.name}>{b.name}</option>
+          ))}
+        </datalist>
         <DatalistPartyFilter datalistId="ypv-counts" options={partyScopedCounts} watchField="party" />
         <datalist id="ypv-contracts">
           {purContracts.map((c) => (
@@ -1222,9 +1228,10 @@ export default async function YarnPurchaseVoucherPage({
                             <td>
                               <input
                                 name="line_brand"
+                                list="ypv-brands"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.brand ?? ""}
-                                style={{ width: 70 }}
+                                style={{ width: 90 }}
                               />
                             </td>
                             <td>
