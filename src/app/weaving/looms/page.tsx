@@ -189,7 +189,7 @@ export default async function LoomsPage({
           <h1 className="page-title">Looms Entries (WVG)</h1>
           <div className="flex items-center gap-4">
             <span className="text-[13px] text-[var(--muted)]">
-              A=Active, S=Stop
+              Status: A=Active · S=Stop · M=Maintenance · D=Dismantled | Wrk: R=Running · F=Free · B=Broken
             </span>
             <ExcelExportButton
               rows={looms}
@@ -351,6 +351,8 @@ export default async function LoomsPage({
                 <select name="status" className="input-box" defaultValue={formItem?.status ?? "A"}>
                   <option value="A">A - Active</option>
                   <option value="S">S - Stop</option>
+                  <option value="M">M - Maintenance</option>
+                  <option value="D">D - Dismantled</option>
                 </select>
               </div>
               <div>
@@ -359,7 +361,14 @@ export default async function LoomsPage({
               </div>
               <div>
                 <label className="label block mb-1">Status Wrk</label>
-                <input name="status_wrk" className="input-box" defaultValue={formItem?.statusWrk ?? ""} />
+                <select name="status_wrk" className="input-box" defaultValue={formItem?.statusWrk ?? ""}>
+                  <option value="">—</option>
+                  <option value="R">R - Running (beam mounted)</option>
+                  <option value="F">F - Free (ready for beam)</option>
+                  <option value="S">S - Stopped</option>
+                  <option value="B">B - Broken</option>
+                  <option value="M">M - Maintenance</option>
+                </select>
               </div>
             </div>
             <div className="flex gap-2 mt-4">
