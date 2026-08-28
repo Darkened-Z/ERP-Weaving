@@ -65,6 +65,17 @@ export default async function LoomsPage({
     const make = (formData.get("lm_allocation") as string)?.trim() || null;
     const statusWrk = (formData.get("status_wrk") as string)?.trim() || null;
 
+    // Pre-check for dup loom_no, EXCLUDING the current row on update.
+    const conflict = await db
+      .select({ id: schema.looms.id })
+      .from(schema.looms)
+      .where(eq(schema.looms.loomNo, loomNo))
+      .limit(1);
+    const conflictId = conflict[0]?.id;
+    if (conflictId != null && (!id || parseInt(id) !== conflictId)) {
+      redirect("/weaving/looms?error=dup" + (id ? `&id=${id}` : ""));
+    }
+
     let ok = true;
     try {
       if (id) {
@@ -76,8 +87,11 @@ export default async function LoomsPage({
           shed, loomNo, type, rpm, actRpm, weaverName, group, forman, status, make, statusWrk,
         });
       }
-    } catch {
-      ok = false; // e.g. loom number already used — surface a message instead of a 500
+    } catch (e) {
+      const msg = String((e as { message?: string })?.message ?? "");
+      const code = String((e as { code?: string })?.code ?? "");
+      if (msg.includes("UNIQUE") || code === "SQLITE_CONSTRAINT_UNIQUE") ok = false;
+      else throw e;
     }
     revalidatePath("/weaving/looms");
     if (!ok) redirect("/weaving/looms?error=dup" + (id ? `&id=${id}` : ""));

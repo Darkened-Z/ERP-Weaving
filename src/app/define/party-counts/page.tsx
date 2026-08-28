@@ -28,14 +28,19 @@ export default async function PartyCountsPage({
   const partyDesc = formItem ? accounts.find((a) => a.code === formItem.partyCode)?.description ?? "" : "";
   const countDesc = formItem ? yarnCounts.find((y) => y.id === formItem.countCode)?.description ?? "" : "";
 
-  // Only level 4 & 5 accounts = the actual weaving parties (e.g. 3.03.20.01.0003).
-  // Excludes the level-3 GL accounts (cash, stock, land) that are not parties.
+  // Level 5 leaf parties only — actual customer/vendor accounts (e.g. 1.01.01.10.0007).
+  // Excludes L4 heads (like INTERNAL DEBTORS) which are group buckets, not parties.
   const partyOpts = accounts
-    .filter((a) => a.level >= 4)
+    .filter((a) => a.level >= 5)
     .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}`, desc: a.description }));
+  // Count label joins the yarn count description with its blend/type so operator
+  // sees the full blend info (e.g. '2 — 30/S MVS PV 65:35' instead of '2 — 30/S MVS').
   const countOpts = yarnCounts
     .filter((y) => y.status === "A")
-    .map((y) => ({ value: String(y.id), label: `${y.countCode} — ${y.description}`, desc: y.description }));
+    .map((y) => {
+      const label = [y.description, y.type].filter(Boolean).join(" ").trim();
+      return { value: String(y.id), label: `${y.countCode} — ${label}`, desc: label };
+    });
 
   const q = (params.q ?? "").trim();
   const ql = q.toLowerCase();

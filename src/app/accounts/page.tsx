@@ -268,15 +268,27 @@ export default async function ChartOfAccountPage({
 
               <form action={saveAccount}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                  <div className="sm:col-span-2">
-                    <div className="w-24">
+                  <div className="sm:col-span-2 flex items-end gap-3">
+                    <div>
                       <label className="label block mb-1">Chart Level</label>
-                      <input
-                        className="input-box mono text-center"
-                        defaultValue={formAccount?.level ?? ""}
-                        readOnly
-                        tabIndex={-1}
-                      />
+                      <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4, 5].map((lvl) => {
+                          const active = (formAccount?.level ?? 0) === lvl;
+                          return (
+                            <span
+                              key={lvl}
+                              className={`inline-flex items-center justify-center mono text-[11px] font-bold border ${active ? "bg-black text-white border-black" : "bg-white text-[var(--muted)] border-[var(--border)]"}`}
+                              style={{ width: 28, height: 28 }}
+                              title={`Level ${lvl}${active ? " (current)" : ""}`}
+                            >
+                              L{lvl}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-[var(--muted)] pb-1">
+                      Level auto-derived from Code hierarchy — not editable
                     </div>
                   </div>
 
