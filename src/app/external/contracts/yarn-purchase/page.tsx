@@ -94,7 +94,7 @@ export default async function YarnPurchaseContractPage({
       level: schema.chartOfAccounts.level,
     })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`)
+    .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
   const countList = await db
     .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })

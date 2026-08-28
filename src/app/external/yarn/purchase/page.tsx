@@ -100,8 +100,8 @@ export default async function YarnPurchaseVoucherPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
 
-  // Only leaf/party accounts (level 4+) are selectable as party / broker.
-  const partyAccounts = parties.filter((p) => p.level >= 4);
+  // Only leaf/party accounts (level 5+) are selectable as party / broker.
+  const partyAccounts = parties.filter((p) => p.level >= 5);
   const partyOpts = partyAccounts.map((p) => ({
     value: p.description,
     label: `${p.code} — ${p.description}`,
@@ -429,7 +429,7 @@ export default async function YarnPurchaseVoucherPage({
     const partyRows = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
       .from(schema.chartOfAccounts)
-      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+      .where(sql`${schema.chartOfAccounts.level} >= 5`);
     const codeByDescSrv = new Map(partyRows.map((p) => [p.description, p.code]));
     const resolvePartyCoa = (p: string | null | undefined): string => {
       if (!p) return "";

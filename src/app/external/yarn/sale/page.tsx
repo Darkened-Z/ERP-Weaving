@@ -99,7 +99,7 @@ export default async function YarnSaleVoucherPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
 
-  const partyAccounts = parties.filter((p) => p.level >= 4);
+  const partyAccounts = parties.filter((p) => p.level >= 5);
   const partyOpts = partyAccounts.map((p) => ({
     value: p.description,
     label: `${p.code} — ${p.description}`,
@@ -522,7 +522,7 @@ export default async function YarnSaleVoucherPage({
     const partyRows = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
       .from(schema.chartOfAccounts)
-      .where(sql`${schema.chartOfAccounts.level} >= 4`);
+      .where(sql`${schema.chartOfAccounts.level} >= 5`);
     const codeByDescMap = new Map(partyRows.map((p) => [p.description, p.code]));
     const resolvePartyCoa = (desc: string | null | undefined): string => {
       if (!desc) return "";
