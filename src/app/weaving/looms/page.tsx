@@ -219,15 +219,25 @@ export default async function LoomsPage({
             </div>
             <div className="flex gap-2">
               <a href="/weaving/looms?adding=1" className="btn btn-outline btn-sm">New</a>
-              {formItem && (
+              {formItem ? (
                 <a
                   href={`/tickets/new?loom=${encodeURIComponent(formItem.loomNo)}`}
                   className="btn btn-outline btn-sm"
                 >
                   Report Issue
                 </a>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the loom first to report an issue"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Report Issue
+                </button>
               )}
-              {formItem && (() => {
+              {formItem ? (() => {
                 const busy = !!(formItem.currentBeam || formItem.currentContract || formItem.statusWrk === "R");
                 if (busy) {
                   return (
@@ -253,12 +263,32 @@ export default async function LoomsPage({
                     Free Loom
                   </button>
                 );
-              })()}
-              {formItem && (
+              })() : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the loom first to enable Free Loom"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Free Loom
+                </button>
+              )}
+              {formItem ? (
                 <form action={deleteLoom} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <ConfirmButton>Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the loom first — new loom has nothing to delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
             </div>
           </div>
