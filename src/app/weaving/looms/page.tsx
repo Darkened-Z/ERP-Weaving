@@ -202,13 +202,27 @@ export default async function LoomsPage({
           </div>
 
           {params.error === "dup" && (
-            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold">
-              That loom number is already in use — pick a different one. The Code stays fixed.
+            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold flex items-center justify-between">
+              <span>That loom number is already in use — pick a different one. The Code stays fixed.</span>
+              <a
+                href={formItem ? `/weaving/looms?id=${formItem.id}` : "/weaving/looms"}
+                className="text-[11px] text-[var(--muted)] hover:text-[var(--danger)] mono"
+                title="Dismiss"
+              >
+                ✕ close
+              </a>
             </div>
           )}
           {params.error === "in_use" && (
-            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold">
-              This loom is referenced by beams, production records, or has a current beam assigned. Clear the references before deleting.
+            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold flex items-center justify-between">
+              <span>This loom is referenced by beams, production records, or has a current beam assigned. Clear the references before deleting.</span>
+              <a
+                href={formItem ? `/weaving/looms?id=${formItem.id}` : "/weaving/looms"}
+                className="text-[11px] text-[var(--muted)] hover:text-[var(--danger)] mono"
+                title="Dismiss"
+              >
+                ✕ close
+              </a>
             </div>
           )}
           <form action={saveLoom}>
