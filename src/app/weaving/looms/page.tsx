@@ -15,10 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function LoomsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; q?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; q?: string; shed?: string }>;
 }) {
   const params = await searchParams;
   const looms = await db.select().from(schema.looms).orderBy(schema.looms.loomNo);
+  const shedFilter = (params.shed ?? "").trim();
   const weavers = await db.select().from(schema.weavers).orderBy(schema.weavers.code);
 
   const selected = params.id
@@ -43,9 +44,10 @@ export default async function LoomsPage({
 
   const q = (params.q ?? "").trim();
   const ql = q.toLowerCase();
+  const shedFiltered = shedFilter ? looms.filter((l) => l.shed === shedFilter) : looms;
   const listed = !q
-    ? looms
-    : looms.filter(
+    ? shedFiltered
+    : shedFiltered.filter(
         (l) =>
           String(l.loomNo).includes(ql) ||
           l.shed.toLowerCase().includes(ql) ||
@@ -151,6 +153,33 @@ export default async function LoomsPage({
     redirect("/weaving/looms");
   }
 
+  async function freeLoom(formData: FormData) {
+    "use server";
+    const id = parseInt(formData.get("id") as string);
+    if (!id) return;
+    // Clear the loom's current beam / contract / product / work-status so the
+    // loom becomes available for a new beam mount (Oracle: SET_LOOM_FREE).
+    // Also detach the beam so it goes back to LOADED (empty on this loom).
+    const [loom] = await db
+      .select({ loomNo: schema.looms.loomNo, currentBeam: schema.looms.currentBeam })
+      .from(schema.looms)
+      .where(eq(schema.looms.id, id))
+      .limit(1);
+    if (!loom) redirect("/weaving/looms");
+    await db.update(schema.looms).set({
+      currentBeam: null,
+      currentContract: null,
+      currentProduct: null,
+      statusWrk: "F",  // F = Free
+    }).where(eq(schema.looms.id, id));
+    if (loom.currentBeam) {
+      await db.update(schema.beams).set({ statusWrk: "LOADED", loomNo: null })
+        .where(eq(schema.beams.beamNo, loom.currentBeam));
+    }
+    revalidatePath("/weaving/looms");
+    redirect(`/weaving/looms?id=${id}`);
+  }
+
   return (
     <Shell active="looms">
       <div className="animate-in">
@@ -195,6 +224,12 @@ export default async function LoomsPage({
                 >
                   Report Issue
                 </a>
+              )}
+              {formItem && (formItem.currentBeam || formItem.currentContract || formItem.statusWrk === "R") && (
+                <form action={freeLoom} className="inline">
+                  <input type="hidden" name="id" value={formItem.id} />
+                  <ConfirmButton message={`Free loom ${formItem.loomNo}? Any running beam/contract will be detached (beam goes back to LOADED).`}>Free Loom</ConfirmButton>
+                </form>
               )}
               {formItem && (
                 <form action={deleteLoom} className="inline">
@@ -315,11 +350,31 @@ export default async function LoomsPage({
           </form>
         </div>
 
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-[11px] uppercase tracking-[0.1em] font-semibold">Filter</span>
+          <a
+            href={q ? `/weaving/looms?q=${encodeURIComponent(q)}` : "/weaving/looms"}
+            className={`btn btn-sm ${!shedFilter ? "" : "btn-outline"}`}
+          >
+            All ({looms.length})
+          </a>
+          {sheds.map((s) => {
+            const n = looms.filter((l) => l.shed === s).length;
+            const active = shedFilter === s;
+            const href = `/weaving/looms?shed=${encodeURIComponent(s)}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+            return (
+              <a key={s} href={href} className={`btn btn-sm ${active ? "" : "btn-outline"}`}>
+                Shed {s} ({n})
+              </a>
+            );
+          })}
+        </div>
         <form method="get" className="flex items-center gap-2 mb-3">
           <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">Find</div>
           <input name="q" defaultValue={q} className="input-box flex-1 text-[13px]" placeholder="Find Loom Desc / Loom No..." />
+          {shedFilter && <input type="hidden" name="shed" value={shedFilter} />}
           <button type="submit" className="btn btn-outline btn-sm">Find</button>
-          {q && <a href="/weaving/looms" className="btn btn-outline btn-sm">Clear</a>}
+          {q && <a href={shedFilter ? `/weaving/looms?shed=${encodeURIComponent(shedFilter)}` : "/weaving/looms"} className="btn btn-outline btn-sm">Clear</a>}
         </form>
 
         <div className="overflow-x-auto">
