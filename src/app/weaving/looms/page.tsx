@@ -4,6 +4,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { LoomNoValidator } from "@/components/loom-no-validator";
+import { UrlStrip } from "@/components/url-strip";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -204,6 +205,7 @@ export default async function LoomsPage({
             </div>
           </div>
 
+          {params.error && <UrlStrip param="error" />}
           {params.error === "dup" && (
             <div data-role="loom-error-banner" className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold flex items-center justify-between">
               <span>That loom number is already in use — pick a different one. The Code stays fixed.</span>
