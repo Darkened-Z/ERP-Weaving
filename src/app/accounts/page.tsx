@@ -488,45 +488,68 @@ export default async function ChartOfAccountPage({
                 <button type="submit" className="btn btn-sm">Find</button>
               </form>
             </div>
+            <div className="text-[10px] text-[var(--muted)] mb-2 flex gap-3 flex-wrap">
+              <span><span className="inline-block w-3 h-3 align-middle" style={{ background: "#0f172a" }}></span> L1 Head</span>
+              <span><span className="inline-block w-3 h-3 align-middle" style={{ background: "#334155" }}></span> L2 Group</span>
+              <span><span className="inline-block w-3 h-3 align-middle" style={{ background: "#64748b" }}></span> L3 Sub</span>
+              <span><span className="inline-block w-3 h-3 align-middle" style={{ background: "#94a3b8" }}></span> L4 Head</span>
+              <span><span className="inline-block w-3 h-3 align-middle border border-[var(--border)]" style={{ background: "white" }}></span> L5 Party</span>
+            </div>
             <div className="overflow-x-auto" style={{ maxHeight: "70vh", overflowY: "auto" }}>
               <table>
-                <thead>
+                <thead className="sticky top-0 bg-white z-10">
                   <tr>
+                    <th style={{ width: 30 }}>L</th>
                     <th>Code</th>
-                    <th>Account Tille</th>
+                    <th>Account Title</th>
                     <th>Sh.Name</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {accounts.map((acc) => (
-                    <tr
-                      key={acc.code}
-                      className={acc.code === selected?.code ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
-                    >
-                      <td className="mono text-[12px]">
-                        <a
-                          href={`/accounts?code=${acc.code}`}
-                          className="no-underline"
-                          style={{ color: acc.code === selected?.code ? "white" : "inherit" }}
-                        >
-                          {acc.code}
-                        </a>
-                      </td>
-                      <td
-                        className="text-[13px]"
-                        style={{ paddingLeft: `${12 + ((acc.level ?? 1) - 1) * 16}px` }}
-                      >
-                        <a
-                          href={`/accounts?code=${acc.code}`}
-                          className="no-underline"
-                          style={{ color: acc.code === selected?.code ? "white" : "inherit" }}
-                        >
-                          {acc.description}
-                        </a>
-                      </td>
-                      <td className="mono text-[11px] text-[var(--muted)]">{acc.descShort}</td>
-                    </tr>
-                  ))}
+                  {accounts.map((acc) => {
+                    const level = acc.level ?? 1;
+                    const isSelected = acc.code === selected?.code;
+                    // Per-level styling — headers are bold/darker, parties are lighter
+                    const levelStyles: Record<number, { bg: string; badge: string; font: string; weight: string }> = {
+                      1: { bg: "#f1f5f9", badge: "#0f172a", font: "text-[13px]", weight: "font-bold uppercase tracking-wide" },
+                      2: { bg: "#f8fafc", badge: "#334155", font: "text-[13px]", weight: "font-semibold" },
+                      3: { bg: "#fafbfc", badge: "#64748b", font: "text-[13px]", weight: "font-medium" },
+                      4: { bg: "white", badge: "#94a3b8", font: "text-[13px]", weight: "font-normal" },
+                      5: { bg: "white", badge: "transparent", font: "text-[12px] text-[var(--muted)]", weight: "font-normal" },
+                    };
+                    const st = levelStyles[level] ?? levelStyles[5];
+                    const rowBg = isSelected ? "bg-black text-white" : "cursor-pointer hover:bg-gray-100";
+                    const inlineBg = isSelected ? undefined : st.bg;
+                    return (
+                      <tr key={acc.code} className={rowBg} style={inlineBg ? { background: inlineBg } : undefined}>
+                        <td className="text-center" style={{ width: 30 }}>
+                          <span
+                            className="inline-block mono text-[9px] font-bold"
+                            style={{
+                              background: isSelected ? "white" : st.badge,
+                              color: isSelected ? "black" : "white",
+                              width: 18, height: 18, lineHeight: "18px", borderRadius: 2,
+                              opacity: level === 5 ? 0.3 : 1,
+                            }}
+                          >
+                            {level}
+                          </span>
+                        </td>
+                        <td className="mono text-[12px]">
+                          <a href={`/accounts?code=${acc.code}${params.find ? `&find=${encodeURIComponent(params.find)}` : ""}`} className="no-underline" style={{ color: isSelected ? "white" : "inherit" }}>
+                            {acc.code}
+                          </a>
+                        </td>
+                        <td className={st.font} style={{ paddingLeft: `${8 + (level - 1) * 18}px` }}>
+                          <a href={`/accounts?code=${acc.code}${params.find ? `&find=${encodeURIComponent(params.find)}` : ""}`} className={`no-underline ${st.weight}`} style={{ color: isSelected ? "white" : "inherit" }}>
+                            {level < 5 && <span className="text-[var(--muted)] mr-1">{"›".repeat(level - 1)}</span>}
+                            {acc.description}
+                          </a>
+                        </td>
+                        <td className="mono text-[11px] text-[var(--muted)]">{acc.descShort}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
