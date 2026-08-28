@@ -234,7 +234,7 @@ export default async function LoomsPage({
                 In edit mode, if the operator switches shed, loom_no is refreshed
                 to the next globally-unique number. The inline LoomNoValidator
                 catches any collision immediately if the operator manually types. */}
-            <AutoFill watch="shed" map={nextLoomByShed} inputs={["loom_no"]} />}
+            <AutoFill watch="shed" map={nextLoomByShed} inputs={["loom_no"]} />
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-3">
               <div>
                 <label className="label block mb-1">Code</label>
