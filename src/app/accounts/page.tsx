@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
+import { AccountPicker } from "@/components/account-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
@@ -295,7 +296,14 @@ export default async function ChartOfAccountPage({
                         tabIndex={-1}
                       />
                     ) : (
-                      <Combobox name="acc_head" options={headOpts} placeholder="Select parent head" descTargetId="acct-code" />
+                      <div className="flex items-center gap-1">
+                        <div className="flex-1"><Combobox name="acc_head" options={headOpts} placeholder="Select parent head" descTargetId="acct-code" /></div>
+                        <AccountPicker
+                          targetName="acc_head"
+                          options={allAccounts.map((a) => ({ code: a.code, description: a.description, level: a.level ?? 1 }))}
+                          label="Select Parent Account Head"
+                        />
+                      </div>
                     )}
                   </div>
                   <div>
