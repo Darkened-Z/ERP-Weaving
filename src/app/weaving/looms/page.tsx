@@ -45,6 +45,8 @@ export default async function LoomsPage({
   const q = (params.q ?? "").trim();
   const ql = q.toLowerCase();
   const shedFiltered = shedFilter ? looms.filter((l) => l.shed === shedFilter) : looms;
+  // Next code for adding — max id + 1 (id is auto-increment PK; matches what SQLite will assign)
+  const nextCode = looms.reduce((m, l) => Math.max(m, l.id), 0) + 1;
   const listed = !q
     ? shedFiltered
     : shedFiltered.filter(
@@ -225,12 +227,33 @@ export default async function LoomsPage({
                   Report Issue
                 </a>
               )}
-              {formItem && (formItem.currentBeam || formItem.currentContract || formItem.statusWrk === "R") && (
-                <form action={freeLoom} className="inline">
-                  <input type="hidden" name="id" value={formItem.id} />
-                  <ConfirmButton message={`Free loom ${formItem.loomNo}? Any running beam/contract will be detached (beam goes back to LOADED).`}>Free Loom</ConfirmButton>
-                </form>
-              )}
+              {formItem && (() => {
+                const busy = !!(formItem.currentBeam || formItem.currentContract || formItem.statusWrk === "R");
+                if (busy) {
+                  return (
+                    <form action={freeLoom} className="inline">
+                      <input type="hidden" name="id" value={formItem.id} />
+                      <ConfirmButton
+                        message={`Free loom ${formItem.loomNo}? Any running beam/contract will be detached (beam goes back to LOADED).`}
+                        title="Detach the current beam / contract and mark loom Free"
+                      >
+                        Free Loom
+                      </ConfirmButton>
+                    </form>
+                  );
+                }
+                return (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled
+                    title="Loom is already free — no beam/contract mounted"
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
+                  >
+                    Free Loom
+                  </button>
+                );
+              })()}
               {formItem && (
                 <form action={deleteLoom} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
@@ -275,7 +298,7 @@ export default async function LoomsPage({
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-3">
               <div>
                 <label className="label block mb-1">Code</label>
-                <input className="input-box mono bg-gray-100" value={formItem ? String(formItem.id) : "auto"} readOnly tabIndex={-1} />
+                <input className="input-box mono bg-gray-100" value={formItem ? String(formItem.id) : String(nextCode)} readOnly tabIndex={-1} />
               </div>
               <div>
                 <label className="label block mb-1">Shed No</label>
