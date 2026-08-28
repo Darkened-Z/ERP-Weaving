@@ -24,7 +24,12 @@ export default async function GreyConstructionPage({
   const rows = await db.select().from(schema.greyConstruction).orderBy(schema.greyConstruction.code);
   const yarnBlends = await db.select().from(schema.yarnBlends);
   const yarnCounts = await db.select().from(schema.yarnCounts).orderBy(schema.yarnCounts.countCode);
-  const countOpts = yarnCounts.map((y) => ({ value: y.countCode, label: `${y.countCode} — ${y.description}` }));
+  // Count label includes yarn_counts.type (blend/ratio) so the picker shows
+  // "2 — 30/S MVS PV 65:35" instead of just "2 — 30/S MVS".
+  const countOpts = yarnCounts.map((y) => {
+    const blend = y.type ? ` ${y.type}` : "";
+    return { value: y.countCode, label: `${y.countCode} — ${y.description}${blend}` };
+  });
   const nextCode = "GC-" + String(
     rows.reduce((max, r) => {
       const m = (r.code ?? "").match(/(\d+)$/);
@@ -192,16 +197,18 @@ export default async function GreyConstructionPage({
     redirect("/define/grey-construction");
   }
 
+  // 4 warp count rows + 1 remarks row (reuses warp_5 as free-text remarks).
   const warpFields = [
-    { name: "warp_count", label: "Warp", value: formItem?.warpCount },
-    { name: "warp_2", label: "RPT 2", value: formItem?.warp2 },
-    { name: "warp_3", label: "RPT 3", value: formItem?.warp3 },
+    { name: "warp_count", label: "Warp 1", value: formItem?.warpCount },
+    { name: "warp_2",     label: "Warp 2", value: formItem?.warp2 },
+    { name: "warp_3",     label: "Warp 3", value: formItem?.warp3 },
+    { name: "warp_4",     label: "Warp 4", value: formItem?.warp4 },
   ];
-
   const weftFields = [
-    { name: "weft_count", label: "Weft", value: formItem?.weftCount },
-    { name: "weft_2", label: "RPT 2", value: formItem?.weft2 },
-    { name: "weft_3", label: "RPT 3", value: formItem?.weft3 },
+    { name: "weft_count", label: "Weft 1", value: formItem?.weftCount },
+    { name: "weft_2",     label: "Weft 2", value: formItem?.weft2 },
+    { name: "weft_3",     label: "Weft 3", value: formItem?.weft3 },
+    { name: "weft_4",     label: "Weft 4", value: formItem?.weft4 },
   ];
 
   const rowHref = (id: number) => `/define/grey-construction?id=${id}` + (filterQS ? `&${filterQS}` : "");
@@ -245,8 +252,12 @@ export default async function GreyConstructionPage({
           )}
           <form action={saveConstruction}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
+            {/* Width + Blend UI removed per client — kept as hidden inputs so
+                existing values aren't destroyed on save (schema columns still exist). */}
+            <input type="hidden" name="width" defaultValue={formItem?.width ?? ""} />
+            <input type="hidden" name="blend" defaultValue={formItem?.blend ?? ""} />
 
-            <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="label block mb-1">Read</label>
                 <input name="reed" type="number" step="any" className="input-box mono" defaultValue={formItem?.reed ?? ""} />
@@ -254,10 +265,6 @@ export default async function GreyConstructionPage({
               <div>
                 <label className="label block mb-1">Pick</label>
                 <input name="pick" type="number" step="any" className="input-box mono" defaultValue={formItem?.pick ?? ""} />
-              </div>
-              <div>
-                <label className="label block mb-1">Width (inch)</label>
-                <input name="width" type="number" step="any" className="input-box mono" defaultValue={formItem?.width ?? ""} placeholder="63" />
               </div>
               <div>
                 <label className="label block mb-1">Gray Code</label>
@@ -271,10 +278,14 @@ export default async function GreyConstructionPage({
                 <div className="grid grid-cols-1 gap-1">
                   {warpFields.map((f) => (
                     <div key={f.name} className="flex items-center gap-2">
-                      <label className="label w-12 text-[11px] shrink-0">{f.label}</label>
+                      <label className="label w-16 text-[11px] shrink-0">{f.label}</label>
                       <div className="flex-1"><Combobox name={f.name} options={countOpts} defaultValue={f.value ?? ""} className="input-box mono text-[13px]" /></div>
                     </div>
                   ))}
+                  <div className="flex items-center gap-2">
+                    <label className="label w-16 text-[11px] shrink-0">Remarks</label>
+                    <input name="warp_5" className="input-box mono text-[13px] flex-1" defaultValue={formItem?.warp5 ?? ""} placeholder="Handwritten note (optional)" />
+                  </div>
                 </div>
               </div>
               <div>
@@ -282,27 +293,19 @@ export default async function GreyConstructionPage({
                 <div className="grid grid-cols-1 gap-1">
                   {weftFields.map((f) => (
                     <div key={f.name} className="flex items-center gap-2">
-                      <label className="label w-12 text-[11px] shrink-0">{f.label}</label>
+                      <label className="label w-16 text-[11px] shrink-0">{f.label}</label>
                       <div className="flex-1"><Combobox name={f.name} options={countOpts} defaultValue={f.value ?? ""} className="input-box mono text-[13px]" /></div>
                     </div>
                   ))}
+                  <div className="flex items-center gap-2">
+                    <label className="label w-16 text-[11px] shrink-0">Remarks</label>
+                    <input name="weft_5" className="input-box mono text-[13px] flex-1" defaultValue={formItem?.weft5 ?? ""} placeholder="Handwritten note (optional)" />
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="label block mb-1">Blend</label>
-                <select name="blend" className="input-box" defaultValue={formItem?.blend ?? ""}>
-                  <option value="">—</option>
-                  {yarnBlends.map((b) => (
-                    <option key={b.id} value={b.description}>{b.description}</option>
-                  ))}
-                  {formItem?.blend && !yarnBlends.some((b) => b.description === formItem.blend) && (
-                    <option value={formItem.blend}>{formItem.blend}</option>
-                  )}
-                </select>
-              </div>
               <div>
                 <label className="label block mb-1">Status</label>
                 <select name="status" className="input-box" defaultValue={formItem?.status ?? "A"}>
