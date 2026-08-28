@@ -31,11 +31,13 @@ export default async function LoomsPage({
   const formanOpts = [...new Set(looms.map((l) => l.forman).filter((f): f is string => !!f))]
     .sort()
     .map((f) => ({ value: f, label: f }));
+  // Next loom # per shed — uses the max loom_no GLOBALLY so the suggestion
+  // stays unique across every shed (loom_no is UNIQUE). Adding-mode gets it
+  // via AutoFill; edit-mode users who change the shed also get an updated
+  // suggestion so the loom # is refreshed to the next free number.
+  const maxLoomNoGlobal = looms.reduce((m, l) => Math.max(m, l.loomNo), 0);
   const nextLoomByShed = Object.fromEntries(
-    sheds.map((s) => [
-      s,
-      { loom_no: looms.filter((l) => l.shed === s).reduce((m, l) => Math.max(m, l.loomNo), 0) + 1 },
-    ])
+    sheds.map((s) => [s, { loom_no: maxLoomNoGlobal + 1 }])
   );
 
   const q = (params.q ?? "").trim();
@@ -228,7 +230,11 @@ export default async function LoomsPage({
           )}
           <form action={saveLoom}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
-            {!formItem && <AutoFill watch="shed" map={nextLoomByShed} inputs={["loom_no"]} />}
+            {/* AutoFill fires whenever shed changes — in both add AND edit modes.
+                In edit mode, if the operator switches shed, loom_no is refreshed
+                to the next globally-unique number. The inline LoomNoValidator
+                catches any collision immediately if the operator manually types. */}
+            <AutoFill watch="shed" map={nextLoomByShed} inputs={["loom_no"]} />}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-3">
               <div>
                 <label className="label block mb-1">Code</label>
