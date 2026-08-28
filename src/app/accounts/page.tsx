@@ -523,6 +523,7 @@ export default async function ChartOfAccountPage({
                     <th>Code</th>
                     <th>Account Title</th>
                     <th>Sh.Name</th>
+                    <th style={{ width: 40 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -567,6 +568,18 @@ export default async function ChartOfAccountPage({
                           </a>
                         </td>
                         <td className="mono text-[11px] text-[var(--muted)]">{acc.descShort}</td>
+                        <td className="text-center" style={{ width: 40 }}>
+                          <form action={deleteAccount} className="inline">
+                            <input type="hidden" name="code" value={acc.code} />
+                            <ConfirmButton
+                              message={`Delete account ${acc.code} — "${acc.description}"?\n\nThis cannot be undone.`}
+                              className="mono text-[13px]"
+                              style={{ background: "transparent", border: "none", color: isSelected ? "white" : "var(--danger)", padding: "2px 6px", cursor: "pointer" }}
+                            >
+                              ✕
+                            </ConfirmButton>
+                          </form>
+                        </td>
                       </tr>
                     );
                   })}

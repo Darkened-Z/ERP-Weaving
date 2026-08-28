@@ -8,15 +8,21 @@ export function ConfirmButton({
   children,
   message = "Delete this record? This cannot be undone.",
   className = "btn btn-outline btn-sm",
+  style,
+  title,
 }: {
   children: React.ReactNode;
   message?: string;
   className?: string;
+  style?: React.CSSProperties;
+  title?: string;
 }) {
   return (
     <button
       type="submit"
       className={className}
+      style={style}
+      title={title}
       onClick={(e) => {
         if (!window.confirm(message)) e.preventDefault();
       }}
