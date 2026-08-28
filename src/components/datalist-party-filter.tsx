@@ -23,11 +23,18 @@ export function DatalistPartyFilter({
   watchField: string;
 }) {
   useEffect(() => {
-    const rebuild = () => {
+    const rebuild = (explicitVal?: string) => {
       const dl = document.getElementById(datalistId);
       if (!dl) return;
-      const watchEl = document.querySelector(`[name="${watchField}"]`) as HTMLInputElement | null;
-      const val = (watchEl?.value ?? "").trim();
+      let val: string;
+      if (explicitVal !== undefined) {
+        val = explicitVal.trim();
+      } else {
+        // Read from all inputs with this name (hidden + visible) and take the first non-empty.
+        const els = document.querySelectorAll(`[name="${watchField}"]`) as NodeListOf<HTMLInputElement>;
+        val = "";
+        els.forEach((e) => { if (!val && e.value) val = e.value.trim(); });
+      }
       let chosen: Opt[];
       if (val) {
         chosen = options.filter((o) => o.party === val);
@@ -48,11 +55,11 @@ export function DatalistPartyFilter({
     rebuild();
     const onCombo = (e: Event) => {
       const d = (e as CustomEvent).detail as { name?: string; value?: string };
-      if (d?.name === watchField) rebuild();
+      if (d?.name === watchField) rebuild(d.value ?? "");
     };
     const onInput = (e: Event) => {
       const t = e.target as HTMLInputElement;
-      if (t?.name === watchField) rebuild();
+      if (t?.name === watchField) rebuild(t.value);
     };
     document.addEventListener("combobox:change", onCombo);
     document.addEventListener("input", onInput, true);
