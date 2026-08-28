@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
+import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
@@ -177,6 +178,21 @@ export default async function YarnSaleVoucherPage({
     .select({ code: schema.yarnCounts.countCode, type: schema.yarnCounts.type, description: schema.yarnCounts.description })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
+  // Party-scoped count options — from party_counts master. Same shape as Yarn Purchase.
+  const partyCountsRows = await db.select().from(schema.partyCounts);
+  const partyScopedCounts: { code: string; description: string; party: string }[] = [];
+  for (const pc of partyCountsRows) {
+    const yc = countList.find((c) => String(c.code) === String(pc.countCode));
+    if (!yc) continue;
+    const partyDesc = descByCode[pc.partyCode];
+    if (!partyDesc) continue;
+    const label = [yc.description, yc.type].filter(Boolean).join(" ").trim();
+    partyScopedCounts.push({ code: String(yc.code), description: label, party: partyDesc });
+  }
+  for (const yc of countList) {
+    const label = [yc.description, yc.type].filter(Boolean).join(" ").trim();
+    partyScopedCounts.push({ code: String(yc.code), description: label, party: "" });
+  }
   const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
   // Blend from yarn_counts.type — used as the default when no contract picked.
   const countDefaultMap: Record<string, Record<string, string | number>> = {};
@@ -842,10 +858,11 @@ export default async function YarnSaleVoucherPage({
         <datalist id="ysv-count-list">
           {countList.map((c) => (
             <option key={c.code} value={String(c.code)}>
-              {c.type ?? ""}
+              {c.code} — {c.description}{c.type ? ` ${c.type}` : ""}
             </option>
           ))}
         </datalist>
+        <DatalistPartyFilter datalistId="ysv-count-list" options={partyScopedCounts} watchField="party" />
 
         <form
           id="ysv-find-form"
@@ -1079,28 +1096,9 @@ export default async function YarnSaleVoucherPage({
                       inputs={["pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                     />
                   </div>
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">Pur</label>
-                    <input
-                      name="pur"
-                      type="number"
-                      step="any"
-                      className="input-box mono bg-gray-100"
-                      defaultValue={savedPur ?? formVoucher?.pur ?? ""}
-                      readOnly
-                    />
-                  </div>
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">Bal</label>
-                    <input
-                      name="bal"
-                      type="number"
-                      step="any"
-                      className="input-box mono bg-gray-100"
-                      defaultValue={savedBal ?? formVoucher?.bal ?? ""}
-                      readOnly
-                    />
-                  </div>
+                  {/* Pur / Bal hidden per client feedback (visual clutter). AutoFill still writes. */}
+                  <input type="hidden" name="pur" defaultValue={savedPur ?? formVoucher?.pur ?? ""} />
+                  <input type="hidden" name="bal" defaultValue={savedBal ?? formVoucher?.bal ?? ""} />
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Stock Bag</label>
                     <input

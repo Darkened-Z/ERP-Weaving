@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
+import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql, desc } from "drizzle-orm";
@@ -114,6 +115,26 @@ export default async function YarnPurchaseVoucherPage({
     .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
+  // Party-scoped count options — driven by party_counts master. Each row becomes
+  // a (party desc, count code) pair the DatalistPartyFilter uses to trim the
+  // Line-Item Count datalist when the header Party is picked.
+  const partyCountsRows = await db.select().from(schema.partyCounts);
+  const partyScopedCounts: { code: string; description: string; party: string }[] = [];
+  for (const pc of partyCountsRows) {
+    const yc = countList.find((c) => String(c.code) === String(pc.countCode));
+    if (!yc) continue;
+    const partyDesc = descByCode[pc.partyCode];
+    if (!partyDesc) continue;
+    const label = [yc.description, yc.type].filter(Boolean).join(" ").trim();
+    partyScopedCounts.push({ code: String(yc.code), description: label, party: partyDesc });
+  }
+  // Fallback: include every yarn count with an empty party string. When no
+  // party is selected, the filter shows everything. When a party is selected
+  // but has no partyCounts entries, the filter falls back to full list.
+  for (const yc of countList) {
+    const label = [yc.description, yc.type].filter(Boolean).join(" ").trim();
+    partyScopedCounts.push({ code: String(yc.code), description: label, party: "" });
+  }
 
   const purContracts = await db
     .select()
@@ -715,6 +736,7 @@ export default async function YarnPurchaseVoucherPage({
             </option>
           ))}
         </datalist>
+        <DatalistPartyFilter datalistId="ypv-counts" options={partyScopedCounts} watchField="party" />
         <datalist id="ypv-contracts">
           {purContracts.map((c) => (
             <option key={c.contNo} value={c.contNo}>
@@ -984,39 +1006,11 @@ export default async function YarnPurchaseVoucherPage({
                       inputs={["per_bag", "pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                     />
                   </div>
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">Pur</label>
-                    <input
-                      name="pur"
-                      type="number"
-                      step="any"
-                      className="input-box mono bg-gray-100"
-                      defaultValue={savedPur ?? formVoucher?.pur ?? ""}
-                      readOnly
-                    />
-                  </div>
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">Bal</label>
-                    <input
-                      name="bal"
-                      type="number"
-                      step="any"
-                      className="input-box mono bg-gray-100"
-                      defaultValue={savedBal ?? formVoucher?.bal ?? ""}
-                      readOnly
-                    />
-                  </div>
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">Sal Avg Rate</label>
-                    <input
-                      name="sal_avg_rate"
-                      type="number"
-                      step="any"
-                      className="input-box mono bg-gray-100"
-                      defaultValue={salAvgRateCalc ?? formVoucher?.salAvgRate ?? ""}
-                      readOnly
-                    />
-                  </div>
+                  {/* PUR / BAL / SAL AVG RATE hidden per client feedback — kept as hidden inputs
+                     so the contract AutoFill still writes to them and save still records the values. */}
+                  <input type="hidden" name="pur" defaultValue={savedPur ?? formVoucher?.pur ?? ""} />
+                  <input type="hidden" name="bal" defaultValue={savedBal ?? formVoucher?.bal ?? ""} />
+                  <input type="hidden" name="sal_avg_rate" defaultValue={salAvgRateCalc ?? formVoucher?.salAvgRate ?? ""} />
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">R.K.D</label>
                     <input
@@ -1028,16 +1022,12 @@ export default async function YarnPurchaseVoucherPage({
                     />
                   </div>
 
-                  <div className="lg:col-span-1 flex items-end">
-                    <span className="mono text-[11px] text-[var(--muted)] pb-2">F-9</span>
-                  </div>
-                  <div className="lg:col-span-11">
+                  <div className="lg:col-span-12">
                     <label className="label block mb-1">Lot No</label>
                     <input
                       name="lot_no"
                       className="input-box mono"
                       defaultValue={formVoucher?.lotNo ?? ""}
-                      placeholder="F9 lookup"
                     />
                   </div>
 
@@ -1124,7 +1114,6 @@ export default async function YarnPurchaseVoucherPage({
                           <th>Cont.#</th>
                           <th>Count</th>
                           <th>Count Desc</th>
-                          <th>Party Count</th>
                           <th>Bld</th>
                           <th>Pack</th>
                           <th>Brand</th>
@@ -1179,14 +1168,8 @@ export default async function YarnPurchaseVoucherPage({
                                 style={{ minWidth: 160, background: "#f3f4f6" }}
                               />
                             </td>
-                            <td>
-                              <input
-                                name="line_party_count"
-                                className="input-box mono text-[12px]"
-                                defaultValue={row?.partyCount ?? ""}
-                                style={{ width: 65 }}
-                              />
-                            </td>
+                            {/* Party Count column removed per client feedback — value kept as hidden so update-cycle doesn't wipe existing rows */}
+                            <input type="hidden" name="line_party_count" defaultValue={row?.partyCount ?? ""} />
                             <td>
                               <input
                                 name="line_bld"
