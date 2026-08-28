@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
+import { LoomNoValidator } from "@/components/loom-no-validator";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -202,7 +203,7 @@ export default async function LoomsPage({
           </div>
 
           {params.error === "dup" && (
-            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold flex items-center justify-between">
+            <div data-role="loom-error-banner" className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold flex items-center justify-between">
               <span>That loom number is already in use — pick a different one. The Code stays fixed.</span>
               <a
                 href={formItem ? `/weaving/looms?id=${formItem.id}` : "/weaving/looms"}
@@ -240,6 +241,10 @@ export default async function LoomsPage({
               <div>
                 <label className="label block mb-1">Loom No</label>
                 <input name="loom_no" type="number" className="input-box mono" defaultValue={formItem?.loomNo ?? ""} required />
+                <LoomNoValidator
+                  takenByLoomNo={Object.fromEntries(looms.map((l) => [String(l.loomNo), l.id]))}
+                  currentId={formItem?.id}
+                />
               </div>
               <div>
                 <label className="label block mb-1">Loom Desc</label>
