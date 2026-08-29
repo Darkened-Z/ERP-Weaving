@@ -1,5 +1,6 @@
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -33,6 +34,11 @@ export default async function PartyCountsPage({
   const partyOpts = accounts
     .filter((a) => a.level >= 5)
     .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}`, desc: a.description }));
+  // Strict finding-list rows for the Party field (value = account code). Picking
+  // from this list is the only way to set the party, so no orphan codes.
+  const partyFindRows = accounts
+    .filter((a) => a.level >= 5)
+    .map((a) => ({ value: a.code, code: a.code, description: a.description }));
   // Count label joins the yarn count description with its blend/type so operator
   // sees the full blend info (e.g. '2 — 30/S MVS PV 65:35' instead of '2 — 30/S MVS').
   const countOpts = yarnCounts
@@ -63,6 +69,18 @@ export default async function PartyCountsPage({
     const partyCode = (formData.get("party") as string)?.trim();
     const countCode = parseInt(formData.get("count") as string);
     if (!partyCode || !countCode) return;
+
+    // Guard against orphan entries: the party must be a real account in the
+    // chart. Prevents a typed/stale code (e.g. after a chart re-import) from
+    // saving a party-count that never matches a selectable party.
+    const [acct] = await db
+      .select({ code: schema.chartOfAccounts.code })
+      .from(schema.chartOfAccounts)
+      .where(eq(schema.chartOfAccounts.code, partyCode))
+      .limit(1);
+    if (!acct) {
+      redirect("/define/party-counts?" + (id ? `id=${id}&` : "adding=1&") + "error=bad_party");
+    }
 
     const trnType = (formData.get("trn_type") as string)?.trim() || null;
     const countGroup = (formData.get("group") as string)?.trim() || null;
@@ -140,6 +158,11 @@ export default async function PartyCountsPage({
                   This party + count combination already exists.
                 </div>
               )}
+              {params.error === "bad_party" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  That party account does not exist in the chart. Pick a party from the F9 list.
+                </div>
+              )}
               <form action={savePartyCount}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
                 <AutoFill
@@ -163,13 +186,9 @@ export default async function PartyCountsPage({
                       className="input-box"
                     />
                   </div>
-                  <div>
-                    <label className="label block mb-1">Party</label>
-                    <Combobox name="party" options={partyOpts} defaultValue={formItem?.partyCode ?? ""} placeholder="Party Code (F9)" descTargetId="pc-party-desc" />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">PartyDesc</label>
-                    <input id="pc-party-desc" className="input-box bg-gray-50" defaultValue={partyDesc} readOnly tabIndex={-1} />
+                  <div className="sm:col-span-2">
+                    <label className="label block mb-1">Party <span className="text-[10px] text-[var(--muted)]">(F9 — pick from list, no typing)</span></label>
+                    <FindingPicker name="party" defaultValue={formItem?.partyCode ?? ""} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
                   </div>
                   <div>
                     <label className="label block mb-1">Count</label>

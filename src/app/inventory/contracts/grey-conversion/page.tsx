@@ -9,6 +9,8 @@ import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntConvCalc } from "@/components/int-conv-calc";
+import { BrokerRateCalc } from "@/components/broker-rate-calc";
+import { CountPicker } from "@/components/count-picker";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
@@ -124,7 +126,7 @@ export default async function IntGreyConversionContractPage({
     }
   }
   const productList = await db
-    .select({ code: schema.products.code, description: schema.products.description })
+    .select({ code: schema.products.code, description: schema.products.description, mainDesc: schema.products.mainDesc, subDesc: schema.products.subDesc })
     .from(schema.products)
     .orderBy(schema.products.description);
   const brandList = await db.select({ name: schema.yarnBrands.name }).from(schema.yarnBrands).orderBy(schema.yarnBrands.name);
@@ -239,8 +241,10 @@ export default async function IntGreyConversionContractPage({
     greyList.map((g) => [g.code, { read: g.reed, pick: g.pick, width: g.width }])
   );
   const productFillMap = Object.fromEntries(
-    productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description }])
+    productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description, product_main_desc: p.mainDesc ?? "", product_sub_desc: p.subDesc ?? "" }])
   );
+  const productDescInfo = new Map(productList.map((p) => [p.description, { mainDesc: p.mainDesc ?? "", subDesc: p.subDesc ?? "" }]));
+  const curProdInfo = formItem?.productName ? productDescInfo.get(formItem.productName) : undefined;
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -538,8 +542,9 @@ export default async function IntGreyConversionContractPage({
             <form id="igcc-save-form" action={saveContract}>
               {formItem && <input type="hidden" name="id" value={formItem.id} />}
               <IntConvCalc />
+              <BrokerRateCalc />
               <AutoFill watch="gray_qlty_code" map={greyFillMap} inputs={["read", "pick", "width"]} />
-              <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name"]} />
+              <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name", "product_main_desc", "product_sub_desc"]} />
               {Array.from({ length: 9 }, (_, k) => k + 1).map((i) => (
                 <RowAutoFill key={`warp-cf-${i}`} watch={`warp_count_${i}`} map={warpCountFillMap} />
               ))}
@@ -554,6 +559,12 @@ export default async function IntGreyConversionContractPage({
                 partyCountData={partyCountData}
                 allCounts={allCountOpts}
                 rows={9}
+              />
+              <CountPicker
+                partyField="party"
+                partyCodeByDesc={partyCodeByDescObj}
+                partyCountData={partyCountData}
+                allCounts={allCountOpts}
               />
               <datalist id="igcc-yarn-counts">
                 {yarnCountList.map((c) => (
@@ -668,13 +679,17 @@ export default async function IntGreyConversionContractPage({
                   </div>
 
                   <div className="grid grid-cols-4 gap-3 mb-3">
-                    <div>
+                    <div className="col-span-2">
                       <label className="label block mb-1">Broaker</label>
                       <Combobox name="broker" options={partyOpts} defaultValue={formItem?.broker ?? ""} placeholder="Select broker" className="input-box mono text-[13px]" />
                     </div>
                     <div>
                       <label className="label block mb-1">Rate/Pick</label>
                       <input name="rate_pick" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePick ?? ""} />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Rate/Mtr <span className="text-[10px] text-[var(--muted)]">(auto)</span></label>
+                      <input name="broker_rate_mtr" type="number" step="any" className="input-box mono text-right" defaultValue="" />
                     </div>
                     <div>
                       <label className="label block mb-1">D.#</label>
@@ -794,6 +809,14 @@ export default async function IntGreyConversionContractPage({
                   <div>
                     <label className="label block mb-1">Product Quality</label>
                     <input name="product_quality" className="input-box mono text-[13px]" defaultValue={formItem?.productQuality ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Main Desc <span className="text-[10px] text-[var(--muted)]">(from product)</span></label>
+                    <input name="product_main_desc" className="input-box mono text-[13px] bg-gray-50" defaultValue={curProdInfo?.mainDesc ?? ""} readOnly />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Sub Desc <span className="text-[10px] text-[var(--muted)]">(from product)</span></label>
+                    <input name="product_sub_desc" className="input-box mono text-[13px] bg-gray-50" defaultValue={curProdInfo?.subDesc ?? ""} readOnly />
                   </div>
                   <div>
                     <label className="label block mb-1">Season Type</label>
