@@ -6,6 +6,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { GreyInfoPanel } from "@/components/grey-info-panel";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
+import { PartyCountGrid } from "@/components/party-count-grid";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
@@ -136,6 +137,38 @@ export default async function GreyConvContractPage({
       (weftCountFillMap[code] ??= {})[`weft_brand_${i}`] = v.brand;
     }
   }
+
+  // Party-count master: restrict the WARP/WEFT count list to the selected
+  // party's counts and auto-fill Cal Count (warp/weft) + Rate Per Lbs per row.
+  const pcRows = await db
+    .select({
+      partyCode: schema.partyCounts.partyCode,
+      calWarp: schema.partyCounts.calCountWarp,
+      calWeft: schema.partyCounts.calCountWeft,
+      rate: schema.partyCounts.ratePerLbs,
+      visibleCode: schema.yarnCounts.countCode,
+      desc: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
+    .from(schema.partyCounts)
+    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
+  const partyCountData: Record<
+    string,
+    { counts: Array<{ code: string; label: string }>; byCount: Record<string, { calWarp: number | null; calWeft: number | null; rate: number | null }> }
+  > = {};
+  for (const r of pcRows) {
+    if (!r.visibleCode) continue;
+    const code = String(r.visibleCode);
+    const label = `${code} — ${r.desc ?? ""}${r.type ? ` ${r.type}` : ""}`;
+    const entry = (partyCountData[r.partyCode] ??= { counts: [], byCount: {} });
+    if (!entry.byCount[code]) entry.counts.push({ code, label });
+    entry.byCount[code] = { calWarp: r.calWarp, calWeft: r.calWeft, rate: r.rate };
+  }
+  const allCountOpts = yarnCountList.map((y) => ({
+    code: String(y.countCode),
+    label: `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+  }));
+  const partyCodeByDescObj: Record<string, string> = Object.fromEntries(parties.map((p) => [p.description, p.code]));
 
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = `%${escFind}%`;
@@ -567,6 +600,14 @@ export default async function GreyConvContractPage({
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <RowAutoFill key={`weft-cf-${i}`} watch={`weft_count_${i}`} map={weftCountFillMap} />
             ))}
+            {/* Party-scoped count list + Cal Count / Rate Per Lbs auto-fill from party_counts */}
+            <PartyCountGrid
+              datalistId="gc-yarn-counts"
+              partyField="party"
+              partyCodeByDesc={partyCodeByDescObj}
+              partyCountData={partyCountData}
+              allCounts={allCountOpts}
+            />
 
             <div className="grid grid-cols-12 gap-3 mb-3">
               <div className="col-span-8">
