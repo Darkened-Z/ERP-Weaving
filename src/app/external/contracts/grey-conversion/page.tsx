@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { GreyInfoPanel } from "@/components/grey-info-panel";
+import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
@@ -91,6 +92,7 @@ export default async function GreyConvContractPage({
       weft6: schema.greyConstruction.weft6,
       weft7: schema.greyConstruction.weft7,
       weft8: schema.greyConstruction.weft8,
+      status: schema.greyConstruction.status,
     })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
@@ -235,6 +237,17 @@ export default async function GreyConvContractPage({
       },
     ])
   );
+  // Full-page picker rows (Oracle FINDING GREY QUALITY parity)
+  const greyPickerRows = greyList.map((g) => ({
+    code: g.code,
+    reed: (g.reed ?? null) as number | null,
+    pick: (g.pick ?? null) as number | null,
+    width: (g.width ?? null) as number | null,
+    description: g.description ?? "",
+    warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => (x ?? "") as string),
+    weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => (x ?? "") as string),
+    status: (g.status ?? "A") as string,
+  }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
   const productCodeByDesc = new Map(productList.map((p) => [p.description, p.code]));
@@ -652,8 +665,8 @@ export default async function GreyConvContractPage({
 
                 <div className="grid grid-cols-4 gap-3 mb-3">
                   <div className="col-span-2">
-                    <label className="label block mb-1">Gray Qlty Code (Const)</label>
-                    <Combobox name="gray_qlty_code" options={greyOpts} defaultValue={formItem?.grayQltyCode ?? ""} placeholder="Select construction" />
+                    <label className="label block mb-1">Gray Qlty Code (Const) <span className="text-[10px] text-[var(--muted)]">(F9 to search by Read/Pick)</span></label>
+                    <GreyQualityPicker name="gray_qlty_code" defaultValue={formItem?.grayQltyCode ?? ""} rows={greyPickerRows} />
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">Img</label>
