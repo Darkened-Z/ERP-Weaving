@@ -8,6 +8,7 @@ import { GreyInfoPanel } from "@/components/grey-info-panel";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { PartyCountGrid } from "@/components/party-count-grid";
 import { FindingPicker } from "@/components/finding-picker";
+import { BrokerRateCalc } from "@/components/broker-rate-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
@@ -593,6 +594,7 @@ export default async function GreyConvContractPage({
           <form action={saveContract}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <GreyConvCalc />
+            <BrokerRateCalc />
             <AutoFill
               watch="gray_qlty_code"
               map={greyFillMap}
@@ -730,9 +732,13 @@ export default async function GreyConvContractPage({
                     <label className="label block mb-1">Broaker</label>
                     <Combobox name="broker" options={partyOpts} defaultValue={formItem?.broker ?? ""} placeholder="Select broker" className="input-box mono text-[13px]" />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="label block mb-1">Rate/Pick</label>
                     <input name="rate_pick" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePick ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Rate/Mtr <span className="text-[10px] text-[var(--muted)]">(auto)</span></label>
+                    <input name="broker_rate_mtr" type="number" step="any" className="input-box mono text-right" defaultValue="" />
                   </div>
                 </div>
 
