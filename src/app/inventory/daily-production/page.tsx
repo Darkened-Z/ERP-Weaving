@@ -518,6 +518,25 @@ export default async function DailyProductionPage({
               .set({ statusWrk: "EMPTY", loomNo: null })
               .where(eq(schema.beams.beamNo, oldBeam));
           }
+          // Auto "last roll → EMPTY": a beam whose cumulative woven meters reach
+          // its total length is exhausted → force EMPTY + detach from loom.
+          // No-ops when the beam has no length set, so it's safe until capacities
+          // are entered.
+          for (const beamNo of newBeams) {
+            const [b] = await tx
+              .select({ length: schema.beams.length, statusWrk: schema.beams.statusWrk })
+              .from(schema.beams)
+              .where(eq(schema.beams.beamNo, beamNo))
+              .limit(1);
+            if (!b?.length || b.length <= 0 || b.statusWrk === "EMPTY") continue;
+            const [agg] = await tx
+              .select({ woven: sql<number>`COALESCE(SUM(${schema.intDailyProductionSet.totalCount}), 0)` })
+              .from(schema.intDailyProductionSet)
+              .where(eq(schema.intDailyProductionSet.beamNo, beamNo));
+            if ((agg?.woven ?? 0) >= b.length) {
+              await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
+            }
+          }
         });
         revalidatePath("/inventory/daily-production");
         redirect(`/inventory/daily-production?id=${id}`);
@@ -581,6 +600,24 @@ export default async function DailyProductionPage({
             const patch: { statusWrk: string; loomNo?: number | null } = { statusWrk: s.beamStatus };
             if (s.beamStatus.toUpperCase() === "EMPTY") patch.loomNo = null;
             await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
+          }
+          // Auto "last roll → EMPTY" (see update path for rationale). No-ops
+          // until beam length is set.
+          const insBeams = new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b));
+          for (const beamNo of insBeams) {
+            const [b] = await tx
+              .select({ length: schema.beams.length, statusWrk: schema.beams.statusWrk })
+              .from(schema.beams)
+              .where(eq(schema.beams.beamNo, beamNo))
+              .limit(1);
+            if (!b?.length || b.length <= 0 || b.statusWrk === "EMPTY") continue;
+            const [agg] = await tx
+              .select({ woven: sql<number>`COALESCE(SUM(${schema.intDailyProductionSet.totalCount}), 0)` })
+              .from(schema.intDailyProductionSet)
+              .where(eq(schema.intDailyProductionSet.beamNo, beamNo));
+            if ((agg?.woven ?? 0) >= b.length) {
+              await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
+            }
           }
           return insertedId;
         });
