@@ -7,6 +7,7 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { GreyInfoPanel } from "@/components/grey-info-panel";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { PartyCountGrid } from "@/components/party-count-grid";
+import { FindingPicker } from "@/components/finding-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
@@ -221,6 +222,9 @@ export default async function GreyConvContractPage({
   const maxLContNo = lRow?.maxL ?? 0;
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Full-page finding list rows for the Party field (value stays the description
+  // so save + PartyCountGrid keep working).
+  const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const greyOpts = greyList.map((g) => {
     const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
     const w = g.width ? `${g.width}" ` : "";
@@ -658,8 +662,8 @@ export default async function GreyConvContractPage({
 
                 <div className="grid grid-cols-4 gap-3 mb-3">
                   <div>
-                    <label className="label block mb-1">Party</label>
-                    <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[13px]" />
+                    <label className="label block mb-1">Party <span className="text-[10px] text-[var(--muted)]">(F9 to find)</span></label>
+                    <FindingPicker name="party" defaultValue={formItem?.party ?? ""} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
                   </div>
                   <div>
                     <label className="label block mb-1">Weave &amp; Frame</label>
