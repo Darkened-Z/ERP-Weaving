@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { AutoAmount } from "@/components/auto-amount";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -36,15 +37,17 @@ const DELIVERY_EMPTY_MIN = 8;
 export default async function GreyPurchaseContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; fparty?: string; fgrey?: string }>;
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
   const findFilter = params.find?.trim();
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = `%${escFind ?? ""}%`;
+  const fParty = (params.fparty ?? "").trim();
+  const fGrey = (params.fgrey ?? "").trim();
 
-  const contracts = findFilter
+  const contractsAll = findFilter
     ? await db
         .select()
         .from(schema.extGreyPurContract)
@@ -60,6 +63,13 @@ export default async function GreyPurchaseContractPage({
         .select()
         .from(schema.extGreyPurContract)
         .orderBy(sql`contract_date DESC, id DESC`);
+
+  // Party-wise + grey-construction-wise finding, layered on top of the text find.
+  const contracts = contractsAll.filter((c) => {
+    if (fParty && c.party !== fParty) return false;
+    if (fGrey && c.greyCode !== fGrey) return false;
+    return true;
+  });
 
   const selectedId = params.id ? parseInt(params.id, 10) : NaN;
   const selected = Number.isFinite(selectedId)
@@ -78,7 +88,7 @@ export default async function GreyPurchaseContractPage({
   const todayVal = today();
 
   const nextContractNo = (() => {
-    const maxN = contracts.reduce((max, c) => {
+    const maxN = contractsAll.reduce((max, c) => {
       const m = c.contractNo?.match(/^GPC-(\d+)$/);
       if (!m) return max;
       const n = parseInt(m[1], 10);
@@ -87,7 +97,7 @@ export default async function GreyPurchaseContractPage({
     return `GPC-${String(maxN + 1).padStart(4, "0")}`;
   })();
 
-  const lastLContNo = contracts.reduce(
+  const lastLContNo = contractsAll.reduce(
     (max, c) => (c.lContNo && c.lContNo > max ? c.lContNo : max),
     0
   );
@@ -142,6 +152,8 @@ export default async function GreyPurchaseContractPage({
   );
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Full-page finding list rows for the Party field (value stays the description so save keeps working).
+  const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const greyOpts = greyList.map((g) => {
     const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
     const w = g.width ? `${g.width}" ` : "";
@@ -561,7 +573,7 @@ export default async function GreyPurchaseContractPage({
                   <label className="label block mb-1">Party</label>
                   <div className="grid grid-cols-[100px_1fr] gap-2">
                     <input id="gpc-party-code" className="input-box mono bg-gray-100" readOnly tabIndex={-1} defaultValue={formItem?.party ? partyCodeByDesc.get(formItem.party) ?? "" : ""} />
-                    <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box" descTargetId="gpc-party-code" />
+                    <FindingPicker name="party" defaultValue={formItem?.party ?? ""} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
                   </div>
                 </div>
               </div>
@@ -856,14 +868,37 @@ export default async function GreyPurchaseContractPage({
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2 pb-2 border-b border-black">
               Brows
             </div>
-            <form method="GET" className="mb-3 flex gap-2">
-              <input
-                name="find"
-                className="input-box text-[13px] flex-1"
-                placeholder="Search..."
-                defaultValue={findFilter ?? ""}
-              />
-              <button type="submit" className="btn btn-sm">Go</button>
+            <form method="GET" className="mb-3 space-y-2">
+              <div className="flex gap-2">
+                <input
+                  name="find"
+                  className="input-box text-[13px] flex-1"
+                  placeholder="Search..."
+                  defaultValue={findFilter ?? ""}
+                />
+                <button type="submit" className="btn btn-sm">Go</button>
+              </div>
+              <div>
+                <label className="label block mb-1">Party wise</label>
+                <select name="fparty" defaultValue={fParty} className="input-box mono text-[13px] w-full">
+                  <option value="">— All parties —</option>
+                  {partyFindRows.map((p) => (
+                    <option key={p.value} value={p.value}>{p.code} — {p.description}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label block mb-1">Grey construction wise</label>
+                <select name="fgrey" defaultValue={fGrey} className="input-box mono text-[13px] w-full">
+                  <option value="">— All qualities —</option>
+                  {greyPickerRows.map((g) => (
+                    <option key={g.code} value={g.code}>{g.code}{g.reed && g.pick ? ` — R${g.reed} P${g.pick}` : ""} {g.description}</option>
+                  ))}
+                </select>
+              </div>
+              {(findFilter || fParty || fGrey) && (
+                <a href="/external/contracts/grey-purchase" className="btn btn-outline btn-sm">Clear</a>
+              )}
             </form>
             <div className="overflow-y-auto scrollbar-thin" style={{ maxHeight: "60vh" }}>
               {contracts.length === 0 && (

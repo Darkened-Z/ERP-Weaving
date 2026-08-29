@@ -41,6 +41,8 @@ export function IntConvCalc() {
     const side = (prefix: "warp" | "weft") => {
       let wt = 0;
       let cost = 0;
+      // WEFT ends are picks/inch → × width for total; WARP ends already total.
+      const widthN = prefix === "weft" ? val("width") : 1;
       for (let i = 1; i <= 9; i++) {
         const calEl = q(`${prefix}_cal_count_${i}`);
         if (!calEl) continue;
@@ -52,9 +54,11 @@ export function IntConvCalc() {
           continue;
         }
         const cal = parseFloat(calEl.value);
+        // WARP: ENDS ÷ 731.52 ÷ Cal Count Warp · WEFT: ENDS × WIDTH ÷ 731.52 ÷ Cal Count Weft
+        const effectiveEnds = val(`${prefix}_ends_${i}`) * widthN;
         const rowWt =
           Number.isFinite(cal) && cal > 0
-            ? round((val(`${prefix}_ends_${i}`) * 1.0936 / 800) / cal, 6)
+            ? round(effectiveEnds / 731.52 / cal, 6)
             : 0;
         const rowCost = round(rowWt * val(`${prefix}_rate_${i}`), 4);
         set(`${prefix}_wt_${i}`, String(rowWt));

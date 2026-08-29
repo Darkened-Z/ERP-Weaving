@@ -524,6 +524,7 @@ export default async function GreyConvContractPage({
   }
 
   const gridCellCls = "input-box mono text-[13px] py-1";
+  const gridCellWideCls = "input-box mono text-[13px] py-1 min-w-[130px]";
   const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
   const gridCellCalcCls = "input-box mono text-[13px] py-1 text-right bg-gray-100";
   const roCls = "input-box mono text-[13px] bg-gray-100";
@@ -871,8 +872,8 @@ export default async function GreyConvContractPage({
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
-                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} list="gc-brands" className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellWideCls} defaultValue={r?.descr ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} list="gc-brands" className={gridCellWideCls} defaultValue={r?.brand ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
@@ -918,8 +919,8 @@ export default async function GreyConvContractPage({
                           <tr key={i}>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
-                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} list="gc-brands" className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellWideCls} defaultValue={r?.descr ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} list="gc-brands" className={gridCellWideCls} defaultValue={r?.brand ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>

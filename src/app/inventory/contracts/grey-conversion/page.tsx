@@ -4,6 +4,8 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
+import { PartyCountGrid } from "@/components/party-count-grid";
+import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntConvCalc } from "@/components/int-conv-calc";
@@ -54,7 +56,7 @@ const SEASON_TYPES = ["SUMMER", "WINTER", "ALL SEASON", "SPRING", "AUTUMN"];
 export default async function IntGreyConversionContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; fparty?: string; fgrey?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -109,35 +111,74 @@ export default async function IntGreyConversionContractPage({
       `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
     ])
   );
+  // Desc auto-fill = full count description incl. blend (e.g. "30/S MVS PV 65;35"),
+  // as written in the count master. Brand is NOT auto-filled — the operator picks
+  // from the full brand list (igcc-brands datalist) below.
   const warpCountFillMap: Record<string, Record<string, string>> = {};
   const weftCountFillMap: Record<string, Record<string, string>> = {};
   for (const c of yarnCountList) {
+    const descr = `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim();
     for (let i = 1; i <= 9; i++) {
-      (warpCountFillMap[String(c.countCode)] ??= {})[`warp_descr_${i}`] = c.description ?? "";
-      (warpCountFillMap[String(c.countCode)] ??= {})[`warp_brand_${i}`] = c.type ?? "";
-      (weftCountFillMap[String(c.countCode)] ??= {})[`weft_descr_${i}`] = c.description ?? "";
-      (weftCountFillMap[String(c.countCode)] ??= {})[`weft_brand_${i}`] = c.type ?? "";
+      (warpCountFillMap[String(c.countCode)] ??= {})[`warp_descr_${i}`] = descr;
+      (weftCountFillMap[String(c.countCode)] ??= {})[`weft_descr_${i}`] = descr;
     }
   }
   const productList = await db
     .select({ code: schema.products.code, description: schema.products.description })
     .from(schema.products)
     .orderBy(schema.products.description);
+  const brandList = await db.select({ name: schema.yarnBrands.name }).from(schema.yarnBrands).orderBy(schema.yarnBrands.name);
 
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
-  const pat = escFind ? `%${escFind}%` : "";
-  const contracts = findFilter
-    ? await db
-        .select()
-        .from(schema.intGreyConversionContract)
-        .where(sql`
-          ${schema.intGreyConversionContract.contNo} LIKE ${pat} ESCAPE '\\' OR
-          ${schema.intGreyConversionContract.party} LIKE ${pat} ESCAPE '\\' OR
-          ${schema.intGreyConversionContract.grayCode} LIKE ${pat} ESCAPE '\\' OR
-          ${schema.intGreyConversionContract.productName} LIKE ${pat} ESCAPE '\\'
-        `)
-        .orderBy(desc(schema.intGreyConversionContract.id))
-    : await db.select().from(schema.intGreyConversionContract).orderBy(desc(schema.intGreyConversionContract.id));
+  // Party-count master: restrict the WARP/WEFT count list to the selected
+  // party's counts and auto-fill Cal Count (warp/weft) + Rate Per Lbs per row.
+  const pcRows = await db
+    .select({
+      partyCode: schema.partyCounts.partyCode,
+      calWarp: schema.partyCounts.calCountWarp,
+      calWeft: schema.partyCounts.calCountWeft,
+      rate: schema.partyCounts.ratePerLbs,
+      visibleCode: schema.yarnCounts.countCode,
+      desc: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
+    .from(schema.partyCounts)
+    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
+  const partyCountData: Record<
+    string,
+    { counts: Array<{ code: string; label: string }>; byCount: Record<string, { calWarp: number | null; calWeft: number | null; rate: number | null }> }
+  > = {};
+  for (const r of pcRows) {
+    if (!r.visibleCode) continue;
+    const code = String(r.visibleCode);
+    const label = `${code} — ${r.desc ?? ""}${r.type ? ` ${r.type}` : ""}`;
+    const entry = (partyCountData[r.partyCode] ??= { counts: [], byCount: {} });
+    if (!entry.byCount[code]) entry.counts.push({ code, label });
+    entry.byCount[code] = { calWarp: r.calWarp, calWeft: r.calWeft, rate: r.rate };
+  }
+  const allCountOpts = yarnCountList.map((y) => ({
+    code: String(y.countCode),
+    label: `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+  }));
+  const partyCodeByDescObj: Record<string, string> = Object.fromEntries(parties.map((p) => [p.description, p.code]));
+
+  // Finding: text find + party-wise + grey-construction-wise. Fetch then filter
+  // in JS so the three filters compose cleanly (contract volume is modest).
+  const fParty = (params.fparty ?? "").trim();
+  const fGrey = (params.fgrey ?? "").trim();
+  const findL = (findFilter ?? "").toLowerCase();
+  const allContracts = await db
+    .select()
+    .from(schema.intGreyConversionContract)
+    .orderBy(desc(schema.intGreyConversionContract.id));
+  const contracts = allContracts.filter((c) => {
+    if (fParty && c.party !== fParty) return false;
+    if (fGrey && c.grayCode !== fGrey && c.grayQltyCode !== fGrey) return false;
+    if (findL) {
+      const hay = `${c.contNo ?? ""} ${c.party ?? ""} ${c.grayCode ?? ""} ${c.productName ?? ""}`.toLowerCase();
+      if (!hay.includes(findL)) return false;
+    }
+    return true;
+  });
 
   const selected = isEditing ? contracts.find((c) => c.id === idParam) ?? null : null;
   const formItem = isAdding ? null : selected;
@@ -168,6 +209,9 @@ export default async function IntGreyConversionContractPage({
   const maxLContNo = lRow?.maxL ?? 0;
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Full-page finding list rows for the Party field (value stays the description
+  // so save + PartyCountGrid keep working).
+  const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const greyOpts = greyList.map((g) => {
     const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
     const w = g.width ? `${g.width}" ` : "";
@@ -408,6 +452,7 @@ export default async function IntGreyConversionContractPage({
   }
 
   const gridCellCls = "input-box mono text-[13px] py-1";
+  const gridCellWideCls = "input-box mono text-[13px] py-1 min-w-[130px]";
   const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
   const gridCellCalcCls = "input-box mono text-[13px] py-1 text-right bg-gray-100";
   const roCls = "input-box mono text-[13px] bg-gray-100";
@@ -501,9 +546,23 @@ export default async function IntGreyConversionContractPage({
               {Array.from({ length: 9 }, (_, k) => k + 1).map((i) => (
                 <RowAutoFill key={`weft-cf-${i}`} watch={`weft_count_${i}`} map={weftCountFillMap} />
               ))}
+              {/* Party-scoped count list + Cal Count / Rate Per Lbs auto-fill from party_counts */}
+              <PartyCountGrid
+                datalistId="igcc-yarn-counts"
+                partyField="party"
+                partyCodeByDesc={partyCodeByDescObj}
+                partyCountData={partyCountData}
+                allCounts={allCountOpts}
+                rows={9}
+              />
               <datalist id="igcc-yarn-counts">
                 {yarnCountList.map((c) => (
                   <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+                ))}
+              </datalist>
+              <datalist id="igcc-brands">
+                {brandList.map((b) => (
+                  <option key={b.name} value={b.name} />
                 ))}
               </datalist>
 
@@ -553,8 +612,8 @@ export default async function IntGreyConversionContractPage({
 
                   <div className="grid grid-cols-4 gap-3 mb-3">
                     <div>
-                      <label className="label block mb-1">Party</label>
-                      <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[13px]" />
+                      <label className="label block mb-1">Party <span className="text-[10px] text-[var(--muted)]">(F9 to find)</span></label>
+                      <FindingPicker name="party" defaultValue={formItem?.party ?? ""} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
                     </div>
                     <div>
                       <label className="label block mb-1">Weave &amp; Frame</label>
@@ -783,8 +842,8 @@ export default async function IntGreyConversionContractPage({
                             <tr key={i}>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="igcc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellWideCls} defaultValue={r?.descr ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} list="igcc-brands" className={gridCellWideCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
@@ -830,8 +889,8 @@ export default async function IntGreyConversionContractPage({
                             <tr key={i}>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="igcc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellWideCls} defaultValue={r?.descr ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} list="igcc-brands" className={gridCellWideCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
@@ -862,17 +921,37 @@ export default async function IntGreyConversionContractPage({
         </div>
 
         <div className="border border-black">
-          <form action="/inventory/contracts/grey-conversion" method="get" className="flex gap-2 items-center border-b border-black p-3 bg-gray-50">
-            <label className="label">Find</label>
-            <input
-              name="find"
-              defaultValue={findFilter ?? ""}
-              placeholder="Cont No, Party, Gray Code, Product…"
-              className="input-box mono text-[13px]"
-              style={{ maxWidth: 320 }}
-            />
+          <form action="/inventory/contracts/grey-conversion" method="get" className="flex gap-2 items-end flex-wrap border-b border-black p-3 bg-gray-50">
+            <div>
+              <label className="label block mb-1">Find</label>
+              <input
+                name="find"
+                defaultValue={findFilter ?? ""}
+                placeholder="Cont No, Party, Gray Code, Product…"
+                className="input-box mono text-[13px]"
+                style={{ maxWidth: 260 }}
+              />
+            </div>
+            <div>
+              <label className="label block mb-1">Party wise</label>
+              <select name="fparty" defaultValue={fParty} className="input-box mono text-[13px]" style={{ maxWidth: 240 }}>
+                <option value="">— All parties —</option>
+                {partyFindRows.map((p) => (
+                  <option key={p.value} value={p.value}>{p.code} — {p.description}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label block mb-1">Grey construction wise</label>
+              <select name="fgrey" defaultValue={fGrey} className="input-box mono text-[13px]" style={{ maxWidth: 240 }}>
+                <option value="">— All qualities —</option>
+                {greyPickerRows.map((g) => (
+                  <option key={g.code} value={g.code}>{g.code}{g.reed && g.pick ? ` — R${g.reed} P${g.pick}` : ""} {g.description}</option>
+                ))}
+              </select>
+            </div>
             <button type="submit" className="btn btn-outline btn-sm">Search</button>
-            {findFilter && <a href="/inventory/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
+            {(findFilter || fParty || fGrey) && <a href="/inventory/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
           </form>
           <div className="overflow-x-auto">
             <table>
