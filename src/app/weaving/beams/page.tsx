@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
+import { BeamStatusPicker, STATUS_LOC_CANONICAL } from "@/components/beam-status-picker";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -247,7 +248,7 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue="WARP" /></div>
                 <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} className="input-box" placeholder="Party (F9)" /></div>
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" /></div>
-                <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" /></div>
+                <div><label className="label block mb-1">Status Loc <span className="text-[10px] text-[var(--muted)]">(F9)</span></label><BeamStatusPicker name="status_loc" defaultValue="RUNNING" allStatuses={beamStatuses} canonical={STATUS_LOC_CANONICAL} /></div>
                 <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} className="input-box" placeholder="Sizing Party (F9)" /></div>
                 <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" /></div>
                 <div><label className="label block mb-1">Loom No</label><Combobox name="loom_no" options={loomOpts} filterByField="shed" className="input-box mono" placeholder="Loom (set Shed first)" /></div>
@@ -275,7 +276,7 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} defaultValue={selected.partyTrade ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" defaultValue={selected.codeConv ?? ""} /></div>
                 <div><label className="label block mb-1">Conv Cont</label><input name="contract_no" className="input-box mono" defaultValue={selected.contractNo ?? ""} /></div>
-                <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" defaultValue={selected.statusLoc ?? ""} /></div>
+                <div><label className="label block mb-1">Status Loc <span className="text-[10px] text-[var(--muted)]">(F9)</span></label><BeamStatusPicker name="status_loc" defaultValue={selected.statusLoc ?? "RUNNING"} allStatuses={beamStatuses} canonical={STATUS_LOC_CANONICAL} /></div>
                 <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} defaultValue={selected.szgParty ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
                 <div><label className="label block mb-1">Loom No</label><Combobox name="loom_no" options={loomOpts} filterByField="shed" defaultValue={selected.loomNo != null ? String(selected.loomNo) : ""} className="input-box mono" placeholder="Loom (set Shed first)" /></div>
@@ -283,15 +284,8 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" defaultValue={selected.beamSetNo ?? ""} /></div>
                 <div><label className="label block mb-1">Set Status</label><input name="set_status" className="input-box" defaultValue={selected.setStatus ?? ""} /></div>
                 <div>
-                  <label className="label block mb-1">Status Wrk</label>
-                  <select name="status_wrk" className="input-box" defaultValue={selected.statusWrk ?? "RUNNING"}>
-                    {beamStatuses.map((s) => (
-                      <option key={s.id} value={s.status}>{s.status}</option>
-                    ))}
-                    {selected.statusWrk && !beamStatuses.some((s) => s.status === selected.statusWrk) && (
-                      <option value={selected.statusWrk}>{selected.statusWrk}</option>
-                    )}
-                  </select>
+                  <label className="label block mb-1">Status Wrk <span className="text-[10px] text-[var(--muted)]">(F9 to pick)</span></label>
+                  <BeamStatusPicker name="status_wrk" defaultValue={selected.statusWrk ?? "EMPTY"} allStatuses={beamStatuses} />
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
