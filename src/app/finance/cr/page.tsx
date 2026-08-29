@@ -563,9 +563,6 @@ export default async function CashReceiptPage({
                   </form>
                 </>
               )}
-              <button type="button" disabled title="Coming soon" className="btn btn-outline btn-sm opacity-50">
-                Brows …
-              </button>
               <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
                 New
               </a>

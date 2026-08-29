@@ -224,10 +224,6 @@ export default async function YarnCountsPage({
                       <option value="C">C</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="label block mb-1">Password</label>
-                    <input type="password" name="pswd" className="input-box mono" tabIndex={-1} />
-                  </div>
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button type="submit" className="btn btn-sm">Save</button>

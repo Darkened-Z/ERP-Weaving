@@ -1,7 +1,7 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
-import { and, gte, lte, isNotNull, ne, desc } from "drizzle-orm";
+import { and, eq, gte, lte, isNotNull, ne, desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,11 @@ const SOURCES = [
   "PP",
   "KP",
   "EOD",
+  "BP",
+  "BR",
+  "CP",
+  "CR",
+  "GCCI",
 ] as const;
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -30,6 +35,11 @@ const SOURCE_LABEL: Record<string, string> = {
   PP: "Packi Parchi",
   KP: "Kachi Parchi",
   EOD: "End of Day Image",
+  BP: "Bank Payment Voucher",
+  BR: "Bank Receipt Voucher",
+  CP: "Cash Payment Voucher",
+  CR: "Cash Receipt Voucher",
+  GCCI: "Internal Grey Conversion Contract",
 };
 
 const SOURCE_HREF: Record<string, (id: number) => string | null> = {
@@ -42,6 +52,11 @@ const SOURCE_HREF: Record<string, (id: number) => string | null> = {
   PP: (id) => `/external/grey/packi-parchi?id=${id}`,
   KP: (id) => `/external/grey/kachi-parchi?id=${id}`,
   EOD: () => null,
+  BP: (id) => `/finance/bp?id=${id}`,
+  BR: (id) => `/finance/br?id=${id}`,
+  CP: (id) => `/finance/cp?id=${id}`,
+  CR: (id) => `/finance/cr?id=${id}`,
+  GCCI: (id) => `/inventory/contracts/grey-conversion?id=${id}`,
 };
 
 type Row = {
@@ -210,6 +225,90 @@ export default async function ImagesPage({
       .orderBy(desc(schema.endOfDayImages.imgDate));
     for (const r of list) {
       rows.push({ key: `EOD-${r.id}`, source: "EOD", id: r.id, vno: `EOD#${r.id}`, date: r.imgDate, party: r.category ?? "", img: r.img });
+    }
+  }
+  if (want("BP")) {
+    const list = await db
+      .select()
+      .from(schema.transMain)
+      .where(
+        and(
+          eq(schema.transMain.vtype, "BP"),
+          isNotNull(schema.transMain.img),
+          ne(schema.transMain.img, ""),
+          from ? gte(schema.transMain.vdate, from) : undefined,
+          to ? lte(schema.transMain.vdate, to) : undefined
+        )
+      );
+    for (const r of list) {
+      rows.push({ key: `BP-${r.id}`, source: "BP", id: r.id, vno: String(r.vno), date: r.vdate, party: r.accCode ?? "", img: r.img! });
+    }
+  }
+  if (want("BR")) {
+    const list = await db
+      .select()
+      .from(schema.transMain)
+      .where(
+        and(
+          eq(schema.transMain.vtype, "BR"),
+          isNotNull(schema.transMain.img),
+          ne(schema.transMain.img, ""),
+          from ? gte(schema.transMain.vdate, from) : undefined,
+          to ? lte(schema.transMain.vdate, to) : undefined
+        )
+      );
+    for (const r of list) {
+      rows.push({ key: `BR-${r.id}`, source: "BR", id: r.id, vno: String(r.vno), date: r.vdate, party: r.accCode ?? "", img: r.img! });
+    }
+  }
+  if (want("CP")) {
+    const list = await db
+      .select()
+      .from(schema.transMain)
+      .where(
+        and(
+          eq(schema.transMain.vtype, "CP"),
+          isNotNull(schema.transMain.img),
+          ne(schema.transMain.img, ""),
+          from ? gte(schema.transMain.vdate, from) : undefined,
+          to ? lte(schema.transMain.vdate, to) : undefined
+        )
+      );
+    for (const r of list) {
+      rows.push({ key: `CP-${r.id}`, source: "CP", id: r.id, vno: String(r.vno), date: r.vdate, party: r.accCode ?? "", img: r.img! });
+    }
+  }
+  if (want("CR")) {
+    const list = await db
+      .select()
+      .from(schema.transMain)
+      .where(
+        and(
+          eq(schema.transMain.vtype, "CR"),
+          isNotNull(schema.transMain.img),
+          ne(schema.transMain.img, ""),
+          from ? gte(schema.transMain.vdate, from) : undefined,
+          to ? lte(schema.transMain.vdate, to) : undefined
+        )
+      );
+    for (const r of list) {
+      rows.push({ key: `CR-${r.id}`, source: "CR", id: r.id, vno: String(r.vno), date: r.vdate, party: r.accCode ?? "", img: r.img! });
+    }
+  }
+  if (want("GCCI")) {
+    const list = await db
+      .select()
+      .from(schema.intGreyConversionContract)
+      .where(
+        and(
+          isNotNull(schema.intGreyConversionContract.img),
+          ne(schema.intGreyConversionContract.img, ""),
+          from ? gte(schema.intGreyConversionContract.contDate, from) : undefined,
+          to ? lte(schema.intGreyConversionContract.contDate, to) : undefined
+        )
+      );
+    for (const r of list) {
+      rows.push({ key: `GCCI-${r.id}`, source: "GCCI", id: r.id, vno: r.contNo, date: r.contDate, party: r.party ?? "", img: r.img! });
     }
   }
 

@@ -601,9 +601,6 @@ export default async function YarnReceiptPage({
                         <label className="label block mb-1">Imag Block</label>
                         <div className="flex items-stretch gap-1">
                           <input name="imgBlock" className="input-box mono flex-1" defaultValue={editing?.imgBlock ?? ""} placeholder="filename" />
-                          <button type="button" disabled title="Coming soon" className="btn btn-outline btn-sm opacity-50" style={{ padding: "4px 8px" }}>Brows</button>
-                          <button type="button" disabled title="Coming soon" className="btn btn-outline btn-sm opacity-50" style={{ padding: "4px 8px" }}>Pic</button>
-                          <button type="button" disabled title="Coming soon" className="btn btn-outline btn-sm opacity-50" style={{ padding: "4px 8px" }}>UPD</button>
                         </div>
                       </div>
                     </div>

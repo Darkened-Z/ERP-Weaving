@@ -1300,16 +1300,6 @@ export default async function KnottingPage({
                 <a href="/inventory/knotting" className="btn btn-outline btn-sm">
                   Exit
                 </a>
-                <div className="ml-auto flex items-end gap-2">
-                  <div>
-                    <label className="label block mb-1">Pswd</label>
-                    <input
-                      type="password"
-                      name="pswd"
-                      className="input-box mono w-40"
-                    />
-                  </div>
-                </div>
               </div>
             </form>
           ) : (
