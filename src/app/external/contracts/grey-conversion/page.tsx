@@ -100,7 +100,7 @@ export default async function GreyConvContractPage({
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
   const productList = await db
-    .select({ code: schema.products.code, description: schema.products.description })
+    .select({ code: schema.products.code, description: schema.products.description, mainDesc: schema.products.mainDesc, subDesc: schema.products.subDesc })
     .from(schema.products)
     .orderBy(schema.products.description);
 
@@ -266,7 +266,7 @@ export default async function GreyConvContractPage({
     ])
   );
   const productFillMap = Object.fromEntries(
-    productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description }])
+    productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description, product_main_desc: p.mainDesc ?? "", product_sub_desc: p.subDesc ?? "" }])
   );
   // Resolve a stored warp/weft value (usually a count code like "2", sometimes a
   // description) to "code — blend", e.g. "2 — 30/S MVS PV 65:35". Falls back to
@@ -308,6 +308,8 @@ export default async function GreyConvContractPage({
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
   const productCodeByDesc = new Map(productList.map((p) => [p.description, p.code]));
+  const productDescInfo = new Map(productList.map((p) => [p.description, { mainDesc: p.mainDesc ?? "", subDesc: p.subDesc ?? "" }]));
+  const curProdInfo = formItem?.productName ? productDescInfo.get(formItem.productName) : undefined;
 
   async function saveContract(formData: FormData) {
     "use server";
@@ -603,7 +605,7 @@ export default async function GreyConvContractPage({
                 "weft_count_5", "weft_count_6", "weft_count_7", "weft_count_8",
               ]}
             />
-            <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name"]} />
+            <AutoFill watch="product_name" map={productFillMap} inputs={["product_quality", "slv_name", "product_main_desc", "product_sub_desc"]} />
             {/* Each row's Count cell → auto-fill that row's Desc + Brand from yarn_counts */}
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <RowAutoFill key={`warp-cf-${i}`} watch={`warp_count_${i}`} map={warpCountFillMap} />
@@ -824,6 +826,14 @@ export default async function GreyConvContractPage({
                 <div>
                   <label className="label block mb-1">Product Quality</label>
                   <input name="product_quality" className="input-box mono text-[13px]" defaultValue={formItem?.productQuality ?? ""} />
+                </div>
+                <div>
+                  <label className="label block mb-1">Main Desc <span className="text-[10px] text-[var(--muted)]">(from product)</span></label>
+                  <input name="product_main_desc" className="input-box mono text-[13px] bg-gray-50" defaultValue={curProdInfo?.mainDesc ?? ""} readOnly />
+                </div>
+                <div>
+                  <label className="label block mb-1">Sub Desc <span className="text-[10px] text-[var(--muted)]">(from product)</span></label>
+                  <input name="product_sub_desc" className="input-box mono text-[13px] bg-gray-50" defaultValue={curProdInfo?.subDesc ?? ""} readOnly />
                 </div>
                 <div>
                   <label className="label block mb-1">Season Type</label>
