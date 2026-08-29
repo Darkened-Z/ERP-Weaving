@@ -1095,7 +1095,7 @@ export default async function KachiParchiPage({
                 <RowAutoFill watch="count_code" map={kpCountFillMap} />
                 <datalist id="kp-yarn-counts">
                   {yarnCountList.map((c) => (
-                    <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+                    <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}{c.type ? ` ${c.type}` : ""}</option>
                   ))}
                 </datalist>
                 <table className="w-full text-[11px]" style={{ minWidth: "320px" }}>

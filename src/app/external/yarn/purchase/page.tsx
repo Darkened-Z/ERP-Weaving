@@ -767,7 +767,7 @@ export default async function YarnPurchaseVoucherPage({
         <datalist id="ypv-counts">
           {countList.map((c) => (
             <option key={c.code} value={c.code}>
-              {c.code} — {c.description}
+              {c.code} — {c.description}{c.type ? ` ${c.type}` : ""}
             </option>
           ))}
         </datalist>

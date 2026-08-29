@@ -1181,7 +1181,7 @@ export default async function PackiParchiPage({
                 <RowAutoFill watch="count_code" map={ppCountFillMap} />
                 <datalist id="pp-yarn-counts">
                   {yarnCountList.map((c) => (
-                    <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}</option>
+                    <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}{c.type ? ` ${c.type}` : ""}</option>
                   ))}
                 </datalist>
               </div>

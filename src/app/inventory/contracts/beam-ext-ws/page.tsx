@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
+import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { BeamWtCalc } from "@/components/int-conv-calc";
@@ -50,7 +51,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function BeamContractExtWsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; fparty?: string; fgrey?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -58,10 +59,12 @@ export default async function BeamContractExtWsPage({
   const isAdding = params.adding === "1";
 
   const findFilter = params.find?.trim();
+  const fParty = (params.fparty ?? "").trim();
+  const fGrey = (params.fgrey ?? "").trim();
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = escFind ? `%${escFind}%` : "";
 
-  const contracts = findFilter
+  const contractsAll = findFilter
     ? await db
         .select()
         .from(schema.intBeamContractExtWs)
@@ -77,6 +80,13 @@ export default async function BeamContractExtWsPage({
         .select()
         .from(schema.intBeamContractExtWs)
         .orderBy(desc(schema.intBeamContractExtWs.id));
+
+  // Party-wise + grey-construction-wise finding layered on the text find.
+  const contracts = contractsAll.filter((c) => {
+    if (fParty && c.party !== fParty) return false;
+    if (fGrey && c.wrpCode !== fGrey) return false;
+    return true;
+  });
 
   const selected = isEditing ? contracts.find((c) => c.id === idParam) ?? null : null;
   const formContract = isAdding ? null : selected;
@@ -158,6 +168,7 @@ export default async function BeamContractExtWsPage({
     .orderBy(schema.products.description);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const greyOpts = greyList.map((g) => {
     const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
     const w = g.width ? `${g.width}" ` : "";
@@ -550,6 +561,41 @@ export default async function BeamContractExtWsPage({
                       Find
                     </button>
                   </div>
+                  <div className="flex gap-2 mt-2">
+                    <select
+                      form="ibws-find-form"
+                      name="fparty"
+                      defaultValue={fParty}
+                      className="input-box mono text-[12px] flex-1"
+                      title="Party wise"
+                    >
+                      <option value="">— All parties —</option>
+                      {partyFindRows.map((p) => (
+                        <option key={p.value} value={p.value}>{p.code} — {p.description}</option>
+                      ))}
+                    </select>
+                    {(findFilter || fParty || fGrey) && (
+                      <a href="/inventory/contracts/beam-ext-ws" className="btn btn-outline btn-sm">
+                        Clear
+                      </a>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    <select
+                      form="ibws-find-form"
+                      name="fgrey"
+                      defaultValue={fGrey}
+                      className="input-box mono text-[12px] w-full"
+                      title="Grey construction wise"
+                    >
+                      <option value="">— All grey constructions —</option>
+                      {greyPickerRows.map((g) => (
+                        <option key={g.code} value={g.code}>
+                          {g.code}{g.reed && g.pick ? ` — R${g.reed} P${g.pick}` : ""} {g.description}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="lg:col-span-3">
@@ -571,12 +617,14 @@ export default async function BeamContractExtWsPage({
                   />
                 </div>
                 <div className="lg:col-span-3">
-                  <label className="label block mb-1">Party</label>
-                  <Combobox
+                  <label className="label block mb-1">Party <span className="text-[10px] text-[var(--muted)]">(F9 to find)</span></label>
+                  <FindingPicker
                     name="party"
-                    options={partyOpts}
                     defaultValue={formContract?.party ?? ""}
+                    rows={partyFindRows}
+                    title="ACCOUNT — FIND PARTY"
                     placeholder="Select party"
+                    className="input-box mono text-[13px] cursor-pointer"
                   />
                 </div>
                 <div className="lg:col-span-3">

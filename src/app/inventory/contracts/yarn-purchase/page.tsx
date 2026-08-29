@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { AutoAmount } from "@/components/auto-amount";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -41,7 +42,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function IntYarnPurchaseContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; fparty?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -51,8 +52,9 @@ export default async function IntYarnPurchaseContractPage({
   const findFilter = params.find?.trim();
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = escFind ? `%${escFind}%` : "";
+  const fParty = (params.fparty ?? "").trim();
 
-  const contracts = findFilter
+  const contractsAll = findFilter
     ? await db
         .select()
         .from(schema.intYarnPurchaseContract)
@@ -68,6 +70,9 @@ export default async function IntYarnPurchaseContractPage({
         .select()
         .from(schema.intYarnPurchaseContract)
         .orderBy(desc(schema.intYarnPurchaseContract.id));
+
+  // Party-wise finding, layered on top of the text find.
+  const contracts = contractsAll.filter((c) => (!fParty || c.partyCode === fParty));
 
   const selected = isEditing ? contracts.find((c) => c.id === idParam) ?? null : null;
   const formContract = isAdding ? null : selected;
@@ -114,6 +119,8 @@ export default async function IntYarnPurchaseContractPage({
     .orderBy(schema.yarnBrands.name);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Full-page finding list rows for the Party field (value stays the description so save keeps working).
+  const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}`, desc: c.description }));
   const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
@@ -479,6 +486,22 @@ export default async function IntYarnPurchaseContractPage({
                     Find
                   </button>
                 </div>
+                <div className="flex gap-2 mt-2">
+                  <select
+                    form="iyc-find-form"
+                    name="fparty"
+                    defaultValue={fParty}
+                    className="input-box mono text-[13px] flex-1"
+                  >
+                    <option value="">— All parties —</option>
+                    {partyFindRows.map((p) => (
+                      <option key={p.value} value={p.value}>{p.code} — {p.description}</option>
+                    ))}
+                  </select>
+                  {(findFilter || fParty) && (
+                    <a href="/inventory/contracts/yarn-purchase" className="btn btn-outline btn-sm">Clear</a>
+                  )}
+                </div>
               </div>
 
               <div className="lg:col-span-3">
@@ -536,11 +559,13 @@ export default async function IntYarnPurchaseContractPage({
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Party</label>
-                <Combobox
+                <FindingPicker
                   name="party_code"
-                  options={partyOpts}
                   defaultValue={formContract?.partyCode ?? ""}
+                  rows={partyFindRows}
+                  title="ACCOUNT — FIND PARTY"
                   placeholder="Select party"
+                  className="input-box mono text-[13px] cursor-pointer"
                 />
               </div>
               <div className="lg:col-span-5">

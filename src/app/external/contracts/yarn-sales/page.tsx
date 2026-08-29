@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { AutoAmount } from "@/components/auto-amount";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ImageAttach } from "@/components/image-attach";
@@ -43,7 +44,7 @@ function nextContNoFromRows(rows: { contNo: string }[], prefix: string): string 
 export default async function YarnSalesContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; fparty?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -53,8 +54,9 @@ export default async function YarnSalesContractPage({
   const findFilter = params.find?.trim();
   const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = escFind ? `%${escFind}%` : "";
+  const fParty = (params.fparty ?? "").trim();
 
-  const contracts = findFilter
+  const contractsAll = findFilter
     ? await db
         .select()
         .from(schema.extYarnSalContract)
@@ -71,6 +73,9 @@ export default async function YarnSalesContractPage({
         .from(schema.extYarnSalContract)
         .orderBy(desc(schema.extYarnSalContract.id));
 
+  // Party-wise finding, layered on top of the text find.
+  const contracts = contractsAll.filter((c) => (!fParty || c.partyCode === fParty));
+
   const selected = isEditing ? contracts.find((c) => c.id === idParam) ?? null : null;
   const formContract = isAdding ? null : selected;
 
@@ -82,9 +87,9 @@ export default async function YarnSalesContractPage({
         .orderBy(schema.extYarnSalContractDelivery.id)
     : [];
 
-  const upcomingContNo = nextContNoFromRows(contracts, "YSC");
+  const upcomingContNo = nextContNoFromRows(contractsAll, "YSC");
   // LV shows the LAST saved local number (Oracle FRM_LVNO semantics)
-  const upcomingLContNo = contracts.reduce((m, c) => Math.max(m, c.lContNo ?? 0), 0);
+  const upcomingLContNo = contractsAll.reduce((m, c) => Math.max(m, c.lContNo ?? 0), 0);
 
   const parties = await db
     .select({
@@ -111,6 +116,8 @@ export default async function YarnSalesContractPage({
     label: `${p.descShort ?? p.code} — ${p.description}`,
     desc: p.description,
   }));
+  // Full-page finding list rows for the Party field (value stays the account code so save keeps working).
+  const partyFindRows = parties.map((p) => ({ value: String(p.code), code: String(p.code), description: p.description }));
   const countOpts = countList.map((c) => ({
     value: String(c.code),
     label: `${c.code} — ${c.description}${c.type ? ` ${c.type}` : ""}`,
@@ -478,6 +485,22 @@ export default async function YarnSalesContractPage({
                     Find
                   </button>
                 </div>
+                <div className="flex gap-2 mt-2">
+                  <select
+                    form="ysc-find-form"
+                    name="fparty"
+                    defaultValue={fParty}
+                    className="input-box mono text-[13px] flex-1"
+                  >
+                    <option value="">— All parties —</option>
+                    {partyFindRows.map((p) => (
+                      <option key={p.value} value={p.value}>{p.code} — {p.description}</option>
+                    ))}
+                  </select>
+                  {(findFilter || fParty) && (
+                    <a href="/external/contracts/yarn-sales" className="btn btn-outline btn-sm">Clear</a>
+                  )}
+                </div>
               </div>
 
               <div className="lg:col-span-3">
@@ -532,7 +555,7 @@ export default async function YarnSalesContractPage({
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Party Code</label>
-                <Combobox name="party_code" options={partyOpts} defaultValue={String(formContract?.partyCode ?? "")} placeholder="FAZAL" descTargetId="ysc-party-desc" />
+                <FindingPicker name="party_code" defaultValue={String(formContract?.partyCode ?? "")} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Party Name</label>
