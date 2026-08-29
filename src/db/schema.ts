@@ -768,6 +768,7 @@ export const tickets = sqliteTable("tickets", {
   status: text("status").notNull().default("OPEN"),
   assigneeUserId: integer("assignee_user_id").references(() => users.id, { onDelete: "set null" }),
   reporterUserId: integer("reporter_user_id").notNull().references(() => users.id),
+  shed: text("shed"),
   loomNo: integer("loom_no"),
   contractNo: text("contract_no"),
   partyCode: text("party_code"),

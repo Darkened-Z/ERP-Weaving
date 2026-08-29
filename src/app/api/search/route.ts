@@ -182,7 +182,7 @@ export async function GET(req: Request) {
     ...looms.map((l) => ({
       type: "Loom",
       id: String(l.id),
-      title: `Loom ${l.loomNo}`,
+      title: l.shed ? `Loom ${l.shed}-${l.loomNo}` : `Loom ${l.loomNo}`,
       subtitle: [l.weaverName, l.shed].filter(Boolean).join(" - "),
       href: `/weaving/looms?id=${l.id}`,
     })),

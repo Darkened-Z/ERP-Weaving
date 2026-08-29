@@ -47,7 +47,14 @@ export default async function NewTicketPage({
     const assigneeUserId = assigneeRaw ? parseInt(assigneeRaw, 10) : null;
     const safeAssignee = Number.isFinite(assigneeUserId) ? assigneeUserId : null;
     const loomRaw = (formData.get("loom_no") as string)?.trim();
-    const loomNo = loomRaw ? parseInt(loomRaw, 10) : null;
+    let parsedShed: string | null = null;
+    let loomNumStr = loomRaw;
+    if (loomRaw && loomRaw.includes("|")) {
+      const [s, l] = loomRaw.split("|");
+      parsedShed = s || null;
+      loomNumStr = l ?? "";
+    }
+    const loomNo = loomNumStr ? parseInt(loomNumStr, 10) : null;
     const safeLoomNo = Number.isFinite(loomNo) ? loomNo : null;
     const contractNo = (formData.get("contract_no") as string)?.trim() || null;
     const partyCode = (formData.get("party_code") as string)?.trim() || null;
@@ -66,6 +73,7 @@ export default async function NewTicketPage({
       status: "OPEN" as const,
       assigneeUserId: safeAssignee,
       reporterUserId: session.userId,
+      shed: parsedShed,
       loomNo: safeLoomNo,
       contractNo,
       partyCode,
@@ -207,8 +215,8 @@ export default async function NewTicketPage({
               >
                 <option value="">--</option>
                 {looms.map((l) => (
-                  <option key={l.id} value={l.loomNo}>
-                    #{l.loomNo} - {l.shed} ({l.type})
+                  <option key={l.id} value={`${l.shed}|${l.loomNo}`}>
+                    Shed {l.shed} · Loom #{l.loomNo} ({l.type})
                   </option>
                 ))}
               </select>

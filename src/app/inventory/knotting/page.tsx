@@ -109,8 +109,15 @@ async function saveKnotting(formData: FormData) {
     const beamLength = num(beamLengths[i]);
     const issueDate = (issueDates[i] ?? "").trim();
     const kDate = (kDates[i] ?? "").trim();
-    const shdHash = (shdHashes[i] ?? "").trim();
-    const lmHash = (lmHashes[i] ?? "").trim();
+    let shdHash = (shdHashes[i] ?? "").trim();
+    let lmHash = (lmHashes[i] ?? "").trim();
+    // Loom picker may emit composite "shed|loomNo" — split it so lmHash stays a
+    // bare loom number and shdHash defaults from the picker when empty.
+    if (lmHash.includes("|")) {
+      const [pickShed, pickLoom] = lmHash.split("|");
+      if (!shdHash && pickShed) shdHash = pickShed;
+      lmHash = (pickLoom ?? "").trim();
+    }
     const extShrAge = num(extShrAges[i]);
     const dspType = (dspTypes[i] ?? "").trim();
     const knContNo = (knContNos[i] ?? "").trim();
@@ -247,17 +254,18 @@ async function saveKnotting(formData: FormData) {
         .select({
           beamNo: schema.intKnottingSarningLine.beamNo,
           lmHash: schema.intKnottingSarningLine.lmHash,
+          shdHash: schema.intKnottingSarningLine.shdHash,
         })
         .from(schema.intKnottingSarningLine)
         .where(eq(schema.intKnottingSarningLine.knottingId, id));
 
       for (const ol of oldLines) {
         const loomNo = ol.lmHash ? parseInt(ol.lmHash, 10) : NaN;
-        if (Number.isFinite(loomNo)) {
+        if (Number.isFinite(loomNo) && ol.shdHash) {
           await tx
             .update(schema.looms)
             .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-            .where(eq(schema.looms.loomNo, loomNo));
+            .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash)));
         }
         if (ol.beamNo) {
           await tx
@@ -464,16 +472,17 @@ async function deleteKnotting(formData: FormData) {
       .select({
         beamNo: schema.intKnottingSarningLine.beamNo,
         lmHash: schema.intKnottingSarningLine.lmHash,
+        shdHash: schema.intKnottingSarningLine.shdHash,
       })
       .from(schema.intKnottingSarningLine)
       .where(eq(schema.intKnottingSarningLine.knottingId, id));
     for (const ol of oldLines) {
       const loomNo = ol.lmHash ? parseInt(ol.lmHash, 10) : NaN;
-      if (Number.isFinite(loomNo)) {
+      if (Number.isFinite(loomNo) && ol.shdHash) {
         await tx
           .update(schema.looms)
           .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-          .where(eq(schema.looms.loomNo, loomNo));
+          .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash)));
       }
       if (ol.beamNo) {
         await tx
@@ -532,7 +541,7 @@ async function mountBeam(formData: FormData) {
   if (!row) redirect("/inventory/knotting");
   const { line } = row;
   const loomNo = line.lmHash ? parseInt(line.lmHash, 10) : NaN;
-  if (!line.beamNo || !Number.isFinite(loomNo)) {
+  if (!line.beamNo || !Number.isFinite(loomNo) || !line.shdHash) {
     redirect(`/inventory/knotting?id=${row.knottingId}&error=loom_required`);
   }
   await db.transaction(async (tx) => {
@@ -543,12 +552,13 @@ async function mountBeam(formData: FormData) {
         currentBeam: line.beamNo,
         ...(line.knContNo ? { currentContract: line.knContNo } : {}),
       })
-      .where(eq(schema.looms.loomNo, loomNo));
+      .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, line.shdHash!)));
     await tx
       .update(schema.beams)
       .set({
         statusWrk: "RUNNING",
         loomNo,
+        shed: line.shdHash!,
         knVno: row.vNo,
         knDate: line.kDate ?? row.vDate,
         ...(line.setNo ? { setNo: line.setNo } : {}),
@@ -1271,8 +1281,8 @@ export default async function KnottingPage({
               </datalist>
               <datalist id="ks-loom-list">
                 {loomRows.map((lm) => (
-                  <option key={lm.loomNo} value={String(lm.loomNo)}>
-                    {(lm.statusWrk ?? "") + (lm.shed ? " · " + lm.shed : "")}
+                  <option key={`${lm.shed}-${lm.loomNo}`} value={`${lm.shed}|${lm.loomNo}`}>
+                    {`Shed ${lm.shed} · Loom ${lm.loomNo}` + (lm.statusWrk ? " · " + lm.statusWrk : "")}
                   </option>
                 ))}
               </datalist>

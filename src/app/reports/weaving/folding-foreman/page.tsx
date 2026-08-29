@@ -48,7 +48,10 @@ export default async function FoldingForemanPage({
       eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id)
     )
     .leftJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
-    .leftJoin(schema.looms, eq(schema.beams.loomNo, schema.looms.loomNo))
+    .leftJoin(
+      schema.looms,
+      and(eq(schema.beams.loomNo, schema.looms.loomNo), eq(schema.beams.shed, schema.looms.shed)),
+    )
     .where(and(...conds))
     .groupBy(schema.looms.forman);
 

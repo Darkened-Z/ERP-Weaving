@@ -157,7 +157,7 @@ async function seed() {
 
     CREATE TABLE looms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      loom_no INTEGER NOT NULL UNIQUE,
+      loom_no INTEGER NOT NULL,
       shed TEXT NOT NULL,
       type TEXT NOT NULL,
       make TEXT,
@@ -166,7 +166,8 @@ async function seed() {
       status TEXT NOT NULL DEFAULT 'RUNNING',
       current_contract TEXT,
       current_product TEXT,
-      current_beam TEXT
+      current_beam TEXT,
+      UNIQUE(shed, loom_no)
     );
 
     CREATE TABLE grey_construction (

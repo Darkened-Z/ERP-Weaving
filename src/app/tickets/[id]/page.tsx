@@ -60,11 +60,11 @@ export default async function TicketDetailPage({
     .orderBy(asc(schema.ticketHistory.createdAt), asc(schema.ticketHistory.id));
 
   const userMap = new Map(users.map((u) => [u.id, u]));
-  const loomMap = new Map(looms.map((l) => [l.loomNo, l]));
+  const loomMap = new Map(looms.map((l) => [`${l.shed}|${l.loomNo}`, l]));
 
   const assignee = ticket.assigneeUserId ? userMap.get(ticket.assigneeUserId) : null;
   const reporter = userMap.get(ticket.reporterUserId);
-  const loom = ticket.loomNo ? loomMap.get(ticket.loomNo) : null;
+  const loom = ticket.loomNo && ticket.shed ? loomMap.get(`${ticket.shed}|${ticket.loomNo}`) : null;
 
   async function addComment(formData: FormData) {
     "use server";

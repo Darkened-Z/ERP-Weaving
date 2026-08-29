@@ -65,9 +65,9 @@ export default async function ProductionBoardPage() {
 
   const loomList = await db.select().from(schema.looms).orderBy(schema.looms.shed, schema.looms.loomNo);
 
-  const byLoom = new Map<number, LoomAgg>();
+  const byLoom = new Map<string, LoomAgg>();
   for (const l of loomList) {
-    byLoom.set(l.loomNo, {
+    byLoom.set(`${l.shed}|${l.loomNo}`, {
       loomNo: l.loomNo,
       shed: l.shed,
       weaverName: l.weaverName,
@@ -88,10 +88,11 @@ export default async function ProductionBoardPage() {
     });
   }
 
-  const effAccum = new Map<number, { sum: number; n: number }>();
+  const effAccum = new Map<string, { sum: number; n: number }>();
 
   for (const r of rows) {
-    let a = byLoom.get(r.loomNo);
+    const key = `${r.shed}|${r.loomNo}`;
+    let a = byLoom.get(key);
     if (!a) {
       a = {
         loomNo: r.loomNo,
@@ -112,7 +113,7 @@ export default async function ProductionBoardPage() {
         efficiency: null,
         hasProd: false,
       };
-      byLoom.set(r.loomNo, a);
+      byLoom.set(key, a);
     }
     a.meters += r.meters ?? 0;
     a.picks += r.picks ?? 0;
@@ -126,14 +127,14 @@ export default async function ProductionBoardPage() {
     a.hasProd = true;
 
     if (r.efficiency != null) {
-      const acc = effAccum.get(r.loomNo) ?? { sum: 0, n: 0 };
+      const acc = effAccum.get(key) ?? { sum: 0, n: 0 };
       acc.sum += r.efficiency;
       acc.n += 1;
-      effAccum.set(r.loomNo, acc);
+      effAccum.set(key, acc);
     }
   }
-  for (const [ln, acc] of effAccum) {
-    const a = byLoom.get(ln);
+  for (const [k, acc] of effAccum) {
+    const a = byLoom.get(k);
     if (a && acc.n > 0) a.efficiency = acc.sum / acc.n;
   }
 
@@ -258,7 +259,7 @@ export default async function ProductionBoardPage() {
                   const idle = !l.hasProd;
                   return (
                     <div
-                      key={l.loomNo}
+                      key={`${l.shed}-${l.loomNo}`}
                       className={`grid grid-cols-[70px_1fr_140px_120px_100px_80px_1fr] gap-x-4 items-center py-3 border-b border-neutral-900 ${idle ? "opacity-40" : ""}`}
                     >
                       <div className="text-2xl font-bold tabular-nums">#{l.loomNo}</div>

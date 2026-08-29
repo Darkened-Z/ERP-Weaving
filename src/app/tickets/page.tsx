@@ -117,7 +117,7 @@ export default async function TicketsPage({
     type: getTypeLabel(t.type),
     priority: getPriorityLabel(t.priority),
     status: getStatusLabel(t.status),
-    loom: t.loomNo ?? "",
+    loom: t.loomNo != null ? (t.shed ? `Shed ${t.shed} · ${t.loomNo}` : String(t.loomNo)) : "",
     created: t.createdAt ? t.createdAt.slice(0, 10) : "",
   }));
 
@@ -343,7 +343,7 @@ export default async function TicketsPage({
                             <span>{getTypeShort(t.type)}</span>
                             {t.loomNo !== null && t.loomNo !== undefined && (
                               <span className="mono">
-                                Loom #{fmt.format(t.loomNo)}
+                                {t.shed ? `Shed ${t.shed} · ` : ""}Loom #{fmt.format(t.loomNo)}
                               </span>
                             )}
                           </div>
@@ -405,7 +405,7 @@ export default async function TicketsPage({
                       <td className="text-[12px]">{getStatusLabel(t.status)}</td>
                       <td className="mono text-[12px]">
                         {t.loomNo !== null && t.loomNo !== undefined
-                          ? fmt.format(t.loomNo)
+                          ? (t.shed ? `Shed ${t.shed} · #${fmt.format(t.loomNo)}` : `#${fmt.format(t.loomNo)}`)
                           : "-"}
                       </td>
                       <td className="text-[12px]">{assignee}</td>

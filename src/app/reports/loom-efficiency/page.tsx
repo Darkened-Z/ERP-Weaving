@@ -39,6 +39,7 @@ export default async function LoomEfficiencyPage({
 
   const prodRows = await db
     .select({
+      shed: schema.dailyProduction.shed,
       loomNo: schema.dailyProduction.loomNo,
       meters: sql<number>`coalesce(sum(meters), 0)`,
       avgEff: sql<number | null>`avg(efficiency)`,
@@ -47,18 +48,18 @@ export default async function LoomEfficiencyPage({
     })
     .from(schema.dailyProduction)
     .where(conditions.length ? and(...conditions) : undefined)
-    .groupBy(schema.dailyProduction.loomNo);
+    .groupBy(schema.dailyProduction.shed, schema.dailyProduction.loomNo);
 
   const looms = await db.select().from(schema.looms);
-  const loomMap = new Map(looms.map((l) => [l.loomNo, l]));
+  const loomMap = new Map(looms.map((l) => [`${l.shed}|${l.loomNo}`, l]));
 
   const activeRows = prodRows.map((p) => {
-    const l = loomMap.get(p.loomNo);
+    const l = loomMap.get(`${p.shed}|${p.loomNo}`);
     const targetRpm = l?.rpm ?? 0;
     const utilization = targetRpm > 0 ? ((p.avgActRpm ?? 0) / targetRpm) * 100 : 0;
     return {
       loomNo: p.loomNo,
-      shed: l?.shed ?? "-",
+      shed: l?.shed ?? p.shed ?? "-",
       weaver: l?.weaverName ?? "-",
       days: p.days ?? 0,
       meters: p.meters ?? 0,
@@ -69,8 +70,8 @@ export default async function LoomEfficiencyPage({
     };
   });
 
-  const prodLoomNos = new Set(prodRows.map((p) => p.loomNo));
-  const idleLooms = looms.filter((l) => !prodLoomNos.has(l.loomNo));
+  const prodLoomNos = new Set(prodRows.map((p) => `${p.shed}|${p.loomNo}`));
+  const idleLooms = looms.filter((l) => !prodLoomNos.has(`${l.shed}|${l.loomNo}`));
   const idleRows = idleLooms.map((l) => ({
     loomNo: l.loomNo,
     shed: l.shed ?? "-",
@@ -175,7 +176,7 @@ export default async function LoomEfficiencyPage({
                       </tr>
                     ) : (
                       top5.map((r) => (
-                        <tr key={r.loomNo}>
+                        <tr key={`${r.shed}-${r.loomNo}`}>
                           <td className="mono">#{r.loomNo}</td>
                           <td className="text-[12px]">{r.weaver}</td>
                           <td className="mono text-right font-bold">
@@ -209,7 +210,7 @@ export default async function LoomEfficiencyPage({
                       </tr>
                     ) : (
                       bottom5.map((r) => (
-                        <tr key={r.loomNo}>
+                        <tr key={`${r.shed}-${r.loomNo}`}>
                           <td className="mono">#{r.loomNo}</td>
                           <td className="text-[12px]">{r.weaver}</td>
                           <td className="mono text-right italic underline">
@@ -262,7 +263,7 @@ export default async function LoomEfficiencyPage({
                           ? "italic underline"
                           : "";
                       return (
-                        <tr key={r.loomNo}>
+                        <tr key={`${r.shed}-${r.loomNo}`}>
                           <td className="mono font-bold">#{r.loomNo}</td>
                           <td className="text-[12px]">{r.shed}</td>
                           <td className="text-[13px]">{r.weaver}</td>

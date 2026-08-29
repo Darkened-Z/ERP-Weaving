@@ -28,6 +28,15 @@ export default async function BeamsPage({
   const rows = await db.select().from(schema.beams).orderBy(schema.beams.beamNo);
   const beamStatuses = await db.select().from(schema.beamStatuses);
   const accounts = await db.select().from(schema.chartOfAccounts).orderBy(schema.chartOfAccounts.code);
+  const looms = await db
+    .select({ loomNo: schema.looms.loomNo, shed: schema.looms.shed })
+    .from(schema.looms)
+    .orderBy(schema.looms.shed, schema.looms.loomNo);
+  const loomOpts = looms.map((l) => ({
+    value: String(l.loomNo),
+    label: `Shed ${l.shed} · Loom ${l.loomNo}`,
+    filterKey: l.shed,
+  }));
   const selected = params.id ? rows.find((r) => r.id === parseInt(params.id!)) ?? null : null;
   const isAdding = params.adding === "1";
 
@@ -241,7 +250,7 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" /></div>
                 <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} className="input-box" placeholder="Sizing Party (F9)" /></div>
                 <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" /></div>
-                <div><label className="label block mb-1">Loom No</label><input name="loom_no" type="number" className="input-box mono" /></div>
+                <div><label className="label block mb-1">Loom No</label><Combobox name="loom_no" options={loomOpts} filterByField="shed" className="input-box mono" placeholder="Loom (set Shed first)" /></div>
                 <div><label className="label block mb-1">Set#</label><input name="set_no" className="input-box mono" /></div>
                 <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" /></div>
               </div>
@@ -269,7 +278,7 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Status Loc</label><input name="status_loc" className="input-box" defaultValue={selected.statusLoc ?? ""} /></div>
                 <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} defaultValue={selected.szgParty ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
-                <div><label className="label block mb-1">Loom No</label><input name="loom_no" type="number" className="input-box mono" defaultValue={selected.loomNo ?? ""} /></div>
+                <div><label className="label block mb-1">Loom No</label><Combobox name="loom_no" options={loomOpts} filterByField="shed" defaultValue={selected.loomNo != null ? String(selected.loomNo) : ""} className="input-box mono" placeholder="Loom (set Shed first)" /></div>
                 <div><label className="label block mb-1">Set#</label><input name="set_no" className="input-box mono" defaultValue={selected.setNo ?? ""} /></div>
                 <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" defaultValue={selected.beamSetNo ?? ""} /></div>
                 <div><label className="label block mb-1">Set Status</label><input name="set_status" className="input-box" defaultValue={selected.setStatus ?? ""} /></div>

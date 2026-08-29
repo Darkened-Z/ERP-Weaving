@@ -53,6 +53,7 @@ export default async function LoomRpmAvgPage({
   // Legacy dailyProduction table has rpm — average per loom in range if present.
   const rpmAgg = await db
     .select({
+      shed: schema.dailyProduction.shed,
       loomNo: schema.dailyProduction.loomNo,
       avgRpm: sql<number>`avg(${schema.dailyProduction.rpm})`,
       runs: sql<number>`count(*)`,
@@ -64,13 +65,14 @@ export default async function LoomRpmAvgPage({
         lte(schema.dailyProduction.productionDate, to),
       ),
     )
-    .groupBy(schema.dailyProduction.loomNo);
-  const legacyMap = new Map(rpmAgg.map((r) => [r.loomNo, r]));
+    .groupBy(schema.dailyProduction.shed, schema.dailyProduction.loomNo);
+  const legacyMap = new Map(rpmAgg.map((r) => [`${r.shed}|${r.loomNo}`, r]));
 
   // intDailyProduction has no per-loom RPM column; join via beams.beamNo → beams.loomNo
   // to count production activity per loom in the range.
   const intAgg = await db
     .select({
+      shed: schema.beams.shed,
       loomNo: schema.beams.loomNo,
       runs: sql<number>`count(distinct ${schema.intDailyProduction.id})`,
       totalProd: sql<number>`coalesce(sum(${schema.intDailyProductionSet.totalCount}), 0)`,
@@ -90,12 +92,13 @@ export default async function LoomRpmAvgPage({
         lte(schema.intDailyProduction.vDate, to),
       ),
     )
-    .groupBy(schema.beams.loomNo);
-  const intMap = new Map(intAgg.map((r) => [r.loomNo ?? 0, r]));
+    .groupBy(schema.beams.shed, schema.beams.loomNo);
+  const intMap = new Map(intAgg.map((r) => [`${r.shed ?? ""}|${r.loomNo ?? 0}`, r]));
 
   const rows: Row[] = looms.map((l) => {
-    const legacy = legacyMap.get(l.loomNo);
-    const int = intMap.get(l.loomNo);
+    const key = `${l.shed}|${l.loomNo}`;
+    const legacy = legacyMap.get(key);
+    const int = intMap.get(key);
     const legacyAvg = legacy?.avgRpm ?? null;
     return {
       loomNo: l.loomNo,
@@ -245,7 +248,7 @@ export default async function LoomRpmAvgPage({
                         </td>
                       </tr>
                       {srows.map((r) => (
-                        <tr key={r.loomNo}>
+                        <tr key={`${r.shed}-${r.loomNo}`}>
                           <td className="mono">{r.shed ?? "-"}</td>
                           <td className="mono font-bold">{r.loomNo}</td>
                           <td>{r.weaverName ?? "-"}</td>
