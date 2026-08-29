@@ -9,6 +9,7 @@ import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { PartyCountGrid } from "@/components/party-count-grid";
 import { FindingPicker } from "@/components/finding-picker";
 import { BrokerRateCalc } from "@/components/broker-rate-calc";
+import { CountPicker } from "@/components/count-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
@@ -617,6 +618,12 @@ export default async function GreyConvContractPage({
             {/* Party-scoped count list + Cal Count / Rate Per Lbs auto-fill from party_counts */}
             <PartyCountGrid
               datalistId="gc-yarn-counts"
+              partyField="party"
+              partyCodeByDesc={partyCodeByDescObj}
+              partyCountData={partyCountData}
+              allCounts={allCountOpts}
+            />
+            <CountPicker
               partyField="party"
               partyCodeByDesc={partyCodeByDescObj}
               partyCountData={partyCountData}
