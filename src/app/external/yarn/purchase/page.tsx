@@ -5,6 +5,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
+import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
@@ -169,6 +170,13 @@ export default async function YarnPurchaseVoucherPage({
       ...(rate ? { line_rate: rate } : {}),
     };
   }
+  // Party-scoped Party-Count select options: only the selected party's counts show.
+  const countsByParty: Record<string, { code: string; label: string }[]> = {};
+  for (const sc of partyScopedCounts) {
+    if (!sc.party) continue;
+    (countsByParty[sc.party] ??= []).push({ code: sc.code, label: `${sc.code} — ${sc.description}` });
+  }
+  const allPartyCountOpts = partyCountOptions.map((o) => ({ code: o.code, label: `${o.code} — ${o.description}` }));
 
   const purContracts = await db
     .select()
@@ -1164,6 +1172,7 @@ export default async function YarnPurchaseVoucherPage({
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
                   <RowAutoFill watch="line_party_count" map={partyCountFillMap} />
+                  <PartyCountSelectFilter partyField="party" selectName="line_party_count" countsByParty={countsByParty} allCounts={allPartyCountOpts} />
                   <CountBlendEnricher
                     watchLineCount="line_count"
                     descField="line_count_desc"
@@ -1324,7 +1333,7 @@ export default async function YarnPurchaseVoucherPage({
                               <Combobox
                                 name="line_despatch_party"
                                 options={despatchPartyOpts}
-                                defaultValue={row?.despatchParty ?? ""}
+                                defaultValue={row?.despatchParty || godownParty}
                                 placeholder="Godown / other party…"
                                 className="input-box mono text-[12px]"
                               />
