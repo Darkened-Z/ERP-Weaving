@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
@@ -102,6 +103,12 @@ export default async function IntGreyConversionContractPage({
     .from(schema.yarnCounts)
     .where(eq(schema.yarnCounts.status, "A"))
     .orderBy(schema.yarnCounts.countCode);
+  const greyCountLabels: Record<string, string> = Object.fromEntries(
+    yarnCountList.map((y) => [
+      String(y.countCode).trim().toLowerCase(),
+      `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+    ])
+  );
   const warpCountFillMap: Record<string, Record<string, string>> = {};
   const weftCountFillMap: Record<string, Record<string, string>> = {};
   for (const c of yarnCountList) {
@@ -619,11 +626,11 @@ export default async function IntGreyConversionContractPage({
                   <div className="grid grid-cols-4 gap-3 mb-3">
                     <div className="col-span-2">
                       <label className="label block mb-1">Gray Qlty Code (Const)</label>
-                      <GreyQualityPicker name="gray_qlty_code" defaultValue={formItem?.grayQltyCode ?? ""} rows={greyPickerRows} />
+                      <GreyQualityPicker name="gray_qlty_code" defaultValue={formItem?.grayQltyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
                     </div>
                     <div className="col-span-2">
                       <label className="label block mb-1">Img</label>
-                      <input name="img" className="input-box mono text-[13px]" defaultValue={formItem?.img ?? ""} />
+                      <ImageAttach name="img" defaultValue={formItem?.img ?? ""} />
                     </div>
                   </div>
 
@@ -671,7 +678,7 @@ export default async function IntGreyConversionContractPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Grey Code</label>
-                    <GreyQualityPicker name="gray_code" defaultValue={formItem?.grayCode ?? ""} rows={greyPickerRows} />
+                    <GreyQualityPicker name="gray_code" defaultValue={formItem?.grayCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
                   </div>
                   <div>
                     <label className="label block mb-1">Find Contract#</label>

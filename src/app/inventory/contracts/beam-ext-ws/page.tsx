@@ -117,6 +117,13 @@ export default async function BeamContractExtWsPage({
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
 
+  const greyCountLabels: Record<string, string> = Object.fromEntries(
+    countList.map((y) => [
+      String(y.code).trim().toLowerCase(),
+      `${y.code} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+    ])
+  );
+
   const greyList = await db
     .select({
       code: schema.greyConstruction.code,
@@ -584,7 +591,7 @@ export default async function BeamContractExtWsPage({
 
                 <div className="lg:col-span-4">
                   <label className="label block mb-1">WRP Code (Grey Const)</label>
-                  <GreyQualityPicker name="wrp_code" defaultValue={formContract?.wrpCode ?? ""} rows={greyPickerRows} />
+                  <GreyQualityPicker name="wrp_code" defaultValue={formContract?.wrpCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">No. of Width</label>

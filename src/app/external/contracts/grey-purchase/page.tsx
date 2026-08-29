@@ -129,6 +129,17 @@ export default async function GreyPurchaseContractPage({
     .from(schema.greyConstruction)
     .where(eq(schema.greyConstruction.status, "A"))
     .orderBy(schema.greyConstruction.code);
+  const yarnCountList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const greyCountLabels: Record<string, string> = Object.fromEntries(
+    yarnCountList.map((y) => [
+      String(y.countCode).trim().toLowerCase(),
+      `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+    ])
+  );
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const greyOpts = greyList.map((g) => {
@@ -593,7 +604,7 @@ export default async function GreyPurchaseContractPage({
               <div className="grid grid-cols-4 gap-3 mb-3">
                 <div>
                   <label className="label block mb-1">Grey Code</label>
-                  <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} />
+                  <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
                 </div>
                 <div>
                   <label className="label block mb-1">Construction</label>

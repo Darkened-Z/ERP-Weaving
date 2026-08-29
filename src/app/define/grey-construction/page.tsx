@@ -30,6 +30,15 @@ export default async function GreyConstructionPage({
     const blend = y.type ? ` ${y.type}` : "";
     return { value: y.countCode, label: `${y.countCode} — ${y.description}${blend}` };
   });
+  // Resolve a stored count code (e.g. "2") to "code — blend" for the list display.
+  const countByCode = new Map(yarnCounts.map((y) => [String(y.countCode).trim().toLowerCase(), y]));
+  const resolveCount = (raw: string | null | undefined) => {
+    const v = (raw ?? "").trim();
+    if (!v) return "-";
+    const y = countByCode.get(v.toLowerCase());
+    if (!y) return v;
+    return `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`;
+  };
   const nextCode = "GC-" + String(
     rows.reduce((max, r) => {
       const m = (r.code ?? "").match(/(\d+)$/);
@@ -383,7 +392,7 @@ export default async function GreyConstructionPage({
                     </td>
                     <td className="mono text-[13px]">
                       <a href={href} className="no-underline block" style={linkStyle}>
-                        {r.warpCount ?? "-"}
+                        {resolveCount(r.warpCount)}
                       </a>
                     </td>
                     <td className="mono font-bold">
@@ -393,7 +402,7 @@ export default async function GreyConstructionPage({
                     </td>
                     <td className="mono text-[13px]">
                       <a href={href} className="no-underline block" style={linkStyle}>
-                        {r.weftCount ?? "-"}
+                        {resolveCount(r.weftCount)}
                       </a>
                     </td>
                     <td className="mono text-[13px]">

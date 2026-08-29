@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { VoucherBalance } from "@/components/voucher-balance";
@@ -780,11 +781,7 @@ export default async function BankPaymentPage({
 
                 <div className="lg:col-span-4">
                   <label className="label block mb-1">Img</label>
-                  <input
-                    name="img"
-                    className="input-box mono"
-                    defaultValue={headVoucher?.img ?? ""}
-                  />
+                  <ImageAttach name="img" defaultValue={headVoucher?.img ?? ""} />
                 </div>
                 <div className="lg:col-span-8">
                   <label className="label block mb-1">Find</label>

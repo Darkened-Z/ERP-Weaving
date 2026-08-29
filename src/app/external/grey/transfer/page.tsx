@@ -100,6 +100,17 @@ export default async function GreyTransferPage({
     .from(schema.greyConstruction)
     .where(eq(schema.greyConstruction.status, "A"))
     .orderBy(schema.greyConstruction.code);
+  const yarnCountList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  const greyCountLabels: Record<string, string> = Object.fromEntries(
+    yarnCountList.map((y) => [
+      String(y.countCode).trim().toLowerCase(),
+      `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+    ])
+  );
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const greyOpts = greyList.map((g) => {
@@ -454,7 +465,7 @@ export default async function GreyTransferPage({
 
                 <div className="col-span-12">
                   <label className="label block mb-1">Quality</label>
-                  <GreyQualityPicker name="quality_from" defaultValue={formTransfer?.qualityFrom ?? ""} rows={greyPickerRows} />
+                  <GreyQualityPicker name="quality_from" defaultValue={formTransfer?.qualityFrom ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
                 </div>
 
                 <div className="col-span-3">
@@ -501,7 +512,7 @@ export default async function GreyTransferPage({
                 </div>
                 <div className="col-span-6">
                   <label className="label block mb-1">Quality</label>
-                  <GreyQualityPicker name="quality_to" defaultValue={formTransfer?.qualityTo ?? ""} rows={greyPickerRows} />
+                  <GreyQualityPicker name="quality_to" defaultValue={formTransfer?.qualityTo ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
                 </div>
                 <div className="col-span-8">
                   <label className="label block mb-1">Remarks</label>

@@ -25,15 +25,23 @@ export function GreyQualityPicker({
   name,
   defaultValue,
   rows,
+  countLabels,
   placeholder = "Select construction",
   className = "input-box mono cursor-pointer",
 }: {
   name: string;
   defaultValue: string;
   rows: Row[];
+  /** Optional map (lowercased count code → "code — blend") to show blend in the Warp/Weft columns. */
+  countLabels?: Record<string, string>;
   placeholder?: string;
   className?: string;
 }) {
+  const label = (v: string) => {
+    const t = (v ?? "").trim();
+    if (!t) return "";
+    return countLabels?.[t.toLowerCase()] ?? t;
+  };
   const [value, setValue] = useState(defaultValue || "");
   const [open, setOpen] = useState(false);
   const [read, setRead] = useState("");
@@ -190,8 +198,8 @@ export function GreyQualityPicker({
                       <td className="px-2 py-1 text-right">{r.reed ?? "-"}</td>
                       <td className="px-2 py-1 text-right">{r.pick ?? "-"}</td>
                       <td className="px-2 py-1 font-bold">{r.code}</td>
-                      <td className="px-2 py-1">{r.warpCounts.filter(Boolean).join(" · ") || "-"}</td>
-                      <td className="px-2 py-1">{r.weftCounts.filter(Boolean).join(" · ") || "-"}</td>
+                      <td className="px-2 py-1">{r.warpCounts.filter(Boolean).map(label).join(" · ") || "-"}</td>
+                      <td className="px-2 py-1">{r.weftCounts.filter(Boolean).map(label).join(" · ") || "-"}</td>
                       <td className="px-2 py-1 text-center">{r.status}</td>
                     </tr>
                   ))}

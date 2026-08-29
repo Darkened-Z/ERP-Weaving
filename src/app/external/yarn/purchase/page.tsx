@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
@@ -1022,11 +1023,7 @@ export default async function YarnPurchaseVoucherPage({
                   />
                   <div className="lg:col-span-8">
                     <label className="label block mb-1">Img</label>
-                    <input
-                      name="img"
-                      className="input-box mono"
-                      defaultValue={formVoucher?.img ?? ""}
-                    />
+                    <ImageAttach name="img" defaultValue={formVoucher?.img ?? ""} />
                   </div>
 
                   <div className="lg:col-span-2">
