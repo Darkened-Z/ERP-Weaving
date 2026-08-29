@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
@@ -72,7 +73,30 @@ export default async function GreyTransferPage({
     .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
   const greyList = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width, reed: schema.greyConstruction.reed, pick: schema.greyConstruction.pick })
+    .select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      width: schema.greyConstruction.width,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      warp3: schema.greyConstruction.warp3,
+      warp4: schema.greyConstruction.warp4,
+      warp5: schema.greyConstruction.warp5,
+      warp6: schema.greyConstruction.warp6,
+      warp7: schema.greyConstruction.warp7,
+      warp8: schema.greyConstruction.warp8,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+      weft3: schema.greyConstruction.weft3,
+      weft4: schema.greyConstruction.weft4,
+      weft5: schema.greyConstruction.weft5,
+      weft6: schema.greyConstruction.weft6,
+      weft7: schema.greyConstruction.weft7,
+      weft8: schema.greyConstruction.weft8,
+      status: schema.greyConstruction.status,
+    })
     .from(schema.greyConstruction)
     .where(eq(schema.greyConstruction.status, "A"))
     .orderBy(schema.greyConstruction.code);
@@ -87,6 +111,16 @@ export default async function GreyTransferPage({
       desc: `reed ${g.reed ?? ""} pick ${g.pick ?? ""} ${g.reed ?? ""}/${g.pick ?? ""} ${g.reed ?? ""}x${g.pick ?? ""}`,
     };
   });
+  const greyPickerRows = greyList.map((g) => ({
+    code: g.code,
+    reed: (g.reed ?? null) as number | null,
+    pick: (g.pick ?? null) as number | null,
+    width: (g.width ?? null) as number | null,
+    description: g.description ?? "",
+    warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => (x ?? "") as string),
+    weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => (x ?? "") as string),
+    status: (g.status ?? "A") as string,
+  }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
 
@@ -420,10 +454,7 @@ export default async function GreyTransferPage({
 
                 <div className="col-span-12">
                   <label className="label block mb-1">Quality</label>
-                  <div className="grid grid-cols-[1fr_1fr] gap-2">
-                    <Combobox name="quality_from" options={greyOpts} defaultValue={formTransfer?.qualityFrom ?? ""} placeholder="Select quality" descTargetId="gt-qfrom-desc" />
-                    <input id="gt-qfrom-desc" className={roCls} readOnly tabIndex={-1} defaultValue={formTransfer?.qualityFrom ? greyDescByCode.get(formTransfer.qualityFrom) ?? "" : ""} />
-                  </div>
+                  <GreyQualityPicker name="quality_from" defaultValue={formTransfer?.qualityFrom ?? ""} rows={greyPickerRows} />
                 </div>
 
                 <div className="col-span-3">
@@ -470,10 +501,7 @@ export default async function GreyTransferPage({
                 </div>
                 <div className="col-span-6">
                   <label className="label block mb-1">Quality</label>
-                  <div className="grid grid-cols-[1fr_1fr] gap-2">
-                    <Combobox name="quality_to" options={greyOpts} defaultValue={formTransfer?.qualityTo ?? ""} placeholder="Select quality" descTargetId="gt-qto-desc" />
-                    <input id="gt-qto-desc" className={roCls} readOnly tabIndex={-1} defaultValue={formTransfer?.qualityTo ? greyDescByCode.get(formTransfer.qualityTo) ?? "" : ""} />
-                  </div>
+                  <GreyQualityPicker name="quality_to" defaultValue={formTransfer?.qualityTo ?? ""} rows={greyPickerRows} />
                 </div>
                 <div className="col-span-8">
                   <label className="label block mb-1">Remarks</label>

@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntConvCalc } from "@/components/int-conv-calc";
@@ -72,6 +73,23 @@ export default async function IntGreyConversionContractPage({
       reed: schema.greyConstruction.reed,
       pick: schema.greyConstruction.pick,
       width: schema.greyConstruction.width,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      warp3: schema.greyConstruction.warp3,
+      warp4: schema.greyConstruction.warp4,
+      warp5: schema.greyConstruction.warp5,
+      warp6: schema.greyConstruction.warp6,
+      warp7: schema.greyConstruction.warp7,
+      warp8: schema.greyConstruction.warp8,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+      weft3: schema.greyConstruction.weft3,
+      weft4: schema.greyConstruction.weft4,
+      weft5: schema.greyConstruction.weft5,
+      weft6: schema.greyConstruction.weft6,
+      weft7: schema.greyConstruction.weft7,
+      weft8: schema.greyConstruction.weft8,
+      status: schema.greyConstruction.status,
     })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
@@ -152,6 +170,16 @@ export default async function IntGreyConversionContractPage({
       desc: `reed ${g.reed ?? ""} pick ${g.pick ?? ""} ${g.reed ?? ""}/${g.pick ?? ""} ${g.reed ?? ""}x${g.pick ?? ""}`,
     };
   });
+  const greyPickerRows = greyList.map((g) => ({
+    code: g.code,
+    reed: (g.reed ?? null) as number | null,
+    pick: (g.pick ?? null) as number | null,
+    width: (g.width ?? null) as number | null,
+    description: g.description ?? "",
+    warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => (x ?? "") as string),
+    weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => (x ?? "") as string),
+    status: (g.status ?? "A") as string,
+  }));
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
@@ -591,7 +619,7 @@ export default async function IntGreyConversionContractPage({
                   <div className="grid grid-cols-4 gap-3 mb-3">
                     <div className="col-span-2">
                       <label className="label block mb-1">Gray Qlty Code (Const)</label>
-                      <Combobox name="gray_qlty_code" options={greyOpts} defaultValue={formItem?.grayQltyCode ?? ""} placeholder="Select construction" />
+                      <GreyQualityPicker name="gray_qlty_code" defaultValue={formItem?.grayQltyCode ?? ""} rows={greyPickerRows} />
                     </div>
                     <div className="col-span-2">
                       <label className="label block mb-1">Img</label>
@@ -643,7 +671,7 @@ export default async function IntGreyConversionContractPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Grey Code</label>
-                    <Combobox name="gray_code" options={greyOpts} defaultValue={formItem?.grayCode ?? ""} placeholder="Select construction" className={`${yellowCls} bg-[#FFF8B7]`} />
+                    <GreyQualityPicker name="gray_code" defaultValue={formItem?.grayCode ?? ""} rows={greyPickerRows} />
                   </div>
                   <div>
                     <label className="label block mb-1">Find Contract#</label>
