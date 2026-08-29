@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { GreyInfoPanel } from "@/components/grey-info-panel";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
@@ -220,6 +221,19 @@ export default async function GreyConvContractPage({
   );
   const productFillMap = Object.fromEntries(
     productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description }])
+  );
+  // Compact info-panel map: one entry per construction with warp/weft as arrays for the display
+  const greyInfoMap = Object.fromEntries(
+    greyList.map((g) => [
+      g.code,
+      {
+        reed: g.reed as number | null,
+        pick: g.pick as number | null,
+        width: g.width as number | null,
+        warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => (x ?? "") as string),
+        weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => (x ?? "") as string),
+      },
+    ])
   );
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
@@ -623,17 +637,13 @@ export default async function GreyConvContractPage({
                 </div>
 
                 <div className="grid grid-cols-4 gap-3 mb-3">
-                  <div>
+                  <div className="col-span-2">
                     <label className="label block mb-1">Broaker</label>
                     <Combobox name="broker" options={partyOpts} defaultValue={formItem?.broker ?? ""} placeholder="Select broker" className="input-box mono text-[13px]" />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="label block mb-1">Rate/Pick</label>
                     <input name="rate_pick" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePick ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">D.#</label>
-                    <input name="design_no" className="input-box mono" defaultValue={formItem?.designNo ?? ""} />
                   </div>
                 </div>
 
@@ -648,19 +658,9 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  <div>
-                    <label className="label block mb-1">WRP Wt / 40 Mtr</label>
-                    <input name="wrp_wt_40" type="number" step="any" className={greenCls} defaultValue={formItem?.wrpWt40 ?? ""} readOnly />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">WFT Wt / 40 Mtr</label>
-                    <input name="wft_wt_40" type="number" step="any" className={greenCls} defaultValue={formItem?.wftWt40 ?? ""} readOnly />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Weight / 40 Mtr</label>
-                    <input name="weight_40" type="number" step="any" className={greenCls} defaultValue={formItem?.weight40 ?? ""} readOnly />
-                  </div>
+                <div className="mb-3">
+                  <label className="label block mb-1">As Information</label>
+                  <GreyInfoPanel watch="gray_qlty_code" map={greyInfoMap} />
                 </div>
 
                 <div className="mb-3">
@@ -668,36 +668,25 @@ export default async function GreyConvContractPage({
                   <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="label block mb-1">Read</label>
-                    <input name="read" type="number" step="any" required className="input-box mono text-right" defaultValue={formItem?.read ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Pick</label>
-                    <input name="pick" type="number" step="any" required className="input-box mono text-right" defaultValue={formItem?.pick ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Width</label>
-                    <input name="width" type="number" step="any" required className="input-box mono text-right" defaultValue={formItem?.width ?? ""} />
-                  </div>
-                </div>
+                {/* Hidden: still submitted for saving; auto-filled by <AutoFill> when Gray Qlty Code picked */}
+                <input type="hidden" name="design_no" defaultValue={formItem?.designNo ?? ""} />
+                <input type="hidden" name="wrp_wt_40" defaultValue={formItem?.wrpWt40 ?? ""} />
+                <input type="hidden" name="wft_wt_40" defaultValue={formItem?.wftWt40 ?? ""} />
+                <input type="hidden" name="weight_40" defaultValue={formItem?.weight40 ?? ""} />
+                <input type="hidden" name="read" defaultValue={formItem?.read ?? ""} />
+                <input type="hidden" name="pick" defaultValue={formItem?.pick ?? ""} />
+                <input type="hidden" name="width" defaultValue={formItem?.width ?? ""} />
               </div>
 
               <div className="col-span-4 border-l border-[var(--border-light)] pl-4 space-y-2">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold border-b border-black pb-1 mb-2">Reference</div>
                 <div>
-                  <label className="label block mb-1">Find Design#</label>
-                  <input name="find_design" className="input-box mono text-[13px]" defaultValue={formItem?.findDesign ?? ""} />
-                </div>
-                <div>
-                  <label className="label block mb-1">Grey Code</label>
-                  <Combobox name="gray_code" options={greyOpts} defaultValue={formItem?.grayCode ?? ""} placeholder="Select construction" className={`${yellowCls} bg-[#FFF8B7]`} />
-                </div>
-                <div>
                   <label className="label block mb-1">Find Contract#</label>
                   <input name="find_contract" className={yellowCls} style={{ background: "#FFF8B7" }} defaultValue={formItem?.findContract ?? ""} />
                 </div>
+                {/* Hidden — preserve DB values for old records */}
+                <input type="hidden" name="find_design" defaultValue={formItem?.findDesign ?? ""} />
+                <input type="hidden" name="gray_code" defaultValue={formItem?.grayCode ?? ""} />
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
                   <div>
