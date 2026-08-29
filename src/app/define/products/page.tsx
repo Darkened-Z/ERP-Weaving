@@ -10,16 +10,27 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; q?: string }>;
 }) {
   const params = await searchParams;
-  const products = await db.select().from(schema.products).orderBy(schema.products.description);
+  const allProducts = await db.select().from(schema.products).orderBy(schema.products.description);
+  const q = (params.q ?? "").trim();
+  const ql = q.toLowerCase();
+  const products = !q
+    ? allProducts
+    : allProducts.filter(
+        (p) =>
+          p.description.toLowerCase().includes(ql) ||
+          (p.mainDesc ?? "").toLowerCase().includes(ql) ||
+          (p.subDesc ?? "").toLowerCase().includes(ql) ||
+          String(p.code).includes(ql)
+      );
 
-  const selected = params.id ? products.find((p) => p.id === parseInt(params.id!)) ?? null : null;
+  const selected = params.id ? allProducts.find((p) => p.id === parseInt(params.id!)) ?? null : null;
   const isAdding = params.adding === "1";
   const formItem = isAdding ? null : selected;
 
-  const nextCode = products.reduce((max, p) => (p.code > max ? p.code : max), 0) + 1;
+  const nextCode = allProducts.reduce((max, p) => (p.code > max ? p.code : max), 0) + 1;
 
   async function saveProduct(formData: FormData) {
     "use server";
@@ -172,10 +183,12 @@ export default async function ProductsPage({
           </div>
 
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <form method="GET" action="/define/products" className="flex items-center gap-2 mb-3">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">Find</div>
-              <input className="input-box flex-1 text-[13px]" placeholder="Search by Desc or Code..." />
-            </div>
+              <input name="q" defaultValue={q} className="input-box flex-1 text-[13px]" placeholder="Search by Desc or Code..." />
+              <button type="submit" className="btn btn-outline btn-sm">Find</button>
+              {q && <a href="/define/products" className="btn btn-outline btn-sm">Clear</a>}
+            </form>
             <div className="overflow-x-auto" style={{ maxHeight: "70vh", overflowY: "auto" }}>
               <table>
                 <thead>
