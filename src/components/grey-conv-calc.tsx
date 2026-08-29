@@ -35,6 +35,9 @@ export function GreyConvCalc() {
     const side = (prefix: "warp" | "weft") => {
       let wt = 0;
       let cost = 0;
+      // For WEFT, ends per row = picks per inch; multiply by width (inches) to
+      // get total weft length per meter of fabric. WARP ends is already total.
+      const widthN = prefix === "weft" ? val("width") : 1;
       for (let i = 1; i <= 9; i++) {
         const calEl = q(`${prefix}_cal_count_${i}`);
         if (!calEl) continue;
@@ -46,9 +49,10 @@ export function GreyConvCalc() {
           continue;
         }
         const cal = parseFloat(calEl.value);
+        const effectiveEnds = val(`${prefix}_ends_${i}`) * widthN;
         const rowWt =
           Number.isFinite(cal) && cal > 0
-            ? round((val(`${prefix}_ends_${i}`) * 1.0936 / 800) / cal, 6)
+            ? round((effectiveEnds * 1.0936 / 800) / cal, 6)
             : 0;
         const rowCost = round(rowWt * val(`${prefix}_rate_${i}`), 4);
         set(`${prefix}_wt_${i}`, String(rowWt));
@@ -86,9 +90,6 @@ export function GreyConvCalc() {
       set("wrp_wt_40", String(round(warpWt * 40, 6)));
       set("wft_wt_40", String(round(weftWt * 40, 6)));
       set("weight_40", String(round(wtPerMtr * 40, 6)));
-      set("warp_read_display", q("read")?.value ?? "");
-      set("warp_pick_display", q("pick")?.value ?? "");
-      set("weft_width_display", q("width")?.value ?? "");
     };
 
     const onInput = (e: Event) => {

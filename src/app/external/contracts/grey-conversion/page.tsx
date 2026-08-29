@@ -274,6 +274,7 @@ export default async function GreyConvContractPage({
         redirect(`/external/contracts/grey-conversion${backQ}&error=design_exists`);
     }
 
+    const widthN = num(formData.get("width")) ?? 0;
     const parseRows = (prefix: "warp" | "weft") => {
       const out: {
         srNo: number;
@@ -294,8 +295,10 @@ export default async function GreyConvContractPage({
         const ends = int(formData.get(`${prefix}_ends_${i}`));
         const ratePerLbs = num(formData.get(`${prefix}_rate_${i}`));
         if (count || descr || brand || calCount !== null || ends !== null || ratePerLbs !== null) {
+          // Weft ends = picks per inch → multiply by width to get total weft length per meter of fabric
+          const effectiveEnds = prefix === "weft" ? (ends ?? 0) * widthN : (ends ?? 0);
           const wtPerMtr =
-            calCount && calCount > 0 ? round(((ends ?? 0) * 1.0936 / 800) / calCount, 6) : 0;
+            calCount && calCount > 0 ? round((effectiveEnds * 1.0936 / 800) / calCount, 6) : 0;
           const costPerMtr = round(wtPerMtr * (ratePerLbs ?? 0), 4);
           out.push({ srNo: i, count, descr, brand, calCount, ends, wtPerMtr, ratePerLbs, costPerMtr });
         }
@@ -668,14 +671,12 @@ export default async function GreyConvContractPage({
                   <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
                 </div>
 
-                {/* Hidden: still submitted for saving; auto-filled by <AutoFill> when Gray Qlty Code picked */}
+                {/* Hidden: still submitted for saving; auto-filled by <AutoFill> when Gray Qlty Code picked.
+                    read / pick / width are NOT hidden here — they're the visible editable inputs in the WARP/WEFT section headers below. */}
                 <input type="hidden" name="design_no" defaultValue={formItem?.designNo ?? ""} />
                 <input type="hidden" name="wrp_wt_40" defaultValue={formItem?.wrpWt40 ?? ""} />
                 <input type="hidden" name="wft_wt_40" defaultValue={formItem?.wftWt40 ?? ""} />
                 <input type="hidden" name="weight_40" defaultValue={formItem?.weight40 ?? ""} />
-                <input type="hidden" name="read" defaultValue={formItem?.read ?? ""} />
-                <input type="hidden" name="pick" defaultValue={formItem?.pick ?? ""} />
-                <input type="hidden" name="width" defaultValue={formItem?.width ?? ""} />
               </div>
 
               <div className="col-span-4 border-l border-[var(--border-light)] pl-4 space-y-2">
@@ -758,9 +759,9 @@ export default async function GreyConvContractPage({
                   <div className="text-[12px] uppercase tracking-[0.1em] font-bold">WARP</div>
                   <div className="flex items-center gap-3 text-[11px]">
                     <span className="label">Read</span>
-                    <input name="warp_read_display" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.read ?? ""} readOnly />
+                    <input name="read" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.read ?? ""} />
                     <span className="label">Pick</span>
-                    <input name="warp_pick_display" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.pick ?? ""} readOnly />
+                    <input name="pick" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.pick ?? ""} />
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -807,7 +808,7 @@ export default async function GreyConvContractPage({
                   <div className="text-[12px] uppercase tracking-[0.1em] font-bold">WEFT</div>
                   <div className="flex items-center gap-3 text-[11px]">
                     <span className="label">Width</span>
-                    <input name="weft_width_display" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.width ?? ""} readOnly />
+                    <input name="width" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.width ?? ""} />
                   </div>
                 </div>
                 <div className="overflow-x-auto">
