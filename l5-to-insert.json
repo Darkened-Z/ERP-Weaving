@@ -1,0 +1,1587 @@
+{
+  "1.01.01.10": {
+    "name": "DEBTORS GREY SALE",
+    "children": [
+      {
+        "code": "1.01.01.10.0001",
+        "desc": "NUK NADEEM USMAN KARACHI"
+      },
+      {
+        "code": "1.01.01.10.0003",
+        "desc": "ZQS ZIA QADRI SAB ADHT"
+      },
+      {
+        "code": "1.01.01.10.0004",
+        "desc": "MTM MALIK TARIQ MUBARIK"
+      },
+      {
+        "code": "1.01.01.10.0005",
+        "desc": "MZS MALIK ZAFIR SAB"
+      },
+      {
+        "code": "1.01.01.10.0006",
+        "desc": "FYGS FAISAL YASIR GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0007",
+        "desc": "SSRS SULEMAN SAB RAFI SAMI"
+      },
+      {
+        "code": "1.01.01.10.0008",
+        "desc": "HRSS HAJI RAFI SAMI SAB"
+      },
+      {
+        "code": "1.01.01.10.0009",
+        "desc": "HSPK HAJI SAMI PUNCH KHATA"
+      },
+      {
+        "code": "1.01.01.10.0010",
+        "desc": "HKJ3 HAJI KHALID JAMIA GALI #3"
+      },
+      {
+        "code": "1.01.01.10.0011",
+        "desc": "MBBPV MALIK BASIT BROKER P,V"
+      },
+      {
+        "code": "1.01.01.10.0012",
+        "desc": "AFZALGSAB AFZAL GILL SAB"
+      },
+      {
+        "code": "1.01.01.10.0013",
+        "desc": "KHMISH KHAWAJA MUHAMMAD ISHFAQ (GS)"
+      },
+      {
+        "code": "1.01.01.10.0015",
+        "desc": "YOCHAGR YOUNAS CHACKER GREY PURCHASE"
+      },
+      {
+        "code": "1.01.01.10.0016",
+        "desc": "MALIKLQA MALIK LIAQAT C.P"
+      },
+      {
+        "code": "1.01.01.10.0017",
+        "desc": "AHMAAGEAL AHMAD AGENT AL-RAHEEM DYING"
+      },
+      {
+        "code": "1.01.01.10.0018",
+        "desc": "TABLGREP TARIQ BILLA GREY PURCHASE"
+      },
+      {
+        "code": "1.01.01.10.0019",
+        "desc": "MALIKASFA MALIK ASLAM FALWARI WALA"
+      },
+      {
+        "code": "1.01.01.10.0020",
+        "desc": "SAQFAB SAQIB FABRICS GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0021",
+        "desc": "DILAFAI DILAWAR FAIZ GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0022",
+        "desc": "SAEBAS SAEED BASHR ( S.B ) GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0023",
+        "desc": "SHAIBBRK SHAIBI BROKER MOLVI GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0024",
+        "desc": "OMGNA OMAR GULAM NABI (GS)"
+      },
+      {
+        "code": "1.01.01.10.0025",
+        "desc": "FARUSGR FAROOQ USMAN GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0026",
+        "desc": "HARFAB HARIS FABRICS MAKKI MARKET"
+      },
+      {
+        "code": "1.01.01.10.0027",
+        "desc": "ALIBHFAB ALI BHAI FABRICS GOLE BAZAR"
+      },
+      {
+        "code": "1.01.01.10.0028",
+        "desc": "MEHBRO MEHMOOD MALIK BROKER"
+      },
+      {
+        "code": "1.01.01.10.0029",
+        "desc": "MEERHUGRAS AMEER HUSSAIN GERY SALE"
+      },
+      {
+        "code": "1.01.01.10.0030",
+        "desc": "HASAMU HAJI SARDAR MUSTAFA GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0031",
+        "desc": "HAYFAB HAFIZ AYUB FABRICS"
+      },
+      {
+        "code": "1.01.01.10.0032",
+        "desc": "UKL USMAN KARIM LAHORE"
+      },
+      {
+        "code": "1.01.01.10.0033",
+        "desc": "BLIGS BAO LIAQAT GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0034",
+        "desc": "HSNK HAJI SAMI NEW KHATA"
+      },
+      {
+        "code": "1.01.01.10.0035",
+        "desc": "ANGS ADIL NASEEM GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0036",
+        "desc": "SARRAMGR SARWAR RAMZAN GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0037",
+        "desc": "RISANIMA RIZWAN SAB ANAIYT MARKET (GS)"
+      },
+      {
+        "code": "1.01.01.10.0038",
+        "desc": "NATGS MALIK NAWAZ AYUB TREADER (GS)"
+      },
+      {
+        "code": "1.01.01.10.0039",
+        "desc": "AFMMF AJWA FABRICS MUMDI MARKET"
+      },
+      {
+        "code": "1.01.01.10.0040",
+        "desc": "ZAAEX ZAHID AMEEN ANSARI ( EX-CHAIRMAN)"
+      },
+      {
+        "code": "1.01.01.10.0041",
+        "desc": "SHQGS SHAHBAZ QADRI GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0042",
+        "desc": "TTBROK TAYYAB TAHIR BROKER"
+      },
+      {
+        "code": "1.01.01.10.0043",
+        "desc": "HMS(GPGS) HAJI MUSTAFA SARDAR (GP & GS)"
+      },
+      {
+        "code": "1.01.01.10.0044",
+        "desc": "MURANM MUZAMIL RIAZ ANYAIAT MARKET"
+      },
+      {
+        "code": "1.01.01.10.0045",
+        "desc": "HASFAB HASNAT FABRICS"
+      },
+      {
+        "code": "1.01.01.10.0046",
+        "desc": "LAFABAS LAGHARI FABRICS C/O ASGHAR BROKER"
+      },
+      {
+        "code": "1.01.01.10.0047",
+        "desc": "MAEHSA MALIK EHSAN SAB"
+      },
+      {
+        "code": "1.01.01.10.0048",
+        "desc": "IMBRO IMRAN BROKER PV"
+      },
+      {
+        "code": "1.01.01.10.0049",
+        "desc": "MIFTFA MALIK IFTKHAR FABRICS"
+      },
+      {
+        "code": "1.01.01.10.0050",
+        "desc": "MLAQBR MALIK AQEEL BROKER"
+      },
+      {
+        "code": "1.01.01.10.0051",
+        "desc": "KHAJA KHAWAJA JAVEED"
+      },
+      {
+        "code": "1.01.01.10.0052",
+        "desc": "FAYASAL FAISAL YASIR GREY 2023"
+      },
+      {
+        "code": "1.01.01.10.0053",
+        "desc": "HAMGAN HAFIZ AMEEN FABRICS ANIYAT MARKET"
+      },
+      {
+        "code": "1.01.01.10.0054",
+        "desc": "ASBMA ASIF B MALL SALE DURM WALI GALI"
+      },
+      {
+        "code": "1.01.01.10.0055",
+        "desc": "SAADSHAH SAAD SHAHZAD SAMNDRI ROAD"
+      },
+      {
+        "code": "1.01.01.10.0056",
+        "desc": "KHAREBROK KHAWAR RASEED GREY BROKER"
+      },
+      {
+        "code": "1.01.01.10.0057",
+        "desc": "MEHSOS MEHMOOD SONS"
+      },
+      {
+        "code": "1.01.01.10.0058",
+        "desc": "OMNOB OMAR NOBAHAR GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0059",
+        "desc": "HAJISA HAJI SAMI GREY SALE 2023"
+      },
+      {
+        "code": "1.01.01.10.0060",
+        "desc": "ARS ARSLAN BR FABRICS"
+      },
+      {
+        "code": "1.01.01.10.0061",
+        "desc": "ZAHIDKAR ZAHID KAMRAN AJWA CENTER"
+      },
+      {
+        "code": "1.01.01.10.0062",
+        "desc": "ZAHIDBHAZ ZAHID SAB 72 # C/O ZAHID AMIN CHAIRMAN"
+      },
+      {
+        "code": "1.01.01.10.0063",
+        "desc": "GREFAB GREEN FABRICS GOLE KACHARI"
+      },
+      {
+        "code": "1.01.01.10.0064",
+        "desc": "TAYYFAB TAYYAB FABRICS GOLE"
+      },
+      {
+        "code": "1.01.01.10.0065",
+        "desc": "PASFAB PASHA FABRICS"
+      },
+      {
+        "code": "1.01.01.10.0066",
+        "desc": "AWAIAK AWAIS AKRAM GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0067",
+        "desc": "FINEFAB FINE FABRICS GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0068",
+        "desc": "TAHIMA TAHIR MAJEED KOH-E-NOOR CENTER"
+      },
+      {
+        "code": "1.01.01.10.0069",
+        "desc": "ALSMARKE AL SAFA FABRICS MAKKI MARKET"
+      },
+      {
+        "code": "1.01.01.10.0070",
+        "desc": "HAJIAFZ HAJI AFZAL AISHA CENTER MAKKI MARKET"
+      },
+      {
+        "code": "1.01.01.10.0071",
+        "desc": "ARSCHA ARSHAD CHANGIA GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0072",
+        "desc": "GULRASO GULAM RASOOL BROKER GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0073",
+        "desc": "KINGFAB KING FABRICS CHNIOT BAZAR"
+      },
+      {
+        "code": "1.01.01.10.0074",
+        "desc": "ALISHAH ALI SHAH ACCOUNTANT GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0075",
+        "desc": "HUSSFAB HUSSANI FABRICS JAMIA GALI"
+      },
+      {
+        "code": "1.01.01.10.0076",
+        "desc": "ARIFD ARIF DYING SMALL STATE"
+      },
+      {
+        "code": "1.01.01.10.0077",
+        "desc": "HAJIYOU HAJI YOUSAF C/O TARIQ 163-C"
+      },
+      {
+        "code": "1.01.01.10.0078",
+        "desc": "SHERLA SHERAZ LARA FRIEND"
+      },
+      {
+        "code": "1.01.01.10.0079",
+        "desc": "HAJIILLAN HAJI ILLYAS GREY SALE ANAIYT MARKET"
+      },
+      {
+        "code": "1.01.01.10.0080",
+        "desc": "RAZZSAB RAZZAQ SAB WAKEELA WALI GALI"
+      },
+      {
+        "code": "1.01.01.10.0081",
+        "desc": "NAVMAJ NAVEED MAJEED JAMIA GALI"
+      },
+      {
+        "code": "1.01.01.10.0082",
+        "desc": "MEHCUT MEHMOOD MOODO CUT PIECE"
+      },
+      {
+        "code": "1.01.01.10.0083",
+        "desc": "ZEEGRBR ZEESHAN GREY BROKER"
+      },
+      {
+        "code": "1.01.01.10.0084",
+        "desc": "FARGR FAROOQ GREY BROKER C/O MUSTAFA"
+      },
+      {
+        "code": "1.01.01.10.0085",
+        "desc": "BILASH BILAL ASHRAF C/O ZAHID AMIN ANSARI"
+      },
+      {
+        "code": "1.01.01.10.0087",
+        "desc": "SAEZAFAFF SAEED ZAFAR AFFAN FABRICS MAKKI MARKET."
+      },
+      {
+        "code": "1.01.01.10.0088",
+        "desc": "AMQAD AMIR QADRI GREY PARTY (GS)"
+      },
+      {
+        "code": "1.01.01.10.0089",
+        "desc": "AKFAB AKBER FABRICS ANIYAT MARKET"
+      },
+      {
+        "code": "1.01.01.10.0090",
+        "desc": "NAEZI NAEEM ZIA ADHT BOOTA MARKET KARKHANA BAZ"
+      },
+      {
+        "code": "1.01.01.10.0091",
+        "desc": "ZAT ZA TREADERS MAKKI MARKET"
+      },
+      {
+        "code": "1.01.01.10.0092",
+        "desc": "FIFAB FINE FABRICS GREY SALE 2026"
+      },
+      {
+        "code": "1.01.01.10.0093",
+        "desc": "MUFAB MUNEEB FABRICS C/O GHORI BROKER"
+      },
+      {
+        "code": "1.01.01.10.0094",
+        "desc": "HAQN HAQ NAWAZ 44#"
+      },
+      {
+        "code": "1.01.01.10.0095",
+        "desc": "MIAASIS MIAN ASIF SONA PLAZA"
+      },
+      {
+        "code": "1.01.01.10.0096",
+        "desc": "SADIFAB NAEEM SADIQUE FABRICS"
+      },
+      {
+        "code": "1.01.01.10.0097",
+        "desc": "BABAJAN BABA JAN FABRICS HAFIZ TALHA"
+      },
+      {
+        "code": "1.01.01.10.0098",
+        "desc": "EHSANSHAR EHSAN SHARJEEL FABRICS GREY SALE"
+      },
+      {
+        "code": "1.01.01.10.0099",
+        "desc": "EHSANAS EHSAN ASHRAF FABRICS MANDAR GALI #2"
+      },
+      {
+        "code": "1.01.01.10.0100",
+        "desc": "BILHAR BILAL HARIS FABRICS"
+      },
+      {
+        "code": "1.01.01.10.0101",
+        "desc": "SAADA SAAD ABDUL-ALEEM C/O ADNAN SHAH"
+      },
+      {
+        "code": "1.01.01.10.0102",
+        "desc": "SAADFAB SAAD FABRICS C/O ADNAN SHAH"
+      },
+      {
+        "code": "1.01.01.10.0103",
+        "desc": "YOUFAB YOUSAF FABRICS MANDIR GALI"
+      },
+      {
+        "code": "1.01.01.10.0104",
+        "desc": "HAFMU HAJIZ MUZZAM GUJRAWALA"
+      },
+      {
+        "code": "1.01.01.10.0105",
+        "desc": "MIANASI IMRAN ASIF SHOP#43 AMEEN PALZA"
+      },
+      {
+        "code": "1.01.01.10.0106",
+        "desc": "FAISAYASI WAQAS TEX C/O FAISAL YASIR 2026"
+      }
+    ]
+  },
+  "1.01.12": {
+    "name": "SHORT TERM LOANS AND ADVANCES",
+    "children": [
+      {
+        "code": "1.01.12.01.0001",
+        "desc": "NWSD NAVEED WORK SHOP DASTI.,"
+      },
+      {
+        "code": "1.01.12.02.0001",
+        "desc": "YASKHA YASEEN KHATA ADVANCE"
+      },
+      {
+        "code": "1.01.12.02.0002",
+        "desc": "SHABSAKHA SHABBIR SAB KHATA ADVANCE"
+      },
+      {
+        "code": "1.01.12.02.0003",
+        "desc": "ARIFLOAD ARIF LODHI SAB KHATA ADVANCE"
+      },
+      {
+        "code": "1.01.12.02.0004",
+        "desc": "JASAKA JAVEED SAB KHATA ADVANCE"
+      },
+      {
+        "code": "1.01.12.02.0005",
+        "desc": "MSSKAD MALIK SHAHID SULTAN KHATA ADVANCES"
+      },
+      {
+        "code": "1.01.12.02.0006",
+        "desc": "UMAIRYOULO UMAIR YOUSNAS LOOM ADVANCE"
+      },
+      {
+        "code": "1.01.12.02.0007",
+        "desc": "LALGU LAL GUJJAR KHATA ADVANCE"
+      },
+      {
+        "code": "1.01.12.02.0008",
+        "desc": "MIANAKR MIAN AKRAM RUSSIAN LOOM ADV"
+      }
+    ]
+  },
+  "1.01.15.02": {
+    "name": "BANK BALANCE",
+    "children": [
+      {
+        "code": "1.01.15.02.0001",
+        "desc": "MBMS MEEZAN BANK MALIK SHAHID-1508"
+      },
+      {
+        "code": "1.01.15.02.0002",
+        "desc": "MBMZ MEEZAN BANK MALIK ZAHID-7757"
+      },
+      {
+        "code": "1.01.15.02.0003",
+        "desc": "BDIACM BANK DUBAI ISLAMIC ACM-256"
+      },
+      {
+        "code": "1.01.15.02.0004",
+        "desc": "JSBAB JS BANK ABDULKARIM-2052649"
+      },
+      {
+        "code": "1.01.15.02.0005",
+        "desc": "MEEZBA MEEZAN BANK ABDUL KARIM-2086"
+      },
+      {
+        "code": "1.01.15.02.0006",
+        "desc": "MEEBATAAA MEEZAN BANK TARIQ ACC-(3311)"
+      },
+      {
+        "code": "1.01.15.02.0007",
+        "desc": "MEEBSK MEEZAN BANK SK WEAVING ACC"
+      },
+      {
+        "code": "1.01.15.02.0008",
+        "desc": "MEEBANK MEEZAN BANK ACC NADEEM SAB-6092"
+      },
+      {
+        "code": "1.01.15.02.0009",
+        "desc": "MEBAMSU MEEZAN BANK ACC M SUBHAN-1929"
+      },
+      {
+        "code": "1.01.15.02.0010",
+        "desc": "FAYBABD FAYSAL BANK ABDULKARIM"
+      }
+    ]
+  },
+  "1.01.15.03": {
+    "name": "BANK BALANCE ADVANCE CHEQUE",
+    "children": [
+      {
+        "code": "1.01.15.03.0001",
+        "desc": "ADCHISSRE ADVANCE CHEQUE ISSUE & RETURN"
+      },
+      {
+        "code": "1.01.15.03.0002",
+        "desc": "MISSON MISSING ONLINE IN MY DIFFRENT ACC"
+      },
+      {
+        "code": "1.01.15.03.0003",
+        "desc": "ADVMS ADVANCE CHQ MEEZAN M SHAHID-1508"
+      },
+      {
+        "code": "1.01.15.03.0004",
+        "desc": "ADVAK ADVANCE CHQ MEEZAN ABDULKARIM-2086"
+      },
+      {
+        "code": "1.01.15.03.0005",
+        "desc": "ADV ADVANCE CHQ MEEZAN M ZAHID-7757"
+      },
+      {
+        "code": "1.01.15.03.0006",
+        "desc": "ADVCHQM ADVANCE CHQ MEEZAN SK WEAVING-"
+      },
+      {
+        "code": "1.01.15.03.0007",
+        "desc": "ADVTAR ADVANCE CHQ MEEZAN TARIQ MASOOD-3311"
+      },
+      {
+        "code": "1.01.15.03.0008",
+        "desc": "ADVCHQJSAK ADVANCE CHQ JS BANK ABDULKARIM-2052649"
+      },
+      {
+        "code": "1.01.15.03.0009",
+        "desc": "ADVCHQMC ADVANCE CHQ MCB UNKNOW ACC"
+      },
+      {
+        "code": "1.01.15.03.0010",
+        "desc": "ADVCHQNAD ADVANCE CHQ MEEZAN NADEEM SAB-6092 ACC"
+      },
+      {
+        "code": "1.01.15.03.0011",
+        "desc": "ADVFAY ADVANCE CHQ FAYSAL BANK"
+      }
+    ]
+  },
+  "1.01.15.04": {
+    "name": "BANK CHEQUE DISHONOUR ACC",
+    "children": [
+      {
+        "code": "1.01.15.04.0001",
+        "desc": "CHFAALI CHQ FAILLED ALI HASSAN BROKER"
+      },
+      {
+        "code": "1.01.15.04.0002",
+        "desc": "TAYYTAHI CHQ FAILLED TAYYAB TAHIR BROKER"
+      },
+      {
+        "code": "1.01.15.04.0003",
+        "desc": "AJWAFAB CHQ FAILLED AJWA FABRICS"
+      },
+      {
+        "code": "1.01.15.04.0004",
+        "desc": "CHQWAPS CHEQUE WAPSI DR & CR"
+      },
+      {
+        "code": "1.01.15.04.0005",
+        "desc": "RAFISA CHQ FAILLED RAFI SAMI"
+      },
+      {
+        "code": "1.01.15.04.0006",
+        "desc": "MIANSAE CHQ FAILLED MIAN SAEED ACC"
+      },
+      {
+        "code": "1.01.15.04.0007",
+        "desc": "SAQIBFAB CHQ FAILLED SAQIB FABRICS"
+      },
+      {
+        "code": "1.01.15.04.0008",
+        "desc": "NAKOD CHQ FAILLED NAKODAR SIZING"
+      },
+      {
+        "code": "1.01.15.04.0009",
+        "desc": "CHQFAIL CHQ FAILLED ABDUL REHMAN LAHORI 1"
+      },
+      {
+        "code": "1.01.15.04.0010",
+        "desc": "CFMB1 CHQ FAILLED MALIK BASIT 1"
+      },
+      {
+        "code": "1.01.15.04.0011",
+        "desc": "CHSF CHQ FAILLED SAQIB FABRIC,1"
+      },
+      {
+        "code": "1.01.15.04.0012",
+        "desc": "CFZA1 CHQ FAILLED ZAHAID AMEEN1"
+      },
+      {
+        "code": "1.01.15.04.0013",
+        "desc": "CHMS CHQ FAILLED MEHMOOD SONS"
+      },
+      {
+        "code": "1.01.15.04.0014",
+        "desc": "CHFF CHQ FAILLED FAHIM FANCY"
+      },
+      {
+        "code": "1.01.15.04.0015",
+        "desc": "CFJS CHQ FAILLED JAVEED SILK CLOSE"
+      },
+      {
+        "code": "1.01.15.04.0016",
+        "desc": "CFAGC CHQ FAILLED AG CORP,"
+      },
+      {
+        "code": "1.01.15.04.0017",
+        "desc": "CFSH CHQ FAILLED SULEMAN HAFEEZ"
+      },
+      {
+        "code": "1.01.15.04.0018",
+        "desc": "CFARK CHQ FAILLED ABDUL REHMAN KISHTI"
+      },
+      {
+        "code": "1.01.15.04.0019",
+        "desc": "CFST CHQ FAILLED SHK TARIQ"
+      },
+      {
+        "code": "1.01.15.04.0020",
+        "desc": "ASA CHQ FAILLED ALI SHAH (ACCOUNTANT)"
+      },
+      {
+        "code": "1.01.15.04.0021",
+        "desc": "CHYJ CHQ FAILLED TAHAIR JABBAR"
+      },
+      {
+        "code": "1.01.15.04.0022",
+        "desc": "CFZM CHQ FAILLED ZAFAR MANNO"
+      },
+      {
+        "code": "1.01.15.04.0023",
+        "desc": "CHQSUP CHQ FAILLED SUPERIOR YARN"
+      },
+      {
+        "code": "1.01.15.04.0024",
+        "desc": "CHQFAILMA CHQ FAILLED MAKKAH NAILON ATIQ"
+      },
+      {
+        "code": "1.01.15.04.0025",
+        "desc": "CHQFAILZA CHQ FAILLED ZAHID MAKKAH"
+      },
+      {
+        "code": "1.01.15.04.0026",
+        "desc": "CHQNAV CHQ FAILLED NAVEED MAJEED JAMIA GALI"
+      },
+      {
+        "code": "1.01.15.04.0027",
+        "desc": "CHQOM CHQ FAILLED OMAR QASOORIA (YP)"
+      },
+      {
+        "code": "1.01.15.04.0028",
+        "desc": "CHFME CHQ FAILLED MEHMOOD CUT PIECE"
+      },
+      {
+        "code": "1.01.15.04.0029",
+        "desc": "CHQFMALIKL CHQ FAILLED MALIK LIAQAT BROKER"
+      },
+      {
+        "code": "1.01.15.04.0030",
+        "desc": "CHQFAI CHQ FAILLED HAFIZ IRFAN (YP)"
+      },
+      {
+        "code": "1.01.15.04.0031",
+        "desc": "CHQFAILN CHQ FAILLED NAWAB SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.15.04.0032",
+        "desc": "CHQFAIJAVE CHQ FAILLED JAVEED SILK NEW"
+      },
+      {
+        "code": "1.01.15.04.0033",
+        "desc": "CFMOD CHQ FAILLED MODERAN SIZING IND"
+      },
+      {
+        "code": "1.01.15.04.0034",
+        "desc": "CHQFCHA CHQ FAILLED CHARAGH LIMITED"
+      },
+      {
+        "code": "1.01.15.04.0035",
+        "desc": "CHQFBI CHQ FAILLED BILAL QASOORI YARN TREADER"
+      },
+      {
+        "code": "1.01.15.04.0036",
+        "desc": "CHQFMI CHQ FAILLED MIANDAD (YP)"
+      },
+      {
+        "code": "1.01.15.04.0037",
+        "desc": "CHQFABD CHQ FAILLED ABDULLAH WASIM (YP)"
+      },
+      {
+        "code": "1.01.15.04.0038",
+        "desc": "CHQFFMSI CHQ FAILLED FM SIZING"
+      },
+      {
+        "code": "1.01.15.04.0039",
+        "desc": "CHQFAISAAD CHQ FAILLED SAAD SPARE PARTS"
+      },
+      {
+        "code": "1.01.15.04.0040",
+        "desc": "CHQFTAHIR CHQ FAILLED TAHIR AMIN YARN TREADER"
+      }
+    ]
+  },
+  "1.01.25.01": {
+    "name": "STOCK - YARN",
+    "children": [
+      {
+        "code": "1.01.25.01.0001",
+        "desc": "WGYS-WVG GODOWN - YARN STOCK (WVG)"
+      },
+      {
+        "code": "1.01.25.01.0002",
+        "desc": "GLBS-WVG GODOWN - LOADED BEAM STOCK (WVG)"
+      },
+      {
+        "code": "1.01.25.01.0003",
+        "desc": "WVG-SHED1 LOOM SHED1 (WVG)"
+      },
+      {
+        "code": "1.01.25.01.0004",
+        "desc": "YARN-WRP STOCK YARN - WARPING UNIT (WVG)"
+      },
+      {
+        "code": "1.01.25.01.0005",
+        "desc": "YARN-DBL STOCK YARN - DOUBLING UNIT (WVG)"
+      },
+      {
+        "code": "1.01.25.01.0006",
+        "desc": "WVG-SHED2 LOOM SHED2 (WVG)"
+      },
+      {
+        "code": "1.01.25.01.0007",
+        "desc": "WVG-SHED3 LOOM SHED3 (WVG)"
+      },
+      {
+        "code": "1.01.25.01.0008",
+        "desc": "GDN-FSI GODOWN - FATHE SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0009",
+        "desc": "GOD-ALREH GODOWN - AL REHMAN SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0010",
+        "desc": "GONAK GODOWN - NAKODAR SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0011",
+        "desc": "GRYS GODOWN - REWINDER YARN STOCK (HAD)"
+      },
+      {
+        "code": "1.01.25.01.0012",
+        "desc": "GOD-REW-AJ GODOWN - REWINDER YARN STOCK (2023)"
+      },
+      {
+        "code": "1.01.25.01.0013",
+        "desc": "GODGS GODOWN - GHAR STOCK"
+      },
+      {
+        "code": "1.01.25.01.0014",
+        "desc": "GODMASH GODOWN - MA SHA ALLAH WARPING"
+      },
+      {
+        "code": "1.01.25.01.0015",
+        "desc": "GODZOH GODOWN - ZOHAIB DOUBILING"
+      },
+      {
+        "code": "1.01.25.01.0016",
+        "desc": "GOD-SHAB GODOWN - SHABBIR WARPING"
+      },
+      {
+        "code": "1.01.25.01.0017",
+        "desc": "GODMALKSA GODOWN - MALIK SHAHID RASEED FACTORY"
+      },
+      {
+        "code": "1.01.25.01.0018",
+        "desc": "GODMODE GODOWN - MODERAN SIZING INDUSTERY"
+      },
+      {
+        "code": "1.01.25.01.0019",
+        "desc": "GOSABS GODOWN - SABARI SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0020",
+        "desc": "GODRANG GODOWN - RANGOON SIZING INDUSTERY"
+      },
+      {
+        "code": "1.01.25.01.0021",
+        "desc": "GOD-YSRU GODOWN - YARN STOCK RUSSIAN SHED"
+      },
+      {
+        "code": "1.01.25.01.0022",
+        "desc": "GODDIL GODOWN - DILAWAR SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0023",
+        "desc": "GODNAWA GODOWN - NAWAB SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0024",
+        "desc": "GOUMSIZ GODOWN - UMAR SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0025",
+        "desc": "GODN-WVG GODOWN - YARN STOCK (WVG) (2023)"
+      },
+      {
+        "code": "1.01.25.01.0026",
+        "desc": "GOMISIND GODOWN - MIAN SIZING INDUSTERY"
+      },
+      {
+        "code": "1.01.25.01.0027",
+        "desc": "GODMOD GODOWN - MODERAN SIZING INDUSTERY 2023"
+      },
+      {
+        "code": "1.01.25.01.0028",
+        "desc": "GOALGNI GODOWN - AL GHANI SIZING INDUSTERY"
+      },
+      {
+        "code": "1.01.25.01.0029",
+        "desc": "GODSUF GODOWN - SUFIYAN SHAHBAZ WARPING"
+      },
+      {
+        "code": "1.01.25.01.0030",
+        "desc": "GODANIY GODOWN - ANIYAT SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0031",
+        "desc": "GODMAKI GODOWN - MAKKI DATA SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0032",
+        "desc": "GODRAF GODOWN - RAFI SAMI"
+      },
+      {
+        "code": "1.01.25.01.0033",
+        "desc": "GOSHALI GODOWN - SHALIMAR SIZING INDUSTERY"
+      },
+      {
+        "code": "1.01.25.01.0034",
+        "desc": "GODFMS GODOWN - FM SIZING INDUSTRY"
+      },
+      {
+        "code": "1.01.25.01.0035",
+        "desc": "GONAW GODOWN - NAWAB SIZING INDUSTRY ((( 2026 )))"
+      },
+      {
+        "code": "1.01.25.01.0036",
+        "desc": "GOBAD GODOWN - BAGDAD SIZING INDUSTERY"
+      }
+    ]
+  },
+  "3.01.01.04": {
+    "name": "LOCAL INVESTORS",
+    "children": [
+      {
+        "code": "3.01.01.04.0001",
+        "desc": "ARIF SAB ARIF SAB (INVEST & PROFIT) TREADING COMMERC"
+      },
+      {
+        "code": "3.01.01.04.0004",
+        "desc": "SHABBIRINV SHABBIR SAB ( INVEST-40% + PROFIT )"
+      },
+      {
+        "code": "3.01.01.04.0005",
+        "desc": "ABDTRD ABDUL RAHEEM ( TREADING INVEST )"
+      },
+      {
+        "code": "3.01.01.04.0006",
+        "desc": "ROUFLIN JAVEED LODHI ( INVESMENT & PROFIT ) CONV BAZ"
+      },
+      {
+        "code": "3.01.01.04.0007",
+        "desc": "ZBJINV ZOHAIB BIN JAVEED INVEST BAG & CLOTH"
+      },
+      {
+        "code": "3.01.01.04.0008",
+        "desc": "MJSYGIN JAVEED+LODHI SAB ( YARN & GREY INVESMENT )"
+      },
+      {
+        "code": "3.01.01.04.0009",
+        "desc": "MSINV MEHAR SARWAR INVESMENT"
+      },
+      {
+        "code": "3.01.01.04.0010",
+        "desc": "AMASIN AMIR AUSTALIA INVESTORS"
+      },
+      {
+        "code": "3.01.01.04.0011",
+        "desc": "ZAINKA ZAIN KARIM INVESMENT YARN & GREY"
+      },
+      {
+        "code": "3.01.01.04.0012",
+        "desc": "AHLOINV AHMAD LODHI ( INVESMENT & PROFIT )"
+      },
+      {
+        "code": "3.01.01.04.0013",
+        "desc": "INRSU IMRAN SUDIA INVESMENT"
+      },
+      {
+        "code": "3.01.01.04.0014",
+        "desc": "MALIKIR MALIK IRTAZA PARVEEZ (INVESMENT)"
+      },
+      {
+        "code": "3.01.01.04.0015",
+        "desc": "ABDRAFF ABDUL RAFFY INVESMENT"
+      },
+      {
+        "code": "3.01.01.04.0016",
+        "desc": "ZOHAIBIN ZOHAIB BIN JAVEED SOLAR INVESMENT"
+      },
+      {
+        "code": "3.01.01.04.0017",
+        "desc": "WAZISO WAZI SOLAR INVESMENT"
+      },
+      {
+        "code": "3.01.01.04.0018",
+        "desc": "ARIFL ARIF LODHI SOLAR INVESMENT"
+      },
+      {
+        "code": "3.01.01.04.0019",
+        "desc": "MALJ MALIK EMAN JAVEED ( YARN & GREY INVEST )"
+      },
+      {
+        "code": "3.01.01.04.0020",
+        "desc": "ABDRAULO ABDUL RAUF LODHI ( YARN & GREY INVESMENT )"
+      },
+      {
+        "code": "3.01.01.04.0021",
+        "desc": "SHAHKARWVG SHAHID KARIM WEAVING CONV PROFIT & LOSS"
+      },
+      {
+        "code": "3.01.01.04.0022",
+        "desc": "ASMAKAR RAHIM KARIM INVESMENT GREY & YARN"
+      },
+      {
+        "code": "3.01.01.04.0023",
+        "desc": "KHATEELOD KHATEEB LODHI INVESMENT GREY & YARN"
+      },
+      {
+        "code": "3.01.01.04.0024",
+        "desc": "WAZIYAR WAZI ( YARN & GREY INVESMENT )"
+      },
+      {
+        "code": "3.01.01.04.0025",
+        "desc": "AHMADZOHAB AHMAD ZOHAIB BAGS AND GREY INVESMENTS"
+      }
+    ]
+  },
+  "3.03.01.01": {
+    "name": "CREDITORS - YARN PURCHASE",
+    "children": [
+      {
+        "code": "3.03.01.01.0001",
+        "desc": "NCY NADEEM CHANGA (YP)"
+      },
+      {
+        "code": "3.03.01.01.0002",
+        "desc": "JM MIANDAD (YP)"
+      },
+      {
+        "code": "3.03.01.01.0003",
+        "desc": "WB WALEED BOOTA (YP)"
+      },
+      {
+        "code": "3.03.01.01.0004",
+        "desc": "MSY MALIK SARFRAZ YARN (YP)"
+      },
+      {
+        "code": "3.03.01.01.0005",
+        "desc": "SH SULEMAN HAFEEZ (YP)"
+      },
+      {
+        "code": "3.03.01.01.0006",
+        "desc": "FJHAR FAHAD JABBAR HAR (YP)"
+      },
+      {
+        "code": "3.03.01.01.0007",
+        "desc": "ATIQMN MAKKAH NAILON ATIQ (YP)"
+      },
+      {
+        "code": "3.03.01.01.0008",
+        "desc": "HRSAMI HAJI RAFI SAMI (YP) & (SALE) RUTINE KHATA"
+      },
+      {
+        "code": "3.03.01.01.0009",
+        "desc": "AMIRAYP AMIR ABDULLAH (YP)"
+      },
+      {
+        "code": "3.03.01.01.0010",
+        "desc": "RANAAKYS RANA AKRAM SAB (YARN SALE)"
+      },
+      {
+        "code": "3.03.01.01.0011",
+        "desc": "MSPW MIAN SAEED PUNCH"
+      },
+      {
+        "code": "3.03.01.01.0012",
+        "desc": "HAMIOOHA HAMIOO HAQ (YP) & (YS)"
+      },
+      {
+        "code": "3.03.01.01.0013",
+        "desc": "JAVSLK JAVEED SILK (YP)"
+      },
+      {
+        "code": "3.03.01.01.0014",
+        "desc": "SAHEAA SAHEEN AA AD"
+      },
+      {
+        "code": "3.03.01.01.0015",
+        "desc": "DNJC DATA NAILON JINNAH COLONY"
+      },
+      {
+        "code": "3.03.01.01.0016",
+        "desc": "AMIRSA AMIR SAREEF YP"
+      },
+      {
+        "code": "3.03.01.01.0017",
+        "desc": "MRSYP MALIK RASEED SAB (YP)"
+      },
+      {
+        "code": "3.03.01.01.0018",
+        "desc": "ABDRAU ABDUL RAUF LODHI (YP)"
+      },
+      {
+        "code": "3.03.01.01.0019",
+        "desc": "YASNAJ YASEEN NAJA (YP)"
+      },
+      {
+        "code": "3.03.01.01.0020",
+        "desc": "UMARQA OMAR QASOORIA (YP)"
+      },
+      {
+        "code": "3.03.01.01.0021",
+        "desc": "RAOSHA RAO SHAKEEL (YP)"
+      },
+      {
+        "code": "3.03.01.01.0022",
+        "desc": "REHMAD REHAN MADNI (YP)"
+      },
+      {
+        "code": "3.03.01.01.0023",
+        "desc": "MAKKRAFI MAKKAH RAFI SAMI KHATA"
+      },
+      {
+        "code": "3.03.01.01.0024",
+        "desc": "ARIFJA ARIF JAVEED (YP & YS ) DHANK"
+      },
+      {
+        "code": "3.03.01.01.0025",
+        "desc": "SUPYTR SUPERIOR YARN TREADER"
+      },
+      {
+        "code": "3.03.01.01.0026",
+        "desc": "WAQJYP WAQAR JHANG (YP)"
+      },
+      {
+        "code": "3.03.01.01.0027",
+        "desc": "MUTBIL MUSTAQ BILLA ( YP )"
+      },
+      {
+        "code": "3.03.01.01.0028",
+        "desc": "RASEJAMY RASEED JAMEEL ( YP )"
+      },
+      {
+        "code": "3.03.01.01.0029",
+        "desc": "UMAISHA UMAR ISHAQ ( YP )"
+      },
+      {
+        "code": "3.03.01.01.0030",
+        "desc": "MISEDO MIAN SAEED DOUBLING"
+      },
+      {
+        "code": "3.03.01.01.0031",
+        "desc": "MIASAEYP MIAN SAEED YP & YS BY RATE"
+      },
+      {
+        "code": "3.03.01.01.0033",
+        "desc": "MASUY MALIK ASIF UMAR YARN TREADER"
+      },
+      {
+        "code": "3.03.01.01.0034",
+        "desc": "HABAS KASHIF KHAIR KY ( YP & YS )"
+      },
+      {
+        "code": "3.03.01.01.0035",
+        "desc": "JHGFB JHABG FABRICS"
+      },
+      {
+        "code": "3.03.01.01.0036",
+        "desc": "FAYAS FAISAL YASIR CONVERGING ACC"
+      },
+      {
+        "code": "3.03.01.01.0037",
+        "desc": "HSZWNK HAJI SAMI ZAIN WEAVING NEW KHATA"
+      },
+      {
+        "code": "3.03.01.01.0038",
+        "desc": "TMYT TAHIR AMIN YARN TREADER"
+      },
+      {
+        "code": "3.03.01.01.0039",
+        "desc": "MYCY MALIK YASEEN COLORE YARN"
+      },
+      {
+        "code": "3.03.01.01.0040",
+        "desc": "SAGR SAIF GROUP"
+      },
+      {
+        "code": "3.03.01.01.0041",
+        "desc": "RITEX RIZWAN TEXTILE"
+      },
+      {
+        "code": "3.03.01.01.0042",
+        "desc": "AMYB ATIF MUNNA YARN BROKER"
+      },
+      {
+        "code": "3.03.01.01.0043",
+        "desc": "BIQAYT BILAL QASOORI YARN TREADER"
+      },
+      {
+        "code": "3.03.01.01.0044",
+        "desc": "SHGUCAC ZEESHAN GUCHA CONVERGING ACC"
+      },
+      {
+        "code": "3.03.01.01.0045",
+        "desc": "TYTREA TAHIR JABBAR YARN TREADER"
+      },
+      {
+        "code": "3.03.01.01.0046",
+        "desc": "MMCY MALIK MANNAN COLOR YARN"
+      },
+      {
+        "code": "3.03.01.01.0047",
+        "desc": "SAHAABHAI SAHEEN AA 2023"
+      },
+      {
+        "code": "3.03.01.01.0048",
+        "desc": "RSMSRAA RAFI SAMI MALIK SABOOR RUTINE ACC"
+      },
+      {
+        "code": "3.03.01.01.0049",
+        "desc": "ARBTSA ALI HASSAN BROKER C/O TARIQ SAEED"
+      },
+      {
+        "code": "3.03.01.01.0050",
+        "desc": "SIEL SULTANI ELESTO (YP) (YS)"
+      },
+      {
+        "code": "3.03.01.01.0051",
+        "desc": "HAFFAR HAFIZ FARUKH (YP) & (YS)"
+      },
+      {
+        "code": "3.03.01.01.0052",
+        "desc": "HAFFAK HAFIZ FAKHAAAR MOTA (YP) & (YS)"
+      },
+      {
+        "code": "3.03.01.01.0053",
+        "desc": "FAYACOA FAISAL YASIR CONV ACC 2023"
+      },
+      {
+        "code": "3.03.01.01.0054",
+        "desc": "SAJPO SAJID POLLA YP"
+      },
+      {
+        "code": "3.03.01.01.0055",
+        "desc": "RAFSAMIA RAFI SAMI C/O MIAN SAEED ACC"
+      },
+      {
+        "code": "3.03.01.01.0056",
+        "desc": "IMIQYP IMRAN IQBAL YP"
+      },
+      {
+        "code": "3.03.01.01.0057",
+        "desc": "AFZSAHP AFZAL SAHEEN PUNCH ACC"
+      },
+      {
+        "code": "3.03.01.01.0058",
+        "desc": "MAKNAILO MAKKAH NAILON 2"
+      },
+      {
+        "code": "3.03.01.01.0059",
+        "desc": "SAHEAAA SAHEEN AA 2024"
+      },
+      {
+        "code": "3.03.01.01.0060",
+        "desc": "FAISAILL FAISAL YASIR CONV (((2024)))"
+      },
+      {
+        "code": "3.03.01.01.0061",
+        "desc": "HASSBAS HASSAN BASHIR KHAIR KY YP"
+      },
+      {
+        "code": "3.03.01.01.0062",
+        "desc": "HAFBASI HAFIZ BASIT YARN BROKER"
+      },
+      {
+        "code": "3.03.01.01.0063",
+        "desc": "SALEMMAD SALEEM MADAN PURA YARN PURCHASE"
+      },
+      {
+        "code": "3.03.01.01.0064",
+        "desc": "MUDASSAB MUDASIR HASNAT CONV (SH KARIM)"
+      },
+      {
+        "code": "3.03.01.01.0065",
+        "desc": "MANHAF MANZOOR HAFEEZ DOUBLING"
+      },
+      {
+        "code": "3.03.01.01.0066",
+        "desc": "SAG SAGHEER DOABA YARN PUR"
+      },
+      {
+        "code": "3.03.01.01.0067",
+        "desc": "NIAZIBRO NIAZI BROKER YARN"
+      },
+      {
+        "code": "3.03.01.01.0068",
+        "desc": "ZEESGUC ZEESHAN GUCHA YARN PURCHASE"
+      },
+      {
+        "code": "3.03.01.01.0069",
+        "desc": "SHTAR SHIEKH TARIQ YP"
+      },
+      {
+        "code": "3.03.01.01.0070",
+        "desc": "AGCOP AG CORPORATION YP"
+      },
+      {
+        "code": "3.03.01.01.0071",
+        "desc": "ALREHMANL ABDULREHMAN LAHORI ( YP )"
+      },
+      {
+        "code": "3.03.01.01.0072",
+        "desc": "FAHFAN FAHIM FANCY YARN PUR"
+      },
+      {
+        "code": "3.03.01.01.0073",
+        "desc": "IBRAA IBRAHIM AA YARN PUR"
+      },
+      {
+        "code": "3.03.01.01.0074",
+        "desc": "ABDREH ABDULREHMAN KASTHI YARN PURCHASE"
+      },
+      {
+        "code": "3.03.01.01.0076",
+        "desc": "HIYP HAFIZ IRFAN (YP)"
+      },
+      {
+        "code": "3.03.01.01.0077",
+        "desc": "ZAHMAKK ZAHID MAKKAH NAILON (YP)"
+      },
+      {
+        "code": "3.03.01.01.0078",
+        "desc": "ZMYP ZAFAR MANU (YP)"
+      },
+      {
+        "code": "3.03.01.01.0079",
+        "desc": "MALJAVPP MALIK JAVEED PP YARN ( YP )"
+      },
+      {
+        "code": "3.03.01.01.0080",
+        "desc": "JAVSILZAI JAVEED SILK ZAIN KARIM ACC"
+      },
+      {
+        "code": "3.03.01.01.0081",
+        "desc": "CHARYP CHARAGH LIMITED YP"
+      },
+      {
+        "code": "3.03.01.01.0082",
+        "desc": "ALKSPIMIL ALKARAM SPINNING MILLS"
+      },
+      {
+        "code": "3.03.01.01.0083",
+        "desc": "AHMDOU AHMAD DOUBLING CASH CARD YARN"
+      },
+      {
+        "code": "3.03.01.01.0084",
+        "desc": "ABDWSM ABDULLAH WASIM (YP)"
+      },
+      {
+        "code": "3.03.01.01.0085",
+        "desc": "HAJSAM HAJI SAMI SAB YP 2026-27"
+      }
+    ]
+  },
+  "3.03.31.01": {
+    "name": "CREDITORS - PRINTING",
+    "children": [
+      {
+        "code": "3.03.31.01.0001",
+        "desc": "JALDY JALANI DYING"
+      },
+      {
+        "code": "3.03.31.01.0002",
+        "desc": "ALNDY AL NOOR DYING"
+      },
+      {
+        "code": "3.03.31.01.0003",
+        "desc": "ALRDY AL RAHEEM DYING"
+      },
+      {
+        "code": "3.03.31.01.0004",
+        "desc": "PILDY PAKISTAN INTER LINING DYING"
+      },
+      {
+        "code": "3.03.31.01.0005",
+        "desc": "SDYL SHAFI DYING LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0006",
+        "desc": "HDMR HAMZA DYING MILLAT ROAD"
+      },
+      {
+        "code": "3.03.31.01.0007",
+        "desc": "JDK JHANG DYING KHUDIAWALA"
+      },
+      {
+        "code": "3.03.31.01.0008",
+        "desc": "UNITEX UNI TEXTILE DYING LHR"
+      },
+      {
+        "code": "3.03.31.01.0009",
+        "desc": "PAKDY PAKISTAN DYING 7 CHACK"
+      },
+      {
+        "code": "3.03.31.01.0010",
+        "desc": "ZEENDY ZEENO DYING LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0011",
+        "desc": "CDL CRYSTAL DYING LHR"
+      },
+      {
+        "code": "3.03.31.01.0012",
+        "desc": "ZTGB ZEE TAX GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0013",
+        "desc": "ASMIDY ASMI DYING LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0014",
+        "desc": "ALREHDY AL REHMAN DYING SMALL STATE"
+      },
+      {
+        "code": "3.03.31.01.0015",
+        "desc": "YASAMEM YASEEN AMEEN DYING SADHAR"
+      },
+      {
+        "code": "3.03.31.01.0016",
+        "desc": "SAFAIND SAFA DYING INDUSTERIES"
+      },
+      {
+        "code": "3.03.31.01.0017",
+        "desc": "SABGDYI SAB G DYING SARGODHA ROAD"
+      },
+      {
+        "code": "3.03.31.01.0018",
+        "desc": "HAFDYGU HAFIZ DYING GUJRAWALA"
+      },
+      {
+        "code": "3.03.31.01.0019",
+        "desc": "PAPAKJH PAKISTAN PACKING KHATA"
+      },
+      {
+        "code": "3.03.31.01.0020",
+        "desc": "ALREHDYABD AL REHMAT DYING MAQBOOL ROAD"
+      },
+      {
+        "code": "3.03.31.01.0021",
+        "desc": "AHDYING A-H DYING LAKAAD MANDI"
+      },
+      {
+        "code": "3.03.31.01.0022",
+        "desc": "MOONALTEX MOON ALHAMRA TEXTILE"
+      },
+      {
+        "code": "3.03.31.01.0024",
+        "desc": "LABODYI LABOURTY DYING OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0025",
+        "desc": "ALRAHEMKKK AL-RAHEEM KAREEM OFFICE GUJJAR"
+      },
+      {
+        "code": "3.03.31.01.0026",
+        "desc": "ALJANDY AL-JANNAT DYING OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0027",
+        "desc": "IMTPRIT IMTIAZ PRINT JHANG ROAD"
+      },
+      {
+        "code": "3.03.31.01.0028",
+        "desc": "VAROFIG VARIETY DYING OFFICE GUJJAR BASI"
+      },
+      {
+        "code": "3.03.31.01.0029",
+        "desc": "BAHPRLH BAHOO PRINT LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0030",
+        "desc": "RADPRI RADO PRINT LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0031",
+        "desc": "ALREMDYMAQ AL-REHMAN DYING MAQBOOL ROAD"
+      },
+      {
+        "code": "3.03.31.01.0032",
+        "desc": "ASZPRKHU ASHRAF ZIA PRINT KHUDIAWALA"
+      },
+      {
+        "code": "3.03.31.01.0033",
+        "desc": "ALADYING ALA DYING SATIANA ROAD"
+      },
+      {
+        "code": "3.03.31.01.0034",
+        "desc": "OMDYAH OMAR DYING AHMAD NAGAR"
+      },
+      {
+        "code": "3.03.31.01.0035",
+        "desc": "ALHADY AL-HAMMED DYING OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0036",
+        "desc": "GILLDYID GILLAN DYING DHANOLLA"
+      },
+      {
+        "code": "3.03.31.01.0037",
+        "desc": "AL-FALA AL-FALAH DYING LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0038",
+        "desc": "RSDIG RS DYING OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0039",
+        "desc": "NDOGB NAZAKAT DYING OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0040",
+        "desc": "KHIDY KHIZRA DYING KHUDIAWALA"
+      },
+      {
+        "code": "3.03.31.01.0041",
+        "desc": "ALLH ALLAH-U-AKBER DYING"
+      },
+      {
+        "code": "3.03.31.01.0042",
+        "desc": "PAKLAD PAK LAND DYING OFFICE"
+      },
+      {
+        "code": "3.03.31.01.0043",
+        "desc": "NAZDYOFF NAZAKAT DYING OFFICE"
+      },
+      {
+        "code": "3.03.31.01.0044",
+        "desc": "DILPDYLHR DILPASAND DYING LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0045",
+        "desc": "SMDYI SM DYING TANOLA"
+      },
+      {
+        "code": "3.03.31.01.0046",
+        "desc": "SBDY S B DYING TANOLA"
+      },
+      {
+        "code": "3.03.31.01.0047",
+        "desc": "ALDYLH ALI DYING LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0048",
+        "desc": "AADYPOL AA DYING SAMANA POLL"
+      },
+      {
+        "code": "3.03.31.01.0049",
+        "desc": "MADNIDY MADNI DYING OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0050",
+        "desc": "MUJDYIT MUJAHID DYING TANOLA"
+      },
+      {
+        "code": "3.03.31.01.0051",
+        "desc": "REHMKA REHMAN KARIM OFFICE GUJJAR"
+      },
+      {
+        "code": "3.03.31.01.0052",
+        "desc": "GHAPR GHAZI PROCESSING DYING"
+      },
+      {
+        "code": "3.03.31.01.0053",
+        "desc": "MDRG MASTER DYING RAJA GULAM RASOOL NAGAR"
+      },
+      {
+        "code": "3.03.31.01.0054",
+        "desc": "MUNTE MUNIR TEXTILE FEDMIC"
+      },
+      {
+        "code": "3.03.31.01.0055",
+        "desc": "SHIEGOODS SHEIKH GOODS JHANG ROAD"
+      },
+      {
+        "code": "3.03.31.01.0056",
+        "desc": "NAVMU NAVEED MUNIR DYING FEDMIC SAIWALA"
+      },
+      {
+        "code": "3.03.31.01.0057",
+        "desc": "AFTDY AFTAB DYING SMALL STATE"
+      },
+      {
+        "code": "3.03.31.01.0058",
+        "desc": "MADGBF MA DAYING GUJJAR BASTI FSD"
+      },
+      {
+        "code": "3.03.31.01.0059",
+        "desc": "QASTEX QASWA TEXTILE DYING JARANWALA"
+      },
+      {
+        "code": "3.03.31.01.0060",
+        "desc": "ALD ALKARIM DYING CHIBAN ROAD"
+      },
+      {
+        "code": "3.03.31.01.0061",
+        "desc": "HADDYI HADI DYING SMALL STATE"
+      },
+      {
+        "code": "3.03.31.01.0062",
+        "desc": "SARDY SARWA DYING FAISALABAD"
+      },
+      {
+        "code": "3.03.31.01.0063",
+        "desc": "SHAHSUL SHAH SULTAN DYING"
+      },
+      {
+        "code": "3.03.31.01.0064",
+        "desc": "ALF AL FAJAR DYING"
+      },
+      {
+        "code": "3.03.31.01.0065",
+        "desc": "MUNNAD MUNIR NADEEM TEXTILE OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0066",
+        "desc": "GHIDY GHOSIA DYING LAHORE"
+      },
+      {
+        "code": "3.03.31.01.0067",
+        "desc": "SUBAL SUBHAN ALLAH DYING"
+      },
+      {
+        "code": "3.03.31.01.0068",
+        "desc": "HQDB HQ DYING OFFICE GUJJAR BASTI"
+      },
+      {
+        "code": "3.03.31.01.0069",
+        "desc": "DND DYING NOT DECIDE"
+      },
+      {
+        "code": "3.03.31.01.0070",
+        "desc": "FAZLDYG FAZAL RABI DYING"
+      },
+      {
+        "code": "3.03.31.01.0071",
+        "desc": "SUFPA SUFIYAN PACKING LAL MILL CHOWK"
+      }
+    ]
+  }
+}

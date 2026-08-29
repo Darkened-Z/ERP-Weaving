@@ -133,7 +133,15 @@ export default async function BeamContractExtWsPage({
     .orderBy(schema.products.description);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  const greyOpts = greyList.map((g) => ({ value: g.code, label: g.width ? `${g.code} — ${g.width}" ${g.description}` : `${g.code} — ${g.description}` }));
+  const greyOpts = greyList.map((g) => {
+    const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
+    const w = g.width ? `${g.width}" ` : "";
+    return {
+      value: g.code,
+      label: `${g.code} — ${rp}${w}${g.description}`,
+      desc: `reed ${g.reed ?? ""} pick ${g.pick ?? ""} ${g.reed ?? ""}/${g.pick ?? ""} ${g.reed ?? ""}x${g.pick ?? ""}`,
+    };
+  });
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 

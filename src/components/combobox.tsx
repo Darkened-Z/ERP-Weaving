@@ -72,7 +72,7 @@ export function Combobox({
   const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
   const display = typed !== null ? typed : val ? labelFor(val) : "";
   const q = (typed ?? "").trim().toLowerCase();
-  const filtered = !q ? visibleOptions : visibleOptions.filter((o) => `${o.label} ${o.value}`.toLowerCase().includes(q));
+  const filtered = !q ? visibleOptions : visibleOptions.filter((o) => `${o.label} ${o.value} ${o.desc ?? ""}`.toLowerCase().includes(q));
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {

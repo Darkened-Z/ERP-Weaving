@@ -1,0 +1,38 @@
+{
+  "DEBTORS GREY SALE": {
+    "parent": null,
+    "children": []
+  },
+  "SHORT TERM LOAN AND ADVANCES": {
+    "parent": null,
+    "children": []
+  },
+  "BANK BALANCE": {
+    "parent": null,
+    "children": []
+  },
+  "BANK BALANCE ADVANCE CHEQUE": {
+    "parent": null,
+    "children": []
+  },
+  "BANK CHEQUE DISHONOUR ACC": {
+    "parent": null,
+    "children": []
+  },
+  "STOCK - YARN": {
+    "parent": null,
+    "children": []
+  },
+  "LOCAL INVESTORS": {
+    "parent": null,
+    "children": []
+  },
+  "CREDITORS - YARN PURCHASE": {
+    "parent": null,
+    "children": []
+  },
+  "CREDITORS - PRINTING": {
+    "parent": null,
+    "children": []
+  }
+}

@@ -101,13 +101,21 @@ export default async function GreyPurchaseContractPage({
     .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
   const greyList = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width })
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width, reed: schema.greyConstruction.reed, pick: schema.greyConstruction.pick })
     .from(schema.greyConstruction)
     .where(eq(schema.greyConstruction.status, "A"))
     .orderBy(schema.greyConstruction.code);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  const greyOpts = greyList.map((g) => ({ value: g.code, label: g.width ? `${g.code} — ${g.width}" ${g.description}` : `${g.code} — ${g.description}` }));
+  const greyOpts = greyList.map((g) => {
+    const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
+    const w = g.width ? `${g.width}" ` : "";
+    return {
+      value: g.code,
+      label: `${g.code} — ${rp}${w}${g.description}`,
+      desc: `reed ${g.reed ?? ""} pick ${g.pick ?? ""} ${g.reed ?? ""}/${g.pick ?? ""} ${g.reed ?? ""}x${g.pick ?? ""}`,
+    };
+  });
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
 
