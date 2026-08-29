@@ -16,7 +16,7 @@ export default async function ProductionPage({
     .select()
     .from(schema.dailyProduction)
     .where(eq(schema.dailyProduction.productionDate, date))
-    .orderBy(schema.dailyProduction.loomNo);
+    .orderBy(schema.dailyProduction.shed, schema.dailyProduction.loomNo);
 
   const totalMeters = rows.reduce((s, r) => s + (r.meters ?? 0), 0);
   const totalPicks = rows.reduce((s, r) => s + (r.picks ?? 0), 0);

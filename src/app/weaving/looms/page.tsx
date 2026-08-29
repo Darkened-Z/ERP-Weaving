@@ -18,7 +18,7 @@ export default async function LoomsPage({
   searchParams: Promise<{ id?: string; adding?: string; error?: string; q?: string; shed?: string }>;
 }) {
   const params = await searchParams;
-  const looms = await db.select().from(schema.looms).orderBy(schema.looms.loomNo);
+  const looms = await db.select().from(schema.looms).orderBy(schema.looms.shed, schema.looms.loomNo);
   const shedFilter = (params.shed ?? "").trim();
   const weavers = await db.select().from(schema.weavers).orderBy(schema.weavers.code);
 
@@ -331,7 +331,7 @@ export default async function LoomsPage({
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-3">
               <div>
                 <label className="label block mb-1">Code</label>
-                <input className="input-box mono bg-gray-100" value={formItem ? String(formItem.id) : String(nextCode)} readOnly tabIndex={-1} />
+                <input className="input-box mono bg-gray-100" value={formItem ? `${formItem.shed}-${formItem.loomNo}` : "auto (pick shed first)"} readOnly tabIndex={-1} />
               </div>
               <div>
                 <label className="label block mb-1">Shed No</label>
@@ -480,7 +480,7 @@ export default async function LoomsPage({
                       const linkStyle = { color: isSel ? "white" : "inherit" };
                       return (
                         <tr key={l.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-100"}>
-                          <td className="mono font-bold p-0"><a href={href} className={linkCls} style={linkStyle}>{l.id}</a></td>
+                          <td className="mono font-bold p-0"><a href={href} className={linkCls} style={linkStyle}>{`${l.shed}-${l.loomNo}`}</a></td>
                           <td className="mono text-[13px] p-0"><a href={href} className={linkCls} style={linkStyle}>{l.loomNo}</a></td>
                           <td className="mono text-[13px] p-0"><a href={href} className={linkCls} style={linkStyle}>{l.shed}</a></td>
                           <td className="p-0"><a href={href} className={linkCls} style={linkStyle}>{l.type}</a></td>
