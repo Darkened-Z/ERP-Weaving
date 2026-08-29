@@ -346,7 +346,6 @@ export default async function GreyConvContractPage({
         redirect(`/external/contracts/grey-conversion${backQ}&error=design_exists`);
     }
 
-    const widthN = num(formData.get("width")) ?? 0;
     const parseRows = (prefix: "warp" | "weft") => {
       const out: {
         srNo: number;
@@ -368,10 +367,10 @@ export default async function GreyConvContractPage({
         const ratePerLbs = num(formData.get(`${prefix}_rate_${i}`));
         if (count || descr || brand || calCount !== null || ends !== null || ratePerLbs !== null) {
           // Weft ends = picks per inch → multiply by width to get total weft length per meter of fabric
-          // WARP: ENDS ÷ 731.52 ÷ CAL COUNT WARP · WEFT: ENDS × WIDTH ÷ 731.52 ÷ CAL COUNT WEFT
-          const effectiveEnds = prefix === "weft" ? (ends ?? 0) * widthN : (ends ?? 0);
+          // WT per meter = ENDS ÷ 731.52 ÷ Cal Count. ENDS is already the full value
+          // (warp = total ends; weft = pick × width entered as ends).
           const wtPerMtr =
-            calCount && calCount > 0 ? round(effectiveEnds / 731.52 / calCount, 6) : 0;
+            calCount && calCount > 0 ? round((ends ?? 0) / 731.52 / calCount, 6) : 0;
           const costPerMtr = round(wtPerMtr * (ratePerLbs ?? 0), 4);
           out.push({ srNo: i, count, descr, brand, calCount, ends, wtPerMtr, ratePerLbs, costPerMtr });
         }

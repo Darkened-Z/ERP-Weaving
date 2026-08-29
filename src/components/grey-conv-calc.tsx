@@ -35,9 +35,6 @@ export function GreyConvCalc() {
     const side = (prefix: "warp" | "weft") => {
       let wt = 0;
       let cost = 0;
-      // For WEFT, ends per row = picks per inch; multiply by width (inches) to
-      // get total weft length per meter of fabric. WARP ends is already total.
-      const widthN = prefix === "weft" ? val("width") : 1;
       for (let i = 1; i <= 9; i++) {
         const calEl = q(`${prefix}_cal_count_${i}`);
         if (!calEl) continue;
@@ -49,13 +46,11 @@ export function GreyConvCalc() {
           continue;
         }
         const cal = parseFloat(calEl.value);
-        // Grey weight per meter:
-        //   WARP: ENDS ÷ 731.52 ÷ CAL COUNT WARP
-        //   WEFT: ENDS × WIDTH ÷ 731.52 ÷ CAL COUNT WEFT
-        const effectiveEnds = val(`${prefix}_ends_${i}`) * widthN;
+        // WT per meter = ENDS ÷ 731.52 ÷ Cal Count. ENDS is already the full
+        // value (warp = total ends; weft = pick × width), so no extra factor.
         const rowWt =
           Number.isFinite(cal) && cal > 0
-            ? round(effectiveEnds / 731.52 / cal, 6)
+            ? round(val(`${prefix}_ends_${i}`) / 731.52 / cal, 6)
             : 0;
         const rowCost = round(rowWt * val(`${prefix}_rate_${i}`), 4);
         set(`${prefix}_wt_${i}`, String(rowWt));
