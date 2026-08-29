@@ -215,13 +215,23 @@ export default async function PartsPage({
               <a href="/store/parts?adding=1" className="btn btn-outline btn-sm">
                 New
               </a>
-              {formItem && (
+              {formItem ? (
                 <form action={deletePart} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <ConfirmButton message="Delete this part? This cannot be undone.">
                     Del
                   </ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the record first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Del
+                </button>
               )}
             </div>
           </div>

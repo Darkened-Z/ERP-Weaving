@@ -736,11 +736,21 @@ export default async function DailyProductionPage({
               <a href="/inventory/daily-production?adding=1" className="btn btn-outline btn-sm">New</a>
               <button type="submit" form="idp-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
-              {editing && (
+              {editing ? (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
                   <ConfirmButton message={`Delete production voucher ${editing.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the voucher first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
               <a href="/inventory/daily-production" className="btn btn-outline btn-sm">Exit</a>
             </div>

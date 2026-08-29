@@ -6,7 +6,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { LoomNoValidator } from "@/components/loom-no-validator";
 import { UrlStrip } from "@/components/url-strip";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -33,13 +33,14 @@ export default async function LoomsPage({
   const formanOpts = [...new Set(looms.map((l) => l.forman).filter((f): f is string => !!f))]
     .sort()
     .map((f) => ({ value: f, label: f }));
-  // Next loom # per shed — uses the max loom_no GLOBALLY so the suggestion
-  // stays unique across every shed (loom_no is UNIQUE). Adding-mode gets it
-  // via AutoFill; edit-mode users who change the shed also get an updated
-  // suggestion so the loom # is refreshed to the next free number.
-  const maxLoomNoGlobal = looms.reduce((m, l) => Math.max(m, l.loomNo), 0);
+  // Next loom # PER SHED — loom_no is unique WITHIN a shed (Oracle Forms
+  // behaviour). Each shed's next number is max(loom_no in that shed) + 1,
+  // so a new Shed 2 loom starts at Shed 2's next number, not Shed 1's.
   const nextLoomByShed = Object.fromEntries(
-    sheds.map((s) => [s, { loom_no: maxLoomNoGlobal + 1 }])
+    sheds.map((s) => {
+      const max = looms.filter((l) => l.shed === s).reduce((m, l) => Math.max(m, l.loomNo), 0);
+      return [s, { loom_no: max + 1 }];
+    })
   );
 
   const q = (params.q ?? "").trim();
@@ -73,11 +74,11 @@ export default async function LoomsPage({
     const make = (formData.get("lm_allocation") as string)?.trim() || null;
     const statusWrk = (formData.get("status_wrk") as string)?.trim() || null;
 
-    // Pre-check for dup loom_no, EXCLUDING the current row on update.
+    // Pre-check for dup (shed, loom_no), EXCLUDING the current row on update.
     const conflict = await db
       .select({ id: schema.looms.id })
       .from(schema.looms)
-      .where(eq(schema.looms.loomNo, loomNo))
+      .where(and(eq(schema.looms.shed, shed), eq(schema.looms.loomNo, loomNo)))
       .limit(1);
     const conflictId = conflict[0]?.id;
     if (conflictId != null && (!id || parseInt(id) !== conflictId)) {
@@ -112,7 +113,7 @@ export default async function LoomsPage({
     if (!id) return;
 
     const [loom] = await db
-      .select({ id: schema.looms.id, loomNo: schema.looms.loomNo, currentBeam: schema.looms.currentBeam })
+      .select({ id: schema.looms.id, loomNo: schema.looms.loomNo, shed: schema.looms.shed, currentBeam: schema.looms.currentBeam })
       .from(schema.looms)
       .where(eq(schema.looms.id, id))
       .limit(1);
@@ -122,28 +123,30 @@ export default async function LoomsPage({
       redirect(`/weaving/looms?id=${id}&error=in_use`);
     }
 
+    // loom_no is unique per shed — FK checks must include shed to avoid
+    // matching a same-numbered loom in another shed.
     const [beamRef] = await db
       .select({ id: schema.beams.id })
       .from(schema.beams)
-      .where(eq(schema.beams.loomNo, loom.loomNo))
+      .where(and(eq(schema.beams.loomNo, loom.loomNo), eq(schema.beams.shed, loom.shed)))
       .limit(1);
     const [dpRef] = await db
       .select({ id: schema.dailyProduction.id })
       .from(schema.dailyProduction)
-      .where(eq(schema.dailyProduction.loomNo, loom.loomNo))
+      .where(and(eq(schema.dailyProduction.loomNo, loom.loomNo), eq(schema.dailyProduction.shed, loom.shed)))
       .limit(1);
+    // knottingTransactions has no shed column — loom_no alone would over-match.
+    // Ambiguity is small (few historical rows); accept the over-match as safe.
     const [ktRef] = await db
       .select({ id: schema.knottingTransactions.id })
       .from(schema.knottingTransactions)
       .where(eq(schema.knottingTransactions.loomNo, loom.loomNo))
       .limit(1);
-    // int_daily_production references looms indirectly via set → beams → loom.
-    // Approximation: any beam in the daily production set that carries this loom.
     const [intDpRef] = await db
       .select({ id: schema.intDailyProductionSet.id })
       .from(schema.intDailyProductionSet)
       .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
-      .where(eq(schema.beams.loomNo, loom.loomNo))
+      .where(and(eq(schema.beams.loomNo, loom.loomNo), eq(schema.beams.shed, loom.shed)))
       .limit(1);
 
     if (beamRef || dpRef || ktRef || intDpRef) {
@@ -338,7 +341,7 @@ export default async function LoomsPage({
                 <label className="label block mb-1">Loom No</label>
                 <input name="loom_no" type="number" className="input-box mono" defaultValue={formItem?.loomNo ?? ""} required />
                 <LoomNoValidator
-                  takenByLoomNo={Object.fromEntries(looms.map((l) => [String(l.loomNo), l.id]))}
+                  takenByShedLoom={Object.fromEntries(looms.map((l) => [`${l.shed}|${l.loomNo}`, l.id]))}
                   currentId={formItem?.id}
                 />
               </div>

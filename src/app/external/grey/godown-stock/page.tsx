@@ -675,11 +675,21 @@ export default async function GodownStockPage({
                     <label className="label block mb-1">Alt-S Password</label>
                     <input className="input-box mono" placeholder="password" type="password" style={{ maxWidth: 130 }} />
                   </div>
-                  {formStock && (
+                  {formStock ? (
                     <form action={deleteStock} className="inline">
                       <input type="hidden" name="id" value={formStock.id} />
                       <ConfirmButton>Delete</ConfirmButton>
                     </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled
+                      title="Save the stock entry first to enable delete"
+                      style={{ opacity: 0.5, cursor: "not-allowed" }}
+                    >
+                      Delete
+                    </button>
                   )}
                 </div>
               </div>

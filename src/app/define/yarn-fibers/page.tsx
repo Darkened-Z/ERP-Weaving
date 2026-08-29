@@ -112,11 +112,21 @@ export default async function YarnFibersPage({
                 </div>
                 <div className="flex gap-2">
                   <a href="/define/yarn-fibers" className="btn btn-outline btn-sm">New</a>
-                  {selected && (
+                  {selected ? (
                     <form action={remove} className="inline">
                       <input type="hidden" name="id" value={selected.id} />
                       <ConfirmButton>Delete</ConfirmButton>
                     </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled
+                      title="Save the record first to enable delete"
+                      style={{ opacity: 0.5, cursor: "not-allowed" }}
+                    >
+                      Delete
+                    </button>
                   )}
                 </div>
               </div>

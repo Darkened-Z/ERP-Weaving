@@ -352,11 +352,21 @@ export default async function GreyDespatchDamiPage({
               <button type="submit" form="dami-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
               <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
-              {formItem && (
+              {formItem ? (
                 <form action={deleteDami} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <ConfirmButton message={`Delete dami slip ${formItem.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the slip first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
             </div>
           </div>
@@ -448,11 +458,21 @@ export default async function GreyDespatchDamiPage({
               <a href="/inventory/grey-despatch-dami?adding=1" className="btn btn-outline btn-sm">New</a>
               <PrintButton label="Print Slip" />
               <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
-              {formItem && (
+              {formItem ? (
                 <form action={deleteDami} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <ConfirmButton message={`Delete dami slip ${formItem.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the slip first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
             </div>
           </form>

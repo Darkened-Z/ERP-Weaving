@@ -412,13 +412,23 @@ export default async function YarnTransferPage({
               <a href="/inventory/yarn-transfer?adding=1" className="btn btn-outline btn-sm">New</a>
               <button type="submit" form="iyt-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
-              {editing && (
+              {editing ? (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
                   <ConfirmButton message="Delete this voucher and its cartons? This cannot be undone.">
                     Delete
                   </ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the voucher first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
               <a href="/inventory/yarn-transfer" className="btn btn-outline btn-sm">Exit</a>
             </div>

@@ -405,13 +405,23 @@ export default async function IntYarnPurchaseContractPage({
                 New
               </a>
               <PrintButton label="Print" />
-              {formContract && (
+              {formContract ? (
                 <form action={deleteContract} className="inline">
                   <input type="hidden" name="id" value={formContract.id} />
                   <ConfirmButton message="Delete this contract and its deliveries? This cannot be undone.">
                     Delete
                   </ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the contract first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
               <a href="/inventory/contracts/yarn-purchase" className="btn btn-outline btn-sm">
                 Exit

@@ -682,11 +682,21 @@ export default async function WarpedBeamReceivingPage({
               <a href="/inventory/warped-beam?adding=1" className="btn btn-outline btn-sm">New</a>
               <button type="submit" form="iwb-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
-              {editing && (
+              {editing ? (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
                   <ConfirmButton message={`Delete warped-beam voucher ${editing.vNo}? This reverts the beams it loaded.`}>Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the voucher first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
               <a href="/inventory/warped-beam" className="btn btn-outline btn-sm">Exit</a>
             </div>
@@ -950,11 +960,21 @@ export default async function WarpedBeamReceivingPage({
                     <label className="label block mb-1">Pswd</label>
                     <input className="input-box mono" placeholder="password" type="password" />
                   </div>
-                  {editing && (
+                  {editing ? (
                     <form action={deleteAction} className="inline">
                       <input type="hidden" name="id" value={editing.id} />
                       <ConfirmButton message={`Delete warped-beam voucher ${editing.vNo}? This reverts the beams it loaded.`}>Delete</ConfirmButton>
                     </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled
+                      title="Save the voucher first to enable delete"
+                      style={{ opacity: 0.5, cursor: "not-allowed" }}
+                    >
+                      Delete
+                    </button>
                   )}
                 </div>
               </div>

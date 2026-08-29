@@ -321,11 +321,21 @@ export default async function GreyTransferPage({
               <a href="/external/grey/transfer" className="btn btn-outline btn-sm">
                 Exit
               </a>
-              {formTransfer && (
+              {formTransfer ? (
                 <form action={deleteTransfer} className="inline">
                   <input type="hidden" name="id" value={formTransfer.id} />
                   <ConfirmButton>Del</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the transfer first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Del
+                </button>
               )}
             </div>
           </div>
@@ -473,11 +483,21 @@ export default async function GreyTransferPage({
               <a href="/external/grey/transfer?adding=1" className="btn btn-outline btn-sm">New</a>
               <PrintButton label="Print" />
               <a href="/external/grey/transfer" className="btn btn-outline btn-sm">Exit</a>
-              {formTransfer && (
+              {formTransfer ? (
                 <form action={deleteTransfer} className="inline">
                   <input type="hidden" name="id" value={formTransfer.id} />
                   <ConfirmButton>Del</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the transfer first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Del
+                </button>
               )}
             </div>
           </form>

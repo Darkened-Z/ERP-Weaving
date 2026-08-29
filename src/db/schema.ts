@@ -141,7 +141,7 @@ export const yarnCounts = sqliteTable("yarn_counts", {
 
 export const looms = sqliteTable("looms", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  loomNo: integer("loom_no").notNull().unique(),
+  loomNo: integer("loom_no").notNull(),
   shed: text("shed").notNull(),
   type: text("type").notNull(),
   make: text("make"),
@@ -156,7 +156,9 @@ export const looms = sqliteTable("looms", {
   currentContract: text("current_contract"),
   currentProduct: text("current_product"),
   currentBeam: text("current_beam"),
-});
+}, (t) => ({
+  uxShedLoom: uniqueIndex("ux_looms_shed_loom_no").on(t.shed, t.loomNo),
+}));
 
 export const greyConstruction = sqliteTable("grey_construction", {
   id: integer("id").primaryKey({ autoIncrement: true }),

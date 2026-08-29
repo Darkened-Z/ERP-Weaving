@@ -743,11 +743,21 @@ export default async function PackiParchiPage({
               <button type="submit" form="pp-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
               <a href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Exit</a>
-              {formItem && (
+              {formItem ? (
                 <form action={deleteParchi} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <ConfirmButton>Del</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the parchi first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Del
+                </button>
               )}
               <button type="button" className="btn btn-outline btn-sm">Conv Rate</button>
             </div>

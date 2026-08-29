@@ -875,11 +875,21 @@ export default async function GreyDespatchPage({
               <button type="submit" form="gd-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
               <a href="/inventory/grey-despatch" className="btn btn-outline btn-sm">Exit</a>
-              {formItem && (
+              {formItem ? (
                 <form action={deleteDespatch} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <ConfirmButton message={`Delete despatch ${formItem.vNo}? This releases its consumed than serials.`}>Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the despatch first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
             </div>
           </div>
@@ -1322,11 +1332,21 @@ export default async function GreyDespatchPage({
                   <label className="label block mb-1">Password</label>
                   <input className="input-box mono" placeholder="password" type="password" />
                 </div>
-                {formItem && (
+                {formItem ? (
                   <form action={deleteDespatch} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
                     <ConfirmButton message={`Delete despatch ${formItem.vNo}? This releases its consumed than serials.`}>Delete</ConfirmButton>
                   </form>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled
+                    title="Save the despatch first to enable delete"
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
+                  >
+                    Delete
+                  </button>
                 )}
               </div>
             </div>

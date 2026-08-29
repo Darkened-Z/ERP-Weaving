@@ -459,7 +459,7 @@ export default async function KnottingContractPage({
             </div>
           </form>
 
-          {formContract && (
+          {formContract ? (
             <form action={deleteContract} className="mt-4 flex items-center gap-3">
               <input type="hidden" name="id" value={formContract.id} />
               <ConfirmButton message="Delete this contract permanently? This cannot be undone.">
@@ -469,6 +469,21 @@ export default async function KnottingContractPage({
                 Deletes the contract permanently.
               </span>
             </form>
+          ) : (
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                disabled
+                title="Save the contract first to enable delete"
+                style={{ opacity: 0.5, cursor: "not-allowed" }}
+              >
+                Delete
+              </button>
+              <span className="mono text-[10px] text-[var(--muted)]">
+                Save the contract first to enable delete.
+              </span>
+            </div>
           )}
         </div>
 

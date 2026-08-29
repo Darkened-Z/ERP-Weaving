@@ -618,6 +618,28 @@ export default async function GrnPage({
                     </ConfirmButton>
                   </form>
                 )}
+                {!formItem && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled
+                    title="Save the GRN first to enable delete"
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
+                  >
+                    Del
+                  </button>
+                )}
+                {formItem && formItem.approvalStatus === "POSTED" && role !== "ADMIN" && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled
+                    title="GRN is POSTED — only ADMIN can delete"
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
+                  >
+                    Del
+                  </button>
+                )}
               </div>
             </div>
 

@@ -426,11 +426,21 @@ export default async function IntGreyConversionContractPage({
               <a href="/inventory/contracts/grey-conversion?adding=1" className="btn btn-outline btn-sm">New</a>
               <button type="submit" form="igcc-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
-              {formItem && (
+              {formItem ? (
                 <form action={deleteContract} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <ConfirmButton message="Delete this contract and its warp/weft rows? This cannot be undone.">Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the contract first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
               <a href="/inventory/contracts/grey-conversion" className="btn btn-outline btn-sm">Exit</a>
             </div>

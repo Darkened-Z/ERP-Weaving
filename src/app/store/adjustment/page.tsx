@@ -515,6 +515,17 @@ export default async function AdjustmentPage({
                     </ConfirmButton>
                   </form>
                 )}
+                {!formItem && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled
+                    title="Save the voucher first to enable delete"
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
+                  >
+                    Del
+                  </button>
+                )}
               </div>
             </div>
 

@@ -3,31 +3,36 @@
 import { useEffect, useState } from "react";
 
 /**
- * Inline validation for the Loom No field.
+ * Inline validation for the Loom No field, scoped to (shed, loom_no).
+ * loom_no is unique WITHIN a shed — same number can exist in another shed.
  * - Warns immediately when the operator types a number already taken by
- *   another loom (excluding the current row on edit).
+ *   another loom in the same shed (excluding the current row on edit).
+ * - Also revalidates when the shed dropdown changes.
  * - Clears the stale ?error=dup banner as soon as the operator starts
  *   editing any field, so an old failed-save banner doesn't linger.
  */
 export function LoomNoValidator({
-  takenByLoomNo,
+  takenByShedLoom,
   currentId,
 }: {
-  takenByLoomNo: Record<string, number>; // loomNo -> loom.id
+  takenByShedLoom: Record<string, number>; // "shed|loom_no" -> loom.id
   currentId?: number;
 }) {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const input = document.querySelector('input[name="loom_no"]') as HTMLInputElement | null;
+    const shedSel = document.querySelector('[name="shed"]') as HTMLSelectElement | HTMLInputElement | null;
     if (!input) return;
 
     const validate = () => {
-      const v = input.value.trim();
-      if (!v) return setMsg(null);
-      const takenId = takenByLoomNo[v];
+      const loomV = input.value.trim();
+      const shedV = (shedSel?.value ?? "").trim();
+      if (!loomV || !shedV) return setMsg(null);
+      const key = `${shedV}|${loomV}`;
+      const takenId = takenByShedLoom[key];
       if (takenId != null && takenId !== currentId) {
-        setMsg(`Loom #${v} is already used by another loom (id ${takenId}). Pick a different number.`);
+        setMsg(`Loom #${loomV} in Shed ${shedV} is already used (id ${takenId}). Pick a different number.`);
       } else {
         setMsg(null);
       }
@@ -46,13 +51,17 @@ export function LoomNoValidator({
     };
 
     input.addEventListener("input", validate);
+    shedSel?.addEventListener("change", validate);
+    shedSel?.addEventListener("input", validate);
     document.addEventListener("input", onEditAnywhere, true);
     validate();
     return () => {
       input.removeEventListener("input", validate);
+      shedSel?.removeEventListener("change", validate);
+      shedSel?.removeEventListener("input", validate);
       document.removeEventListener("input", onEditAnywhere, true);
     };
-  }, [takenByLoomNo, currentId]);
+  }, [takenByShedLoom, currentId]);
 
   if (!msg) return null;
   return (

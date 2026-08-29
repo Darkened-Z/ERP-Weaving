@@ -777,7 +777,7 @@ export default async function KnottingPage({
                 </button>
               )}
               <PrintButton label="Print" />
-              {formBill && (
+              {formBill ? (
                 <>
                   <form action={deleteBillKnotting} className="inline">
                     <input type="hidden" name="id" value={formBill.id} />
@@ -791,6 +791,27 @@ export default async function KnottingPage({
                       Delete
                     </ConfirmButton>
                   </form>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled
+                    title="Save the voucher first to enable Del Bill"
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
+                  >
+                    Del Bill
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled
+                    title="Save the voucher first to enable delete"
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
+                  >
+                    Delete
+                  </button>
                 </>
               )}
               <a href="/inventory/knotting" className="btn btn-outline btn-sm">

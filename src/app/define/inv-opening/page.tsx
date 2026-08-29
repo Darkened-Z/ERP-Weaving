@@ -242,12 +242,22 @@ export default async function InventoryOpeningPage({
             </div>
             <div className="flex gap-2">
               <a href={`/define/inv-opening?tab=${tab}&adding=1`} className="btn btn-outline btn-sm">New</a>
-              {formItem && (
+              {formItem ? (
                 <form action={deleteEntry} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
                   <input type="hidden" name="tab" value={tab} />
                   <ConfirmButton message="Delete this opening balance entry? This cannot be undone.">Delete</ConfirmButton>
                 </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Save the record first to enable delete"
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
               )}
             </div>
           </div>

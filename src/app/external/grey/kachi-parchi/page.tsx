@@ -610,11 +610,21 @@ export default async function KachiParchiPage({
                   <button type="submit" form="kp-save-form" className="btn btn-sm">Save</button>
                   <PrintButton label="Print" />
                   <a href="/external/grey/kachi-parchi" className="btn btn-outline btn-sm">Exit</a>
-                  {formItem && (
+                  {formItem ? (
                     <form action={deleteParchi} className="inline">
                       <input type="hidden" name="id" value={formItem.id} />
                       <ConfirmButton>Del</ConfirmButton>
                     </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled
+                      title="Save the parchi first to enable delete"
+                      style={{ opacity: 0.5, cursor: "not-allowed" }}
+                    >
+                      Del
+                    </button>
                   )}
                 </div>
               </div>
@@ -1053,11 +1063,21 @@ export default async function KachiParchiPage({
                       <label className="label block mb-1">Alt-S Password</label>
                       <input className="input-box mono" placeholder="password" type="password" />
                     </div>
-                    {formItem && (
+                    {formItem ? (
                       <form action={deleteParchi} className="inline">
                         <input type="hidden" name="id" value={formItem.id} />
                         <ConfirmButton>Delete</ConfirmButton>
                       </form>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        disabled
+                        title="Save the parchi first to enable delete"
+                        style={{ opacity: 0.5, cursor: "not-allowed" }}
+                      >
+                        Delete
+                      </button>
                     )}
                   </div>
                 </div>
