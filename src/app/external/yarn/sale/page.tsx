@@ -5,6 +5,8 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
+import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
+import { FindingPicker } from "@/components/finding-picker";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
@@ -197,7 +199,50 @@ export default async function YarnSaleVoucherPage({
     const label = [yc.description, yc.type].filter(Boolean).join(" ").trim();
     partyScopedCounts.push({ code: String(yc.code), description: label, party: "" });
   }
-  const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+  // Party Count column data (mirror purchase). partyCountInfo carries the
+  // negotiated rate from party_counts (ratePerLbs — same field for sale);
+  // partyCountFillMap drives the per-row auto-fill (count + desc + rate).
+  const partyCountInfo: Record<string, { code: string; desc: string; rate: string }> = {};
+  for (const pc of partyCountsRows) {
+    const yc =
+      countList.find((c) => c.id === pc.countCode) ??
+      countList.find((c) => String(c.code) === String(pc.countCode));
+    if (!yc) continue;
+    const code = String(yc.code);
+    const desc = [yc.description, yc.type].filter(Boolean).join(" ").trim();
+    partyCountInfo[code] = { code, desc, rate: pc.ratePerLbs != null ? String(pc.ratePerLbs) : "" };
+  }
+  const partyCountOptions: { code: string; description: string }[] = [];
+  const seenPartyCount = new Set<string>();
+  for (const sc of partyScopedCounts) {
+    if (seenPartyCount.has(sc.code)) continue;
+    seenPartyCount.add(sc.code);
+    partyCountOptions.push({ code: sc.code, description: sc.description });
+  }
+  const partyCountFillMap: Record<string, Record<string, string | number>> = {};
+  for (const opt of partyCountOptions) {
+    const rate = partyCountInfo[opt.code]?.rate;
+    partyCountFillMap[opt.code] = {
+      line_count: opt.code,
+      line_count_desc: opt.description,
+      ...(rate ? { line_rate: rate } : {}),
+    };
+  }
+  const countsByParty: Record<string, { code: string; label: string }[]> = {};
+  for (const sc of partyScopedCounts) {
+    if (!sc.party) continue;
+    (countsByParty[sc.party] ??= []).push({ code: sc.code, label: `${sc.code} — ${sc.description}` });
+  }
+  const allPartyCountOpts = partyCountOptions.map((o) => ({ code: o.code, label: `${o.code} — ${o.description}` }));
+
+  // Godown accounts for the Despatch Party picker. Default to the WVG/own
+  // yarn-stock godown when present; otherwise the first GODOWN.
+  const godownAccounts = partyAccounts.filter((p) => p.description.toUpperCase().includes("GODOWN"));
+  const godownParty =
+    godownAccounts.find((p) => /WVG|GHAR|OWN|YARN STOCK/i.test(p.description))?.description ??
+    godownAccounts[0]?.description ??
+    "";
+  const despatchFindRows = godownAccounts.map((p) => ({ value: p.description, code: p.code, description: p.description }));
 
   // Historical brand inference — most recent brand ever used on that count, preferring party match.
   const recentSaleLines = await db
@@ -423,6 +468,8 @@ export default async function YarnSaleVoucherPage({
 
     const contNos = formData.getAll("line_cont_no") as string[];
     const counts = formData.getAll("line_count") as string[];
+    const dots = formData.getAll("line_count_dot") as string[];
+    const partyCounts = formData.getAll("line_party_count") as string[];
     const blds = formData.getAll("line_bld") as string[];
     const packs = formData.getAll("line_pack") as string[];
     const brands = formData.getAll("line_brand") as string[];
@@ -440,6 +487,8 @@ export default async function YarnSaleVoucherPage({
     const validLines: {
       contNo: string | null;
       count: string | null;
+      countDot: string | null;
+      partyCount: string | null;
       bld: string | null;
       pack: string | null;
       brand: string | null;
@@ -456,7 +505,7 @@ export default async function YarnSaleVoucherPage({
     }[] = [];
 
     const rowCount = Math.max(
-      contNos.length, counts.length, blds.length, packs.length, brands.length,
+      contNos.length, counts.length, partyCounts.length, blds.length, packs.length, brands.length,
       doNos.length, qtys.length, bags.length, conss.length, lbss.length,
       units.length, dspParties.length, rates.length, amts.length, rmks.length
     );
@@ -464,6 +513,8 @@ export default async function YarnSaleVoucherPage({
     for (let i = 0; i < rowCount; i++) {
       const c = (contNos[i] || "").trim();
       const ct = (counts[i] || "").trim();
+      const dt = (dots[i] || "").trim();
+      const pc = (partyCounts[i] || "").trim();
       const bl = (blds[i] || "").trim();
       const pk = (packs[i] || "").trim();
       const br = (brands[i] || "").trim();
@@ -477,15 +528,19 @@ export default async function YarnSaleVoucherPage({
       const rt = num(rates[i]);
       const rm = (rmks[i] || "").trim();
 
-      if (!c && !ct && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && !u && !dp && rt == null && !rm) {
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && !u && !dp && rt == null && !rm) {
         continue;
       }
 
-      const recomputedAmt = l != null && rt != null ? Math.round(l * rt * 100) / 100 : null;
+      // Lbs is derived from Qty × 100 (the visible Lbs box is read-only).
+      const computedLbs = (q ?? 0) * 100;
+      const recomputedAmt = rt != null ? Math.round(computedLbs * rt * 100) / 100 : null;
 
       validLines.push({
         contNo: c || null,
         count: ct || null,
+        countDot: dt || null,
+        partyCount: pc || null,
         bld: bl || null,
         pack: pk || null,
         brand: br || null,
@@ -493,7 +548,7 @@ export default async function YarnSaleVoucherPage({
         qty: q,
         bag: b,
         cons: co,
-        lbs: l,
+        lbs: computedLbs,
         unit: u || null,
         despatchParty: dp || null,
         rate: rt,
@@ -1263,6 +1318,8 @@ export default async function YarnSaleVoucherPage({
                 <div className="mt-6">
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
+                  <RowAutoFill watch="line_party_count" map={partyCountFillMap} />
+                  <PartyCountSelectFilter partyField="party" selectName="line_party_count" countsByParty={countsByParty} allCounts={allPartyCountOpts} />
                   <CountBlendEnricher
                     watchLineCount="line_count"
                     descField="line_count_desc"
@@ -1271,7 +1328,7 @@ export default async function YarnSaleVoucherPage({
                     blendByContract={blendByContract}
                   />
                   <RowAutoFill watch="line_stock_key" map={countStockFillMap} />
-                  <RowCalc target="line_lbs" a="line_bag" factor={100} round={0} onlyWhenEmpty />
+                  <RowCalc target="line_lbs" a="line_qty" factor={100} round={0} />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
@@ -1283,15 +1340,14 @@ export default async function YarnSaleVoucherPage({
                           <th style={{ width: "30px" }}>#</th>
                           <th>Cont.#</th>
                           <th title="Pick a purchased count in stock — auto-fills the row">Stock</th>
+                          <th>Party Count</th>
                           <th>Count</th>
+                          <th>Dot</th>
                           <th>Count Desc</th>
-                          <th>Bld</th>
                           <th>Pack</th>
                           <th>Brand</th>
                           <th>DO.No</th>
                           <th>Qty</th>
-                          <th>Bag</th>
-                          <th>Cons</th>
                           <th>Lbs</th>
                           <th>Unit</th>
                           <th>Despatch Party</th>
@@ -1306,7 +1362,7 @@ export default async function YarnSaleVoucherPage({
                             <td className="mono text-[11px] text-center text-[var(--muted)]">
                               {i + 1}
                             </td>
-                            <td style={{ minWidth: 90 }}>
+                            <td style={{ minWidth: 66 }}>
                               <Combobox
                                 name="line_cont_no"
                                 options={contractOpts}
@@ -1327,12 +1383,35 @@ export default async function YarnSaleVoucherPage({
                               />
                             </td>
                             <td>
+                              <select
+                                name="line_party_count"
+                                className="input-box mono text-[12px]"
+                                defaultValue={row?.partyCount ?? ""}
+                                style={{ minWidth: 150 }}
+                              >
+                                <option value=""></option>
+                                {partyCountOptions.map((o) => (
+                                  <option key={o.code} value={o.code}>
+                                    {o.code} — {o.description}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
                               <input
                                 name="line_count"
                                 list="ysv-count-list"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.count ?? ""}
                                 style={{ width: 60 }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                name="line_count_dot"
+                                className="input-box mono text-[12px]"
+                                defaultValue={row?.countDot ?? ""}
+                                style={{ width: 44 }}
                               />
                             </td>
                             <td>
@@ -1349,14 +1428,11 @@ export default async function YarnSaleVoucherPage({
                                 style={{ minWidth: 160, background: "#f3f4f6" }}
                               />
                             </td>
-                            <td>
-                              <input
-                                name="line_bld"
-                                className="input-box mono text-[12px]"
-                                defaultValue={row?.bld ?? ""}
-                                style={{ width: 55 }}
-                              />
-                            </td>
+                            {/* Bld/Bag/Cons columns removed per client feedback — kept as hidden
+                               inputs so save still records existing values and getAll arrays stay index-aligned */}
+                            <input type="hidden" name="line_bld" defaultValue={row?.bld ?? ""} />
+                            <input type="hidden" name="line_bag" defaultValue={row?.bag ?? ""} />
+                            <input type="hidden" name="line_cons" defaultValue={row?.cons ?? ""} />
                             <td>
                               <input
                                 name="line_pack"
@@ -1394,31 +1470,13 @@ export default async function YarnSaleVoucherPage({
                             </td>
                             <td>
                               <input
-                                name="line_bag"
-                                type="number"
-                                step="any"
-                                className="input-box mono text-[12px] text-right"
-                                defaultValue={row?.bag ?? ""}
-                                style={{ width: 65 }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                name="line_cons"
-                                type="number"
-                                step="any"
-                                className="input-box mono text-[12px] text-right"
-                                defaultValue={row?.cons ?? ""}
-                                style={{ width: 60 }}
-                              />
-                            </td>
-                            <td>
-                              <input
                                 name="line_lbs"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px] text-right"
+                                className="input-box mono text-[12px] text-right bg-gray-100"
                                 defaultValue={row?.lbs ?? ""}
+                                readOnly
+                                tabIndex={-1}
                                 style={{ width: 75 }}
                               />
                             </td>
@@ -1430,12 +1488,14 @@ export default async function YarnSaleVoucherPage({
                                 style={{ width: 55 }}
                               />
                             </td>
-                            <td>
-                              <input
+                            <td style={{ minWidth: 200 }}>
+                              <FindingPicker
                                 name="line_despatch_party"
-                                className="input-box mono text-[12px]"
-                                defaultValue={row?.despatchParty ?? ""}
-                                style={{ minWidth: 160 }}
+                                defaultValue={row?.despatchParty || godownParty}
+                                rows={despatchFindRows}
+                                title="DESPATCH — FIND GODOWN / PARTY"
+                                placeholder="Godown / other party…"
+                                className="input-box mono text-[12px] cursor-pointer"
                               />
                             </td>
                             <td>

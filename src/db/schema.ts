@@ -1182,6 +1182,8 @@ export const extYarnSalVoucherLine = sqliteTable("ext_yarn_sal_voucher_line", {
   voucherId: integer("voucher_id").notNull().references(() => extYarnSalVoucher.id, { onDelete: "cascade" }),
   contNo: text("cont_no"),
   count: text("count"),
+  countDot: text("count_dot"),
+  partyCount: text("party_count"),
   bld: text("bld"),
   pack: text("pack"),
   brand: text("brand"),
