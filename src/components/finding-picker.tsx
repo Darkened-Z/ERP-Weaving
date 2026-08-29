@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Row = { value: string; code: string; description: string; extra?: string };
 
@@ -32,19 +32,24 @@ export function FindingPicker({
   const [value, setValue] = useState(defaultValue || "");
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  // Instance-scoped refs so multiple pickers with the SAME name (e.g. one per
+  // grid row) stay independent — F9 opens only the focused one, and picking
+  // writes to this row's own hidden input, not the first match in the DOM.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hiddenRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const active = document.activeElement as HTMLElement | null;
       if (e.key === "Escape" && open) { e.preventDefault(); setOpen(false); return; }
       if (e.key !== "F9") return;
-      const named = active?.getAttribute?.("name") === name;
-      const insideMe = active?.closest?.(`[data-finding-picker="${name}"]`);
-      if (named || insideMe || open) { e.preventDefault(); setOpen((s) => !s); }
+      // Only respond if the focus is inside THIS instance (or its modal is open).
+      const insideMe = !!active && !!containerRef.current && containerRef.current.contains(active);
+      if (insideMe || open) { e.preventDefault(); setOpen((s) => !s); }
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [open, name]);
+  }, [open]);
 
   const filtered = useMemo(() => {
     const qL = q.trim().toLowerCase();
@@ -55,7 +60,7 @@ export function FindingPicker({
   const pickRow = (v: string) => {
     setValue(v);
     setOpen(false);
-    const hidden = document.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+    const hidden = hiddenRef.current;
     if (hidden) {
       hidden.value = v;
       hidden.dispatchEvent(new Event("input", { bubbles: true }));
@@ -67,8 +72,8 @@ export function FindingPicker({
   const selected = rows.find((r) => r.value === value);
 
   return (
-    <div className="relative" data-finding-picker={name}>
-      <input type="hidden" name={name} value={value} readOnly />
+    <div className="relative" ref={containerRef} data-finding-picker={name}>
+      <input ref={hiddenRef} type="hidden" name={name} value={value} readOnly />
       <div className="flex gap-1">
         <input
           readOnly

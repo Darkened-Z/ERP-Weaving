@@ -6,6 +6,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
+import { FindingPicker } from "@/components/finding-picker";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
@@ -280,6 +281,7 @@ export default async function YarnPurchaseVoucherPage({
     godownAccounts[0]?.description ??
     "";
   const despatchPartyOpts = godownAccounts.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const despatchFindRows = godownAccounts.map((p) => ({ value: p.description, code: p.code, description: p.description }));
 
   // Historical brand inference — from past yarn purchase voucher lines. When a
   // count is picked in a row, we fill line_brand with the most recent brand ever
@@ -1329,13 +1331,14 @@ export default async function YarnPurchaseVoucherPage({
                                 style={{ width: 55 }}
                               />
                             </td>
-                            <td style={{ minWidth: 180 }}>
-                              <Combobox
+                            <td style={{ minWidth: 200 }}>
+                              <FindingPicker
                                 name="line_despatch_party"
-                                options={despatchPartyOpts}
                                 defaultValue={row?.despatchParty || godownParty}
+                                rows={despatchFindRows}
+                                title="DESPATCH — FIND GODOWN / PARTY"
                                 placeholder="Godown / other party…"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] cursor-pointer"
                               />
                             </td>
                             <td>
