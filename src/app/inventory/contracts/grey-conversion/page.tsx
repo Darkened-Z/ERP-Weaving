@@ -456,7 +456,9 @@ export default async function IntGreyConversionContractPage({
   }
 
   const gridCellCls = "input-box mono text-[13px] py-1";
-  const gridCellWideCls = "input-box mono text-[13px] py-1 min-w-[130px]";
+  const gridCellWideCls = "input-box mono text-[13px] py-1 min-w-[150px]";
+  const gridCellBrandCls = "input-box mono text-[13px] py-1 min-w-[80px]";
+  const gridCellEndsCls = "input-box mono text-[13px] py-1 text-right min-w-[64px]";
   const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
   const gridCellCalcCls = "input-box mono text-[13px] py-1 text-right bg-gray-100";
   const roCls = "input-box mono text-[13px] bg-gray-100";
@@ -484,6 +486,7 @@ export default async function IntGreyConversionContractPage({
           <h1 className="page-title">
             GREY CONVERSION CONTRACT{" "}
             <span className="text-[var(--muted)] text-lg font-normal">({contracts.length})</span>
+            <span className="ml-2 text-[10px] uppercase tracking-wider px-2 py-0.5 border border-sky-500 text-sky-700 rounded">Internal</span>
           </h1>
           <ExcelExportButton
             rows={excelRows}
@@ -792,14 +795,9 @@ export default async function IntGreyConversionContractPage({
                       <label className="label block mb-1">Gray Rate/Mtr</label>
                       <input name="gray_rate_per_mtr" type="number" step="any" className={greenCls} defaultValue={formItem?.grayRatePerMtr ?? ""} readOnly />
                     </div>
-                    <div>
-                      <label className="label block mb-1">Rate Per Mtr</label>
-                      <input name="rate_per_mtr_1" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePerMtr1 ?? ""} />
-                    </div>
-                    <div>
-                      <label className="label block mb-1">Rate Per Mtr</label>
-                      <input name="rate_per_mtr_2" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePerMtr2 ?? ""} />
-                    </div>
+                    {/* Two RATE PER MTR boxes removed per client — kept as hidden inputs to preserve any saved values */}
+                    <input type="hidden" name="rate_per_mtr_1" defaultValue={formItem?.ratePerMtr1 ?? ""} />
+                    <input type="hidden" name="rate_per_mtr_2" defaultValue={formItem?.ratePerMtr2 ?? ""} />
                   </div>
 
                   <div>
@@ -833,7 +831,7 @@ export default async function IntGreyConversionContractPage({
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
                 <div className="border border-black">
-                  <div className="bg-green-100 border-b border-black px-3 py-1 flex items-center justify-between">
+                  <div className="bg-sky-100 border-b border-sky-300 px-3 py-1 flex items-center justify-between">
                     <div className="text-[12px] uppercase tracking-[0.1em] font-bold">WARP</div>
                     <div className="flex items-center gap-3 text-[11px]">
                       <span className="label">Read</span>
@@ -866,9 +864,9 @@ export default async function IntGreyConversionContractPage({
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="igcc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellWideCls} defaultValue={r?.descr ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} list="igcc-brands" className={gridCellWideCls} defaultValue={r?.brand ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} list="igcc-brands" className={gridCellBrandCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellEndsCls} defaultValue={r?.ends ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>
@@ -882,7 +880,7 @@ export default async function IntGreyConversionContractPage({
                 </div>
 
                 <div className="border border-black">
-                  <div className="bg-green-100 border-b border-black px-3 py-1 flex items-center justify-between">
+                  <div className="bg-sky-100 border-b border-sky-300 px-3 py-1 flex items-center justify-between">
                     <div className="text-[12px] uppercase tracking-[0.1em] font-bold">WEFT</div>
                     <div className="flex items-center gap-3 text-[11px]">
                       <span className="label">Width</span>
@@ -913,9 +911,9 @@ export default async function IntGreyConversionContractPage({
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="igcc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellWideCls} defaultValue={r?.descr ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} list="igcc-brands" className={gridCellWideCls} defaultValue={r?.brand ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} list="igcc-brands" className={gridCellBrandCls} defaultValue={r?.brand ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
-                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellEndsCls} defaultValue={r?.ends ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_rate_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.ratePerLbs ?? ""} /></td>
                               <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cost_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.costPerMtr ?? ""} readOnly /></td>

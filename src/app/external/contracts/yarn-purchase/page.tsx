@@ -97,7 +97,7 @@ export default async function YarnPurchaseContractPage({
     .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
   const countList = await db
-    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
+    .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
     .from(schema.yarnCounts)
     .where(eq(schema.yarnCounts.status, "A"))
     .orderBy(schema.yarnCounts.countCode);
@@ -114,7 +114,7 @@ export default async function YarnPurchaseContractPage({
   }));
   const countOpts = countList.map((c) => ({
     value: String(c.code),
-    label: `${c.code} — ${c.description}`,
+    label: `${c.code} — ${c.description}${c.type ? ` ${c.type}` : ""}`,
     desc: c.description,
   }));
   const brandOpts = brandList.map((b) => ({ value: b.name, label: b.name }));
