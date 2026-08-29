@@ -358,7 +358,6 @@ export default async function GreyConstructionPage({
               <tr>
                 <th>Read</th>
                 <th>Pick</th>
-                <th>Width</th>
                 <th>Warp</th>
                 <th>Gray Code</th>
                 <th>Weft</th>
@@ -380,11 +379,6 @@ export default async function GreyConstructionPage({
                     <td className="mono">
                       <a href={href} className="no-underline block" style={linkStyle}>
                         {r.pick ?? "-"}
-                      </a>
-                    </td>
-                    <td className="mono">
-                      <a href={href} className="no-underline block" style={linkStyle}>
-                        {r.width ? `${r.width}"` : "-"}
                       </a>
                     </td>
                     <td className="mono text-[13px]">
