@@ -19,7 +19,8 @@ export function ImageAttach({
   quality?: number;
 }) {
   const [dataUrl, setDataUrl] = useState<string>(defaultValue || "");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -29,19 +30,23 @@ export function ImageAttach({
     } catch {
       /* ignore unreadable file */
     }
+    e.target.value = ""; // allow re-picking the same file
   }
 
   return (
     <div>
       <input type="hidden" name={name} value={dataUrl} readOnly />
-      <div className="flex items-center gap-3">
-        <button type="button" onClick={() => fileRef.current?.click()} className="btn btn-outline btn-sm">
-          {dataUrl ? "Change Photo" : "Add Photo"}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button type="button" onClick={() => galleryRef.current?.click()} className="btn btn-outline btn-sm">
+          {dataUrl ? "Change" : "Gallery"}
+        </button>
+        <button type="button" onClick={() => cameraRef.current?.click()} className="btn btn-outline btn-sm">
+          Camera
         </button>
         {dataUrl && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={dataUrl} alt="evidence" className="h-16 w-16 object-cover border border-[var(--border)]" />
+            <img src={dataUrl} alt="attachment" className="h-16 w-16 object-cover border border-[var(--border)]" />
             <button
               type="button"
               onClick={() => setDataUrl("")}
@@ -52,14 +57,10 @@ export function ImageAttach({
           </>
         )}
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={onPick}
-      />
+      {/* Gallery / file picker — no capture, so mobile shows the photo library */}
+      <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+      {/* Camera — capture hint opens the camera directly on mobile */}
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPick} />
     </div>
   );
 }

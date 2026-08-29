@@ -60,7 +60,7 @@ const SEASON_TYPES = ["SUMMER", "WINTER", "ALL SEASON", "SPRING", "AUTUMN"];
 export default async function GreyConvContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; fparty?: string; fgrey?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -171,25 +171,24 @@ export default async function GreyConvContractPage({
   }));
   const partyCodeByDescObj: Record<string, string> = Object.fromEntries(parties.map((p) => [p.description, p.code]));
 
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
-  const pat = `%${escFind}%`;
-  const contracts = findFilter
-    ? await db
-        .select()
-        .from(schema.extGreyConvContract)
-        .where(
-          or(
-            sql`${schema.extGreyConvContract.contNo} LIKE ${pat} ESCAPE '\\'`,
-            sql`${schema.extGreyConvContract.party} LIKE ${pat} ESCAPE '\\'`,
-            sql`${schema.extGreyConvContract.grayCode} LIKE ${pat} ESCAPE '\\'`,
-            sql`${schema.extGreyConvContract.productName} LIKE ${pat} ESCAPE '\\'`
-          )
-        )
-        .orderBy(sql`cont_date desc`)
-    : await db
-        .select()
-        .from(schema.extGreyConvContract)
-        .orderBy(sql`cont_date desc`);
+  // Finding: text find + party-wise + grey-construction-wise. Fetch then filter
+  // in JS so the three filters compose cleanly (contract volume is modest).
+  const fParty = (params.fparty ?? "").trim();
+  const fGrey = (params.fgrey ?? "").trim();
+  const findL = (findFilter ?? "").toLowerCase();
+  const allContracts = await db
+    .select()
+    .from(schema.extGreyConvContract)
+    .orderBy(sql`cont_date desc`);
+  const contracts = allContracts.filter((c) => {
+    if (fParty && c.party !== fParty) return false;
+    if (fGrey && c.grayCode !== fGrey && c.grayQltyCode !== fGrey) return false;
+    if (findL) {
+      const hay = `${c.contNo ?? ""} ${c.party ?? ""} ${c.grayCode ?? ""} ${c.productName ?? ""}`.toLowerCase();
+      if (!hay.includes(findL)) return false;
+    }
+    return true;
+  });
 
   const selected = Number.isFinite(idParam)
     ? contracts.find((c) => c.id === idParam) ?? null
@@ -960,17 +959,37 @@ export default async function GreyConvContractPage({
         </div>
 
         <div className="border border-black">
-          <form action="/external/contracts/grey-conversion" method="get" className="flex gap-2 items-center border-b border-black p-3 bg-gray-50">
-            <label className="label">Find</label>
-            <input
-              name="find"
-              defaultValue={findFilter ?? ""}
-              placeholder="Cont No, Party, Gray Code, Product…"
-              className="input-box mono text-[13px]"
-              style={{ maxWidth: 320 }}
-            />
+          <form action="/external/contracts/grey-conversion" method="get" className="flex gap-2 items-end flex-wrap border-b border-black p-3 bg-gray-50">
+            <div>
+              <label className="label block mb-1">Find</label>
+              <input
+                name="find"
+                defaultValue={findFilter ?? ""}
+                placeholder="Cont No, Party, Gray Code, Product…"
+                className="input-box mono text-[13px]"
+                style={{ maxWidth: 260 }}
+              />
+            </div>
+            <div>
+              <label className="label block mb-1">Party wise</label>
+              <select name="fparty" defaultValue={fParty} className="input-box mono text-[13px]" style={{ maxWidth: 240 }}>
+                <option value="">— All parties —</option>
+                {partyFindRows.map((p) => (
+                  <option key={p.value} value={p.value}>{p.code} — {p.description}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label block mb-1">Grey construction wise</label>
+              <select name="fgrey" defaultValue={fGrey} className="input-box mono text-[13px]" style={{ maxWidth: 240 }}>
+                <option value="">— All qualities —</option>
+                {greyPickerRows.map((g) => (
+                  <option key={g.code} value={g.code}>{g.code}{g.reed && g.pick ? ` — R${g.reed} P${g.pick}` : ""} {g.description}</option>
+                ))}
+              </select>
+            </div>
             <button type="submit" className="btn btn-outline btn-sm">Search</button>
-            {findFilter && <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
+            {(findFilter || fParty || fGrey) && <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
           </form>
           <div className="overflow-x-auto">
             <table>
