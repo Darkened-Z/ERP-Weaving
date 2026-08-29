@@ -246,7 +246,6 @@ const SECTIONS = [
       { href: "/settings/fiscal-years", label: "Fiscal Years", key: "fiscal-years" },
       { href: "/settings/locking", label: "System Locking", key: "locking" },
       { href: "/settings/backup", label: "Daily Backup", key: "backup" },
-      { href: "/import/excel", label: "Excel Import", key: "excel-import" },
     ],
   },
 ];

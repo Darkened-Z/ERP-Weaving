@@ -1,20 +1,11 @@
-import { Shell } from "@/components/shell";
-import { ImportForm } from "./import-form";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+// Excel Import was a non-functional preview (mapped rows were never written to
+// the DB). Gated off so nobody mistakes it for a working importer and loses
+// data. Re-enable by restoring the ImportForm render + nav link once the
+// server-side import is actually built.
 export default function ExcelImportPage() {
-  return (
-    <Shell active="excel-import">
-      <div className="animate-in">
-        <div className="mb-8">
-          <h1 className="page-title">Excel Import</h1>
-          <p className="text-[13px] text-[var(--muted)] mt-2">
-            Upload a spreadsheet, map columns, preview rows. Actual writes land in v2.
-          </p>
-        </div>
-        <ImportForm />
-      </div>
-    </Shell>
-  );
+  redirect("/");
 }
