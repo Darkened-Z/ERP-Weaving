@@ -224,6 +224,19 @@ export default async function GreyConvContractPage({
   const productFillMap = Object.fromEntries(
     productList.map((p) => [p.description, { product_quality: p.description, slv_name: p.description }])
   );
+  // Resolve a stored warp/weft value (usually a count code like "2", sometimes a
+  // description) to "code — blend", e.g. "2 — 30/S MVS PV 65:35". Falls back to
+  // the raw value if it matches no yarn count.
+  const countByCode = new Map(yarnCountList.map((c) => [String(c.countCode).trim().toLowerCase(), c]));
+  const countByDesc = new Map(yarnCountList.map((c) => [String(c.description).trim().toLowerCase(), c]));
+  const resolveCount = (raw: string) => {
+    const v = (raw ?? "").trim();
+    if (!v) return "";
+    const c = countByCode.get(v.toLowerCase()) ?? countByDesc.get(v.toLowerCase());
+    if (!c) return v;
+    const blend = `${c.description}${c.type ? ` ${c.type}` : ""}`;
+    return `${c.countCode} — ${blend}`;
+  };
   // Compact info-panel map: one entry per construction with warp/weft as arrays for the display
   const greyInfoMap = Object.fromEntries(
     greyList.map((g) => [
@@ -232,8 +245,8 @@ export default async function GreyConvContractPage({
         reed: g.reed as number | null,
         pick: g.pick as number | null,
         width: g.width as number | null,
-        warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => (x ?? "") as string),
-        weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => (x ?? "") as string),
+        warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => resolveCount((x ?? "") as string)),
+        weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => resolveCount((x ?? "") as string)),
       },
     ])
   );
