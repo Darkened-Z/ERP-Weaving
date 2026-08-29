@@ -231,40 +231,57 @@ export default async function MyTasksPage({
             <tbody>
               {sorted.map((t) => {
                 const due = dueLabel(t.dueDate ?? null, today);
-                const href = `/tickets/${t.id}${fromParam}`;
+                const rowHref = `/tickets/${t.id}${fromParam}`;
+                const linkStyle = { color: "inherit" };
                 return (
                   <tr key={t.id} className="cursor-pointer hover:bg-gray-50">
-                    <td className="mono text-[12px]">
+                    <td className="mono text-[12px] p-0">
                       <a
-                        href={href}
-                        className="no-underline block"
-                        style={{ color: "inherit" }}
+                        href={rowHref}
+                        className="no-underline block px-2 py-1"
+                        style={linkStyle}
                       >
                         {t.ticketNo}
                       </a>
                     </td>
-                    <td className="text-[13px]">
+                    <td className="text-[13px] p-0">
                       <a
-                        href={href}
-                        className="no-underline block"
-                        style={{ color: "inherit" }}
+                        href={rowHref}
+                        className="no-underline block px-2 py-1"
+                        style={linkStyle}
                       >
                         {t.title}
                       </a>
                     </td>
-                    <td className="text-[12px]">{getTypeShort(t.type)}</td>
-                    <td>
-                      <span
-                        className={`mono text-[10px] px-1.5 py-0.5 ${getPriorityChipClass(t.priority)}`}
-                      >
-                        {getPriorityShort(t.priority)}
-                      </span>
+                    <td className="text-[12px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        {getTypeShort(t.type)}
+                      </a>
                     </td>
-                    <td className="text-[12px]">{getStatusLabel(t.status)}</td>
-                    <td className="mono text-[12px]">
-                      {t.dueDate ? t.dueDate.slice(0, 10) : "—"}
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        <span
+                          className={`mono text-[10px] px-1.5 py-0.5 ${getPriorityChipClass(t.priority)}`}
+                        >
+                          {getPriorityShort(t.priority)}
+                        </span>
+                      </a>
                     </td>
-                    <td className={`text-[12px] ${due.color}`}>{due.text}</td>
+                    <td className="text-[12px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        {getStatusLabel(t.status)}
+                      </a>
+                    </td>
+                    <td className="mono text-[12px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        {t.dueDate ? t.dueDate.slice(0, 10) : "—"}
+                      </a>
+                    </td>
+                    <td className={`text-[12px] p-0 ${due.color}`}>
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        {due.text}
+                      </a>
+                    </td>
                   </tr>
                 );
               })}

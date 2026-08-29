@@ -378,41 +378,64 @@ export default async function TicketsPage({
               </thead>
               <tbody>
                 {tickets.map((t) => {
-                  const href = `/tickets/${t.id}${fromParam}`;
+                  const rowHref = `/tickets/${t.id}${fromParam}`;
+                  const linkStyle = { color: "inherit" };
                   const assignee = t.assigneeUserId
                     ? userById.get(t.assigneeUserId)?.fullName ?? "-"
                     : "-";
                   return (
                     <tr key={t.id} className="cursor-pointer hover:bg-gray-50">
-                      <td className="mono text-[12px]">
-                        <a href={href} className="no-underline block" style={{ color: "inherit" }}>
+                      <td className="mono text-[12px] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                           {t.ticketNo}
                         </a>
                       </td>
-                      <td className="text-[13px]">
-                        <a href={href} className="no-underline block" style={{ color: "inherit" }}>
+                      <td className="text-[13px] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                           {t.title}
                         </a>
                       </td>
-                      <td className="text-[12px]">{getTypeLabel(t.type)}</td>
-                      <td>
-                        <span
-                          className={`mono text-[10px] px-1.5 py-0.5 ${getPriorityChipClass(t.priority)}`}
-                        >
-                          {getPriorityShort(t.priority)}
-                        </span>
+                      <td className="text-[12px] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                          {getTypeLabel(t.type)}
+                        </a>
                       </td>
-                      <td className="text-[12px]">{getStatusLabel(t.status)}</td>
-                      <td className="mono text-[12px]">
-                        {t.loomNo !== null && t.loomNo !== undefined
-                          ? (t.shed ? `Shed ${t.shed} · #${fmt.format(t.loomNo)}` : `#${fmt.format(t.loomNo)}`)
-                          : "-"}
+                      <td className="p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                          <span
+                            className={`mono text-[10px] px-1.5 py-0.5 ${getPriorityChipClass(t.priority)}`}
+                          >
+                            {getPriorityShort(t.priority)}
+                          </span>
+                        </a>
                       </td>
-                      <td className="text-[12px]">{assignee}</td>
-                      <td className="mono text-[12px] text-[var(--muted)]">
-                        {t.createdAt ? t.createdAt.slice(0, 10) : "-"}
+                      <td className="text-[12px] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                          {getStatusLabel(t.status)}
+                        </a>
                       </td>
-                      <td className="mono text-[12px]">{t.dueDate ?? "-"}</td>
+                      <td className="mono text-[12px] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                          {t.loomNo !== null && t.loomNo !== undefined
+                            ? (t.shed ? `Shed ${t.shed} · #${fmt.format(t.loomNo)}` : `#${fmt.format(t.loomNo)}`)
+                            : "-"}
+                        </a>
+                      </td>
+                      <td className="text-[12px] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                          {assignee}
+                        </a>
+                      </td>
+                      <td className="mono text-[12px] text-[var(--muted)] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                          {t.createdAt ? t.createdAt.slice(0, 10) : "-"}
+                        </a>
+                      </td>
+                      <td className="mono text-[12px] p-0">
+                        <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                          {t.dueDate ?? "-"}
+                        </a>
+                      </td>
                     </tr>
                   );
                 })}

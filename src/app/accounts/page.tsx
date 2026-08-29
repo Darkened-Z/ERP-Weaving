@@ -543,6 +543,8 @@ export default async function ChartOfAccountPage({
                   {accounts.map((acc) => {
                     const level = acc.level ?? 1;
                     const isSelected = acc.code === selected?.code;
+                    const rowHref = `/accounts?code=${acc.code}${params.find ? `&find=${encodeURIComponent(params.find)}` : ""}`;
+                    const linkStyle = { color: isSelected ? "white" : "inherit" };
                     // Per-level styling — headers are bold/darker, parties are lighter
                     const levelStyles: Record<number, { bg: string; badge: string; font: string; weight: string }> = {
                       1: { bg: "#f1f5f9", badge: "#0f172a", font: "text-[13px]", weight: "font-bold uppercase tracking-wide" },
@@ -556,31 +558,37 @@ export default async function ChartOfAccountPage({
                     const inlineBg = isSelected ? undefined : st.bg;
                     return (
                       <tr key={acc.code} className={rowBg} style={inlineBg ? { background: inlineBg } : undefined}>
-                        <td className="text-center" style={{ width: 30 }}>
-                          <span
-                            className="inline-block mono text-[9px] font-bold"
-                            style={{
-                              background: isSelected ? "white" : st.badge,
-                              color: isSelected ? "black" : "white",
-                              width: 18, height: 18, lineHeight: "18px", borderRadius: 2,
-                              opacity: level === 5 ? 0.3 : 1,
-                            }}
-                          >
-                            {level}
-                          </span>
+                        <td className="text-center p-0" style={{ width: 30 }}>
+                          <a href={rowHref} className="no-underline block px-2 py-1 text-center" style={linkStyle}>
+                            <span
+                              className="inline-block mono text-[9px] font-bold"
+                              style={{
+                                background: isSelected ? "white" : st.badge,
+                                color: isSelected ? "black" : "white",
+                                width: 18, height: 18, lineHeight: "18px", borderRadius: 2,
+                                opacity: level === 5 ? 0.3 : 1,
+                              }}
+                            >
+                              {level}
+                            </span>
+                          </a>
                         </td>
-                        <td className="mono text-[12px]">
-                          <a href={`/accounts?code=${acc.code}${params.find ? `&find=${encodeURIComponent(params.find)}` : ""}`} className="no-underline" style={{ color: isSelected ? "white" : "inherit" }}>
+                        <td className="mono text-[12px] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                             {acc.code}
                           </a>
                         </td>
-                        <td className={st.font} style={{ paddingLeft: `${8 + (level - 1) * 18}px` }}>
-                          <a href={`/accounts?code=${acc.code}${params.find ? `&find=${encodeURIComponent(params.find)}` : ""}`} className={`no-underline ${st.weight}`} style={{ color: isSelected ? "white" : "inherit" }}>
+                        <td className={`${st.font} p-0`}>
+                          <a href={rowHref} className={`no-underline block px-2 py-1 ${st.weight}`} style={{ ...linkStyle, paddingLeft: `${8 + (level - 1) * 18}px` }}>
                             {level < 5 && <span className="text-[var(--muted)] mr-1">{"›".repeat(level - 1)}</span>}
                             {acc.description}
                           </a>
                         </td>
-                        <td className="mono text-[11px] text-[var(--muted)]">{acc.descShort}</td>
+                        <td className="mono text-[11px] text-[var(--muted)] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                            {acc.descShort}
+                          </a>
+                        </td>
                         <td className="text-center" style={{ width: 40 }}>
                           <form action={deleteAccount} className="inline">
                             <input type="hidden" name="code" value={acc.code} />

@@ -846,52 +846,64 @@ export default async function DemandPage({
             ) : (
               rows.map((r) => {
                 const isSel = r.id === selected?.id;
-                const href = `/store/demand?id=${r.id}`;
+                const rowHref = `/store/demand?id=${r.id}`;
                 const linkStyle = { color: isSel ? "white" : "inherit" };
                 return (
                   <tr
                     key={r.id}
                     className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
                   >
-                    <td className="mono text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="mono text-[13px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         {r.demandDate}
                       </a>
                     </td>
-                    <td className="mono text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="mono text-[13px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         {r.demandNo}
                       </a>
                     </td>
-                    <td>
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         <div>{r.department}</div>
                         {r.department && ccCodeByDesc.get(r.department) && (
                           <div className="text-[11px] text-[var(--muted)]">{ccCodeByDesc.get(r.department)}</div>
                         )}
                       </a>
                     </td>
-                    <td>{r.requestedBy ?? ""}</td>
-                    <td className="mono text-[13px] text-right">
-                      {r.itemCount ?? 0}
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        {r.requestedBy ?? ""}
+                      </a>
                     </td>
-                    <td className="mono text-[13px] text-right">
-                      {fmt.format(Math.round(r.totalAmount ?? 0))}
+                    <td className="mono text-[13px] text-right p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                        {r.itemCount ?? 0}
+                      </a>
                     </td>
-                    <td>
-                      <span
-                        className="inline-block border px-2 py-0.5 text-[11px] font-bold uppercase"
-                        style={{
-                          background: r.status === "P" ? "#000" : "transparent",
-                          color: r.status === "P" ? "#fff" : "#000",
-                          borderColor: "#000",
-                        }}
-                      >
-                        {r.status === "P" ? "PENDING" : "APPROVED"}
-                      </span>
+                    <td className="mono text-[13px] text-right p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                        {fmt.format(Math.round(r.totalAmount ?? 0))}
+                      </a>
                     </td>
-                    <td>
-                      <ApprovalBadge status={r.approvalStatus} />
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        <span
+                          className="inline-block border px-2 py-0.5 text-[11px] font-bold uppercase"
+                          style={{
+                            background: r.status === "P" ? "#000" : "transparent",
+                            color: r.status === "P" ? "#fff" : "#000",
+                            borderColor: "#000",
+                          }}
+                        >
+                          {r.status === "P" ? "PENDING" : "APPROVED"}
+                        </span>
+                      </a>
+                    </td>
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        <ApprovalBadge status={r.approvalStatus} />
+                      </a>
                     </td>
                   </tr>
                 );

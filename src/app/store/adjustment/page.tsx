@@ -781,44 +781,56 @@ export default async function AdjustmentPage({
             ) : (
               rows.map((r) => {
                 const isSel = r.id === selected?.id;
-                const href = `/store/adjustment?id=${r.id}${q ? `&q=${encodeURIComponent(q)}` : ""}${year && year !== fyCode ? `&year=${encodeURIComponent(year)}` : ""}`;
+                const rowHref = `/store/adjustment?id=${r.id}${q ? `&q=${encodeURIComponent(q)}` : ""}${year && year !== fyCode ? `&year=${encodeURIComponent(year)}` : ""}`;
                 const linkStyle = { color: isSel ? "white" : "inherit" };
                 return (
                   <tr
                     key={r.id}
                     className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
                   >
-                    <td className="mono text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="mono text-[13px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         {r.adjDate}
                       </a>
                     </td>
-                    <td className="mono text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="mono text-[13px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         {r.adjNo}/{r.fyCode}
                       </a>
                     </td>
-                    <td>
-                      <span
-                        className="inline-block border px-2 py-0.5 text-[11px] font-bold uppercase"
-                        style={{
-                          background: r.type === "DAMAGE" ? "#000" : "transparent",
-                          color: r.type === "DAMAGE" ? "#fff" : "#000",
-                          borderColor: "#000",
-                        }}
-                      >
-                        {r.type === "DAMAGE" ? "DAMAGE" : "ADJUSTMENT"}
-                      </span>
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        <span
+                          className="inline-block border px-2 py-0.5 text-[11px] font-bold uppercase"
+                          style={{
+                            background: r.type === "DAMAGE" ? "#000" : "transparent",
+                            color: r.type === "DAMAGE" ? "#fff" : "#000",
+                            borderColor: "#000",
+                          }}
+                        >
+                          {r.type === "DAMAGE" ? "DAMAGE" : "ADJUSTMENT"}
+                        </span>
+                      </a>
                     </td>
-                    <td>{r.remarks ?? ""}</td>
-                    <td className="mono text-[13px] text-right">
-                      {r.itemCount ?? 0}
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        {r.remarks ?? ""}
+                      </a>
                     </td>
-                    <td className="mono text-[13px] text-right">
-                      {fmt.format(Math.round(r.totalValue ?? 0))}
+                    <td className="mono text-[13px] text-right p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                        {r.itemCount ?? 0}
+                      </a>
                     </td>
-                    <td>
-                      <ApprovalBadge status={r.approvalStatus} />
+                    <td className="mono text-[13px] text-right p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                        {fmt.format(Math.round(r.totalValue ?? 0))}
+                      </a>
+                    </td>
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        <ApprovalBadge status={r.approvalStatus} />
+                      </a>
                     </td>
                   </tr>
                 );

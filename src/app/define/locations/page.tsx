@@ -112,14 +112,20 @@ export default async function GreyLocationsPage({
                 <tbody>
                   {allLocations.map((l) => {
                     const isSel = l.id === selected?.id;
+                    const rowHref = `/define/locations?id=${l.id}`;
+                    const linkStyle = { color: isSel ? "white" : "inherit" };
                     return (
                       <tr key={l.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                        <td className="mono text-[13px]">
-                          <a href={`/define/locations?id=${l.id}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
+                        <td className="mono text-[13px] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                             {l.code}
                           </a>
                         </td>
-                        <td>{l.description}</td>
+                        <td className="p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                            {l.description}
+                          </a>
+                        </td>
                       </tr>
                     );
                   })}

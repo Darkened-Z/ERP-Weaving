@@ -882,40 +882,50 @@ export default async function GrnPage({
             ) : (
               rows.map((r) => {
                 const isSel = r.id === selected?.id;
-                const href = `/store/grn?id=${r.id}`;
+                const rowHref = `/store/grn?id=${r.id}`;
                 const linkStyle = { color: isSel ? "white" : "inherit" };
                 return (
                   <tr
                     key={r.id}
                     className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}
                   >
-                    <td className="mono text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="mono text-[13px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         {r.grnDate}
                       </a>
                     </td>
-                    <td className="mono text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="mono text-[13px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         {r.grnNo}
                       </a>
                     </td>
-                    <td>
-                      <a href={href} className="no-underline block" style={linkStyle}>
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                         <div>{r.supplier}</div>
                         {r.supplierCode && (
                           <div className="text-[11px] text-[var(--muted)]">{r.supplierCode}</div>
                         )}
                       </a>
                     </td>
-                    <td className="mono text-[13px]">{r.invoiceNo ?? ""}</td>
-                    <td className="mono text-[13px] text-right">
-                      {r.itemCount ?? 0}
+                    <td className="mono text-[13px] p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        {r.invoiceNo ?? ""}
+                      </a>
                     </td>
-                    <td className="mono text-[13px] text-right">
-                      {fmt.format(Math.round(r.totalAmount ?? 0))}
+                    <td className="mono text-[13px] text-right p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                        {r.itemCount ?? 0}
+                      </a>
                     </td>
-                    <td>
-                      <ApprovalBadge status={r.approvalStatus} />
+                    <td className="mono text-[13px] text-right p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                        {fmt.format(Math.round(r.totalAmount ?? 0))}
+                      </a>
+                    </td>
+                    <td className="p-0">
+                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                        <ApprovalBadge status={r.approvalStatus} />
+                      </a>
                     </td>
                   </tr>
                 );

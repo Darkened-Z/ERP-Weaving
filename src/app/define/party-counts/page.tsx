@@ -248,22 +248,52 @@ export default async function PartyCountsPage({
                 <tbody>
                   {listed.map((c) => {
                     const isSel = c.id === selected?.id;
+                    const rowHref = `/define/party-counts?id=${c.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+                    const linkStyle = { color: isSel ? "white" : "inherit" };
                     const cDesc = yarnCounts.find((y) => y.id === c.countCode)?.description ?? "";
                     const pDesc = accounts.find((a) => a.code === c.partyCode)?.description ?? "";
                     return (
                       <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                        <td className="mono text-[12px]">
-                          <a href={`/define/party-counts?id=${c.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="no-underline" style={{ color: isSel ? "white" : "inherit" }}>
+                        <td className="mono text-[12px] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                             {c.partyCode}
                           </a>
                         </td>
-                        <td className="mono text-[12px]">{c.countCode}</td>
-                        <td className="text-[13px]">{cDesc}</td>
-                        <td>{c.trnType ?? "-"}</td>
-                        <td className="text-[13px]">{pDesc}</td>
-                        <td className="mono text-[13px] text-right">{c.calCountWarp?.toFixed(2) ?? "-"}</td>
-                        <td className="mono text-[13px] text-right">{c.calCountWeft?.toFixed(2) ?? "-"}</td>
-                        <td className="mono text-[13px] text-right">{c.ratePerLbs?.toFixed(2) ?? "-"}</td>
+                        <td className="mono text-[12px] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                            {c.countCode}
+                          </a>
+                        </td>
+                        <td className="text-[13px] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                            {cDesc}
+                          </a>
+                        </td>
+                        <td className="p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                            {c.trnType ?? "-"}
+                          </a>
+                        </td>
+                        <td className="text-[13px] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                            {pDesc}
+                          </a>
+                        </td>
+                        <td className="mono text-[13px] text-right p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                            {c.calCountWarp?.toFixed(2) ?? "-"}
+                          </a>
+                        </td>
+                        <td className="mono text-[13px] text-right p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                            {c.calCountWeft?.toFixed(2) ?? "-"}
+                          </a>
+                        </td>
+                        <td className="mono text-[13px] text-right p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1 text-right" style={linkStyle}>
+                            {c.ratePerLbs?.toFixed(2) ?? "-"}
+                          </a>
+                        </td>
                       </tr>
                     );
                   })}
