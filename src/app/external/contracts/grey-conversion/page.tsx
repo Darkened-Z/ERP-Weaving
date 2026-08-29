@@ -312,7 +312,7 @@ export default async function GreyConvContractPage({
       contDate,
       expDate: txt(formData.get("exp_date")),
       status: txt(formData.get("status")) ?? "R",
-      type: "CONV",
+      type: (txt(formData.get("type")) === "SALE" ? "SALE" : "CONV"),
       party,
       weaveFrame: txt(formData.get("weave_frame")),
       selvType: txt(formData.get("selv_type")),
@@ -534,7 +534,10 @@ export default async function GreyConvContractPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Type</label>
-                    <input name="type" className={roCls} defaultValue="CONV" readOnly />
+                    <select name="type" className="input-box mono" defaultValue={formItem?.type ?? "CONV"}>
+                      <option value="CONV">CONV</option>
+                      <option value="SALE">SALE</option>
+                    </select>
                   </div>
                   <div>
                     <label className="label block mb-1">Cont.No</label>
