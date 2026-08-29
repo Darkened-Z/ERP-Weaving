@@ -264,8 +264,14 @@ export default async function YarnPurchaseVoucherPage({
     salAvgRateCalc = bsum > 0 ? round2(wsum / bsum) : null;
   }
 
-  // Default godown party — first party account whose description contains "GODOWN"
-  const godownParty = partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+  // Godown accounts (STOCK-YARN godowns) for the Despatch Party picker. Default
+  // to the WVG/own yarn-stock godown when present; otherwise the first GODOWN.
+  const godownAccounts = partyAccounts.filter((p) => p.description.toUpperCase().includes("GODOWN"));
+  const godownParty =
+    godownAccounts.find((p) => /WVG|GHAR|OWN|YARN STOCK/i.test(p.description))?.description ??
+    godownAccounts[0]?.description ??
+    "";
+  const despatchPartyOpts = godownAccounts.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
 
   // Historical brand inference — from past yarn purchase voucher lines. When a
   // count is picked in a row, we fill line_brand with the most recent brand ever
@@ -1314,12 +1320,13 @@ export default async function YarnPurchaseVoucherPage({
                                 style={{ width: 55 }}
                               />
                             </td>
-                            <td>
-                              <input
+                            <td style={{ minWidth: 180 }}>
+                              <Combobox
                                 name="line_despatch_party"
-                                className="input-box mono text-[12px]"
+                                options={despatchPartyOpts}
                                 defaultValue={row?.despatchParty ?? ""}
-                                style={{ minWidth: 160 }}
+                                placeholder="Godown / other party…"
+                                className="input-box mono text-[12px]"
                               />
                             </td>
                             <td>
