@@ -121,11 +121,13 @@ export default async function GreyConvContractPage({
       `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
     ])
   );
+  // Desc auto-fill = full count description incl. blend (e.g. "30/S MVS PV 65;35"),
+  // as written in the count master. Brand is NOT auto-filled — the operator picks
+  // from the full brand list (gc-brands datalist) below.
   const yarnCountFillMap: Record<string, Record<string, string>> = {};
   for (const c of yarnCountList) {
     yarnCountFillMap[String(c.countCode)] = {
-      descr: c.description ?? "",
-      brand: c.type ?? "",
+      descr: `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim(),
     };
   }
   const warpCountFillMap: Record<string, Record<string, string>> = {};
@@ -133,11 +135,10 @@ export default async function GreyConvContractPage({
   for (const [code, v] of Object.entries(yarnCountFillMap)) {
     for (let i = 1; i <= 8; i++) {
       (warpCountFillMap[code] ??= {})[`warp_descr_${i}`] = v.descr;
-      (warpCountFillMap[code] ??= {})[`warp_brand_${i}`] = v.brand;
       (weftCountFillMap[code] ??= {})[`weft_descr_${i}`] = v.descr;
-      (weftCountFillMap[code] ??= {})[`weft_brand_${i}`] = v.brand;
     }
   }
+  const brandList = await db.select({ name: schema.yarnBrands.name }).from(schema.yarnBrands).orderBy(schema.yarnBrands.name);
 
   // Party-count master: restrict the WARP/WEFT count list to the selected
   // party's counts and auto-fill Cal Count (warp/weft) + Rate Per Lbs per row.
@@ -365,9 +366,10 @@ export default async function GreyConvContractPage({
         const ratePerLbs = num(formData.get(`${prefix}_rate_${i}`));
         if (count || descr || brand || calCount !== null || ends !== null || ratePerLbs !== null) {
           // Weft ends = picks per inch → multiply by width to get total weft length per meter of fabric
+          // WARP: ENDS ÷ 731.52 ÷ CAL COUNT WARP · WEFT: ENDS × WIDTH ÷ 731.52 ÷ CAL COUNT WEFT
           const effectiveEnds = prefix === "weft" ? (ends ?? 0) * widthN : (ends ?? 0);
           const wtPerMtr =
-            calCount && calCount > 0 ? round((effectiveEnds * 1.0936 / 800) / calCount, 6) : 0;
+            calCount && calCount > 0 ? round(effectiveEnds / 731.52 / calCount, 6) : 0;
           const costPerMtr = round(wtPerMtr * (ratePerLbs ?? 0), 4);
           out.push({ srNo: i, count, descr, brand, calCount, ends, wtPerMtr, ratePerLbs, costPerMtr });
         }
@@ -579,6 +581,11 @@ export default async function GreyConvContractPage({
                 {c.description}
                 {c.type ? ` — ${c.type}` : ""}
               </option>
+            ))}
+          </datalist>
+          <datalist id="gc-brands">
+            {brandList.map((b) => (
+              <option key={b.name} value={b.name} />
             ))}
           </datalist>
           <form action={saveContract}>
@@ -865,7 +872,7 @@ export default async function GreyConvContractPage({
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
-                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} list="gc-brands" className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>
@@ -912,7 +919,7 @@ export default async function GreyConvContractPage({
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="gc-yarn-counts" className={gridCellCls} defaultValue={r?.count ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className={gridCellCls} defaultValue={r?.descr ?? ""} /></td>
-                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
+                            <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} list="gc-brands" className={gridCellCls} defaultValue={r?.brand ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className={gridCellNumCls} defaultValue={r?.calCount ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className={gridCellNumCls} defaultValue={r?.ends ?? ""} /></td>
                             <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_wt_${i}`} type="number" step="any" className={gridCellCalcCls} defaultValue={r?.wtPerMtr ?? ""} readOnly /></td>

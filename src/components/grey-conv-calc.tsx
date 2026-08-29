@@ -49,10 +49,13 @@ export function GreyConvCalc() {
           continue;
         }
         const cal = parseFloat(calEl.value);
+        // Grey weight per meter:
+        //   WARP: ENDS ÷ 731.52 ÷ CAL COUNT WARP
+        //   WEFT: ENDS × WIDTH ÷ 731.52 ÷ CAL COUNT WEFT
         const effectiveEnds = val(`${prefix}_ends_${i}`) * widthN;
         const rowWt =
           Number.isFinite(cal) && cal > 0
-            ? round((effectiveEnds * 1.0936 / 800) / cal, 6)
+            ? round(effectiveEnds / 731.52 / cal, 6)
             : 0;
         const rowCost = round(rowWt * val(`${prefix}_rate_${i}`), 4);
         set(`${prefix}_wt_${i}`, String(rowWt));
