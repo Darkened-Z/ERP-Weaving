@@ -140,6 +140,36 @@ export default async function YarnPurchaseVoucherPage({
     partyScopedCounts.push({ code: String(yc.code), description: label, party: "" });
   }
 
+  // Party Count column data: keyed by the yarn count code (the option value).
+  // partyCountInfo carries the negotiated rate from party_counts; partyCountFillMap
+  // drives the per-row auto-fill (count + desc + rate) when a Party Count is picked.
+  const partyCountInfo: Record<string, { code: string; desc: string; rate: string }> = {};
+  for (const pc of partyCountsRows) {
+    const yc =
+      countList.find((c) => c.id === pc.countCode) ??
+      countList.find((c) => String(c.code) === String(pc.countCode));
+    if (!yc) continue;
+    const code = String(yc.code);
+    const desc = [yc.description, yc.type].filter(Boolean).join(" ").trim();
+    partyCountInfo[code] = { code, desc, rate: pc.ratePerLbs != null ? String(pc.ratePerLbs) : "" };
+  }
+  const partyCountOptions: { code: string; description: string }[] = [];
+  const seenPartyCount = new Set<string>();
+  for (const sc of partyScopedCounts) {
+    if (seenPartyCount.has(sc.code)) continue;
+    seenPartyCount.add(sc.code);
+    partyCountOptions.push({ code: sc.code, description: sc.description });
+  }
+  const partyCountFillMap: Record<string, Record<string, string | number>> = {};
+  for (const opt of partyCountOptions) {
+    const rate = partyCountInfo[opt.code]?.rate;
+    partyCountFillMap[opt.code] = {
+      line_count: opt.code,
+      line_count_desc: opt.description,
+      ...(rate ? { line_rate: rate } : {}),
+    };
+  }
+
   const purContracts = await db
     .select()
     .from(schema.extYarnPurContract)
@@ -332,6 +362,7 @@ export default async function YarnPurchaseVoucherPage({
 
     const contNos = formData.getAll("line_cont_no") as string[];
     const counts = formData.getAll("line_count") as string[];
+    const dots = formData.getAll("line_count_dot") as string[];
     const partyCounts = formData.getAll("line_party_count") as string[];
     const blds = formData.getAll("line_bld") as string[];
     const packs = formData.getAll("line_pack") as string[];
@@ -349,6 +380,7 @@ export default async function YarnPurchaseVoucherPage({
     const validLines: {
       contNo: string | null;
       count: string | null;
+      countDot: string | null;
       partyCount: string | null;
       bld: string | null;
       pack: string | null;
@@ -373,6 +405,7 @@ export default async function YarnPurchaseVoucherPage({
     for (let i = 0; i < rowCount; i++) {
       const c = (contNos[i] || "").trim();
       const ct = (counts[i] || "").trim();
+      const dt = (dots[i] || "").trim();
       const pc = (partyCounts[i] || "").trim();
       const bl = (blds[i] || "").trim();
       const pk = (packs[i] || "").trim();
@@ -394,6 +427,7 @@ export default async function YarnPurchaseVoucherPage({
       validLines.push({
         contNo: c || null,
         count: ct || null,
+        countDot: dt || null,
         partyCount: pc || null,
         bld: bl || null,
         pack: pk || null,
@@ -402,7 +436,7 @@ export default async function YarnPurchaseVoucherPage({
         qty: q,
         bag: b,
         con: co,
-        lbs: l,
+        lbs: (q ?? 0) * 100,
         unit: u || null,
         despatchParty: dp || null,
         rate: rt,
@@ -969,15 +1003,8 @@ export default async function YarnPurchaseVoucherPage({
                     )}
                   </div>
 
-                  <div className="lg:col-span-2">
-                    <label className="label block mb-1">BM</label>
-                    <input
-                      name="bm_party"
-                      className="input-box mono"
-                      defaultValue={formVoucher?.bmParty ?? ""}
-                    />
-                  </div>
-                  <div className="lg:col-span-10">
+                  <input type="hidden" name="bm_party" defaultValue={formVoucher?.bmParty ?? ""} />
+                  <div className="lg:col-span-12">
                     <label className="label block mb-1">Party</label>
                     <Combobox
                       name="party"
@@ -1130,6 +1157,7 @@ export default async function YarnPurchaseVoucherPage({
                 <div className="mt-6">
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
+                  <RowAutoFill watch="line_party_count" map={partyCountFillMap} />
                   <CountBlendEnricher
                     watchLineCount="line_count"
                     descField="line_count_desc"
@@ -1137,7 +1165,7 @@ export default async function YarnPurchaseVoucherPage({
                     headerContractField="cont"
                     blendByContract={blendByContract}
                   />
-                  <RowCalc target="line_lbs" a="line_bag" factor={100} round={0} onlyWhenEmpty />
+                  <RowCalc target="line_lbs" a="line_qty" factor={100} round={0} />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
@@ -1148,20 +1176,18 @@ export default async function YarnPurchaseVoucherPage({
                         <tr>
                           <th style={{ width: "30px" }}>#</th>
                           <th>Cont.#</th>
+                          <th>Party Count</th>
                           <th>Count</th>
+                          <th>Dot</th>
                           <th>Count Desc</th>
-                          <th>Bld</th>
                           <th>Pack</th>
                           <th>Brand</th>
                           <th>DO.No</th>
                           <th>Qty</th>
-                          <th>Bag</th>
-                          <th>Con</th>
                           <th>Lbs</th>
                           <th>Unit</th>
                           <th>Despatch Party</th>
                           <th>Rate</th>
-                          <th>Rate Sv</th>
                           <th>Amt</th>
                         </tr>
                       </thead>
@@ -1171,7 +1197,7 @@ export default async function YarnPurchaseVoucherPage({
                             <td className="mono text-[11px] text-center text-[var(--muted)]">
                               {i + 1}
                             </td>
-                            <td style={{ minWidth: 90 }}>
+                            <td style={{ minWidth: 66 }}>
                               <Combobox
                                 name="line_cont_no"
                                 options={contractOpts}
@@ -1182,12 +1208,35 @@ export default async function YarnPurchaseVoucherPage({
                               />
                             </td>
                             <td>
+                              <select
+                                name="line_party_count"
+                                className="input-box mono text-[12px]"
+                                defaultValue={row?.partyCount ?? ""}
+                                style={{ minWidth: 150 }}
+                              >
+                                <option value=""></option>
+                                {partyCountOptions.map((o) => (
+                                  <option key={o.code} value={o.code}>
+                                    {o.code} — {o.description}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
                               <input
                                 name="line_count"
                                 list="ypv-counts"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.count ?? ""}
                                 style={{ width: 60 }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                name="line_count_dot"
+                                className="input-box mono text-[12px]"
+                                defaultValue={row?.countDot ?? ""}
+                                style={{ width: 44 }}
                               />
                             </td>
                             <td>
@@ -1204,16 +1253,12 @@ export default async function YarnPurchaseVoucherPage({
                                 style={{ minWidth: 160, background: "#f3f4f6" }}
                               />
                             </td>
-                            {/* Party Count column removed per client feedback — value kept as hidden so update-cycle doesn't wipe existing rows */}
-                            <input type="hidden" name="line_party_count" defaultValue={row?.partyCount ?? ""} />
-                            <td>
-                              <input
-                                name="line_bld"
-                                className="input-box mono text-[12px]"
-                                defaultValue={row?.bld ?? ""}
-                                style={{ width: 55 }}
-                              />
-                            </td>
+                            {/* Bld/Bag/Con/Rate Sv columns removed per client feedback — kept as hidden
+                               inputs so save still records existing values and getAll arrays stay index-aligned */}
+                            <input type="hidden" name="line_bld" defaultValue={row?.bld ?? ""} />
+                            <input type="hidden" name="line_bag" defaultValue={row?.bag ?? ""} />
+                            <input type="hidden" name="line_con" defaultValue={row?.con ?? ""} />
+                            <input type="hidden" name="line_rate_sv" defaultValue={row?.rateSv ?? ""} />
                             <td>
                               <input
                                 name="line_pack"
@@ -1251,31 +1296,13 @@ export default async function YarnPurchaseVoucherPage({
                             </td>
                             <td>
                               <input
-                                name="line_bag"
-                                type="number"
-                                step="any"
-                                className="input-box mono text-[12px] text-right"
-                                defaultValue={row?.bag ?? ""}
-                                style={{ width: 65 }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                name="line_con"
-                                type="number"
-                                step="any"
-                                className="input-box mono text-[12px] text-right"
-                                defaultValue={row?.con ?? ""}
-                                style={{ width: 60 }}
-                              />
-                            </td>
-                            <td>
-                              <input
                                 name="line_lbs"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px] text-right"
+                                className="input-box mono text-[12px] text-right bg-gray-100"
                                 defaultValue={row?.lbs ?? ""}
+                                readOnly
+                                tabIndex={-1}
                                 style={{ width: 75 }}
                               />
                             </td>
@@ -1302,16 +1329,6 @@ export default async function YarnPurchaseVoucherPage({
                                 step="any"
                                 className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.rate ?? ""}
-                                style={{ width: 80 }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                name="line_rate_sv"
-                                type="number"
-                                step="any"
-                                className="input-box mono text-[12px] text-right"
-                                defaultValue={row?.rateSv ?? ""}
                                 style={{ width: 80 }}
                               />
                             </td>
