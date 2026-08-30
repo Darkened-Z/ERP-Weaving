@@ -1235,6 +1235,8 @@ export const extGodownStock = sqliteTable("ext_godown_stock", {
   commission: real("commission"),
   total: real("total"),
   balance: real("balance"),
+  profitPerMtr: real("profit_per_mtr"),
+  profitAmt: real("profit_amt"),
   printingName: text("printing_name"),
   brokerName: text("broker_name"),
   remarks: text("remarks"),

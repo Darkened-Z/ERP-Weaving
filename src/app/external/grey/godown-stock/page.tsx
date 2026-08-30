@@ -418,6 +418,11 @@ export default async function GodownStockPage({
     const commissionAmt = Math.round((netMeter * rateVal * (commission ?? 0)) / 100);
     const total = Math.round(netMeter * rateVal);
     const balance = total - (kaatAmt + checkeryAmt + commissionAmt);
+    // Persist profit (sale rate − cost rate) so reports can read it directly. cost=rate, sale=rate_sal.
+    const saleRateVal = rateSal ?? 0;
+    const hasBothRates = saleRateVal > 0 && rateVal > 0;
+    const profitPerMtr = hasBothRates ? Math.round((saleRateVal - rateVal) * 100) / 100 : null;
+    const profitAmt = hasBothRates ? Math.round(netMeter * (saleRateVal - rateVal)) : null;
 
     const lineThans = formData.getAll("line_than") as string[];
     const lineMtrs = formData.getAll("line_mtr") as string[];
@@ -516,6 +521,7 @@ export default async function GodownStockPage({
             vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo, contactQuality, dspQuality,
             than, meter, elCumiNum, elCumiDen, kamiMtr, rateConversion, term, dueDate, days, rateSal, salContNo,
             greySaleCont, kaatPercent, elMeter, elMeterMode, netMeter, checkery, commission, total, balance,
+            profitPerMtr, profitAmt,
             printingName, brokerName, remarks, imgHash, convGreyType, rate, salAvgRate,
             modifiedDate: nowIso,
           })
@@ -575,7 +581,7 @@ export default async function GodownStockPage({
               vNo, lvNo: nextL, vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo,
               contactQuality, dspQuality, than, meter, elCumiNum, elCumiDen, kamiMtr, rateConversion,
               term, dueDate, days, rateSal, salContNo, greySaleCont, kaatPercent, elMeter, elMeterMode, netMeter,
-              checkery, commission, total, balance, printingName, brokerName, remarks, imgHash,
+              checkery, commission, total, balance, profitPerMtr, profitAmt, printingName, brokerName, remarks, imgHash,
               convGreyType, rate, salAvgRate, postedDate: nowIso,
             })
             .returning({ id: schema.extGodownStock.id });
@@ -1099,11 +1105,11 @@ export default async function GodownStockPage({
                       </div>
                       <div>
                         <label className="label block mb-1">Profit / Mtr</label>
-                        <input name="profit_rate_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} style={{ maxWidth: 110 }} />
+                        <input name="profit_rate_disp" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.profitPerMtr ?? ""} readOnly tabIndex={-1} style={{ maxWidth: 110 }} />
                       </div>
                       <div>
                         <label className="label block mb-1">Profit Amt</label>
-                        <input name="profit_amt_disp" type="number" step="any" className={roCls + " text-right font-bold text-[13px]"} readOnly tabIndex={-1} style={{ maxWidth: 150 }} />
+                        <input name="profit_amt_disp" type="number" step="any" className={roCls + " text-right font-bold text-[13px]"} defaultValue={formStock?.profitAmt ?? ""} readOnly tabIndex={-1} style={{ maxWidth: 150 }} />
                       </div>
                     </div>
                   </div>
