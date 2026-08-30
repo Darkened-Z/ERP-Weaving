@@ -289,3 +289,59 @@ tr:hover td {
     padding: 16px;
   }
 }
+
+/* ── Compact Oracle-style label-left form layout ──────────────────────────
+   Add `gform` to a header field grid whose children are <div><label.label/>…</div>.
+   Every field becomes label-left, 2 per row. Wide fields (col-span ≥ 4, or an
+   explicit `gform-full`) span the whole row. CSS-only: no markup/logic change. */
+.gform {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px 14px;
+  align-items: center;
+}
+.gform > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  grid-column: auto !important;
+  margin: 0 !important;
+}
+.gform > div > label.label {
+  flex: 0 0 96px;
+  width: 96px;
+  text-align: right;
+  margin: 0 !important;
+  font-size: 9.5px;
+  line-height: 1.05;
+  display: block;
+}
+.gform > div > label.label > span { display: none; }
+.gform > div > :not(label.label) { flex: 1 1 auto; min-width: 0; }
+.gform .input-box,
+.gform select.input-box {
+  padding: 0 5px;
+  font-size: 11px;
+  height: 21px;
+  line-height: 21px;
+}
+.gform textarea.input-box { height: auto; line-height: 1.3; padding: 3px 5px; }
+.gform input[type="number"] { max-width: 120px; }
+.gform .btn,
+.gform .btn-sm { padding: 0 7px; font-size: 10px; height: 21px; line-height: 21px; }
+.gform > .col-span-4,
+.gform > .col-span-5,
+.gform > .col-span-6,
+.gform > .col-span-7,
+.gform > .col-span-8,
+.gform > .col-span-9,
+.gform > .col-span-10,
+.gform > .col-span-11,
+.gform > .col-span-12,
+.gform > .gform-full { grid-column: 1 / -1 !important; }
+@media (max-width: 820px) {
+  .gform { grid-template-columns: 1fr; }
+  .gform > div { grid-column: 1 / -1 !important; }
+}
