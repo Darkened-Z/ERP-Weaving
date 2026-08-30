@@ -51,6 +51,7 @@ export function GodownCalc({
         for (const n of [
           "el_meter", "net_meter_display", "kaat_amt_disp", "checkery_amt_disp",
           "commission_amt_disp", "total_display", "balance_display",
+          "cost_rate_disp", "sale_rate_disp", "profit_rate_disp", "profit_amt_disp",
         ]) put(n, "");
         return;
       }
@@ -72,6 +73,11 @@ export function GodownCalc({
       const checkeryAmt = Math.round(netMeter * num("checkery"));
       const commissionAmt = Math.round((netMeter * rate * num("commission")) / 100);
       const total = Math.round(netMeter * rate);
+      // Profit = sale rate − cost rate (per meter and amount) so the ledger shows margin.
+      const saleRate = num("rate_sal");
+      const hasBoth = saleRate > 0 && rate > 0;
+      const profitPerMtr = hasBoth ? r2(saleRate - rate) : 0;
+      const profitAmt = hasBoth ? Math.round(netMeter * (saleRate - rate)) : 0;
       put("el_meter", String(elMeter));
       put("net_meter_display", String(r2(netMeter)));
       put("kaat_amt_disp", String(kaatAmt));
@@ -79,6 +85,10 @@ export function GodownCalc({
       put("commission_amt_disp", String(commissionAmt));
       put("total_display", String(total));
       put("balance_display", String(total - (kaatAmt + checkeryAmt + commissionAmt)));
+      put("cost_rate_disp", rate ? String(rate) : "");
+      put("sale_rate_disp", saleRate ? String(saleRate) : "");
+      put("profit_rate_disp", hasBoth ? String(profitPerMtr) : "");
+      put("profit_amt_disp", hasBoth ? String(profitAmt) : "");
       recalcTotLbs(netMeter);
     };
 

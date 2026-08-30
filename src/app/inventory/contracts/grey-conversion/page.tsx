@@ -234,6 +234,9 @@ export default async function IntGreyConversionContractPage({
     status: (g.status ?? "A") as string,
   }));
   const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  const findContractOpts = allContracts
+    .filter((c) => c.contNo)
+    .map((c) => ({ value: c.contNo, label: `${c.contNo}${c.party ? ` — ${c.party}` : ""}`, desc: c.party ?? "" }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
   const productCodeByDesc = new Map(productList.map((p) => [p.description, p.code]));
@@ -462,7 +465,6 @@ export default async function IntGreyConversionContractPage({
   const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
   const gridCellCalcCls = "input-box mono text-[13px] py-1 text-right bg-gray-100";
   const roCls = "input-box mono text-[13px] bg-gray-100";
-  const yellowCls = "input-box mono text-[13px]";
   const greenCls = "input-box mono text-[13px] bg-green-50";
 
   const showForm = !!formItem || isAdding;
@@ -759,7 +761,7 @@ export default async function IntGreyConversionContractPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Find Contract#</label>
-                    <input name="find_contract" className={yellowCls} style={{ background: "#FFF8B7" }} defaultValue={formItem?.findContract ?? ""} />
+                    <Combobox name="find_contract" options={findContractOpts} defaultValue={formItem?.findContract ?? ""} placeholder="Select contract" className="input-box mono text-[13px] bg-[#FFF8B7]!" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 pt-2">

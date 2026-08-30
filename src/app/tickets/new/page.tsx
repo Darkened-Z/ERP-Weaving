@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -30,6 +31,34 @@ export default async function NewTicketPage({
   const users = await db.select().from(schema.users);
   const looms = await db.select().from(schema.looms);
   const greyConstructions = await db.select().from(schema.greyConstruction);
+
+  const [convContracts, purContracts, salContracts, coaParties] = await Promise.all([
+    db.select({ no: schema.extGreyConvContract.contNo }).from(schema.extGreyConvContract),
+    db.select({ no: schema.extGreyPurContract.contractNo }).from(schema.extGreyPurContract),
+    db.select({ no: schema.extGreySalContract.contractNo }).from(schema.extGreySalContract),
+    db
+      .select({
+        code: schema.chartOfAccounts.code,
+        description: schema.chartOfAccounts.description,
+        level: schema.chartOfAccounts.level,
+      })
+      .from(schema.chartOfAccounts),
+  ]);
+
+  const contractOptions = Array.from(
+    new Set(
+      [...convContracts, ...purContracts, ...salContracts]
+        .map((r) => r.no)
+        .filter((v): v is string => !!v)
+    )
+  )
+    .sort()
+    .map((no) => ({ value: no, label: no }));
+
+  const partyOptions = coaParties
+    .filter((a) => (a.level ?? 0) >= 4)
+    .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}`, desc: a.description }))
+    .sort((a, b) => a.value.localeCompare(b.value));
 
   async function createTicket(formData: FormData) {
     "use server";
@@ -224,19 +253,21 @@ export default async function NewTicketPage({
 
             <div>
               <label className="label block mb-1">Contract #</label>
-              <input
+              <Combobox
                 name="contract_no"
-                className="input-box mono"
+                options={contractOptions}
                 defaultValue={params.contract ?? ""}
+                placeholder="Contract #"
               />
             </div>
 
             <div>
               <label className="label block mb-1">Party Code</label>
-              <input
+              <Combobox
                 name="party_code"
-                className="input-box mono"
+                options={partyOptions}
                 defaultValue={params.party ?? ""}
+                placeholder="Party Code"
               />
             </div>
 

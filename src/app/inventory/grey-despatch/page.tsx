@@ -285,6 +285,10 @@ export default async function GreyDespatchPage({
     .selectDistinct({ v: schema.intGreyDespatch.gpNo })
     .from(schema.intGreyDespatch)
     .where(isNotNull(schema.intGreyDespatch.gpNo));
+  const shedList = await db
+    .selectDistinct({ v: schema.looms.shed })
+    .from(schema.looms)
+    .orderBy(schema.looms.shed);
 
   // Pending thans panel: show for the selected contract on a saved voucher, or via ?pending=1&contract=.
   const pendingContract =
@@ -992,6 +996,11 @@ export default async function GreyDespatchPage({
                 <option key={r.v ?? ""} value={r.v ?? ""} />
               ))}
             </datalist>
+            <datalist id="sheds-list">
+              {shedList.map((r) => (
+                <option key={r.v ?? ""} value={r.v ?? ""} />
+              ))}
+            </datalist>
             <datalist id="gd-yarn-counts">
               {yarnCountList.map((c) => (
                 <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}{c.type ? ` ${c.type}` : ""}</option>
@@ -1165,7 +1174,7 @@ export default async function GreyDespatchPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Shed No</label>
-                    <input name="shed_no" className="input-box mono text-[12px]" defaultValue={formItem?.shedNo ?? ""} />
+                    <input name="shed_no" list="sheds-list" className="input-box mono text-[12px]" defaultValue={formItem?.shedNo ?? ""} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">

@@ -58,6 +58,18 @@ export default async function InventoryOpeningPage({
     ...new Set([...extPurCont, ...intPurCont].map((c) => c.contNo).filter(Boolean)),
   ].sort();
 
+  const extConvCont = await db
+    .select({ contNo: schema.extGreyConvContract.contNo })
+    .from(schema.extGreyConvContract);
+  const intConvCont = await db
+    .select({ contNo: schema.intGreyConversionContract.contNo })
+    .from(schema.intGreyConversionContract);
+  const convContOpts = [
+    ...new Set([...extConvCont, ...intConvCont].map((c) => c.contNo).filter(Boolean)),
+  ]
+    .sort()
+    .map((c) => ({ value: c, label: c }));
+
   // No measurement-unit master exists (company_units holds godown/section codes),
   // so seed the Unit picker from distinct values already used on inventory rows.
   const unitOpts = [
@@ -359,13 +371,13 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Opn. Party</label>
-                    <input name="opn_party" className="input-box mono" defaultValue={formItem?.opnParty ?? ""} />
+                    <Combobox name="opn_party" options={partyOpts} defaultValue={String(formItem?.opnParty ?? "")} placeholder="Select party" className="input-box mono" />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-x-4">
                   <div>
                     <label className="label block mb-1">Conv.Cont No</label>
-                    <input name="conv_cont_no" className="input-box mono" defaultValue={formItem?.convContNo ?? ""} />
+                    <Combobox name="conv_cont_no" options={convContOpts} defaultValue={formItem?.convContNo ?? ""} placeholder="Select contract" className="input-box mono" />
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">Count Code / Description</label>
@@ -654,7 +666,7 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Warp/Sizing Party</label>
-                    <input name="warp_sizing_party" className="input-box mono" defaultValue={formItem?.warpSizingParty ?? ""} />
+                    <Combobox name="warp_sizing_party" options={partyOpts} defaultValue={String(formItem?.warpSizingParty ?? "")} placeholder="Select party" className="input-box mono" />
                   </div>
                   <div>
                     <label className="label block mb-1">Conversion Party</label>

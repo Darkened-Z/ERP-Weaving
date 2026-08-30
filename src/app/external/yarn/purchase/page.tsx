@@ -119,6 +119,15 @@ export default async function YarnPurchaseVoucherPage({
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
   const brandList = await db.select().from(schema.yarnBrands).orderBy(schema.yarnBrands.name);
+  // No unit master exists — seed the Unit datalist from distinct values already
+  // used on purchase lines, plus the common GDN/LBS/MTR/NOS defaults.
+  const unitRows = await db
+    .select({ unit: schema.extYarnPurVoucherLine.unit })
+    .from(schema.extYarnPurVoucherLine)
+    .groupBy(schema.extYarnPurVoucherLine.unit);
+  const unitOpts = [
+    ...new Set([...unitRows.map((u) => u.unit).filter((u): u is string => !!u), "GDN", "LBS", "MTR", "NOS"]),
+  ].sort();
   // Party-scoped count options — driven by party_counts master. party_counts.countCode
   // stores yarn_counts.id (PK), not .countCode — so we match on id first, and fall back
   // to code-as-string in case some rows stored the visible code.
@@ -868,6 +877,11 @@ export default async function YarnPurchaseVoucherPage({
             </option>
           ))}
         </datalist>
+        <datalist id="ypv-units">
+          {unitOpts.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
 
         <form
           id="ypv-find-form"
@@ -1363,6 +1377,7 @@ export default async function YarnPurchaseVoucherPage({
                             <td>
                               <input
                                 name="line_unit"
+                                list="ypv-units"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.unit ?? ""}
                                 style={{ width: 55 }}

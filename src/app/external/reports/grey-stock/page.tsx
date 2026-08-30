@@ -163,7 +163,12 @@ export default async function GreyStockPage({
           </div>
           <div>
             <label className="label block mb-1">Dsp. Quality</label>
-            <input type="text" name="dspQuality" defaultValue={dspQuality} className="input-box mono" />
+            <input type="text" name="dspQuality" defaultValue={dspQuality} className="input-box mono" list="dsp-quality-list" />
+            <datalist id="dsp-quality-list">
+              {greyRows.map((g) => (
+                <option key={g.code} value={g.code} label={`${g.code} — ${g.description}`} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="label block mb-1">Party</label>

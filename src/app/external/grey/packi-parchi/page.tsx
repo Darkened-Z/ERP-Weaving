@@ -118,6 +118,15 @@ export default async function PackiParchiPage({
   }
   const ppCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
 
+  const constructions = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.description);
+  const qualityOpts = constructions.map((c) => ({
+    value: c.description,
+    label: `${c.code} — ${c.description}`,
+  }));
+
   const kachiParchis = await db
     .select()
     .from(schema.extKachiParchi)
@@ -849,14 +858,14 @@ export default async function PackiParchiPage({
                 <AutoFill
                   watch="kp_no"
                   map={kpMap}
-                  combos={["purchase_party"]}
-                  inputs={["kp_id", "quality", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
+                  combos={["purchase_party", "quality"]}
+                  inputs={["kp_id", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
                 />
                 <AutoFill
                   watch="kp_no_all"
                   map={kpMap}
-                  combos={["purchase_party"]}
-                  inputs={["kp_id", "quality", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
+                  combos={["purchase_party", "quality"]}
+                  inputs={["kp_id", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
                 />
                 <PackiCalc />
               </div>
@@ -891,10 +900,11 @@ export default async function PackiParchiPage({
 
               <div className="lg:col-span-6">
                 <label className="label block mb-1">Quality</label>
-                <input
+                <Combobox
                   name="quality"
-                  className="input-box mono"
+                  options={qualityOpts}
                   defaultValue={formItem?.quality ?? ""}
+                  placeholder="Quality…"
                 />
               </div>
               <div className="lg:col-span-6">
@@ -1393,7 +1403,7 @@ export default async function PackiParchiPage({
                   <tbody>
                     <tr>
                       <td className="mono text-[12px] text-center font-bold">Warp</td>
-                      <td><input name="warp_quality" className={gridCellCls} defaultValue={warpBag?.quality ?? ""} /></td>
+                      <td><Combobox name="warp_quality" options={qualityOpts} defaultValue={warpBag?.quality ?? ""} placeholder="Quality…" className={gridCellCls} /></td>
                       <td><input name="warp_wt" type="number" step="any" className={gridCellNumCls} defaultValue={warpBag?.wtPerMeter ?? ""} /></td>
                       <td><input name="warp_bags" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={warpBag?.bags ?? ""} readOnly /></td>
                       <td><input name="warp_rate" type="number" step="any" className={gridCellNumCls} defaultValue={warpBag?.rate ?? ""} /></td>
@@ -1401,7 +1411,7 @@ export default async function PackiParchiPage({
                     </tr>
                     <tr>
                       <td className="mono text-[12px] text-center font-bold">Weft</td>
-                      <td><input name="weft_quality" className={gridCellCls} defaultValue={weftBag?.quality ?? ""} /></td>
+                      <td><Combobox name="weft_quality" options={qualityOpts} defaultValue={weftBag?.quality ?? ""} placeholder="Quality…" className={gridCellCls} /></td>
                       <td><input name="weft_wt" type="number" step="any" className={gridCellNumCls} defaultValue={weftBag?.wtPerMeter ?? ""} /></td>
                       <td><input name="weft_bags" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={weftBag?.bags ?? ""} readOnly /></td>
                       <td><input name="weft_rate" type="number" step="any" className={gridCellNumCls} defaultValue={weftBag?.rate ?? ""} /></td>

@@ -18,6 +18,12 @@ export default async function StaffPage({
     .from(schema.productionStaff)
     .orderBy(schema.productionStaff.code);
 
+  const shedRows = await db
+    .selectDistinct({ shed: schema.looms.shed })
+    .from(schema.looms)
+    .orderBy(schema.looms.shed);
+  const shedOpts = shedRows.map((r) => r.shed).filter(Boolean);
+
   const selected = params.id
     ? staff.find((s) => String(s.id) === params.id) ?? null
     : null;
@@ -144,6 +150,11 @@ export default async function StaffPage({
               )}
               <form action={save}>
                 {selected && <input type="hidden" name="id" value={selected.id} />}
+                <datalist id="staff-sheds">
+                  {shedOpts.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                   <div>
                     <label className="label block mb-1">Code</label>
@@ -202,6 +213,7 @@ export default async function StaffPage({
                     <input
                       name="shed"
                       type="number"
+                      list="staff-sheds"
                       className="input-box mono"
                       defaultValue={selected?.shed ?? ""}
                     />

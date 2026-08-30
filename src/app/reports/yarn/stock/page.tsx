@@ -12,6 +12,7 @@ import {
   todayIso,
   partyByNameOptions,
   yarnCountOptions,
+  locationOptions,
 } from "../../_shared";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +30,10 @@ export default async function YarnStockPage({
   const location = p.location?.trim() ?? "";
   const onlyNeg = p.neg === "1";
 
-  const [partyOpts, countOpts, countMetaRows] = await Promise.all([
+  const [partyOpts, countOpts, locationOpts, countMetaRows] = await Promise.all([
     partyByNameOptions(),
     yarnCountOptions(),
+    locationOptions(),
     db.select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description }).from(schema.yarnCounts),
   ]);
   const countDescMap = new Map(countMetaRows.map((r) => [r.code, r.description]));
@@ -192,7 +194,7 @@ export default async function YarnStockPage({
           </div>
           <div>
             <label className="label block mb-1">Location</label>
-            <input type="text" name="location" defaultValue={location} className="input-box mono" placeholder="All locations" />
+            <Combobox name="location" options={locationOpts} defaultValue={location} placeholder="All locations" />
           </div>
           <div className="sm:col-span-5 flex gap-2 flex-wrap items-center">
             <button type="submit" className="btn btn-sm">Apply</button>

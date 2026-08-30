@@ -1,4 +1,5 @@
 import { db, schema } from "@/db";
+import { eq } from "drizzle-orm";
 import { today, monthsAgo } from "@/lib/time";
 
 export const fmt = (n: number | null | undefined) =>
@@ -63,5 +64,18 @@ export async function yarnCountOptions() {
     value: y.countCode,
     label: `${y.countCode} — ${y.description}`,
     desc: y.description,
+  }));
+}
+
+export async function locationOptions() {
+  const rows = await db
+    .select({ code: schema.locations.code, description: schema.locations.description })
+    .from(schema.locations)
+    .where(eq(schema.locations.type, "YARN"))
+    .orderBy(schema.locations.code);
+  return rows.map((l) => ({
+    value: l.description,
+    label: `${l.code} — ${l.description}`,
+    desc: String(l.code),
   }));
 }

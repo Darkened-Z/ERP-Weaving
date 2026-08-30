@@ -505,7 +505,13 @@ export default async function WeavingCountsReportPage({
               defaultValue={yarnCount}
               className="input-box mono"
               placeholder="Count code"
+              list="yarn-count-list"
             />
+            <datalist id="yarn-count-list">
+              {countRows.map((c) => (
+                <option key={c.countCode} value={c.countCode} label={`${c.countCode} — ${c.description}`} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="label block mb-1">Rate/Lbs</label>

@@ -215,6 +215,15 @@ export default async function YarnSaleVoucherPage({
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
   const brandList = await db.select().from(schema.yarnBrands).orderBy(schema.yarnBrands.name);
+  // No unit master exists — seed the Unit datalist from distinct values already
+  // used on sale lines, plus the common GDN/LBS/MTR/NOS defaults.
+  const unitRows = await db
+    .select({ unit: schema.extYarnSalVoucherLine.unit })
+    .from(schema.extYarnSalVoucherLine)
+    .groupBy(schema.extYarnSalVoucherLine.unit);
+  const unitOpts = [
+    ...new Set([...unitRows.map((u) => u.unit).filter((u): u is string => !!u), "GDN", "LBS", "MTR", "NOS"]),
+  ].sort();
   // Party-scoped count options — party_counts.countCode stores yarn_counts.id (PK), not code.
   const partyCountsRows = await db.select().from(schema.partyCounts);
   const partyScopedCounts: { code: string; description: string; party: string }[] = [];
@@ -989,6 +998,11 @@ export default async function YarnSaleVoucherPage({
             <option key={b.id} value={b.name}>{b.name}</option>
           ))}
         </datalist>
+        <datalist id="ysv-units">
+          {unitOpts.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
         <DatalistPartyFilter datalistId="ysv-count-list" options={partyScopedCounts} watchField="party" />
 
         <form
@@ -1519,6 +1533,7 @@ export default async function YarnSaleVoucherPage({
                             <td>
                               <input
                                 name="line_unit"
+                                list="ysv-units"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.unit ?? ""}
                                 style={{ width: 55 }}

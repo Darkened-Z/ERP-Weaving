@@ -951,7 +951,7 @@ export default async function GodownStockPage({
 
                   <div className="col-span-4">
                     <label className="label block mb-1">Rate Conversion</label>
-                    <input name="rate_conversion" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateConversion ?? ""} />
+                    <input name="rate_conversion" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateConversion ?? ""} style={{ maxWidth: 120 }} />
                   </div>
                   <TermSelect
                     defaultTerm={formStock?.term ?? "CASH"}
@@ -964,7 +964,7 @@ export default async function GodownStockPage({
 
                   <div className="col-span-3">
                     <label className="label block mb-1">Rate Sal</label>
-                    <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateSal ?? ""} />
+                    <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateSal ?? ""} style={{ maxWidth: 120 }} />
                   </div>
                   <div className="col-span-3">
                     <label className="label block mb-1">Sal Cont #</label>
@@ -1006,7 +1006,7 @@ export default async function GodownStockPage({
 
                   <div className="col-span-3">
                     <label className="label block mb-1">Kaat %</label>
-                    <input name="kaat_percent" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.kaatPercent ?? ""} />
+                    <input name="kaat_percent" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.kaatPercent ?? ""} style={{ maxWidth: 90 }} />
                   </div>
                   <div className="col-span-4">
                     <label className="label block mb-1">EL-Meter</label>
@@ -1043,11 +1043,11 @@ export default async function GodownStockPage({
 
                   <div className="col-span-3">
                     <label className="label block mb-1">Checkery</label>
-                    <input name="checkery" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.checkery ?? ""} />
+                    <input name="checkery" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.checkery ?? ""} style={{ maxWidth: 90 }} />
                   </div>
                   <div className="col-span-3">
                     <label className="label block mb-1">Commission</label>
-                    <input name="commission" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.commission ?? ""} />
+                    <input name="commission" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.commission ?? ""} style={{ maxWidth: 90 }} />
                   </div>
                   <div className="col-span-3">
                     <label className="label block mb-1">Total</label>
@@ -1059,6 +1059,7 @@ export default async function GodownStockPage({
                       defaultValue={formStock?.total ?? ""}
                       readOnly
                       tabIndex={-1}
+                      style={{ maxWidth: 140 }}
                     />
                   </div>
                   <div className="col-span-3">
@@ -1071,6 +1072,7 @@ export default async function GodownStockPage({
                       defaultValue={formStock?.balance ?? ""}
                       readOnly
                       tabIndex={-1}
+                      style={{ maxWidth: 140 }}
                     />
                   </div>
 
@@ -1083,6 +1085,7 @@ export default async function GodownStockPage({
                       className={roCls + " text-right"}
                       readOnly
                       tabIndex={-1}
+                      style={{ maxWidth: 140 }}
                     />
                   </div>
                   <div className="col-span-4">
@@ -1094,6 +1097,7 @@ export default async function GodownStockPage({
                       className={roCls + " text-right"}
                       readOnly
                       tabIndex={-1}
+                      style={{ maxWidth: 140 }}
                     />
                   </div>
                   <div className="col-span-4">
@@ -1105,7 +1109,30 @@ export default async function GodownStockPage({
                       className={roCls + " text-right"}
                       readOnly
                       tabIndex={-1}
+                      style={{ maxWidth: 140 }}
                     />
+                  </div>
+
+                  <div className="col-span-12">
+                    <div className="border border-black bg-blue-50 p-2 inline-flex items-end gap-4">
+                      <div>
+                        <label className="label block mb-1">Cost Rate <span className="text-[9px] text-[var(--muted)]">(purchase)</span></label>
+                        <input name="cost_rate_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} defaultValue={formStock?.rate ?? ""} style={{ maxWidth: 110 }} />
+                      </div>
+                      <div className="text-[var(--muted)] pb-2">→</div>
+                      <div>
+                        <label className="label block mb-1">Sale Rate</label>
+                        <input name="sale_rate_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} defaultValue={formStock?.rateSal ?? ""} style={{ maxWidth: 110 }} />
+                      </div>
+                      <div>
+                        <label className="label block mb-1">Profit / Mtr</label>
+                        <input name="profit_rate_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} style={{ maxWidth: 110 }} />
+                      </div>
+                      <div>
+                        <label className="label block mb-1">Profit Amt</label>
+                        <input name="profit_amt_disp" type="number" step="any" className={roCls + " text-right font-bold text-[13px]"} readOnly tabIndex={-1} style={{ maxWidth: 150 }} />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="col-span-6">
@@ -1160,7 +1187,7 @@ export default async function GodownStockPage({
                               <option key={c} value={c}>{c || "—"}</option>
                             ))}
                           </select>
-                          <div className="mt-1 flex items-center gap-1">
+                          <div className="mt-1 flex flex-col items-start gap-1">
                             <TypeToggle
                               targetName="conv_grey_type"
                               values={[
