@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { TypeToggle } from "@/components/type-toggle";
+import { FindingPicker } from "@/components/finding-picker";
 import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
@@ -153,6 +154,17 @@ export default async function GodownStockPage({
     label: `${c.contNo} — ${c.party ?? ""}`,
     filterKey: c.party ?? "",
   }));
+  // Full-page F9 finder rows for Cont# — the party's running contracts with their
+  // construction (read × pick) so the operator can pick like the Oracle LOV.
+  const contractFindRows = convContracts.map((c) => {
+    const constr = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "";
+    return {
+      value: c.contNo,
+      code: c.contNo,
+      description: `${c.party ?? ""}${constr ? ` · ${constr}` : ""}`,
+      filterKey: c.party ?? "",
+    };
+  });
   const contractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     convContracts.map((c) => [
       c.contNo,
@@ -797,18 +809,20 @@ export default async function GodownStockPage({
                   </div>
 
                   <div className="col-span-6">
-                    <label className="label block mb-1">Cont # <span className="text-[9px] text-[var(--muted)]">(filtered by party)</span></label>
-                    <Combobox
+                    <label className="label block mb-1">Cont # <span className="text-[9px] text-[var(--muted)]">(F9 — party's contracts)</span></label>
+                    <FindingPicker
                       name="cont_no"
-                      options={contractOpts}
                       defaultValue={formStock?.contNo ?? ""}
-                      placeholder="Contract #…"
+                      rows={contractFindRows}
                       filterByField="purchase_party"
+                      title="CONVERSION CONTRACT LIST"
+                      placeholder="Contract #…"
+                      className="input-box mono text-[13px] cursor-pointer"
                     />
                     <AutoFill
                       watch="cont_no"
                       map={contractMap}
-                      inputs={["rate_conversion", "contact_quality"]}
+                      inputs={["rate_conversion", "contact_quality", "dsp_quality", "_contact_quality_pick", "_dsp_quality_pick"]}
                     />
                   </div>
                   <div className="col-span-6">

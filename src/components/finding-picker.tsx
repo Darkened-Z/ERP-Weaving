@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Row = { value: string; code: string; description: string; extra?: string };
+type Row = { value: string; code: string; description: string; extra?: string; filterKey?: string };
 
 /**
  * Oracle-Forms style full-page FINDING list for a flat master (parties,
@@ -20,6 +20,7 @@ export function FindingPicker({
   placeholder = "Select",
   className = "input-box mono cursor-pointer",
   extraLabel,
+  filterByField,
 }: {
   name: string;
   defaultValue: string;
@@ -28,10 +29,13 @@ export function FindingPicker({
   placeholder?: string;
   className?: string;
   extraLabel?: string;
+  /** Name of another field whose value must equal a row's filterKey for it to show (empty other-field = show all). */
+  filterByField?: string;
 }) {
   const [value, setValue] = useState(defaultValue || "");
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [filterVal, setFilterVal] = useState("");
   // Instance-scoped refs so multiple pickers with the SAME name (e.g. one per
   // grid row) stay independent — F9 opens only the focused one, and picking
   // writes to this row's own hidden input, not the first match in the DOM.
@@ -51,11 +55,32 @@ export function FindingPicker({
     return () => document.removeEventListener("keydown", onKey, true);
   }, [open]);
 
+  // Track the party (or other) field this picker is scoped to.
+  useEffect(() => {
+    if (!filterByField) return;
+    const read = () => setFilterVal((document.querySelector<HTMLInputElement>(`[name="${filterByField}"]`)?.value ?? "").trim());
+    const onChange = (e: Event) => {
+      const t = e.target as HTMLInputElement | null;
+      const d = (e as CustomEvent).detail as { value?: string; name?: string } | undefined;
+      if ((t?.name ?? d?.name) === filterByField) setFilterVal((d?.value ?? t?.value ?? "").trim());
+    };
+    read();
+    document.addEventListener("input", onChange, true);
+    document.addEventListener("change", onChange, true);
+    document.addEventListener("combobox:change", onChange, true);
+    return () => {
+      document.removeEventListener("input", onChange, true);
+      document.removeEventListener("change", onChange, true);
+      document.removeEventListener("combobox:change", onChange, true);
+    };
+  }, [filterByField]);
+
   const filtered = useMemo(() => {
+    const scoped = filterByField && filterVal ? rows.filter((r) => !r.filterKey || r.filterKey === filterVal) : rows;
     const qL = q.trim().toLowerCase();
-    if (!qL) return rows;
-    return rows.filter((r) => `${r.code} ${r.description} ${r.extra ?? ""}`.toLowerCase().includes(qL));
-  }, [rows, q]);
+    if (!qL) return scoped;
+    return scoped.filter((r) => `${r.code} ${r.description} ${r.extra ?? ""}`.toLowerCase().includes(qL));
+  }, [rows, q, filterByField, filterVal]);
 
   const pickRow = (v: string) => {
     setValue(v);
