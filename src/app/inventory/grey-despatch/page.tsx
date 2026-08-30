@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { WhatsAppModal } from "@/components/whatsapp-modal";
 import { Combobox } from "@/components/combobox";
+import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DespatchAmountCalc, CountGridFiller } from "@/components/production-calc";
@@ -18,6 +19,9 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 const VTYPE = "GDP";
+
+const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
+const SELV_TYPES = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 
 const num = (v: FormDataEntryValue | null): number | null => {
   if (v === null || v === undefined || v === "") return null;
@@ -140,6 +144,61 @@ export default async function GreyDespatchPage({
       (ucCountFillMap[String(c.countCode)] ??= {})[`uc_type_${i}`] = c.type ?? "";
     }
   }
+
+  // Grey construction master → GreyQualityPicker rows + count labels (Oracle FINDING GREY QUALITY parity).
+  const greyList = await db
+    .select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      width: schema.greyConstruction.width,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      warp3: schema.greyConstruction.warp3,
+      warp4: schema.greyConstruction.warp4,
+      warp5: schema.greyConstruction.warp5,
+      warp6: schema.greyConstruction.warp6,
+      warp7: schema.greyConstruction.warp7,
+      warp8: schema.greyConstruction.warp8,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+      weft3: schema.greyConstruction.weft3,
+      weft4: schema.greyConstruction.weft4,
+      weft5: schema.greyConstruction.weft5,
+      weft6: schema.greyConstruction.weft6,
+      weft7: schema.greyConstruction.weft7,
+      weft8: schema.greyConstruction.weft8,
+      status: schema.greyConstruction.status,
+    })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.code);
+  const greyPickerRows = greyList.map((g) => ({
+    code: g.code,
+    reed: (g.reed ?? null) as number | null,
+    pick: (g.pick ?? null) as number | null,
+    width: (g.width ?? null) as number | null,
+    description: g.description ?? "",
+    warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => (x ?? "") as string),
+    weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => (x ?? "") as string),
+    status: (g.status ?? "A") as string,
+  }));
+  const greyCountLabels: Record<string, string> = Object.fromEntries(
+    yarnCountList.map((y) => [
+      String(y.countCode).trim().toLowerCase(),
+      `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+    ])
+  );
+
+  // Yarn masters → blend / brand datalists.
+  const blendList = await db
+    .select({ description: schema.yarnBlends.description })
+    .from(schema.yarnBlends)
+    .orderBy(schema.yarnBlends.description);
+  const brandList = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
 
   // Running conv contracts + warp/weft rows for count-grid auto-populate.
   const contracts = await db
@@ -938,6 +997,16 @@ export default async function GreyDespatchPage({
                 <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}{c.type ? ` ${c.type}` : ""}</option>
               ))}
             </datalist>
+            <datalist id="gd-blends">
+              {blendList.map((b) => (
+                <option key={b.description} value={b.description} />
+              ))}
+            </datalist>
+            <datalist id="gd-brands">
+              {brandList.map((b) => (
+                <option key={b.name} value={b.name} />
+              ))}
+            </datalist>
             {Array.from({ length: 12 }, (_, k) => k + 1).map((i) => (
               <RowAutoFill key={`uc-cf-${i}`} watch={`uc_code_${i}`} map={ucCountFillMap} />
             ))}
@@ -1188,7 +1257,7 @@ export default async function GreyDespatchPage({
                 <label className="label block mb-1">
                   Brk Code <span className="text-[9px] text-[var(--muted)]">F9</span>
                 </label>
-                <input name="enc_code" className="input-box mono text-[12px]" defaultValue={formItem?.encCode ?? ""} />
+                <Combobox name="enc_code" options={partyOpts} defaultValue={formItem?.encCode ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Supervisor</label>
@@ -1209,7 +1278,13 @@ export default async function GreyDespatchPage({
 
               <div className="col-span-3">
                 <label className="label block mb-1">Silvag Quality</label>
-                <input name="silvag_quality" className="input-box mono text-[12px]" defaultValue={formItem?.silvagQuality ?? ""} />
+                <select name="silvag_quality" className="input-box mono text-[12px]" defaultValue={formItem?.silvagQuality ?? ""}>
+                  <option value="">—</option>
+                  {SELV_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {formItem?.silvagQuality && !SELV_TYPES.includes(formItem.silvagQuality) && (
+                    <option value={formItem.silvagQuality}>{formItem.silvagQuality}</option>
+                  )}
+                </select>
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Brkg Per Mtr</label>
@@ -1225,20 +1300,26 @@ export default async function GreyDespatchPage({
               </div>
               <div className="col-span-5">
                 <label className="label block mb-1">Product Brand</label>
-                <input name="product_brand" className="input-box mono text-[12px]" defaultValue={formItem?.productBrand ?? ""} />
+                <input name="product_brand" list="gd-brands" className="input-box mono text-[12px]" defaultValue={formItem?.productBrand ?? ""} />
               </div>
 
               <div className="col-span-3">
                 <label className="label block mb-1">Loom Type</label>
-                <input name="loom_type" className="input-box mono text-[12px]" defaultValue={formItem?.loomType ?? ""} />
+                <select name="loom_type" className="input-box mono text-[12px]" defaultValue={formItem?.loomType ?? ""}>
+                  <option value="">—</option>
+                  {LOOM_TYPES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+                  {formItem?.loomType && !LOOM_TYPES.includes(formItem.loomType) && (
+                    <option value={formItem.loomType}>{formItem.loomType}</option>
+                  )}
+                </select>
               </div>
               <div className="col-span-3">
                 <label className="label block mb-1">Blend</label>
-                <input name="blend" className="input-box mono text-[12px]" defaultValue={formItem?.blend ?? ""} />
+                <input name="blend" list="gd-blends" className="input-box mono text-[12px]" defaultValue={formItem?.blend ?? ""} />
               </div>
               <div className="col-span-3">
                 <label className="label block mb-1">Gray Code</label>
-                <input name="grey_code" className="input-box mono text-[12px]" defaultValue={formItem?.greyCode ?? ""} />
+                <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
               </div>
               <div className="col-span-3">
                 <label className="label block mb-1">Width</label>

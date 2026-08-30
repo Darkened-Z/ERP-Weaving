@@ -155,6 +155,16 @@ export default async function PartsPage({
     .sort()
     .map((c) => ({ value: c as string, label: c as string }));
 
+  // No measurement-unit master exists (company_units holds godown/section codes),
+  // and the locations master is weaving GREY/YARN godowns rather than store bins,
+  // so both pickers are seeded from distinct values already used on parts.
+  const unitOpts = [
+    ...new Set([...parts.map((p) => p.unit).filter(Boolean), "NOS"]),
+  ].sort();
+  const locationOpts = [
+    ...new Set(parts.map((p) => p.location).filter(Boolean) as string[]),
+  ].sort();
+
   const total = parts.length;
   const categories = new Set(parts.map((p) => p.category)).size;
   const belowMin = parts.filter((p) => p.currentStock < p.minStock).length;
@@ -275,9 +285,15 @@ export default async function PartsPage({
                 <label className="label block mb-1">Unit</label>
                 <input
                   name="unit"
+                  list="parts-units"
                   className="input-box mono"
                   defaultValue={formItem?.unit ?? "NOS"}
                 />
+                <datalist id="parts-units">
+                  {unitOpts.map((u) => (
+                    <option key={u} value={u} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="label block mb-1">Min Stock</label>
@@ -293,9 +309,15 @@ export default async function PartsPage({
                 <label className="label block mb-1">Location</label>
                 <input
                   name="location"
+                  list="parts-locations"
                   className="input-box"
                   defaultValue={formItem?.location ?? ""}
                 />
+                <datalist id="parts-locations">
+                  {locationOpts.map((l) => (
+                    <option key={l} value={l} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="label block mb-1">Current Stock</label>

@@ -33,6 +33,8 @@ const txt = (v: FormDataEntryValue | null): string | null => {
 const SET_ROWS = 3;
 const DETAIL_ROWS = 3;
 
+const SELV_OPTIONS = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
+
 const MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 export default async function DailyProductionPage({
@@ -108,6 +110,32 @@ export default async function DailyProductionPage({
     .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+
+  const productList = await db
+    .select({ code: schema.products.code, description: schema.products.description })
+    .from(schema.products)
+    .orderBy(schema.products.code);
+  const productOpts = productList.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
+
+  const constructionList = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.code);
+  const qualityOpts = constructionList.map((c) => ({
+    value: c.description,
+    label: c.width ? `${c.code} — ${c.width}" ${c.description}` : `${c.code} — ${c.description}`,
+  }));
+
+  const brandList = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
+
+  const shedRows = await db
+    .selectDistinct({ shed: schema.looms.shed })
+    .from(schema.looms)
+    .orderBy(schema.looms.shed);
+  const shedList = shedRows.map((s) => s.shed).filter((s): s is string => !!s);
 
   // Per-beam accumulated Rcvd/Mtr = Σ(totalCount + rejCount) across ALL saved production
   // (excluding the current voucher so the live client math can add this row's own numbers).
@@ -805,6 +833,16 @@ export default async function DailyProductionPage({
                   </option>
                 ))}
               </datalist>
+              <datalist id="dp-sheds">
+                {shedList.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+              <datalist id="dp-brands">
+                {brandList.map((b) => (
+                  <option key={b.name} value={b.name} />
+                ))}
+              </datalist>
 
               <div className="border border-black p-4 mb-3">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">HEADER</div>
@@ -836,7 +874,7 @@ export default async function DailyProductionPage({
 
                   <div className="md:col-span-3">
                     <label className="label block mb-1">Shed No</label>
-                    <input name="shedNo" className="input-box mono" defaultValue={editing?.shedNo ?? ""} />
+                    <input name="shedNo" list="dp-sheds" className="input-box mono" defaultValue={editing?.shedNo ?? ""} />
                   </div>
                   <div className="md:col-span-3">
                     <label className="label block mb-1">Folding Stock</label>
@@ -1014,15 +1052,23 @@ export default async function DailyProductionPage({
                     <div className="grid grid-cols-1 gap-3">
                       <div>
                         <label className="label block mb-1">Product Quality</label>
-                        <input name="productQuality" className="input-box" defaultValue={editing?.productQuality ?? ""} />
+                        <Combobox name="productQuality" options={qualityOpts} defaultValue={editing?.productQuality ?? ""} className="input-box" placeholder="Select quality" />
                       </div>
                       <div>
                         <label className="label block mb-1">Product (Brand)</label>
-                        <input name="productBrand" className="input-box" defaultValue={editing?.productBrand ?? ""} />
+                        <input name="productBrand" list="dp-brands" className="input-box" defaultValue={editing?.productBrand ?? ""} />
                       </div>
                       <div>
                         <label className="label block mb-1">Product Slvag</label>
-                        <input name="productSlvag" className="input-box" defaultValue={editing?.productSlvag ?? ""} />
+                        <select name="productSlvag" className="input-box mono" defaultValue={editing?.productSlvag ?? ""}>
+                          <option value=""></option>
+                          {SELV_OPTIONS.map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                          {editing?.productSlvag && !SELV_OPTIONS.includes(editing.productSlvag) && (
+                            <option value={editing.productSlvag}>{editing.productSlvag}</option>
+                          )}
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1115,7 +1161,7 @@ export default async function DailyProductionPage({
                       </div>
                       <div>
                         <label className="label block mb-1">Prd Code</label>
-                        <input name="prodCode" className="input-box mono" defaultValue={editing?.prodCode ?? ""} />
+                        <Combobox name="prodCode" options={productOpts} defaultValue={editing?.prodCode ?? ""} className="input-box mono" placeholder="Select product" />
                       </div>
                       <div>
                         <label className="label block mb-1">Lot#</label>

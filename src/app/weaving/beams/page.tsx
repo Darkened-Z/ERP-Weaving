@@ -38,6 +38,15 @@ export default async function BeamsPage({
     label: `Shed ${l.shed} · Loom ${l.loomNo}`,
     filterKey: l.shed,
   }));
+  const shedList = [...new Set(looms.map((l) => l.shed).filter((s): s is string => !!s))];
+  const convContracts = await db
+    .select({ contNo: schema.intGreyConversionContract.contNo, party: schema.intGreyConversionContract.party })
+    .from(schema.intGreyConversionContract)
+    .orderBy(schema.intGreyConversionContract.contNo);
+  const contractOpts = convContracts.map((c) => ({
+    value: c.contNo,
+    label: c.party ? `${c.contNo} — ${c.party}` : c.contNo,
+  }));
   const selected = params.id ? rows.find((r) => r.id === parseInt(params.id!)) ?? null : null;
   const isAdding = params.adding === "1";
 
@@ -148,6 +157,11 @@ export default async function BeamsPage({
   return (
     <Shell active="beams">
       <div className="animate-in">
+        <datalist id="beam-sheds">
+          {shedList.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
         <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <h1 className="page-title">
             Beams (WRP){" "}
@@ -250,7 +264,7 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" /></div>
                 <div><label className="label block mb-1">Status Loc <span className="text-[10px] text-[var(--muted)]">(F9)</span></label><BeamStatusPicker name="status_loc" defaultValue="RUNNING" allStatuses={beamStatuses} canonical={STATUS_LOC_CANONICAL} /></div>
                 <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} className="input-box" placeholder="Sizing Party (F9)" /></div>
-                <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" /></div>
+                <div><label className="label block mb-1">Shed No</label><input name="shed" list="beam-sheds" className="input-box mono" /></div>
                 <div><label className="label block mb-1">Loom No</label><Combobox name="loom_no" options={loomOpts} filterByField="shed" className="input-box mono" placeholder="Loom (set Shed first)" /></div>
                 <div><label className="label block mb-1">Set#</label><input name="set_no" className="input-box mono" /></div>
                 <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" /></div>
@@ -275,10 +289,10 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue={selected.type ?? ""} /></div>
                 <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} defaultValue={selected.partyTrade ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" defaultValue={selected.codeConv ?? ""} /></div>
-                <div><label className="label block mb-1">Conv Cont</label><input name="contract_no" className="input-box mono" defaultValue={selected.contractNo ?? ""} /></div>
+                <div><label className="label block mb-1">Conv Cont</label><Combobox name="contract_no" options={contractOpts} defaultValue={selected.contractNo ?? ""} className="input-box mono" placeholder="Conv contract #" /></div>
                 <div><label className="label block mb-1">Status Loc <span className="text-[10px] text-[var(--muted)]">(F9)</span></label><BeamStatusPicker name="status_loc" defaultValue={selected.statusLoc ?? "RUNNING"} allStatuses={beamStatuses} canonical={STATUS_LOC_CANONICAL} /></div>
                 <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} defaultValue={selected.szgParty ?? ""} className="input-box" /></div>
-                <div><label className="label block mb-1">Shed No</label><input name="shed" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
+                <div><label className="label block mb-1">Shed No</label><input name="shed" list="beam-sheds" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>
                 <div><label className="label block mb-1">Loom No</label><Combobox name="loom_no" options={loomOpts} filterByField="shed" defaultValue={selected.loomNo != null ? String(selected.loomNo) : ""} className="input-box mono" placeholder="Loom (set Shed first)" /></div>
                 <div><label className="label block mb-1">Set#</label><input name="set_no" className="input-box mono" defaultValue={selected.setNo ?? ""} /></div>
                 <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" defaultValue={selected.beamSetNo ?? ""} /></div>

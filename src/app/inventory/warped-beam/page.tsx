@@ -129,6 +129,11 @@ export default async function WarpedBeamReceivingPage({
     warpContracts.map((c) => [c.contNo, { conv: c.ratePerBeam }]),
   );
 
+  const brandRows = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
+
   async function saveAction(formData: FormData) {
     "use server";
     try {
@@ -823,7 +828,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Bm Sale Party</label>
-                  <input name="bmSaleParty" className="input-box mono" defaultValue={editing?.bmSaleParty ?? ""} />
+                  <Combobox name="bmSaleParty" options={partyOpts} defaultValue={editing?.bmSaleParty ?? ""} placeholder="party account" />
                 </div>
               </div>
 
@@ -864,7 +869,7 @@ export default async function WarpedBeamReceivingPage({
                             <td className="mono text-[11px] text-center">{i + 1}</td>
                             <td><input name="rDate" type="date" className={gridCellCls} defaultValue={l?.rDate ?? ""} /></td>
                             <td><input name="yarnLotNo" className={gridCellCls} defaultValue={l?.yarnLotNo ?? ""} /></td>
-                            <td><input name="yarnBrand" className={gridCellCls} defaultValue={l?.yarnBrand ?? ""} /></td>
+                            <td><input name="yarnBrand" list="iwb-brands" className={gridCellCls} defaultValue={l?.yarnBrand ?? ""} /></td>
                             <td><input name="setNo" className={gridCellCls} defaultValue={l?.setNo ?? ""} /></td>
                             <td><input name="beamSetNo" className={gridCellCls} defaultValue={l?.beamSetNo ?? ""} /></td>
                             <td><input name="beamNo" list="iwb-beam-list" className={gridCellCls} defaultValue={l?.beamNo ?? ""} /></td>
@@ -905,6 +910,11 @@ export default async function WarpedBeamReceivingPage({
               <datalist id="iwb-warp-cont-list">
                 {warpContracts.map((c) => (
                   <option key={c.contNo} value={c.contNo} />
+                ))}
+              </datalist>
+              <datalist id="iwb-brands">
+                {brandRows.map((b) => (
+                  <option key={b.name} value={b.name} />
                 ))}
               </datalist>
               <RowAutoFill watch="beamNo" map={beamFillMap} />

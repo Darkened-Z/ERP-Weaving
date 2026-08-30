@@ -114,6 +114,10 @@ export default async function GodownStockPage({
   const godownParty =
     partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
   const partyCodeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
+  // Picking a party fills its account code live (Oracle: choose Amir → code 868 appears).
+  const partyCodeFillMap: Record<string, Record<string, string>> = Object.fromEntries(
+    partyAccounts.map((p) => [p.description, { party_code_display: p.code, gdn_code_display: p.code }])
+  );
 
   const yarnCountList = await db
     .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
@@ -169,6 +173,7 @@ export default async function GodownStockPage({
     convContracts.map((c) => [
       c.contNo,
       {
+        purchase_party: c.party ?? "",
         rate_conversion: c.rateMtr ?? c.convRatePerMtr,
         contact_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
         dsp_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
@@ -757,7 +762,7 @@ export default async function GodownStockPage({
 
                   <div className="col-span-1">
                     <label className="label block mb-1">Code</label>
-                    <input className={roCls} value={partyCodeByDesc.get(formStock?.purchaseParty ?? "") ?? ""} readOnly tabIndex={-1} />
+                    <input name="party_code_display" className={roCls} defaultValue={partyCodeByDesc.get(formStock?.purchaseParty ?? "") ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div className="col-span-4">
                     <label className="label block mb-1">Purchase Party</label>
@@ -767,6 +772,7 @@ export default async function GodownStockPage({
                       defaultValue={formStock?.purchaseParty ?? ""}
                       placeholder="Select party…"
                     />
+                    <AutoFill watch="purchase_party" map={partyCodeFillMap} inputs={["party_code_display"]} />
                   </div>
                   <div className="col-span-2 flex flex-col items-stretch">
                     <label className="label block mb-1">
@@ -796,7 +802,7 @@ export default async function GodownStockPage({
 
                   <div className="col-span-2">
                     <label className="label block mb-1">Gdn Code</label>
-                    <input className={roCls} value={partyCodeByDesc.get(formStock?.gdnParty ?? "") ?? ""} readOnly tabIndex={-1} />
+                    <input name="gdn_code_display" className={roCls} defaultValue={partyCodeByDesc.get(formStock?.gdnParty ?? "") ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div className="col-span-10">
                     <label className="label block mb-1">Gdn Party</label>
@@ -806,6 +812,7 @@ export default async function GodownStockPage({
                       defaultValue={formStock?.gdnParty ?? ""}
                       placeholder="Select party…"
                     />
+                    <AutoFill watch="gdn_party" map={partyCodeFillMap} inputs={["gdn_code_display"]} />
                   </div>
 
                   <div className="col-span-6">
@@ -822,6 +829,7 @@ export default async function GodownStockPage({
                     <AutoFill
                       watch="cont_no"
                       map={contractMap}
+                      combos={["purchase_party"]}
                       inputs={["rate_conversion", "contact_quality", "dsp_quality", "_contact_quality_pick", "_dsp_quality_pick"]}
                     />
                   </div>
@@ -921,7 +929,8 @@ export default async function GodownStockPage({
                     <AutoFill
                       watch="sal_cont_no"
                       map={salMap}
-                      inputs={["rate_sal", "grey_sale_cont", "contact_quality"]}
+                      combos={["grey_sale_cont"]}
+                      inputs={["rate_sal", "contact_quality"]}
                     />
                     <RowAutoFill watch="count_code" map={gsCountFillMap} />
                     <datalist id="gs-yarn-counts">
@@ -932,7 +941,13 @@ export default async function GodownStockPage({
                   </div>
                   <div className="col-span-6">
                     <label className="label block mb-1">Grey Sale Cont</label>
-                    <input name="grey_sale_cont" className="input-box mono" defaultValue={formStock?.greySaleCont ?? ""} />
+                    <Combobox
+                      name="grey_sale_cont"
+                      options={salOpts}
+                      defaultValue={formStock?.greySaleCont ?? ""}
+                      filterByField="purchase_party"
+                      placeholder="Grey sale contract #…"
+                    />
                   </div>
 
                   <div className="col-span-3">

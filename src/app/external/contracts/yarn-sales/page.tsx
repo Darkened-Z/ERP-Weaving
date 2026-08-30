@@ -110,6 +110,10 @@ export default async function YarnSalesContractPage({
     .select({ name: schema.yarnBrands.name })
     .from(schema.yarnBrands)
     .orderBy(schema.yarnBrands.name);
+  const blendList = await db
+    .select({ description: schema.yarnBlends.description })
+    .from(schema.yarnBlends)
+    .orderBy(schema.yarnBlends.description);
 
   const partyOpts = parties.map((p) => ({
     value: String(p.code),
@@ -608,9 +612,15 @@ export default async function YarnSalesContractPage({
                 <label className="label block mb-1">Ratio</label>
                 <input
                   name="ratio"
+                  list="ysc-blends"
                   className="input-box mono"
                   defaultValue={formContract?.ratio ?? ""}
                 />
+                <datalist id="ysc-blends">
+                  {blendList.map((b) => (
+                    <option key={b.description} value={b.description} />
+                  ))}
+                </datalist>
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Brand</label>

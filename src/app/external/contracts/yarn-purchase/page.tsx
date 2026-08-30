@@ -110,6 +110,10 @@ export default async function YarnPurchaseContractPage({
     .select({ name: schema.yarnBrands.name })
     .from(schema.yarnBrands)
     .orderBy(schema.yarnBrands.name);
+  const blendList = await db
+    .select({ description: schema.yarnBlends.description })
+    .from(schema.yarnBlends)
+    .orderBy(schema.yarnBlends.description);
 
   // Short code (descShort) as the visible token, description as helper text.
   const partyOpts = parties.map((p) => ({
@@ -615,9 +619,15 @@ export default async function YarnPurchaseContractPage({
                 <label className="label block mb-1">Ratio</label>
                 <input
                   name="ratio"
+                  list="ypc-blends"
                   className="input-box mono"
                   defaultValue={formContract?.ratio ?? ""}
                 />
+                <datalist id="ypc-blends">
+                  {blendList.map((b) => (
+                    <option key={b.description} value={b.description} />
+                  ))}
+                </datalist>
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Brand</label>

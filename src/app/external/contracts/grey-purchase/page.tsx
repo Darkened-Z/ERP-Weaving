@@ -636,11 +636,19 @@ export default async function GreyPurchaseContractPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Salvage</label>
-                  <input
+                  <select
                     name="salvage"
                     className="input-box"
                     defaultValue={formItem?.salvage ?? ""}
-                  />
+                  >
+                    <option value="">--</option>
+                    {["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"].map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    {formItem?.salvage && !["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"].includes(formItem.salvage) && (
+                      <option value={formItem.salvage}>{formItem.salvage}</option>
+                    )}
+                  </select>
                 </div>
               </div>
 
@@ -727,20 +735,36 @@ export default async function GreyPurchaseContractPage({
 
               <div className="mb-3">
                 <label className="label block mb-1">Payment Term</label>
-                <input
+                <select
                   name="payment_term"
                   className="input-box"
                   defaultValue={formItem?.paymentTerm ?? ""}
-                />
+                >
+                  <option value="">--</option>
+                  {["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  {formItem?.paymentTerm && !["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].includes(formItem.paymentTerm) && (
+                    <option value={formItem.paymentTerm}>{formItem.paymentTerm}</option>
+                  )}
+                </select>
               </div>
 
               <div className="mb-3">
                 <label className="label block mb-1">Delivery Term</label>
-                <input
+                <select
                   name="delivery_term"
                   className="input-box"
                   defaultValue={formItem?.deliveryTerm ?? ""}
-                />
+                >
+                  <option value="">--</option>
+                  {["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  {formItem?.deliveryTerm && !["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].includes(formItem.deliveryTerm) && (
+                    <option value={formItem.deliveryTerm}>{formItem.deliveryTerm}</option>
+                  )}
+                </select>
               </div>
 
               <div className="mb-4">

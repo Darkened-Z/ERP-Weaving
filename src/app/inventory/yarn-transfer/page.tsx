@@ -127,6 +127,11 @@ export default async function YarnTransferPage({
     .sort()
     .map((v) => ({ value: v, label: v }));
 
+  const brandRows = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
+
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
@@ -401,6 +406,12 @@ export default async function YarnTransferPage({
           ))}
         </datalist>
 
+        <datalist id="iyt-brands">
+          {brandRows.map((b) => (
+            <option key={b.name} value={b.name} />
+          ))}
+        </datalist>
+
         <form id="iyt-find-form" method="GET" action="/inventory/yarn-transfer" className="hidden" />
 
         <div className="border border-black p-4 mb-3">
@@ -564,7 +575,7 @@ export default async function YarnTransferPage({
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Brand</label>
-                        <input name="brand" className="input-box mono" defaultValue={editing?.brand ?? ""} />
+                        <input name="brand" list="iyt-brands" className="input-box mono" defaultValue={editing?.brand ?? ""} />
                       </div>
 
                       <div className="md:col-span-6">

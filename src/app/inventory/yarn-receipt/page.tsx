@@ -124,6 +124,25 @@ export default async function YarnReceiptPage({
     .where(sql`${schema.intYarnReceipt.yarnLotNo} IS NOT NULL AND ${schema.intYarnReceipt.yarnLotNo} <> ''`);
   const priorLots = priorLotsRows.map((r) => r.v).filter((v): v is string => !!v);
 
+  const priorLocFromRows = await db
+    .selectDistinct({ v: schema.intYarnReceipt.locationFrom })
+    .from(schema.intYarnReceipt)
+    .where(sql`${schema.intYarnReceipt.locationFrom} IS NOT NULL AND ${schema.intYarnReceipt.locationFrom} <> ''`);
+  const locOpts = priorLocFromRows
+    .map((r) => r.v)
+    .filter((v): v is string => !!v)
+    .sort()
+    .map((v) => ({ value: v, label: v }));
+
+  const brandRows = await db
+    .select({ name: schema.yarnBrands.name })
+    .from(schema.yarnBrands)
+    .orderBy(schema.yarnBrands.name);
+  const blendRows = await db
+    .select({ description: schema.yarnBlends.description })
+    .from(schema.yarnBlends)
+    .orderBy(schema.yarnBlends.description);
+
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyDescByCode: Record<string, string> = {};
   for (const p of parties) partyDescByCode[p.code] = p.description;
@@ -438,6 +457,18 @@ export default async function YarnReceiptPage({
           ))}
         </datalist>
 
+        <datalist id="iyr-brands">
+          {brandRows.map((b) => (
+            <option key={b.name} value={b.name} />
+          ))}
+        </datalist>
+
+        <datalist id="iyr-blends">
+          {blendRows.map((b) => (
+            <option key={b.description} value={b.description} />
+          ))}
+        </datalist>
+
         <form id="iyr-find-form" method="GET" action="/inventory/yarn-receipt" className="hidden" />
 
         <div className="border border-black p-4 mb-3">
@@ -578,7 +609,7 @@ export default async function YarnReceiptPage({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Yarn Party To</label>
-                        <input name="yarnPartyTo" className="input-box" defaultValue={editing?.yarnPartyTo ?? ""} />
+                        <Combobox name="yarnPartyTo" options={partyOpts} defaultValue={editing?.yarnPartyTo ?? ""} placeholder="Party…" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
@@ -595,7 +626,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Location From (F9)</label>
-                        <input name="locationFrom" className="input-box mono" defaultValue={editing?.locationFrom ?? ""} />
+                        <Combobox name="locationFrom" options={locOpts} defaultValue={editing?.locationFrom ?? ""} placeholder="Type or select location" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Imag Block</label>
@@ -645,7 +676,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Brand</label>
-                        <input name="brand" className="input-box mono" defaultValue={editing?.brand ?? ""} />
+                        <input name="brand" list="iyr-brands" className="input-box mono" defaultValue={editing?.brand ?? ""} />
                       </div>
 
                       <div className="md:col-span-4">
@@ -654,7 +685,7 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Ratio</label>
-                        <input name="ratioText" className="input-box mono" defaultValue={editing?.ratioText ?? ""} />
+                        <input name="ratioText" list="iyr-blends" className="input-box mono" defaultValue={editing?.ratioText ?? ""} />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Set No.</label>

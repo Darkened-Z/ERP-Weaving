@@ -18,6 +18,7 @@ export default async function BranchOpeningPage({
     .select()
     .from(schema.branchOpening)
     .orderBy(schema.branchOpening.openingDate);
+  const cities = await db.select().from(schema.cities).orderBy(schema.cities.name);
 
   const selected = params.id
     ? branches.find((b) => String(b.id) === params.id) ?? null
@@ -146,9 +147,15 @@ export default async function BranchOpeningPage({
                     <label className="label block mb-1">City</label>
                     <input
                       name="city"
+                      list="bo-cities"
                       className="input-box"
                       defaultValue={selected?.city ?? ""}
                     />
+                    <datalist id="bo-cities">
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.name} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="label block mb-1">Phone</label>

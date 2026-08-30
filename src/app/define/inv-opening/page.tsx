@@ -1,9 +1,10 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { ConfirmButton } from "@/components/confirm-button";
+import { Combobox } from "@/components/combobox";
 import { getSession } from "@/lib/auth";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -31,6 +32,37 @@ export default async function InventoryOpeningPage({
   const locations = await db.select().from(schema.locations);
   const greyConstructions = await db.select().from(schema.greyConstruction);
   const yarnBlends = await db.select().from(schema.yarnBlends);
+
+  const parties = await db
+    .select({
+      code: schema.chartOfAccounts.code,
+      description: schema.chartOfAccounts.description,
+      descShort: schema.chartOfAccounts.descShort,
+    })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} >= 5`)
+    .orderBy(schema.chartOfAccounts.description);
+  const partyOpts = parties.map((p) => ({
+    value: String(p.code),
+    label: `${p.descShort ?? p.code} — ${p.description}`,
+    desc: p.description,
+  }));
+
+  const extPurCont = await db
+    .select({ contNo: schema.extYarnPurContract.contNo })
+    .from(schema.extYarnPurContract);
+  const intPurCont = await db
+    .select({ contNo: schema.intYarnPurchaseContract.contNo })
+    .from(schema.intYarnPurchaseContract);
+  const purContNos = [
+    ...new Set([...extPurCont, ...intPurCont].map((c) => c.contNo).filter(Boolean)),
+  ].sort();
+
+  // No measurement-unit master exists (company_units holds godown/section codes),
+  // so seed the Unit picker from distinct values already used on inventory rows.
+  const unitOpts = [
+    ...new Set([...rows.map((r) => r.unit).filter(Boolean), "LBS", "MTR"]),
+  ].sort();
 
   const yarnRows = rows.filter((r) => r.itemType === "YARN");
   const greyRows = rows.filter((r) => r.itemType === "GREY");
@@ -272,6 +304,22 @@ export default async function InventoryOpeningPage({
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <input type="hidden" name="item_type" value={formItem?.itemType ?? itemTypeValue} />
 
+            <datalist id="io-blends">
+              {yarnBlends.map((b) => (
+                <option key={b.id} value={b.description} />
+              ))}
+            </datalist>
+            <datalist id="io-units">
+              {unitOpts.map((u) => (
+                <option key={u} value={u} />
+              ))}
+            </datalist>
+            <datalist id="io-pur-cont">
+              {purContNos.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+
             {tab === "yarn" && (
               <div className="space-y-3">
                 <div className="grid grid-cols-4 gap-x-4">
@@ -307,7 +355,7 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Pur Cont.No</label>
-                    <input name="pur_cont_no" className="input-box mono" defaultValue={formItem?.purContNo ?? ""} />
+                    <input name="pur_cont_no" list="io-pur-cont" className="input-box mono" defaultValue={formItem?.purContNo ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">Opn. Party</label>
@@ -345,7 +393,7 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Ratio</label>
-                    <input name="ratio" className="input-box mono" defaultValue={formItem?.ratio ?? ""} />
+                    <input name="ratio" list="io-blends" className="input-box mono" defaultValue={formItem?.ratio ?? ""} />
                   </div>
                 </div>
                 <div className="grid grid-cols-6 gap-x-3">
@@ -381,7 +429,7 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Unit</label>
-                    <input name="unit" className="input-box" defaultValue={formItem?.unit ?? "LBS"} />
+                    <input name="unit" list="io-units" className="input-box" defaultValue={formItem?.unit ?? "LBS"} />
                   </div>
                 </div>
               </div>
@@ -439,7 +487,15 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Weave</label>
-                    <input name="weave" className="input-box" defaultValue={formItem?.weave ?? ""} />
+                    <select name="weave" className="input-box" defaultValue={formItem?.weave ?? ""}>
+                      <option value="">--</option>
+                      {["1/1", "PLAIN", "TWILL", "SATIN", "DRILL"].map((w) => (
+                        <option key={w} value={w}>{w}</option>
+                      ))}
+                      {formItem?.weave && !["1/1", "PLAIN", "TWILL", "SATIN", "DRILL"].includes(formItem.weave) && (
+                        <option value={formItem.weave}>{formItem.weave}</option>
+                      )}
+                    </select>
                   </div>
                   <div>
                     <label className="label block mb-1">Design No</label>
@@ -486,7 +542,7 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Unit</label>
-                    <input name="unit" className="input-box" defaultValue={formItem?.unit ?? "MTR"} />
+                    <input name="unit" list="io-units" className="input-box" defaultValue={formItem?.unit ?? "MTR"} />
                   </div>
                   <div>
                     <label className="label block mb-1">Status</label>
@@ -557,7 +613,7 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Unit</label>
-                    <input name="unit" className="input-box" defaultValue={formItem?.unit ?? "MTR"} />
+                    <input name="unit" list="io-units" className="input-box" defaultValue={formItem?.unit ?? "MTR"} />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-x-4">
@@ -602,7 +658,7 @@ export default async function InventoryOpeningPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Conversion Party</label>
-                    <input name="conv_party" className="input-box mono" defaultValue={formItem?.convParty ?? ""} />
+                    <Combobox name="conv_party" options={partyOpts} defaultValue={String(formItem?.convParty ?? "")} placeholder="Select party" className="input-box mono" />
                   </div>
                 </div>
               </div>
