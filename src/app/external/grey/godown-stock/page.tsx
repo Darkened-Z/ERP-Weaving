@@ -778,7 +778,20 @@ export default async function GodownStockPage({
               <form id="gdn-save-form" action={saveStock}>
                 {formStock && <input type="hidden" name="id" value={formStock.id} />}
 
-                <div className="grid grid-cols-12 gap-x-2 gap-y-2">
+                <style dangerouslySetInnerHTML={{ __html: `
+                  .gform{display:grid;grid-template-columns:1fr 1fr;gap:3px 22px;align-items:center}
+                  .gform>div{display:flex;align-items:center;gap:8px;min-width:0}
+                  .gform>div>label.label{flex:0 0 98px;width:98px;text-align:right;margin:0;font-size:10px;line-height:1.15;display:block}
+                  .gform>div>label.label>span{display:none}
+                  .gform>div>:not(label.label){flex:1 1 auto;min-width:0}
+                  .gform .input-box{padding:2px 6px;font-size:12px;height:26px}
+                  .gform input[type=number]{max-width:135px}
+                  .gform select.input-box{height:26px;padding:1px 4px}
+                  .gform .btn-sm{padding:2px 8px;font-size:11px}
+                  .gform>.col-span-4,.gform>.col-span-5,.gform>.col-span-6,.gform>.col-span-8,.gform>.col-span-10,.gform>.col-span-12{grid-column:1 / -1}
+                  @media(max-width:820px){.gform{grid-template-columns:1fr}}
+                ` }} />
+                <div className="grid grid-cols-12 gap-x-2 gap-y-2 gform">
                   <div className="col-span-2">
                     <label className="label block mb-1">V. Date</label>
                     <input
