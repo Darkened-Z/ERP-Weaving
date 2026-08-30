@@ -4,6 +4,26 @@ import { useEffect, useRef, useState } from "react";
 
 type Opt = { value: string; label: string; desc?: string; filterKey?: string };
 
+// Fields we walk with Enter (mirror of the global FormKeyboard selector).
+const NEXT_FIELD_SELECTOR =
+  'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])';
+
+// Oracle "pick-then-move": after an Enter-pick, focus the next visible field of the same form.
+function advanceToNextField(from: HTMLElement | null) {
+  if (!from) return;
+  const form = from.closest("form");
+  if (!form) return;
+  const fields = Array.from(form.querySelectorAll<HTMLElement>(NEXT_FIELD_SELECTOR)).filter(
+    (el) => el.offsetParent !== null || el.getClientRects().length > 0
+  );
+  const i = fields.indexOf(from);
+  const next = i >= 0 ? fields[i + 1] : undefined;
+  if (!next) return;
+  next.focus();
+  const inp = next as HTMLInputElement;
+  if (typeof inp.select === "function" && inp.type !== "date" && inp.type !== "number") inp.select();
+}
+
 /**
  * Editable searchable dropdown. Submits `value` via a hidden field named `name`,
  * but shows the option's friendly `label` in the box. Click/tap the arrow (or field)
@@ -120,12 +140,12 @@ export function Combobox({
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
-      if (e.key === "ArrowDown" || e.key === "F9") {
+      if (e.key === "ArrowDown" || e.key === "F9" || e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
         setOpen(true);
       }
-      return; // closed: let Enter etc. bubble to the global next-field handler
+      return; // closed: any other key bubbles to the global next-field handler
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -136,15 +156,18 @@ export function Combobox({
       e.stopPropagation();
       setSel((s) => Math.max(s - 1, 0));
     } else if (e.key === "Enter") {
+      // Enter always resolves the list and advances (Oracle pick-then-move).
+      // A mouse click on an option goes through choose() only, so it never advances.
+      e.preventDefault();
+      e.stopPropagation();
       const o = filtered[sel];
       if (o) {
-        e.preventDefault();
-        e.stopPropagation();
-        choose(o);
+        choose(o); // focuses the input; advance moves past it to the next field
       } else {
         setOpen(false);
-        setTyped(null);
+        setTyped(null); // free-text kept in `val`; just close the list
       }
+      advanceToNextField(inputRef.current);
     } else if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

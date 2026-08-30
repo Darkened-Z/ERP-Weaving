@@ -57,7 +57,17 @@ export function GodownCalc({
       const meter = num("meter");
       const elMeter = Math.round((meter * num("el_cumi_num")) / (num("el_cumi_den") === 5 ? 400 : 800));
       const netMeter = meter - elMeter - num("kami_mtr");
-      const rate = num("rate");
+      // Effective rate for total/commission: the Rate Display box if typed, else the
+      // contract rate chosen by Conv/Grey Type (Conv → rate_conversion, Grey → rate_sal).
+      const cgType = (form.querySelector<HTMLSelectElement>('[name="conv_grey_type"]')?.value ?? "").toUpperCase();
+      let rate = num("rate");
+      if (!rate) {
+        rate =
+          cgType === "CONV" ? num("rate_conversion")
+          : cgType === "GREY" ? num("rate_sal")
+          : num("rate_conversion") || num("rate_sal");
+        if (rate) put("rate", String(rate)); // reflect it in the Rate box so the user sees what's used
+      }
       const kaatAmt = Math.round((netMeter / 40) * num("kaat_percent"));
       const checkeryAmt = Math.round(netMeter * num("checkery"));
       const commissionAmt = Math.round((netMeter * rate * num("commission")) / 100);
@@ -74,6 +84,7 @@ export function GodownCalc({
 
     const sources = [
       "meter", "el_cumi_num", "el_cumi_den", "kami_mtr", "rate",
+      "rate_conversion", "rate_sal",
       "kaat_percent", "checkery", "commission", "count_wt_per_mtr",
     ];
     const onInput = (e: Event) => {
@@ -95,6 +106,12 @@ export function GodownCalc({
     const onChange = (e: Event) => {
       const t = e.target as HTMLSelectElement;
       if (t?.name === "type") fillGdnParty();
+      // Conv/Grey Type drives which contract rate flows into total/commission.
+      if (t?.name === "conv_grey_type") {
+        const rateEl = field("rate");
+        if (rateEl) rateEl.value = ""; // clear so the fallback re-picks the type-appropriate rate
+        recalc();
+      }
     };
     form.addEventListener("change", onChange);
 

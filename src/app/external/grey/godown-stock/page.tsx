@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { TypeToggle } from "@/components/type-toggle";
+import { ContractOpenButton } from "@/components/contract-open-button";
 import { FindingPicker } from "@/components/finding-picker";
 import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -1157,7 +1158,7 @@ export default async function GodownStockPage({
                               <option key={c} value={c}>{c || "—"}</option>
                             ))}
                           </select>
-                          <div className="mt-1">
+                          <div className="mt-1 flex items-center gap-1">
                             <TypeToggle
                               targetName="conv_grey_type"
                               values={[
@@ -1165,6 +1166,7 @@ export default async function GodownStockPage({
                                 { label: "Conv", value: "CONV" },
                               ]}
                             />
+                            <ContractOpenButton typeField="conv_grey_type" />
                           </div>
                         </div>
                         <div className="col-span-3">

@@ -24,6 +24,37 @@ function focusAndSelect(el: HTMLElement | undefined | null) {
   }
 }
 
+// KEY-NEXT-ITEM: move to the next visible field, or submit when on the last one.
+// Shared by the Enter handler and the LovPopup so both advance identically.
+function advanceFrom(field: HTMLElement) {
+  const form = field.closest("form");
+  if (!form) return;
+  const fields = fieldsIn(form);
+  const i = fields.indexOf(field);
+  const next = fields[i + 1];
+  if (next) focusAndSelect(next);
+  else form.requestSubmit();
+}
+
+// Build LOV rows for a lookup field: a <datalist> (input[list]) or a <select>'s own options.
+// Returns null when there is nothing worth showing.
+function lovOptionsFor(field: HTMLInputElement | HTMLSelectElement): { value: string; label: string }[] | null {
+  if (field.tagName === "SELECT") {
+    const options = Array.from((field as HTMLSelectElement).options)
+      .map((o) => ({ value: o.value, label: (o.textContent || o.value).trim() }))
+      .filter((o) => o.value !== "" && o.label !== "—" && o.label !== "-");
+    return options.length ? options : null;
+  }
+  const listId = field.getAttribute("list");
+  const dl = listId ? (document.getElementById(listId) as HTMLDataListElement | null) : null;
+  if (!dl) return null;
+  const options = Array.from(dl.querySelectorAll("option")).map((o) => ({
+    value: (o as HTMLOptionElement).value,
+    label: o.textContent?.trim() || (o as HTMLOptionElement).value,
+  }));
+  return options.length ? options : null;
+}
+
 function clickByText(match: (t: string) => boolean) {
   const el = Array.from(document.querySelectorAll<HTMLElement>("a, button")).find(
     (x) => isVisible(x) && !x.hasAttribute("disabled") && match(x.textContent?.trim().toLowerCase() ?? "")
@@ -47,7 +78,11 @@ function clickByText(match: (t: string) => boolean) {
 export function FormKeyboard() {
   const pathname = usePathname();
   const [hasForm, setHasForm] = useState(false);
-  const [lov, setLov] = useState<{ options: { value: string; label: string }[]; field: HTMLInputElement } | null>(null);
+  const [lov, setLov] = useState<{
+    options: { value: string; label: string }[];
+    field: HTMLInputElement | HTMLSelectElement;
+    advanceOnPick: boolean;
+  } | null>(null);
   const dirty = useRef(false);
 
   // Per-page: reset dirty flag, detect entry form, put the cursor in the first field (like Oracle).
@@ -109,20 +144,13 @@ export function FormKeyboard() {
       const form = field.closest("form");
       if (!form) return;
 
-      // F9 — open a searchable List-of-Values from the field's <datalist> (Oracle LOV)
+      // F9 — open a searchable List-of-Values from the field's <datalist> or a <select>'s options
       if (e.key === "F9") {
-        const inp = field as HTMLInputElement;
-        const listId = inp.getAttribute("list");
-        const dl = listId ? (document.getElementById(listId) as HTMLDataListElement | null) : null;
-        if (dl) {
-          const options = Array.from(dl.querySelectorAll("option")).map((o) => ({
-            value: (o as HTMLOptionElement).value,
-            label: o.textContent?.trim() || (o as HTMLOptionElement).value,
-          }));
-          if (options.length) {
-            e.preventDefault();
-            setLov({ options, field: inp });
-          }
+        const f = field as HTMLInputElement | HTMLSelectElement;
+        const options = lovOptionsFor(f);
+        if (options) {
+          e.preventDefault();
+          setLov({ options, field: f, advanceOnPick: false });
         }
         return;
       }
@@ -165,15 +193,21 @@ export function FormKeyboard() {
         return;
       }
 
-      // Enter — advance to next field, or submit when on the last field
+      // Enter — on a lookup field open the LOV (pick-then-advance); otherwise go to next field
       if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (field.tagName === "TEXTAREA") return; // let textareas take a newline
+        const f = field as HTMLInputElement | HTMLSelectElement;
+        const isLookup = f.tagName === "SELECT" || (f.tagName !== "SELECT" && f.hasAttribute("list"));
+        if (isLookup) {
+          const options = lovOptionsFor(f);
+          if (options) {
+            e.preventDefault();
+            setLov({ options, field: f, advanceOnPick: true });
+            return;
+          }
+        }
         e.preventDefault();
-        const fields = fieldsIn(form);
-        const i = fields.indexOf(field);
-        const next = fields[i + 1];
-        if (next) focusAndSelect(next);
-        else form.requestSubmit();
+        advanceFrom(field);
       }
     }
 
@@ -221,7 +255,14 @@ export function FormKeyboard() {
           <span className="hidden sm:flex items-center gap-1"><Key>Alt</Key><Key>N</Key> new</span>
         </div>
       )}
-      {lov && <LovPopup options={lov.options} field={lov.field} onClose={() => setLov(null)} />}
+      {lov && (
+        <LovPopup
+          options={lov.options}
+          field={lov.field}
+          advanceOnPick={lov.advanceOnPick}
+          onClose={() => setLov(null)}
+        />
+      )}
     </>
   );
 }
@@ -229,10 +270,12 @@ export function FormKeyboard() {
 function LovPopup({
   options,
   field,
+  advanceOnPick,
   onClose,
 }: {
   options: { value: string; label: string }[];
-  field: HTMLInputElement;
+  field: HTMLInputElement | HTMLSelectElement;
+  advanceOnPick?: boolean;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -258,9 +301,12 @@ function LovPopup({
 
   function pick(value: string) {
     field.value = value;
+    // selects only react to "change"; inputs listen for "input" — fire both.
     field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
     onClose();
-    field.focus();
+    if (advanceOnPick) advanceFrom(field);
+    else field.focus();
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
