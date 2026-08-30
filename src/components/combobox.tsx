@@ -180,26 +180,32 @@ export function Combobox({
       >
         ▼
       </span>
-      {open && filtered.length > 0 && (
+      {open && (
         <div
           className="absolute z-30 left-0 right-0 mt-0.5 max-h-56 overflow-y-auto bg-white border border-[var(--border)] shadow-lg"
           role="listbox"
         >
-          {filtered.map((o, i) => (
-            <div
-              key={`${o.value}-${i}`}
-              role="option"
-              aria-selected={i === sel}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(o);
-              }}
-              onMouseEnter={() => setSel(i)}
-              className={`px-2 py-1.5 text-[13px] mono cursor-pointer ${i === sel ? "bg-[var(--accent)] text-white" : ""}`}
-            >
-              {o.label}
+          {filtered.length > 0 ? (
+            filtered.map((o, i) => (
+              <div
+                key={`${o.value}-${i}`}
+                role="option"
+                aria-selected={i === sel}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(o);
+                }}
+                onMouseEnter={() => setSel(i)}
+                className={`px-2 py-1.5 text-[13px] mono cursor-pointer ${i === sel ? "bg-[var(--accent)] text-white" : ""}`}
+              >
+                {o.label}
+              </div>
+            ))
+          ) : (
+            <div className="px-2 py-2 text-[12px] text-[var(--muted)] italic select-none">
+              {visibleOptions.length === 0 ? "No records yet — add one in its own form first" : "No match"}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
