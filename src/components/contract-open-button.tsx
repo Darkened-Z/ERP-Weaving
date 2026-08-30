@@ -19,10 +19,10 @@ export function ContractOpenButton({ typeField = "conv_grey_type" }: { typeField
       type="button"
       onClick={open}
       className="btn btn-outline btn-xs whitespace-nowrap"
-      style={{ padding: "2px 8px" }}
+      style={{ padding: "2px 6px", maxWidth: "100%" }}
       title="Create a contract of the selected type (opens in a new tab)"
     >
-      ＋ New Contract
+      ＋ New
     </button>
   );
 }
