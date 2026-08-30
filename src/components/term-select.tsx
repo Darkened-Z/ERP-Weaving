@@ -29,7 +29,9 @@ export function TermSelect({
     const dt = new Date(base + "T00:00:00");
     if (Number.isNaN(dt.getTime())) return;
     dt.setDate(dt.getDate() + n);
-    setDue(dt.toISOString().slice(0, 10));
+    // Format from LOCAL components — toISOString() would shift a day in UTC+ zones (e.g. PKT).
+    const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    setDue(iso);
   };
 
   return (
