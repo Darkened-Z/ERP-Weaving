@@ -14,6 +14,7 @@ export default async function YarnCountsPage({
 }) {
   const params = await searchParams;
   const counts = await db.select().from(schema.yarnCounts).orderBy(schema.yarnCounts.countCode);
+  const blends = await db.select({ description: schema.yarnBlends.description }).from(schema.yarnBlends).orderBy(schema.yarnBlends.description);
   const nextCode = String(
     counts.reduce((max, c) => {
       const n = parseInt(c.countCode ?? "", 10);
@@ -214,7 +215,10 @@ export default async function YarnCountsPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Blend / Ratio <span className="text-[10px] text-[var(--muted)]">(e.g. PV 65:35 — appears after count in line items)</span></label>
-                    <input name="blend" className="input-box mono" defaultValue={formItem?.type ?? ""} placeholder="PV 65:35" />
+                    <input name="blend" list="yc-blends" className="input-box mono" defaultValue={formItem?.type ?? ""} placeholder="Pick or type a blend…" />
+                    <datalist id="yc-blends">
+                      {blends.map((b) => <option key={b.description} value={b.description} />)}
+                    </datalist>
                   </div>
                   <div>
                     <label className="label block mb-1">Status</label>
