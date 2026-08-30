@@ -627,8 +627,8 @@ export default async function PettyCashReceiptPage({
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 200 }}>Account (F9)</th>
                         <th style={{ width: 220 }}>Tittle</th>
-                        <th style={{ width: 40 }}>OK</th>
-                        <th style={{ width: 130 }}>Yarn Count - (List - F9)</th>
+                        <th className="hidden" style={{ width: 40 }}>OK</th>
+                        <th className="hidden" style={{ width: 130 }}>Yarn Count - (List - F9)</th>
                         <th style={{ width: 240 }}>Narr</th>
                         <th style={{ width: 110 }}>Chq.No</th>
                         <th style={{ width: 130 }}>Chq.Date</th>
@@ -659,10 +659,10 @@ export default async function PettyCashReceiptPage({
                                 tabIndex={-1}
                               />
                             </td>
-                            <td className="text-center text-[10px] text-[var(--muted)]">
+                            <td className="hidden text-center text-[10px] text-[var(--muted)]">
                               {l?.statusOk === "OK" ? "OK" : ""}
                             </td>
-                            <td>
+                            <td className="hidden">
                               <input
                                 name="line_yarn"
                                 list="fin-yarns"
