@@ -778,7 +778,7 @@ export default async function GodownStockPage({
               <form id="gdn-save-form" action={saveStock}>
                 {formStock && <input type="hidden" name="id" value={formStock.id} />}
 
-                <div className="grid grid-cols-12 gap-x-3 gap-y-3">
+                <div className="grid grid-cols-12 gap-x-2 gap-y-2">
                   <div className="col-span-2">
                     <label className="label block mb-1">V. Date</label>
                     <input
@@ -928,15 +928,16 @@ export default async function GodownStockPage({
                     <input type="hidden" name="dsp_quality" defaultValue={formStock?.dspQuality ?? formStock?.contactQuality ?? ""} />
                   </div>
 
-                  <div className="col-span-3">
+                  {/* Measurements — one dense row */}
+                  <div className="col-span-2">
                     <label className="label block mb-1">Than</label>
                     <input name="than" type="number" step="1" className="input-box mono text-right" defaultValue={formStock?.than ?? ""} />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <label className="label block mb-1">Meter</label>
                     <input name="meter" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.meter ?? ""} />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <label className="label block mb-1">EL-Cumi</label>
                     <div className="flex items-center gap-1">
                       <input name="el_cumi_num" type="number" step="1" className="input-box mono text-right" defaultValue={formStock?.elCumiNum ?? ""} />
@@ -944,29 +945,47 @@ export default async function GodownStockPage({
                       <input name="el_cumi_den" type="number" step="1" className="input-box mono text-right" defaultValue={formStock?.elCumiDen ?? ""} />
                     </div>
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <label className="label block mb-1">Kami Mtr</label>
                     <input name="kami_mtr" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.kamiMtr ?? ""} />
                   </div>
+                  <div className="col-span-2">
+                    <label className="label block mb-1">EL-Meter</label>
+                    <input name="el_meter" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.elMeter ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Net Meter</label>
+                    <input name="net_meter_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.netMeter ?? ""} readOnly tabIndex={-1} />
+                  </div>
 
-                  <div className="col-span-4">
+                  {/* Rates / term row */}
+                  <div className="col-span-2">
+                    <label className="label block mb-1">(1/5 or 1/10)</label>
+                    <select name="el_meter_mode" className="input-box mono" defaultValue={formStock?.elMeterMode ?? ""}>
+                      {EL_METER_MODE_OPTIONS.map((m) => (
+                        <option key={m} value={m}>{m || "—"}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
                     <label className="label block mb-1">Rate Conversion</label>
-                    <input name="rate_conversion" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateConversion ?? ""} style={{ maxWidth: 120 }} />
+                    <input name="rate_conversion" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateConversion ?? ""} />
                   </div>
                   <TermSelect
                     defaultTerm={formStock?.term ?? "CASH"}
                     defaultDate={formStock?.dueDate ?? ""}
                   />
-                  <div className="col-span-4">
+                  <div className="col-span-2">
                     <label className="label block mb-1">Days</label>
                     <input name="days" type="number" step="1" className="input-box mono text-right" defaultValue={formStock?.days ?? ""} />
                   </div>
-
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <label className="label block mb-1">Rate Sal</label>
-                    <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateSal ?? ""} style={{ maxWidth: 120 }} />
+                    <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateSal ?? ""} />
                   </div>
-                  <div className="col-span-3">
+
+                  {/* Sale contracts */}
+                  <div className="col-span-4">
                     <label className="label block mb-1">Sal Cont #</label>
                     <FindingPicker
                       name="sal_cont_no"
@@ -990,7 +1009,7 @@ export default async function GodownStockPage({
                       ))}
                     </datalist>
                   </div>
-                  <div className="col-span-6">
+                  <div className="col-span-8">
                     <label className="label block mb-1">Grey Sale Cont</label>
                     <FindingPicker
                       name="grey_sale_cont"
@@ -1004,113 +1023,40 @@ export default async function GodownStockPage({
                     />
                   </div>
 
-                  <div className="col-span-3">
+                  {/* Charges paired with their amounts — full row, no gaps */}
+                  <div className="col-span-2">
                     <label className="label block mb-1">Kaat %</label>
-                    <input name="kaat_percent" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.kaatPercent ?? ""} style={{ maxWidth: 90 }} />
-                  </div>
-                  <div className="col-span-4">
-                    <label className="label block mb-1">EL-Meter</label>
-                    <input
-                      name="el_meter"
-                      type="number"
-                      step="any"
-                      className={roCls + " text-right"}
-                      defaultValue={formStock?.elMeter ?? ""}
-                      readOnly
-                      tabIndex={-1}
-                    />
+                    <input name="kaat_percent" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.kaatPercent ?? ""} />
                   </div>
                   <div className="col-span-2">
-                    <label className="label block mb-1">(1/5 or 1/10)</label>
-                    <select name="el_meter_mode" className="input-box mono" defaultValue={formStock?.elMeterMode ?? ""}>
-                      {EL_METER_MODE_OPTIONS.map((m) => (
-                        <option key={m} value={m}>{m || "—"}</option>
-                      ))}
-                    </select>
+                    <label className="label block mb-1">Kaat Amt</label>
+                    <input name="kaat_amt_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
                   </div>
-                  <div className="col-span-3">
-                    <label className="label block mb-1">Net Meter</label>
-                    <input
-                      name="net_meter_display"
-                      type="number"
-                      step="any"
-                      className={roCls + " text-right"}
-                      defaultValue={formStock?.netMeter ?? ""}
-                      readOnly
-                      tabIndex={-1}
-                    />
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Checkery</label>
+                    <input name="checkery" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.checkery ?? ""} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Checkery Amt</label>
+                    <input name="checkery_amt_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Commission</label>
+                    <input name="commission" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.commission ?? ""} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Commission Amt</label>
+                    <input name="commission_amt_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
                   </div>
 
-                  <div className="col-span-3">
-                    <label className="label block mb-1">Checkery</label>
-                    <input name="checkery" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.checkery ?? ""} style={{ maxWidth: 90 }} />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="label block mb-1">Commission</label>
-                    <input name="commission" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.commission ?? ""} style={{ maxWidth: 90 }} />
-                  </div>
+                  {/* Totals */}
                   <div className="col-span-3">
                     <label className="label block mb-1">Total</label>
-                    <input
-                      name="total_display"
-                      type="number"
-                      step="any"
-                      className={roCls + " text-right"}
-                      defaultValue={formStock?.total ?? ""}
-                      readOnly
-                      tabIndex={-1}
-                      style={{ maxWidth: 140 }}
-                    />
+                    <input name="total_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.total ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div className="col-span-3">
                     <label className="label block mb-1">Balance</label>
-                    <input
-                      name="balance_display"
-                      type="number"
-                      step="any"
-                      className={roCls + " text-right"}
-                      defaultValue={formStock?.balance ?? ""}
-                      readOnly
-                      tabIndex={-1}
-                      style={{ maxWidth: 140 }}
-                    />
-                  </div>
-
-                  <div className="col-span-4">
-                    <label className="label block mb-1">Kaat Amt</label>
-                    <input
-                      name="kaat_amt_disp"
-                      type="number"
-                      step="any"
-                      className={roCls + " text-right"}
-                      readOnly
-                      tabIndex={-1}
-                      style={{ maxWidth: 140 }}
-                    />
-                  </div>
-                  <div className="col-span-4">
-                    <label className="label block mb-1">Checkery Amt</label>
-                    <input
-                      name="checkery_amt_disp"
-                      type="number"
-                      step="any"
-                      className={roCls + " text-right"}
-                      readOnly
-                      tabIndex={-1}
-                      style={{ maxWidth: 140 }}
-                    />
-                  </div>
-                  <div className="col-span-4">
-                    <label className="label block mb-1">Commission Amt</label>
-                    <input
-                      name="commission_amt_disp"
-                      type="number"
-                      step="any"
-                      className={roCls + " text-right"}
-                      readOnly
-                      tabIndex={-1}
-                      style={{ maxWidth: 140 }}
-                    />
+                    <input name="balance_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.balance ?? ""} readOnly tabIndex={-1} />
                   </div>
 
                   <div className="col-span-12">
