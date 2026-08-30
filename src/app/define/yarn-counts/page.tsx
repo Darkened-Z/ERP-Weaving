@@ -245,6 +245,7 @@ export default async function YarnCountsPage({
                 <thead>
                   <tr>
                     <th>Desc</th>
+                    <th>Blend</th>
                     <th>Code</th>
                   </tr>
                 </thead>
@@ -256,6 +257,7 @@ export default async function YarnCountsPage({
                     return (
                       <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                         <td className="p-0"><a href={href} className="no-underline block px-2 py-1" style={style}>{c.description}</a></td>
+                        <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{c.type ?? "-"}</a></td>
                         <td className="p-0 mono text-[13px]"><a href={href} className="no-underline block px-2 py-1" style={style}>{c.countCode}</a></td>
                       </tr>
                     );
