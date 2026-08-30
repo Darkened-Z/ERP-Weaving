@@ -780,7 +780,7 @@ export default async function GodownStockPage({
 
                 <style dangerouslySetInnerHTML={{ __html: `
                   .gform{display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;align-items:center}
-                  .gform>div{display:flex;align-items:center;gap:6px;min-width:0}
+                  .gform>div{display:flex!important;flex-direction:row!important;align-items:center;gap:6px;min-width:0}
                   .gform>div>label.label{flex:0 0 82px;width:82px;text-align:right;margin:0;font-size:9.5px;line-height:1.05;display:block}
                   .gform>div>label.label>span{display:none}
                   .gform>div>:not(label.label){flex:1 1 auto;min-width:0}
