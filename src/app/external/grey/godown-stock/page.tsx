@@ -109,7 +109,7 @@ export default async function GodownStockPage({
   const partyAccounts = parties.filter((p) => p.level >= 5);
   const partyOpts = partyAccounts.map((p) => ({
     value: p.description,
-    label: `${p.code} — ${p.description}`,
+    label: p.description, // show the party NAME only (the code sits in the CODE field); still searchable by code via `desc`
     desc: p.code,
   }));
   const godownParty =
