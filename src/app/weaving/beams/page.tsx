@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { BeamStatusPicker, STATUS_LOC_CANONICAL } from "@/components/beam-status-picker";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -40,13 +41,57 @@ export default async function BeamsPage({
   }));
   const shedList = [...new Set(looms.map((l) => l.shed).filter((s): s is string => !!s))];
   const convContracts = await db
-    .select({ contNo: schema.intGreyConversionContract.contNo, party: schema.intGreyConversionContract.party })
+    .select({
+      contNo: schema.intGreyConversionContract.contNo,
+      contDate: schema.intGreyConversionContract.contDate,
+      grayQltyCode: schema.intGreyConversionContract.grayQltyCode,
+      grayCode: schema.intGreyConversionContract.grayCode,
+      qtyMtr: schema.intGreyConversionContract.qtyMtr,
+      convRatePerMtr: schema.intGreyConversionContract.convRatePerMtr,
+      grayRatePerMtr: schema.intGreyConversionContract.grayRatePerMtr,
+      status: schema.intGreyConversionContract.status,
+    })
     .from(schema.intGreyConversionContract)
     .orderBy(schema.intGreyConversionContract.contNo);
-  const contractOpts = convContracts.map((c) => ({
-    value: c.contNo,
-    label: c.party ? `${c.contNo} — ${c.party}` : c.contNo,
-  }));
+  const constructions = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction);
+  const qualityByCode: Record<string, string> = Object.fromEntries(
+    constructions.map((c) => [c.code, c.description])
+  );
+  const fmtN = (n: number | null | undefined, d = 0) =>
+    n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+  const contractColumns = [
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "desc", label: "Prd. Desc" },
+    { key: "qty", label: "Qty Mtr", width: 84, align: "right" as const },
+    { key: "convRate", label: "Conv Rate", width: 78, align: "right" as const },
+    { key: "grayRate", label: "Gray Rate", width: 78, align: "right" as const },
+    { key: "date", label: "Date", width: 86 },
+    { key: "status", label: "St", width: 34 },
+  ];
+  const contractRows = convContracts.map((c) => {
+    const desc =
+      (c.grayQltyCode && qualityByCode[c.grayQltyCode]) ||
+      (c.grayCode && qualityByCode[c.grayCode]) ||
+      c.grayCode ||
+      c.grayQltyCode ||
+      "";
+    return {
+      value: c.contNo,
+      code: c.contNo,
+      description: desc,
+      cells: {
+        cont: c.contNo,
+        desc,
+        qty: fmtN(c.qtyMtr),
+        convRate: fmtN(c.convRatePerMtr, 2),
+        grayRate: fmtN(c.grayRatePerMtr, 2),
+        date: c.contDate ?? "",
+        status: c.status ?? "",
+      },
+    };
+  });
   const selected = params.id ? rows.find((r) => r.id === parseInt(params.id!)) ?? null : null;
   const isAdding = params.adding === "1";
 
@@ -289,7 +334,7 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue={selected.type ?? ""} /></div>
                 <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} defaultValue={selected.partyTrade ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" defaultValue={selected.codeConv ?? ""} /></div>
-                <div><label className="label block mb-1">Conv Cont</label><Combobox name="contract_no" options={contractOpts} defaultValue={selected.contractNo ?? ""} className="input-box mono" placeholder="Conv contract #" /></div>
+                <div><label className="label block mb-1">Conv Cont</label><FindingPicker name="contract_no" defaultValue={selected.contractNo ?? ""} rows={contractRows} columns={contractColumns} title="GREY CONVERSION CONTRACT LIST" placeholder="Conv contract #" className="input-box mono cursor-pointer" /></div>
                 <div><label className="label block mb-1">Status Loc <span className="text-[10px] text-[var(--muted)]">(F9)</span></label><BeamStatusPicker name="status_loc" defaultValue={selected.statusLoc ?? "RUNNING"} allStatuses={beamStatuses} canonical={STATUS_LOC_CANONICAL} /></div>
                 <div><label className="label block mb-1">Szg Party</label><Combobox name="szg_party" options={partyOpts} defaultValue={selected.szgParty ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Shed No</label><input name="shed" list="beam-sheds" className="input-box mono" defaultValue={selected.shed ?? ""} /></div>

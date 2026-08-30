@@ -92,6 +92,21 @@ export function FindingPicker({
     };
   }, [filterByField]);
 
+  // Accept a value pushed in by an AutoFill (combobox:set), so a FindingPicker can
+  // be an auto-fill target just like a Combobox (e.g. Sal Cont # echoing into Grey Sale Cont).
+  useEffect(() => {
+    const onSet = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string } | undefined;
+      if (d?.name !== name) return;
+      const v = d?.value ?? "";
+      setValue(v);
+      const hidden = hiddenRef.current;
+      if (hidden) hidden.value = v;
+    };
+    document.addEventListener("combobox:set", onSet);
+    return () => document.removeEventListener("combobox:set", onSet);
+  }, [name]);
+
   const filtered = useMemo(() => {
     const scoped = filterByField && filterVal ? rows.filter((r) => !r.filterKey || r.filterKey === filterVal) : rows;
     const qL = q.trim().toLowerCase();

@@ -140,58 +140,33 @@ export default async function GodownStockPage({
   const qualityByCode: Record<string, string> = Object.fromEntries(
     constructions.map((c) => [c.code, c.description])
   );
-  const qualityCodeByDesc: Record<string, string> = Object.fromEntries(
-    constructions.map((c) => [c.description, c.code])
-  );
-  const greyCodeOpts = constructions.map((c) => ({
-    value: c.code,
-    label: c.width ? `${c.code} — ${c.width}" ${c.description}` : `${c.code} — ${c.description}`,
-  }));
-  const contactQualityFillMap: Record<string, Record<string, string>> = Object.fromEntries(
-    constructions.map((c) => [c.code, { contact_quality: c.description ?? "" }])
-  );
-  const dspQualityFillMap: Record<string, Record<string, string>> = Object.fromEntries(
-    constructions.map((c) => [c.code, { dsp_quality: c.description ?? "" }])
-  );
-  const contractOpts = convContracts.map((c) => ({
-    value: c.contNo,
-    label: `${c.contNo} — ${c.party ?? ""}`,
-    filterKey: c.party ?? "",
-  }));
   // Full-page F9 finder rows for Cont# — the party's running contracts shown as a
   // rich Oracle-style LOV (date, party, quality, read×pick×width, qty, rate, status).
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
   const contractColumns = [
-    { key: "cont", label: "Cont #", width: 92 },
-    { key: "date", label: "Date", width: 96 },
-    { key: "party", label: "Party" },
-    { key: "quality", label: "Quality", width: 120 },
-    { key: "rpw", label: "R×P×W", width: 100 },
-    { key: "qty", label: "Qty Mtr", width: 82, align: "right" as const },
-    { key: "rate", label: "Rate", width: 66, align: "right" as const },
-    { key: "status", label: "St", width: 40 },
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "desc", label: "Prd. Desc" },
+    { key: "qty", label: "Qty Mtr", width: 84, align: "right" as const },
+    { key: "convRate", label: "Conv Rate", width: 78, align: "right" as const },
+    { key: "grayRate", label: "Gray Rate", width: 78, align: "right" as const },
+    { key: "date", label: "Date", width: 86 },
+    { key: "status", label: "St", width: 34 },
   ];
   const contractFindRows = convContracts.map((c) => {
-    const constr = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "";
-    const rpw =
-      c.read != null && c.pick != null && c.width != null
-        ? `${fmtN(c.read)}×${fmtN(c.pick)}×${fmtN(c.width)}`
-        : "";
-    const rate = c.convRatePerMtr ?? c.rateMtr;
+    const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
     return {
       value: c.contNo,
       code: c.contNo,
-      description: `${c.party ?? ""}${constr ? ` · ${constr}` : ""}`,
+      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
       filterKey: c.party ?? "",
       cells: {
         cont: c.contNo,
-        date: c.contDate ?? "",
-        party: c.party ?? "",
-        quality: constr,
-        rpw,
+        desc: prd,
         qty: fmtN(c.qtyMtr),
-        rate: fmtN(rate, 2),
+        convRate: fmtN(c.convRatePerMtr, 2),
+        grayRate: fmtN(c.grayRatePerMtr, 2),
+        date: c.contDate ?? "",
         status: c.status ?? "",
       },
     };
@@ -214,11 +189,6 @@ export default async function GodownStockPage({
     .select()
     .from(schema.extGreyPurContract)
     .orderBy(desc(schema.extGreyPurContract.id));
-  const purOpts = purContracts.map((c) => ({
-    value: c.contractNo,
-    label: `${c.contractNo} — ${c.party ?? ""}`,
-    filterKey: c.party ?? "",
-  }));
   const purMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     purContracts.map((c) => [
       c.contractNo,
@@ -235,10 +205,6 @@ export default async function GodownStockPage({
     .select()
     .from(schema.extGreySalContract)
     .orderBy(desc(schema.extGreySalContract.id));
-  const salOpts = salContracts.map((c) => ({
-    value: c.contractNo,
-    label: `${c.contractNo} — ${c.party ?? ""}`,
-  }));
   const salMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     salContracts.map((c) => [
       c.contractNo,
@@ -252,6 +218,55 @@ export default async function GodownStockPage({
       },
     ])
   );
+
+  // Full-page F9 finder rows for the grey PURCHASE / SALE contracts — rich
+  // Oracle-style LOV columns (Prd. Desc, qty, rate, term, date, status).
+  const greyPurColumns = [
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "desc", label: "Prd. Desc" },
+    { key: "qty", label: "Qty", width: 84, align: "right" as const },
+    { key: "rate", label: "Rate", width: 70, align: "right" as const },
+    { key: "term", label: "Term", width: 70 },
+    { key: "date", label: "Date", width: 86 },
+    { key: "status", label: "St", width: 34 },
+  ];
+  const greySaleColumns = greyPurColumns;
+  const purFindRows = purContracts.map((c) => {
+    const prd = (c.greyCode ? qualityByCode[c.greyCode] : "") || c.greyCode || "";
+    return {
+      value: c.contractNo,
+      code: c.contractNo,
+      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      filterKey: c.party ?? "",
+      cells: {
+        cont: c.contractNo,
+        desc: prd,
+        qty: fmtN(c.quantityMtr),
+        rate: fmtN(c.ratePerMtr, 2),
+        term: c.paymentTerm ?? "",
+        date: c.contractDate ?? "",
+        status: c.status ?? "",
+      },
+    };
+  });
+  const salFindRows = salContracts.map((c) => {
+    const prd = (c.greyCode ? qualityByCode[c.greyCode] : "") || c.greyCode || "";
+    return {
+      value: c.contractNo,
+      code: c.contractNo,
+      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      filterKey: c.party ?? "",
+      cells: {
+        cont: c.contractNo,
+        desc: prd,
+        qty: fmtN(c.quantityMtr),
+        rate: fmtN(c.ratePerMtr, 2),
+        term: c.paymentTerm ?? "",
+        date: c.contractDate ?? "",
+        status: c.status ?? "",
+      },
+    };
+  });
 
   const warpRows = await db
     .select()
@@ -287,6 +302,25 @@ export default async function GodownStockPage({
   };
   for (const w of warpRows) pushCount(w.contractId, "WARP", w);
   for (const w of weftRows) pushCount(w.contractId, "WEFT", w);
+
+  // Quality shown when a contract is picked = full construction detail (Oracle-style):
+  // construction desc · read×pick×width · warp/weft counts — not a bare quality code.
+  for (const c of convContracts) {
+    const desc = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? c.grayQltyCode : c.grayCode ?? "";
+    const rpw =
+      c.read != null && c.pick != null
+        ? ` ${fmtN(c.read)}×${fmtN(c.pick)}${c.width != null ? `×${fmtN(c.width)}` : ""}`
+        : "";
+    const cnts = countMap[c.contNo] ?? [];
+    const warp = cnts.filter((x) => x.type === "WARP").map((x) => x.code).filter(Boolean).join(",");
+    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => x.code).filter(Boolean).join(",");
+    const wf = warp || weft ? ` [W:${warp || "-"} F:${weft || "-"}]` : "";
+    const rich = `${desc}${rpw}${wf}`.trim();
+    if (contractMap[c.contNo] && rich) {
+      contractMap[c.contNo].contact_quality = rich;
+      contractMap[c.contNo].dsp_quality = rich;
+    }
+  }
 
   const nextVNoVal = await db
     .select({
@@ -829,14 +863,14 @@ export default async function GodownStockPage({
 
                   <div className="col-span-2">
                     <label className="label block mb-1">Gdn Code</label>
-                    <input name="gdn_code_display" className={roCls} defaultValue={partyCodeByDesc.get(formStock?.gdnParty ?? "") ?? ""} readOnly tabIndex={-1} />
+                    <input name="gdn_code_display" className={roCls} defaultValue={partyCodeByDesc.get(formStock?.gdnParty ?? godownParty) ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div className="col-span-10">
-                    <label className="label block mb-1">Gdn Party</label>
+                    <label className="label block mb-1">Gdn Party <span className="text-[9px] text-[var(--muted)]">(own godown — auto)</span></label>
                     <Combobox
                       name="gdn_party"
                       options={partyOpts}
-                      defaultValue={formStock?.gdnParty ?? ""}
+                      defaultValue={formStock?.gdnParty ?? godownParty}
                       placeholder="Select party…"
                     />
                     <AutoFill watch="gdn_party" map={partyCodeFillMap} inputs={["gdn_code_display"]} />
@@ -858,17 +892,20 @@ export default async function GodownStockPage({
                       watch="cont_no"
                       map={contractMap}
                       combos={["purchase_party"]}
-                      inputs={["rate_conversion", "contact_quality", "dsp_quality", "_contact_quality_pick", "_dsp_quality_pick"]}
+                      inputs={["rate_conversion", "contact_quality", "dsp_quality"]}
                     />
                   </div>
                   <div className="col-span-6">
                     <label className="label block mb-1">Pur Cont # <span className="text-[9px] text-[var(--muted)]">(filtered by party)</span></label>
-                    <Combobox
+                    <FindingPicker
                       name="pur_cont_no"
-                      options={purOpts}
                       defaultValue={formStock?.purContNo ?? ""}
-                      placeholder="Pur contract #…"
+                      rows={purFindRows}
+                      columns={greyPurColumns}
                       filterByField="purchase_party"
+                      title="GREY PURCHASE CONTRACT LIST"
+                      placeholder="Pur contract #…"
+                      className="input-box mono text-[13px] cursor-pointer"
                     />
                     <AutoFill
                       watch="pur_cont_no"
@@ -878,34 +915,14 @@ export default async function GodownStockPage({
                     />
                   </div>
 
-                  <div className="col-span-2">
-                    <label className="label block mb-1">CQ Code</label>
-                    <Combobox
-                      name="_contact_quality_pick"
-                      options={greyCodeOpts}
-                      defaultValue={qualityCodeByDesc[formStock?.contactQuality ?? ""] ?? ""}
-                      placeholder="F9…"
-                    />
-                    <AutoFill watch="_contact_quality_pick" map={contactQualityFillMap} inputs={["contact_quality"]} />
-                  </div>
-                  <div className="col-span-10">
-                    <label className="label block mb-1">Contact Quality</label>
-                    <input name="contact_quality" className="input-box mono" defaultValue={formStock?.contactQuality ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} />
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="label block mb-1">DQ Code</label>
-                    <Combobox
-                      name="_dsp_quality_pick"
-                      options={greyCodeOpts}
-                      defaultValue={qualityCodeByDesc[formStock?.dspQuality ?? ""] ?? ""}
-                      placeholder="F9…"
-                    />
-                    <AutoFill watch="_dsp_quality_pick" map={dspQualityFillMap} inputs={["dsp_quality"]} />
-                  </div>
-                  <div className="col-span-10">
-                    <label className="label block mb-1">Dsp. Quality</label>
-                    <input name="dsp_quality" className="input-box mono" defaultValue={formStock?.dspQuality ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} />
+                  <div className="col-span-12">
+                    <label className="label block mb-1">
+                      Quality{" "}
+                      <span className="text-[9px] text-[var(--muted)]">(construction · read×pick×width · warp/weft — auto from contract)</span>
+                    </label>
+                    <input name="contact_quality" className="input-box mono w-full" defaultValue={formStock?.contactQuality ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} />
+                    {/* Despatch quality mirrors the contract quality; kept as a hidden field so the record still stores it. */}
+                    <input type="hidden" name="dsp_quality" defaultValue={formStock?.dspQuality ?? formStock?.contactQuality ?? ""} />
                   </div>
 
                   <div className="col-span-3">
@@ -948,11 +965,14 @@ export default async function GodownStockPage({
                   </div>
                   <div className="col-span-3">
                     <label className="label block mb-1">Sal Cont #</label>
-                    <Combobox
+                    <FindingPicker
                       name="sal_cont_no"
-                      options={salOpts}
                       defaultValue={formStock?.salContNo ?? ""}
+                      rows={salFindRows}
+                      columns={greySaleColumns}
+                      title="GREY SALE CONTRACT LIST"
                       placeholder="Sal contract #…"
+                      className="input-box mono text-[13px] cursor-pointer"
                     />
                     <AutoFill
                       watch="sal_cont_no"
@@ -969,12 +989,15 @@ export default async function GodownStockPage({
                   </div>
                   <div className="col-span-6">
                     <label className="label block mb-1">Grey Sale Cont</label>
-                    <Combobox
+                    <FindingPicker
                       name="grey_sale_cont"
-                      options={salOpts}
                       defaultValue={formStock?.greySaleCont ?? ""}
+                      rows={salFindRows}
+                      columns={greySaleColumns}
                       filterByField="purchase_party"
+                      title="GREY SALE CONTRACT LIST"
                       placeholder="Grey sale contract #…"
+                      className="input-box mono text-[13px] cursor-pointer"
                     />
                   </div>
 

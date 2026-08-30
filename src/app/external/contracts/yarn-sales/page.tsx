@@ -813,13 +813,11 @@ export default async function YarnSalesContractPage({
               <thead>
                 <tr>
                   <th>Cont. No</th>
-                  <th>Date</th>
                   <th>Party</th>
-                  <th>Count</th>
-                  <th>Brand</th>
-                  <th className="text-right">Qty Bags</th>
-                  <th className="text-right">Rate/Lbs</th>
-                  <th className="text-right">Amount</th>
+                  <th style={{ minWidth: 280 }}>Prd. Desc</th>
+                  <th className="text-right">Qty (Lbs)</th>
+                  <th className="text-right">Rate</th>
+                  <th>Date</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -828,6 +826,9 @@ export default async function YarnSalesContractPage({
                   const isSel = c.id === selected?.id;
                   const href = `/external/contracts/yarn-sales?id=${c.id}`;
                   const linkStyle = { color: isSel ? "white" : "inherit" } as const;
+                  const countDesc = c.countCode ? countDescByCode.get(String(c.countCode)) : undefined;
+                  const prdDesc = countDesc || c.countCode || null;
+                  const prdSub = [c.countCode, c.ratio].filter(Boolean).join(" · ");
                   return (
                     <tr
                       key={c.id}
@@ -838,11 +839,6 @@ export default async function YarnSalesContractPage({
                           {c.contNo}
                         </a>
                       </td>
-                      <td className="mono text-[12px]">
-                        <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.contDate}
-                        </a>
-                      </td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {c.partyCode ?? "-"}
@@ -851,22 +847,17 @@ export default async function YarnSalesContractPage({
                           )}
                         </a>
                       </td>
-                      <td className="text-[13px]">
+                      <td className="text-[13px]" style={{ minWidth: 280 }}>
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.countCode ?? "-"}
-                          {c.countCode && countDescByCode.get(String(c.countCode)) && (
-                            <span className="block text-[11px] opacity-70">{countDescByCode.get(String(c.countCode))}</span>
+                          {prdDesc ?? "-"}
+                          {countDesc && prdSub && (
+                            <span className="block text-[11px] opacity-70 mono">{prdSub}</span>
                           )}
-                        </a>
-                      </td>
-                      <td className="text-[13px]">
-                        <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.brand ?? "-"}
                         </a>
                       </td>
                       <td className="text-right mono text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {formatNum(c.qtyBags)}
+                          {formatNum(c.qtyLbs)}
                         </a>
                       </td>
                       <td className="text-right mono text-[13px]">
@@ -874,9 +865,9 @@ export default async function YarnSalesContractPage({
                           {formatNum(c.ratePerLbs)}
                         </a>
                       </td>
-                      <td className="text-right mono text-[13px] font-bold">
+                      <td className="mono text-[12px] whitespace-nowrap">
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {formatNum(c.amount)}
+                          {c.contDate}
                         </a>
                       </td>
                       <td className="mono text-[12px]">
@@ -890,7 +881,7 @@ export default async function YarnSalesContractPage({
                 {contracts.length === 0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={7}
                       className="text-center text-[13px] text-[var(--muted)] py-6"
                     >
                       No contracts. Click <b>New</b> above to create one.

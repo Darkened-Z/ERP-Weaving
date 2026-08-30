@@ -968,11 +968,11 @@ export default async function GreyPurchaseContractPage({
               <tr>
                 <th>Contract No</th>
                 <th>Party</th>
-                <th>Grey Code</th>
-                <th>Weave</th>
-                <th className="text-right">Qty Mtr</th>
-                <th className="text-right">Rate/Mtr</th>
-                <th className="text-right">Amount</th>
+                <th style={{ minWidth: 280 }}>Prd. Desc</th>
+                <th className="text-right">Qty</th>
+                <th className="text-right">Rate</th>
+                <th>Term</th>
+                <th>Date</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -981,6 +981,8 @@ export default async function GreyPurchaseContractPage({
                 const isSel = c.id === selected?.id;
                 const href = `/external/contracts/grey-purchase?id=${c.id}`;
                 const linkStyle = { color: isSel ? "white" : "inherit" };
+                const constrDesc = (c.greyCode && greyDescByCode.get(c.greyCode)) || null;
+                const constrSub = [c.greyCode, c.weave].filter(Boolean).join(" · ");
                 return (
                   <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                     <td className="mono font-bold">
@@ -994,16 +996,13 @@ export default async function GreyPurchaseContractPage({
                         )}
                       </a>
                     </td>
-                    <td className="mono text-[13px]">
+                    <td className="text-[13px]" style={{ minWidth: 280 }}>
                       <a href={href} className="no-underline block" style={linkStyle}>
-                        {c.greyCode ?? "-"}
-                        {c.greyCode && greyDescByCode.get(c.greyCode) && (
-                          <span className="block text-[11px] opacity-70">{greyDescByCode.get(c.greyCode)}</span>
+                        {constrDesc ?? c.greyCode ?? "-"}
+                        {constrDesc && constrSub && (
+                          <span className="block text-[11px] opacity-70 mono">{constrSub}</span>
                         )}
                       </a>
-                    </td>
-                    <td className="text-[13px]">
-                      <a href={href} className="no-underline block" style={linkStyle}>{c.weave ?? "-"}</a>
                     </td>
                     <td className="text-right mono">
                       <a href={href} className="no-underline block" style={linkStyle}>
@@ -1015,10 +1014,11 @@ export default async function GreyPurchaseContractPage({
                         {c.ratePerMtr != null ? fmt(c.ratePerMtr) : "-"}
                       </a>
                     </td>
-                    <td className="text-right mono font-bold">
-                      <a href={href} className="no-underline block" style={linkStyle}>
-                        {c.amount != null ? fmt(c.amount) : "-"}
-                      </a>
+                    <td className="text-[13px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>{c.paymentTerm ?? "-"}</a>
+                    </td>
+                    <td className="mono text-[12px] whitespace-nowrap">
+                      <a href={href} className="no-underline block" style={linkStyle}>{c.contractDate ?? "-"}</a>
                     </td>
                     <td>
                       <a href={href} className="no-underline block" style={linkStyle}>{statusBadge(c.status)}</a>

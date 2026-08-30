@@ -309,7 +309,6 @@ export default async function GreyConvContractPage({
   }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
-  const productCodeByDesc = new Map(productList.map((p) => [p.description, p.code]));
   const productDescInfo = new Map(productList.map((p) => [p.description, { mainDesc: p.mainDesc ?? "", subDesc: p.subDesc ?? "" }]));
   const curProdInfo = formItem?.productName ? productDescInfo.get(formItem.productName) : undefined;
 
@@ -535,6 +534,8 @@ export default async function GreyConvContractPage({
   const roCls = "input-box mono text-[13px] bg-gray-100";
   const yellowCls = "input-box mono text-[13px]";
   const greenCls = "input-box mono text-[13px] bg-green-50";
+
+  const fmtNum = (n: number | null | undefined) => (n == null ? "" : Number(n).toLocaleString("en-US"));
 
   const excelRows = contracts.map((c) => ({
     contNo: c.contNo,
@@ -1024,11 +1025,11 @@ export default async function GreyConvContractPage({
                 <tr>
                   <th>Cont No</th>
                   <th>Party</th>
-                  <th>Gray Code</th>
-                  <th>Product Name</th>
-                  <th>Loom Type</th>
+                  <th style={{ minWidth: 280 }}>Prd. Desc</th>
                   <th className="text-right">Qty Mtr</th>
-                  <th className="text-right">Rate/Mtr</th>
+                  <th className="text-right">Conv Rate</th>
+                  <th className="text-right">Gray Rate</th>
+                  <th>Date</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -1037,6 +1038,8 @@ export default async function GreyConvContractPage({
                   const isSel = c.id === selected?.id;
                   const linkStyle = { color: isSel ? "white" : "inherit" } as const;
                   const href = `/external/contracts/grey-conversion?id=${c.id}`;
+                  const constrCode = c.grayQltyCode ?? c.grayCode ?? null;
+                  const constrDesc = (constrCode && greyDescByCode.get(constrCode)) || c.productQuality || c.productName || null;
                   return (
                     <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{c.contNo}</a></td>
@@ -1048,25 +1051,18 @@ export default async function GreyConvContractPage({
                           )}
                         </a>
                       </td>
-                      <td className="mono text-[13px]">
+                      <td className="text-[13px]" style={{ minWidth: 280 }}>
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.grayCode ?? "-"}
-                          {c.grayCode && greyDescByCode.get(c.grayCode) && (
-                            <span className="block text-[11px] opacity-70">{greyDescByCode.get(c.grayCode)}</span>
+                          {constrDesc ?? constrCode ?? "-"}
+                          {constrDesc && constrCode && (
+                            <span className="block text-[11px] opacity-70 mono">{constrCode}</span>
                           )}
                         </a>
                       </td>
-                      <td className="text-[13px]">
-                        <a href={href} className="no-underline block" style={linkStyle}>
-                          {c.productName ?? "-"}
-                          {c.productName && productCodeByDesc.get(c.productName) && (
-                            <span className="block text-[11px] opacity-70">{productCodeByDesc.get(c.productName)}</span>
-                          )}
-                        </a>
-                      </td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.loomType ?? "-"}</a></td>
-                      <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{c.qtyMtr ?? "-"}</a></td>
-                      <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{c.rateMtr ?? "-"}</a></td>
+                      <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.qtyMtr) || "-"}</a></td>
+                      <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.convRatePerMtr) || "-"}</a></td>
+                      <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.grayRatePerMtr) || "-"}</a></td>
+                      <td className="mono text-[12px] whitespace-nowrap"><a href={href} className="no-underline block" style={linkStyle}>{c.contDate ?? "-"}</a></td>
                       <td className="mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.status}</a></td>
                     </tr>
                   );

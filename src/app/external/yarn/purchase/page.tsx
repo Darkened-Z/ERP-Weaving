@@ -203,6 +203,40 @@ export default async function YarnPurchaseVoucherPage({
       label: `${c.contNo}${c.partyCode ? ` — ${descByCode[c.partyCode] ?? c.partyCode}` : ""}`,
       filterKey: c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "",
     }));
+  // Oracle-style rich LOV for the header contract picker (FindingPicker).
+  const fmtN = (n: number | null | undefined, d = 0) =>
+    n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+  const contractColumns: { key: string; label: string; width?: number; align?: "left" | "right" }[] = [
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "desc", label: "Prd. Desc" },
+    { key: "qty", label: "Qty Lbs", width: 90, align: "right" },
+    { key: "rate", label: "Rate", width: 70, align: "right" },
+    { key: "date", label: "Date", width: 86 },
+    { key: "status", label: "St", width: 34 },
+  ];
+  const contractRows = purContracts
+    .filter((c) => c.status === "R")
+    .map((c) => {
+      const party = c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "";
+      const cDesc = c.countCode
+        ? countList.find((x) => String(x.code) === String(c.countCode))?.description || String(c.countCode)
+        : "";
+      const prdDesc = [cDesc, c.ratio ?? ""].filter(Boolean).join(" ").trim();
+      return {
+        value: c.contNo,
+        code: c.contNo,
+        description: party,
+        filterKey: party,
+        cells: {
+          cont: c.contNo,
+          desc: prdDesc,
+          qty: fmtN(c.qtyLbs),
+          rate: fmtN(c.ratePerLbs, 2),
+          date: c.contDate ?? "",
+          status: c.status ?? "",
+        },
+      };
+    });
   // Picking a contract in the header auto-fills the party/broker (comboboxes),
   // the brokerage %/bag, received/balance, and the read-only contract-info strip.
   const contractMap: Record<string, Record<string, string | number>> = {};
@@ -1071,12 +1105,15 @@ export default async function YarnPurchaseVoucherPage({
 
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Cont <span className="text-[9px] text-[var(--muted)]">(party's running)</span></label>
-                    <Combobox
+                    <FindingPicker
                       name="cont"
-                      options={contractOpts}
                       defaultValue={formVoucher?.cont ?? ""}
+                      rows={contractRows}
+                      columns={contractColumns}
+                      title="CONTRACT — FIND YARN PURCHASE"
                       placeholder="Contract #…"
                       filterByField="party"
+                      className="input-box mono text-[12px] cursor-pointer"
                     />
                     <AutoFill
                       watch="cont"

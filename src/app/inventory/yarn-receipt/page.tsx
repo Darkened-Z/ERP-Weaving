@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
 import { AutoAmount } from "@/components/auto-amount";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -118,6 +119,13 @@ export default async function YarnReceiptPage({
     .from(schema.intGreyConversionContract)
     .orderBy(desc(schema.intGreyConversionContract.contNo));
 
+  const constructions = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction);
+  const qualityByCode: Record<string, string> = Object.fromEntries(
+    constructions.map((c) => [c.code, c.description])
+  );
+
   const priorLotsRows = await db
     .selectDistinct({ v: schema.intYarnReceipt.yarnLotNo })
     .from(schema.intYarnReceipt)
@@ -152,14 +160,65 @@ export default async function YarnReceiptPage({
   const countBrandMap: Record<string, Record<string, string>> = Object.fromEntries(
     countList.map((c) => [c.code, { brand: c.description ?? "" }])
   );
-  const purOpts = purContracts.map((c) => ({
-    value: c.contNo,
-    label: `${c.contNo}${c.partyCode ? ` — ${partyDescByCode[c.partyCode] ?? c.partyCode}` : ""}${c.countCode ? ` [${c.countCode}]` : ""}`,
-  }));
-  const convOpts = convContracts.map((c) => ({
-    value: c.contNo,
-    label: `${c.contNo}${c.party ? ` — ${c.party}` : ""}`,
-  }));
+  const fmtN = (n: number | null | undefined, d = 0) =>
+    n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+
+  const purContractColumns = [
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "desc", label: "Prd. Desc" },
+    { key: "qty", label: "Qty Lbs", width: 90, align: "right" as const },
+    { key: "rate", label: "Rate", width: 70, align: "right" as const },
+    { key: "date", label: "Date", width: 86 },
+    { key: "status", label: "St", width: 34 },
+  ];
+  const purContractRows = purContracts.map((c) => {
+    const desc = [c.countCode, c.ratio].filter(Boolean).join(" ");
+    return {
+      value: c.contNo,
+      code: c.contNo,
+      description: desc,
+      cells: {
+        cont: c.contNo,
+        desc,
+        qty: fmtN(c.qtyLbs),
+        rate: fmtN(c.ratePerLbs, 2),
+        date: c.contDate ?? "",
+        status: c.status ?? "",
+      },
+    };
+  });
+
+  const convContractColumns = [
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "desc", label: "Prd. Desc" },
+    { key: "qty", label: "Qty Mtr", width: 84, align: "right" as const },
+    { key: "convRate", label: "Conv Rate", width: 78, align: "right" as const },
+    { key: "grayRate", label: "Gray Rate", width: 78, align: "right" as const },
+    { key: "date", label: "Date", width: 86 },
+    { key: "status", label: "St", width: 34 },
+  ];
+  const convContractRows = convContracts.map((c) => {
+    const desc =
+      (c.grayQltyCode && qualityByCode[c.grayQltyCode]) ||
+      (c.grayCode && qualityByCode[c.grayCode]) ||
+      c.grayCode ||
+      c.grayQltyCode ||
+      "";
+    return {
+      value: c.contNo,
+      code: c.contNo,
+      description: desc,
+      cells: {
+        cont: c.contNo,
+        desc,
+        qty: fmtN(c.qtyMtr),
+        convRate: fmtN(c.convRatePerMtr, 2),
+        grayRate: fmtN(c.grayRatePerMtr, 2),
+        date: c.contDate ?? "",
+        status: c.status ?? "",
+      },
+    };
+  });
 
   const purMap: Record<string, Record<string, string | number>> = {};
   for (const c of purContracts) {
@@ -595,11 +654,25 @@ export default async function YarnReceiptPage({
 
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Conv.Cont No (F9)</label>
-                        <Combobox name="convContNo" options={convOpts} defaultValue={editing?.convContNo ?? ""} placeholder="Select conv contract" />
+                        <FindingPicker
+                          name="convContNo"
+                          defaultValue={editing?.convContNo ?? ""}
+                          rows={convContractRows}
+                          columns={convContractColumns}
+                          title="GREY CONVERSION CONTRACT LIST"
+                          placeholder="Select conv contract"
+                        />
                       </div>
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Pur.Cont No (F9) *</label>
-                        <Combobox name="purContNo" options={purOpts} defaultValue={editing?.purContNo ?? ""} placeholder="Select purchase contract" />
+                        <FindingPicker
+                          name="purContNo"
+                          defaultValue={editing?.purContNo ?? ""}
+                          rows={purContractRows}
+                          columns={purContractColumns}
+                          title="YARN PURCHASE CONTRACT LIST"
+                          placeholder="Select purchase contract"
+                        />
                       </div>
                     </div>
                   </div>
