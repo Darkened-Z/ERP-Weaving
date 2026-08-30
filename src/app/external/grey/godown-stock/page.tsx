@@ -974,11 +974,8 @@ export default async function GodownStockPage({
                   <TermSelect
                     defaultTerm={formStock?.term ?? "CASH"}
                     defaultDate={formStock?.dueDate ?? ""}
+                    defaultDays={formStock?.days ?? ""}
                   />
-                  <div className="col-span-2">
-                    <label className="label block mb-1">Days</label>
-                    <input name="days" type="number" step="1" className="input-box mono text-right" defaultValue={formStock?.days ?? ""} />
-                  </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">Rate Sal</label>
                     <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateSal ?? ""} />
