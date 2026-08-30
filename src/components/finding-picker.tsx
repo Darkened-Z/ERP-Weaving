@@ -2,12 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Row = { value: string; code: string; description: string; extra?: string; filterKey?: string };
+type Column = { key: string; label: string; width?: number; align?: "left" | "right" };
+type Row = {
+  value: string;
+  code: string;
+  description: string;
+  extra?: string;
+  filterKey?: string;
+  /** Extra per-column values for the rich Oracle-LOV layout (keyed by Column.key). */
+  cells?: Record<string, string | number | null | undefined>;
+};
 
 /**
  * Oracle-Forms style full-page FINDING list for a flat master (parties,
  * accounts, etc.). Opens a modal with a search box and a Code / Description
  * table. Click a row (or Enter on a single match) to pick.
+ *
+ * Pass `columns` for a rich multi-column LOV (contract lists that mirror the
+ * Oracle grid: date, party, quality, rate, qty, status…). Each row supplies
+ * the column values in `cells`. Without `columns` it renders the classic
+ * Code / Description / [Extra] table.
  *
  * Stores `value` in a hidden input `name` and dispatches input/change/
  * combobox:change so downstream auto-fills (e.g. PartyCountGrid) react.
@@ -21,6 +35,7 @@ export function FindingPicker({
   className = "input-box mono cursor-pointer",
   extraLabel,
   filterByField,
+  columns,
 }: {
   name: string;
   defaultValue: string;
@@ -31,6 +46,8 @@ export function FindingPicker({
   extraLabel?: string;
   /** Name of another field whose value must equal a row's filterKey for it to show (empty other-field = show all). */
   filterByField?: string;
+  /** Optional Oracle-style columns; when set, the table renders these instead of Code/Description/[Extra]. */
+  columns?: Column[];
 }) {
   const [value, setValue] = useState(defaultValue || "");
   const [open, setOpen] = useState(false);
@@ -79,7 +96,10 @@ export function FindingPicker({
     const scoped = filterByField && filterVal ? rows.filter((r) => !r.filterKey || r.filterKey === filterVal) : rows;
     const qL = q.trim().toLowerCase();
     if (!qL) return scoped;
-    return scoped.filter((r) => `${r.code} ${r.description} ${r.extra ?? ""}`.toLowerCase().includes(qL));
+    return scoped.filter((r) => {
+      const cellText = r.cells ? Object.values(r.cells).map((v) => v ?? "").join(" ") : "";
+      return `${r.code} ${r.description} ${r.extra ?? ""} ${cellText}`.toLowerCase().includes(qL);
+    });
   }, [rows, q, filterByField, filterVal]);
 
   const pickRow = (v: string) => {
@@ -123,7 +143,7 @@ export function FindingPicker({
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-8" style={{ background: "rgba(15,23,42,0.6)" }} onClick={() => setOpen(false)}>
           <div
             className="border-2 border-black bg-white"
-            style={{ width: "min(760px, 96vw)", maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
+            style={{ width: columns ? "min(1040px, 97vw)" : "min(760px, 96vw)", maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="border-b border-black px-4 py-2 flex items-center justify-between" style={{ background: "#0f172a", color: "white" }}>
@@ -150,15 +170,29 @@ export function FindingPicker({
             <div className="overflow-auto" style={{ flex: 1 }}>
               <table className="w-full text-[12px] mono">
                 <thead className="sticky top-0 bg-white border-b-2 border-black">
-                  <tr>
-                    <th className="px-2 py-1 text-left border-b border-black" style={{ width: 160 }}>Code</th>
-                    <th className="px-2 py-1 text-left border-b border-black">Description</th>
-                    {extraLabel && <th className="px-2 py-1 text-left border-b border-black" style={{ width: 120 }}>{extraLabel}</th>}
-                  </tr>
+                  {columns ? (
+                    <tr>
+                      {columns.map((c) => (
+                        <th
+                          key={c.key}
+                          className={`px-2 py-1 border-b border-black ${c.align === "right" ? "text-right" : "text-left"}`}
+                          style={c.width ? { width: c.width } : undefined}
+                        >
+                          {c.label}
+                        </th>
+                      ))}
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th className="px-2 py-1 text-left border-b border-black" style={{ width: 160 }}>Code</th>
+                      <th className="px-2 py-1 text-left border-b border-black">Description</th>
+                      {extraLabel && <th className="px-2 py-1 text-left border-b border-black" style={{ width: 120 }}>{extraLabel}</th>}
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={extraLabel ? 3 : 2} className="px-4 py-8 text-center text-[var(--muted)] italic">No matches</td></tr>
+                    <tr><td colSpan={columns ? columns.length : extraLabel ? 3 : 2} className="px-4 py-8 text-center text-[var(--muted)] italic">No matches</td></tr>
                   ) : filtered.map((r) => (
                     <tr
                       key={r.value}
@@ -166,9 +200,22 @@ export function FindingPicker({
                       onClick={() => pickRow(r.value)}
                       style={value === r.value ? { background: "#0f172a", color: "white" } : undefined}
                     >
-                      <td className="px-2 py-1 font-bold">{r.code}</td>
-                      <td className="px-2 py-1">{r.description}</td>
-                      {extraLabel && <td className="px-2 py-1">{r.extra ?? ""}</td>}
+                      {columns ? (
+                        columns.map((c, ci) => (
+                          <td
+                            key={c.key}
+                            className={`px-2 py-1 ${c.align === "right" ? "text-right" : "text-left"} ${ci === 0 ? "font-bold" : ""}`}
+                          >
+                            {r.cells?.[c.key] ?? ""}
+                          </td>
+                        ))
+                      ) : (
+                        <>
+                          <td className="px-2 py-1 font-bold">{r.code}</td>
+                          <td className="px-2 py-1">{r.description}</td>
+                          {extraLabel && <td className="px-2 py-1">{r.extra ?? ""}</td>}
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>

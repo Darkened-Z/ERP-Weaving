@@ -158,15 +158,42 @@ export default async function GodownStockPage({
     label: `${c.contNo} — ${c.party ?? ""}`,
     filterKey: c.party ?? "",
   }));
-  // Full-page F9 finder rows for Cont# — the party's running contracts with their
-  // construction (read × pick) so the operator can pick like the Oracle LOV.
+  // Full-page F9 finder rows for Cont# — the party's running contracts shown as a
+  // rich Oracle-style LOV (date, party, quality, read×pick×width, qty, rate, status).
+  const fmtN = (n: number | null | undefined, d = 0) =>
+    n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+  const contractColumns = [
+    { key: "cont", label: "Cont #", width: 92 },
+    { key: "date", label: "Date", width: 96 },
+    { key: "party", label: "Party" },
+    { key: "quality", label: "Quality", width: 120 },
+    { key: "rpw", label: "R×P×W", width: 100 },
+    { key: "qty", label: "Qty Mtr", width: 82, align: "right" as const },
+    { key: "rate", label: "Rate", width: 66, align: "right" as const },
+    { key: "status", label: "St", width: 40 },
+  ];
   const contractFindRows = convContracts.map((c) => {
     const constr = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "";
+    const rpw =
+      c.read != null && c.pick != null && c.width != null
+        ? `${fmtN(c.read)}×${fmtN(c.pick)}×${fmtN(c.width)}`
+        : "";
+    const rate = c.convRatePerMtr ?? c.rateMtr;
     return {
       value: c.contNo,
       code: c.contNo,
       description: `${c.party ?? ""}${constr ? ` · ${constr}` : ""}`,
       filterKey: c.party ?? "",
+      cells: {
+        cont: c.contNo,
+        date: c.contDate ?? "",
+        party: c.party ?? "",
+        quality: constr,
+        rpw,
+        qty: fmtN(c.qtyMtr),
+        rate: fmtN(rate, 2),
+        status: c.status ?? "",
+      },
     };
   });
   const contractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
@@ -821,6 +848,7 @@ export default async function GodownStockPage({
                       name="cont_no"
                       defaultValue={formStock?.contNo ?? ""}
                       rows={contractFindRows}
+                      columns={contractColumns}
                       filterByField="purchase_party"
                       title="CONVERSION CONTRACT LIST"
                       placeholder="Contract #…"
