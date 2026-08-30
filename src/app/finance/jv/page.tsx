@@ -778,7 +778,7 @@ export default async function JournalVoucherPage({
                   </div>
                 </div>
 
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 hidden">
                   <label className="label block mb-1">Due Date</label>
                   <input
                     name="due_date"
@@ -787,7 +787,7 @@ export default async function JournalVoucherPage({
                     defaultValue={formMain?.dueDate ?? ""}
                   />
                 </div>
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 hidden">
                   <label className="label block mb-1">Exp.Date</label>
                   <input
                     name="exp_date"
@@ -838,7 +838,7 @@ export default async function JournalVoucherPage({
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 140 }}>Short Name</th>
                         <th style={{ width: 240 }}>Tittle</th>
-                        <th style={{ width: 34 }}>OK</th>
+                        <th className="hidden" style={{ width: 34 }}>OK</th>
                         <th style={{ width: 200 }}>Narr</th>
                         <th style={{ width: 100 }}>Chq.No</th>
                         <th style={{ width: 140 }}>Chq.Date</th>
@@ -877,7 +877,7 @@ export default async function JournalVoucherPage({
                                 tabIndex={-1}
                               />
                             </td>
-                            <td className="text-center text-[10px] text-[var(--muted)]">
+                            <td className="hidden text-center text-[10px] text-[var(--muted)]">
                               {l?.statusOk === "Y" ? "✓" : ""}
                             </td>
                             <td>

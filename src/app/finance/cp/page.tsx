@@ -649,7 +649,7 @@ export default async function CashPaymentPage({
                 <ImageAttach name="img" defaultValue={formVoucher?.img ?? ""} />
               </div>
 
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Exp.Date</label>
                 <input
                   name="exp_date"
@@ -700,8 +700,8 @@ export default async function CashPaymentPage({
                       <th style={{ width: 36 }}>Sr#</th>
                       <th style={{ width: 200 }}>Account (F9)</th>
                       <th style={{ width: 220 }}>Tittle</th>
-                      <th style={{ width: 34 }}>OK</th>
-                      <th style={{ width: 110 }}>Yarn Count</th>
+                      <th className="hidden" style={{ width: 34 }}>OK</th>
+                      <th className="hidden" style={{ width: 110 }}>Yarn Count</th>
                       <th style={{ width: 200 }}>Narr</th>
                       <th style={{ width: 110 }}>Chq.No</th>
                       <th style={{ width: 130 }}>Chq.Date</th>
@@ -733,10 +733,10 @@ export default async function CashPaymentPage({
                               tabIndex={-1}
                             />
                           </td>
-                          <td className="text-center text-[10px] text-[var(--muted)]">
+                          <td className="hidden text-center text-[10px] text-[var(--muted)]">
                             {l?.statusOk === "OK" ? "OK" : ""}
                           </td>
-                          <td>
+                          <td className="hidden">
                             <input
                               name="line_yarn"
                               list="fin-yarns"

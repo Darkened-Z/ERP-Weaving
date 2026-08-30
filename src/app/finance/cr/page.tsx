@@ -652,7 +652,7 @@ export default async function CashReceiptPage({
                 <ImageAttach name="img" defaultValue={formVoucher?.img ?? ""} />
               </div>
 
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Due Date</label>
                 <input
                   name="due_date"
@@ -661,7 +661,7 @@ export default async function CashReceiptPage({
                   defaultValue={formVoucher?.dueDate ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Exp.Date</label>
                 <input
                   name="exp_date"
@@ -712,8 +712,8 @@ export default async function CashReceiptPage({
                       <th style={{ width: 36 }}>Sr#</th>
                       <th style={{ width: 200 }}>Account (F9)</th>
                       <th style={{ width: 240 }}>Tittle</th>
-                      <th style={{ width: 34 }}>OK</th>
-                      <th style={{ width: 110 }}>Yarn Count</th>
+                      <th className="hidden" style={{ width: 34 }}>OK</th>
+                      <th className="hidden" style={{ width: 110 }}>Yarn Count</th>
                       <th style={{ width: 220 }}>Narr</th>
                       <th style={{ width: 110 }}>Chq.No</th>
                       <th style={{ width: 130 }}>Chq.Date</th>
@@ -745,10 +745,10 @@ export default async function CashReceiptPage({
                               tabIndex={-1}
                             />
                           </td>
-                          <td className="text-center text-[10px] text-[var(--muted)]">
+                          <td className="hidden text-center text-[10px] text-[var(--muted)]">
                             {l?.statusOk === "OK" ? "OK" : ""}
                           </td>
-                          <td>
+                          <td className="hidden">
                             <input
                               name="line_yarn"
                               list="fin-yarns"
