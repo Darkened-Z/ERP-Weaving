@@ -116,7 +116,7 @@ export default async function BranchOpeningPage({
               )}
               <form action={save}>
                 {selected && <input type="hidden" name="id" value={selected.id} />}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 gform">
                   <div>
                     <label className="label block mb-1">Branch Code</label>
                     <input
@@ -135,7 +135,7 @@ export default async function BranchOpeningPage({
                       required
                     />
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 gform-full">
                     <label className="label block mb-1">Address</label>
                     <input
                       name="address"

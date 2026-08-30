@@ -393,7 +393,7 @@ export default async function GreyTransferPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-3 mb-4">
+          <div className="grid grid-cols-12 gap-3 mb-4 gform">
             <div className="col-span-8">
               <label className="label block mb-1">Find</label>
               <div className="flex gap-2">
@@ -439,7 +439,7 @@ export default async function GreyTransferPage({
               <div className="px-4 py-2 border-b-2 border-black text-[12px] uppercase tracking-[0.1em] font-bold" style={{ background: "#F9A8D4" }}>
                 TRANSFER FROM (-)
               </div>
-              <div className="p-4 grid grid-cols-12 gap-3">
+              <div className="p-4 grid grid-cols-12 gap-3 gform">
                 <div className="col-span-3">
                   <label className="label block mb-1">V. Date</label>
                   <input
@@ -505,7 +505,7 @@ export default async function GreyTransferPage({
               <div className="px-4 py-2 border-b-2 border-black text-[12px] uppercase tracking-[0.1em] font-bold" style={{ background: "#FDBA74" }}>
                 TRANSFER TO (+)
               </div>
-              <div className="p-4 grid grid-cols-12 gap-3">
+              <div className="p-4 grid grid-cols-12 gap-3 gform">
                 <div className="col-span-6">
                   <label className="label block mb-1">Party To</label>
                   <Combobox name="party_to" options={partyOpts} defaultValue={formTransfer?.partyTo ?? ""} placeholder="Select party" />

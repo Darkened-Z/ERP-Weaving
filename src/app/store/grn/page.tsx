@@ -646,7 +646,7 @@ export default async function GrnPage({
             <form action={saveGrn}>
               {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4 gform">
                 <div>
                   <label className="label block mb-1">GRN No</label>
                   <input

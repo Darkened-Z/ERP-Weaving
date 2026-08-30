@@ -924,7 +924,7 @@ export default async function YarnPurchaseVoucherPage({
               <form id="ypv-save-form" action={saveVoucher}>
                 {formVoucher && <input type="hidden" name="id" value={formVoucher.id} />}
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
                   <div className="lg:col-span-3">
                     <label className="label block mb-1">Loom Type</label>
                     <select
@@ -1068,7 +1068,7 @@ export default async function YarnPurchaseVoucherPage({
                   </div>
 
                   <input type="hidden" name="bm_party" defaultValue={formVoucher?.bmParty ?? ""} />
-                  <div className="lg:col-span-12">
+                  <div className="lg:col-span-12 gform-full">
                     <label className="label block mb-1">Party</label>
                     <Combobox
                       name="party"
@@ -1152,7 +1152,7 @@ export default async function YarnPurchaseVoucherPage({
                     />
                   </div>
 
-                  <div className="lg:col-span-12">
+                  <div className="lg:col-span-12 gform-full">
                     <label className="label block mb-1">Lot No</label>
                     <input
                       name="lot_no"

@@ -453,7 +453,7 @@ export default async function YarnPurchaseContractPage({
             <AutoAmount qty="qty_bags" rate="one" target="qty_lbs" factor={100} round={0} />
             <AutoAmount qty="qty_bags" rate="rate_per_lbs" target="amount" factor={100} />
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 lg:gap-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 lg:gap-y-4 gform">
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Cont. Date</label>
                 <input

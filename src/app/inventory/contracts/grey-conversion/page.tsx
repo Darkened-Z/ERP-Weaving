@@ -584,7 +584,7 @@ export default async function IntGreyConversionContractPage({
 
               <div className="grid grid-cols-12 gap-3 mb-3">
                 <div className="col-span-8">
-                  <div className="grid grid-cols-5 gap-3 mb-3">
+                  <div className="grid grid-cols-5 gap-3 mb-3 gform">
                     <div>
                       <label className="label block mb-1">Cont. Date</label>
                       <input name="cont_date" type="date" className="input-box mono" defaultValue={formItem?.contDate ?? today} />
@@ -626,7 +626,7 @@ export default async function IntGreyConversionContractPage({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-3 mb-3">
+                  <div className="grid grid-cols-4 gap-3 mb-3 gform">
                     <div>
                       <label className="label block mb-1">Party <span className="text-[10px] text-[var(--muted)]">(F9 to find)</span></label>
                       <FindingPicker name="party" defaultValue={formItem?.party ?? ""} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
@@ -651,7 +651,7 @@ export default async function IntGreyConversionContractPage({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-3 mb-3">
+                  <div className="grid grid-cols-4 gap-3 mb-3 gform">
                     <div>
                       <label className="label block mb-1">Qty (Mtr)</label>
                       <input name="qty_mtr" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.qtyMtr ?? ""} />
@@ -662,7 +662,7 @@ export default async function IntGreyConversionContractPage({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-3 mb-3">
+                  <div className="grid grid-cols-4 gap-3 mb-3 gform">
                     <div>
                       <label className="label block mb-1">Rate Per Pick (N / Mtr)</label>
                       <input name="rate_per_pick" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePerPick ?? ""} />
@@ -683,7 +683,7 @@ export default async function IntGreyConversionContractPage({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-3 mb-3">
+                  <div className="grid grid-cols-4 gap-3 mb-3 gform">
                     <div className="col-span-2">
                       <label className="label block mb-1">Broaker</label>
                       <Combobox name="broker" options={partyOpts} defaultValue={formItem?.broker ?? ""} placeholder="Select broker" className="input-box mono text-[13px]" />
@@ -702,7 +702,7 @@ export default async function IntGreyConversionContractPage({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-3 mb-3">
+                  <div className="grid grid-cols-4 gap-3 mb-3 gform">
                     <div className="col-span-2">
                       <label className="label block mb-1">Gray Qlty Code (Const)</label>
                       <GreyQualityPicker name="gray_qlty_code" defaultValue={formItem?.grayQltyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
@@ -713,7 +713,7 @@ export default async function IntGreyConversionContractPage({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="grid grid-cols-3 gap-3 mb-3 gform">
                     <div>
                       <label className="label block mb-1">WRP Wt / 40 Mtr</label>
                       <input name="wrp_wt_40" type="number" step="any" className={greenCls} defaultValue={formItem?.wrpWt40 ?? ""} readOnly />
@@ -733,7 +733,7 @@ export default async function IntGreyConversionContractPage({
                     <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-3 gform">
                     <div>
                       <label className="label block mb-1">Read</label>
                       <input name="read" type="number" step="any" required className="input-box mono text-right" defaultValue={formItem?.read ?? ""} />
@@ -764,7 +764,7 @@ export default async function IntGreyConversionContractPage({
                     <Combobox name="find_contract" options={findContractOpts} defaultValue={formItem?.findContract ?? ""} placeholder="Select contract" className="input-box mono text-[13px] bg-[#FFF8B7]!" />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-2">
+                  <div className="grid grid-cols-2 gap-2 pt-2 gform">
                     <div>
                       <label className="label block mb-1">Warp WT/Mtr</label>
                       <input name="warp_wt_per_mtr" type="number" step="any" className={roCls} defaultValue={formItem?.warpWtPerMtr ?? ""} readOnly />

@@ -107,7 +107,7 @@ export default async function BeamStatusPage({
           )}
           <form action={saveStatus}>
             {selected && <input type="hidden" name="id" value={selected.id} />}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 gform">
               <div>
                 <label className="label block mb-1">Status</label>
                 <input

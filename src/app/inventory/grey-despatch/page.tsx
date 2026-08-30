@@ -1020,7 +1020,7 @@ export default async function GreyDespatchPage({
               <RowAutoFill key={`uc-cf-${i}`} watch={`uc_code_${i}`} map={ucCountFillMap} />
             ))}
 
-            <div className="grid grid-cols-12 gap-3 mb-2">
+            <div className="grid grid-cols-12 gap-3 mb-2 gform">
               <div className="col-span-2">
                 <label className="label block mb-1">Date</label>
                 <input name="v_date" type="date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
@@ -1055,7 +1055,7 @@ export default async function GreyDespatchPage({
 
             <div className="border border-black p-3 mb-2 bg-gray-50">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">DO-DETAIL</div>
-              <div className="grid grid-cols-12 gap-3">
+              <div className="grid grid-cols-12 gap-3 gform">
                 <div className="col-span-2">
                   <label className="label block mb-1">V.No From</label>
                   <input name="do_v_no_from" className="input-box mono" defaultValue={formItem?.doVNoFrom ?? ""} />
@@ -1131,7 +1131,7 @@ export default async function GreyDespatchPage({
               </div>
 
               <div className="col-span-5 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch To</label>
                     <input name="despatch_to" className="input-box mono text-[12px]" defaultValue={formItem?.despatchTo ?? ""} />
@@ -1141,7 +1141,7 @@ export default async function GreyDespatchPage({
                     <input name="despatch_location" className="input-box mono text-[12px]" defaultValue={formItem?.despatchLocation ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch From</label>
                     <input name="despatch_from" className="input-box mono text-[12px]" defaultValue={formItem?.despatchFrom ?? ""} />
@@ -1160,7 +1160,7 @@ export default async function GreyDespatchPage({
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Post Lot No</label>
                     <input name="post_lot_no" className="input-box mono text-[12px]" defaultValue={formItem?.postLotNo ?? ""} />
@@ -1177,7 +1177,7 @@ export default async function GreyDespatchPage({
                     <input name="shed_no" list="sheds-list" className="input-box mono text-[12px]" defaultValue={formItem?.shedNo ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Party</label>
                     <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
@@ -1187,7 +1187,7 @@ export default async function GreyDespatchPage({
                     <Combobox name="do_party" options={partyOpts} defaultValue={formItem?.doParty ?? ""} placeholder="Select do party" className="input-box mono text-[12px]" />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Than / Qty</label>
                     <input name="than_qty" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.thanQty ?? ""} />
@@ -1205,7 +1205,7 @@ export default async function GreyDespatchPage({
                     <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Ftx %</label>
                     <input name="ftx_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
@@ -1223,7 +1223,7 @@ export default async function GreyDespatchPage({
                     <input name="amt_tot" type="number" step="any" className="input-box mono text-right text-[12px] bg-red-50" defaultValue={formItem?.amtTot ?? ""} readOnly tabIndex={-1} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">GP No</label>
                     <input name="gp_no" list="gp-list" className="input-box mono text-[12px]" defaultValue={formItem?.gpNo ?? ""} />
@@ -1233,7 +1233,7 @@ export default async function GreyDespatchPage({
                     <input name="gp_date" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.gpDate ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Date From</label>
                     <input name="date_from" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.dateFrom ?? "2020-11-01"} />
@@ -1249,7 +1249,7 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-12 gap-3 mb-3">
+            <div className="grid grid-cols-12 gap-3 mb-3 gform">
               <div className="col-span-2">
                 <label className="label block mb-1">F.T Weave</label>
                 <input name="ft_weave" className="input-box mono text-[12px]" defaultValue={formItem?.ftWeave ?? ""} />

@@ -846,7 +846,7 @@ export default async function DailyProductionPage({
 
               <div className="border border-black p-4 mb-3">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">HEADER</div>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Date</label>
                     <input name="vDate" type="date" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
@@ -1049,7 +1049,7 @@ export default async function DailyProductionPage({
                 <div className="lg:col-span-5 space-y-6">
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PRODUCT</div>
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="grid grid-cols-1 gap-3 gform">
                       <div>
                         <label className="label block mb-1">Product Quality</label>
                         <Combobox name="productQuality" options={qualityOpts} defaultValue={editing?.productQuality ?? ""} className="input-box" placeholder="Select quality" />
@@ -1075,7 +1075,7 @@ export default async function DailyProductionPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PARTIES</div>
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="grid grid-cols-1 gap-3 gform">
                       <div>
                         <label className="label block mb-1">Conv Cont Party</label>
                         <Combobox name="convContParty" options={partyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
@@ -1093,7 +1093,7 @@ export default async function DailyProductionPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">SHIFT INCHARGE</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-3 gform">
                       <div>
                         <label className="label block mb-1">TM</label>
                         <select name="shiftInchargeTm" className="input-box mono" defaultValue={editing?.shiftInchargeTm ?? ""}>
@@ -1154,7 +1154,7 @@ export default async function DailyProductionPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">CODES</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-3 gform">
                       <div>
                         <label className="label block mb-1">No of widths</label>
                         <input name="noOfWidths" type="number" step="1" className="input-box mono text-right" defaultValue={editing?.noOfWidths ?? ""} />

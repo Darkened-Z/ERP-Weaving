@@ -249,7 +249,7 @@ export default async function PartsPage({
           <form action={savePart}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 gform">
               <div>
                 <label className="label block mb-1">Code</label>
                 <input
@@ -280,7 +280,7 @@ export default async function PartsPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4 gform">
               <div>
                 <label className="label block mb-1">Unit</label>
                 <input

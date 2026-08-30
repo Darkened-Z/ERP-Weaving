@@ -834,7 +834,7 @@ export default async function KnottingPage({
             <form id="ks-save-form" action={saveKnotting}>
               {formBill && <input type="hidden" name="id" value={formBill.id} />}
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Date</label>
                   <input
@@ -1024,7 +1024,7 @@ export default async function KnottingPage({
                   />
                 </div>
 
-                <div className="lg:col-span-12">
+                <div className="lg:col-span-12 gform-full">
                   <label className="label block mb-1">Rem</label>
                   <input
                     name="rem"

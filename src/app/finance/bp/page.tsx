@@ -669,7 +669,7 @@ export default async function BankPaymentPage({
             <form id="vf-save-form" action={saveVoucher}>
               {formVoucher && <input type="hidden" name="id" value={formVoucher.id} />}
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Date</label>
                   <input

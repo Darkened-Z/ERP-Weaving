@@ -458,7 +458,7 @@ export default async function YarnTransferPage({
                 <div className="lg:col-span-8 space-y-6">
 
                   <div className="border border-black p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Date</label>
                         <input name="vDate" type="date" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
@@ -506,7 +506,7 @@ export default async function YarnTransferPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">TRANSFER FROM ( - )</div>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-12">
                         <label className="label block mb-1">Transfer From (Party)</label>
                         <Combobox name="transferFromParty" options={partyOpts} defaultValue={editing?.transferFromParty ?? ""} placeholder="Select party" />
@@ -524,7 +524,7 @@ export default async function YarnTransferPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">TRANSFER TO ( + )</div>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-12">
                         <label className="label block mb-1">Transfer To (Party)</label>
                         <Combobox name="transferToParty" options={partyOpts} defaultValue={editing?.transferToParty ?? editing?.transferFromParty ?? ""} placeholder="Select party" />
@@ -542,7 +542,7 @@ export default async function YarnTransferPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">COUNT-DETAIL</div>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Stock Bage</label>
                         <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockBag} readOnly tabIndex={-1} />

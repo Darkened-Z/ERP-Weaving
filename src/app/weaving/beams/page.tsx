@@ -302,7 +302,7 @@ export default async function BeamsPage({
               </div>
             )}
             <form action={createBeam}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3 gform">
                 <div><label className="label block mb-1">Beams No</label><input name="beam_no" className="input-box mono" required autoFocus /></div>
                 <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue="WARP" /></div>
                 <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} className="input-box" placeholder="Party (F9)" /></div>
@@ -330,7 +330,7 @@ export default async function BeamsPage({
             </div>
             <form action={saveBeam}>
               <input type="hidden" name="id" value={selected.id} />
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3 gform">
                 <div><label className="label block mb-1">Type</label><input name="type" className="input-box mono" defaultValue={selected.type ?? ""} /></div>
                 <div><label className="label block mb-1">Party/Trade</label><Combobox name="party_trade" options={partyOpts} defaultValue={selected.partyTrade ?? ""} className="input-box" /></div>
                 <div><label className="label block mb-1">Code Conv</label><input name="code_conv" className="input-box mono" defaultValue={selected.codeConv ?? ""} /></div>

@@ -374,7 +374,7 @@ export default async function GreyDespatchDamiPage({
           <form id="dami-save-form" action={saveDami}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
-            <div className="grid grid-cols-12 gap-3 mb-4">
+            <div className="grid grid-cols-12 gap-3 mb-4 gform">
               <div className="col-span-2">
                 <label className="label block mb-1">Date</label>
                 <input name="v_date" type="date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
@@ -400,7 +400,7 @@ export default async function GreyDespatchDamiPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-12 gap-3 mb-4">
+            <div className="grid grid-cols-12 gap-3 mb-4 gform">
               <div className="col-span-6">
                 <label className="label block mb-1">Original Despatch</label>
                 <select name="original_despatch_id" className="input-box mono text-[12px]" defaultValue={formItem?.originalDespatchId ?? ""}>

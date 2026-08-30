@@ -170,7 +170,7 @@ export default async function PartyCountsPage({
                   map={{ WVG: { party: "" }, WRP: { party: "" }, RWD: { party: "" }, DBF: { party: "" } }}
                   combos={["party"]}
                 />
-                <div className="grid grid-cols-1 gap-y-3">
+                <div className="grid grid-cols-1 gap-y-3 gform">
                   <div>
                     <label className="label block mb-1">Trn. Type</label>
                     <Combobox
@@ -186,7 +186,7 @@ export default async function PartyCountsPage({
                       className="input-box"
                     />
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 gform-full">
                     <label className="label block mb-1">Party <span className="text-[10px] text-[var(--muted)]">(F9 — pick from list, no typing)</span></label>
                     <FindingPicker name="party" defaultValue={formItem?.partyCode ?? ""} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
                   </div>

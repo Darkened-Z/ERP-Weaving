@@ -518,7 +518,7 @@ export default async function BeamContractExtWsPage({
                 <RowAutoFill key={`ibws-cf-${i}`} watch={`d_count_code_${i}`} map={rowCountFillMap} />
               ))}
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 gform">
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Cont. Date</label>
                   <input
@@ -740,7 +740,7 @@ export default async function BeamContractExtWsPage({
                   />
                 </div>
 
-                <div className="lg:col-span-12">
+                <div className="lg:col-span-12 gform-full">
                   <label className="label block mb-1">Terms</label>
                   <input
                     name="terms"
@@ -748,7 +748,7 @@ export default async function BeamContractExtWsPage({
                     defaultValue={formContract?.terms ?? ""}
                   />
                 </div>
-                <div className="lg:col-span-12">
+                <div className="lg:col-span-12 gform-full">
                   <label className="label block mb-1">Remarks</label>
                   <input
                     name="remarks"

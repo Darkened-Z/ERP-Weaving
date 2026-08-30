@@ -320,6 +320,10 @@ tr:hover td {
 }
 .gform > div > label.label > span { display: none; }
 .gform > div > :not(label.label) { flex: 1 1 auto; min-width: 0; }
+/* Keep hidden / conditionally-hidden fields hidden (the flex !important above would show them). */
+.gform > .hidden,
+.gform > div[style*="display:none"],
+.gform > div[style*="display: none"] { display: none !important; }
 .gform .input-box,
 .gform select.input-box {
   padding: 0 5px;
@@ -331,15 +335,17 @@ tr:hover td {
 .gform input[type="number"] { max-width: 120px; }
 .gform .btn,
 .gform .btn-sm { padding: 0 7px; font-size: 10px; height: 21px; line-height: 21px; }
-.gform > .col-span-4,
-.gform > .col-span-5,
-.gform > .col-span-6,
-.gform > .col-span-7,
-.gform > .col-span-8,
-.gform > .col-span-9,
-.gform > .col-span-10,
-.gform > .col-span-11,
-.gform > .col-span-12,
+/* Wide fields span the whole row — matches plain AND responsive col-span (md:col-span-8 etc.).
+   col-span-1/2/3 deliberately excluded so they stay as single half-cells. */
+.gform > [class*="col-span-4"],
+.gform > [class*="col-span-5"],
+.gform > [class*="col-span-6"],
+.gform > [class*="col-span-7"],
+.gform > [class*="col-span-8"],
+.gform > [class*="col-span-9"],
+.gform > [class*="col-span-10"],
+.gform > [class*="col-span-11"],
+.gform > [class*="col-span-12"],
 .gform > .gform-full { grid-column: 1 / -1 !important; }
 @media (max-width: 820px) {
   .gform { grid-template-columns: 1fr; }

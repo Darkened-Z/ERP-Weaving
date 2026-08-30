@@ -585,7 +585,7 @@ export default async function YarnReceiptPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">DELIVERED FROM</div>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Date</label>
                         <input name="vDate" type="date" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
@@ -679,7 +679,7 @@ export default async function YarnReceiptPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">DELIVERED TO</div>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Yarn Party To</label>
                         <Combobox name="yarnPartyTo" options={partyOpts} defaultValue={editing?.yarnPartyTo ?? ""} placeholder="Party…" />
@@ -712,7 +712,7 @@ export default async function YarnReceiptPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">COUNT-DETAIL</div>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Stock Bage</label>
                         <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockBag} readOnly tabIndex={-1} />
@@ -765,7 +765,7 @@ export default async function YarnReceiptPage({
                         <input name="setNo" className="input-box mono" defaultValue={editing?.setNo ?? ""} />
                       </div>
 
-                      <div className="md:col-span-12">
+                      <div className="md:col-span-12 gform-full">
                         <label className="label block mb-1">Remarks</label>
                         <input name="remarks" className="input-box" defaultValue={editing?.remarks ?? ""} />
                       </div>

@@ -480,7 +480,7 @@ export default async function GreyPurchaseContractPage({
             <form action={saveContract}>
               {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
-              <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Contract Date</label>
                   <input
@@ -522,7 +522,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Exp. Date</label>
                   <input
@@ -560,7 +560,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Party Ref. No</label>
                   <input
@@ -578,7 +578,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div className="col-span-4">
                   <label className="label block mb-1">
                     Broaker <span className="text-[9px] font-normal">(F9)</span>
@@ -590,7 +590,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Brokag Percentage</label>
                   <input
@@ -613,7 +613,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Grey Code</label>
                   <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
@@ -652,7 +652,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="grid grid-cols-3 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Quantity (Mtr)</label>
                   <input
@@ -692,7 +692,7 @@ export default async function GreyPurchaseContractPage({
               </div>
               <AutoAmount qty="quantity_mtr" qty2="ext_mtr" rate="rate_per_mtr" target="amount" />
 
-              <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="grid grid-cols-3 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Ext. (Mtr)</label>
                   <input

@@ -173,8 +173,8 @@ export default async function NewTicketPage({
         </div>
 
         <form action={createTicket} className="border border-black p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <div className="md:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 gform">
+            <div className="md:col-span-2 gform-full">
               <label className="label block mb-1">Title *</label>
               <input
                 name="title"
@@ -213,7 +213,7 @@ export default async function NewTicketPage({
               </select>
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 gform-full">
               <label className="label block mb-1">Description</label>
               <textarea
                 name="description"
@@ -301,7 +301,7 @@ export default async function NewTicketPage({
               <input name="due_date" type="date" className="input-box mono" />
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 gform-full">
               <label className="label block mb-1">Labels</label>
               <input
                 name="labels"

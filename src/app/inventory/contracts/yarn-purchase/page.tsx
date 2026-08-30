@@ -446,7 +446,7 @@ export default async function IntYarnPurchaseContractPage({
             <AutoAmount qty="qty_bags" rate="one" target="qty_lbs" factor={100} round={0} />
             <AutoAmount qty="qty_bags" rate="rate_per_lbs" target="amount" factor={100} />
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 gform">
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Cont. Date</label>
                 <input
@@ -694,7 +694,7 @@ export default async function IntYarnPurchaseContractPage({
                 />
               </div>
 
-              <div className="lg:col-span-12">
+              <div className="lg:col-span-12 gform-full">
                 <label className="label block mb-1">Delivery Place</label>
                 <input
                   name="delivery_place"
@@ -702,7 +702,7 @@ export default async function IntYarnPurchaseContractPage({
                   defaultValue={formContract?.deliveryPlace ?? formContract?.img ?? ""}
                 />
               </div>
-              <div className="lg:col-span-12">
+              <div className="lg:col-span-12 gform-full">
                 <label className="label block mb-1">Remarks</label>
                 <input
                   name="remarks"

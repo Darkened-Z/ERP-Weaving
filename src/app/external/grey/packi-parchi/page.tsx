@@ -775,7 +775,7 @@ export default async function PackiParchiPage({
           <form id="pp-save-form" action={saveParchi}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
               <div className="lg:col-span-2">
                 <label className="label block mb-1">V. Date</label>
                 <input
@@ -1156,7 +1156,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-5"></div>
 
-              <div className="lg:col-span-12 border-t border-black pt-3 mt-1">
+              <div className="lg:col-span-12 border-t border-black pt-3 mt-1 gform-full">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">Sale Side</div>
               </div>
 
@@ -1273,7 +1273,7 @@ export default async function PackiParchiPage({
                 />
               </div>
 
-              <div className="lg:col-span-12 border-t border-black pt-3 mt-1">
+              <div className="lg:col-span-12 border-t border-black pt-3 mt-1 gform-full">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">Totals</div>
               </div>
 

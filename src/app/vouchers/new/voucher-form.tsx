@@ -164,7 +164,7 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
             </div>
 
             <form onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 gform">
                 <div>
                   <label className="label block mb-2">Voucher Type</label>
                   <select

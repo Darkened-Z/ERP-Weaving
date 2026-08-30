@@ -204,7 +204,7 @@ export default async function YarnCountsPage({
               )}
               <form action={saveCount}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
-                <div className="grid grid-cols-1 gap-y-3">
+                <div className="grid grid-cols-1 gap-y-3 gform">
                   <div>
                     <label className="label block mb-1">Code</label>
                     <input name="code" className="input-box mono bg-gray-100" value={formItem?.countCode ?? nextCode} readOnly tabIndex={-1} />

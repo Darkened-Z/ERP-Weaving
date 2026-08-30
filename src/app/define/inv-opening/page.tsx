@@ -334,7 +334,7 @@ export default async function InventoryOpeningPage({
 
             {tab === "yarn" && (
               <div className="space-y-3">
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Date</label>
                     <input name="entry_date" type="date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
@@ -352,7 +352,7 @@ export default async function InventoryOpeningPage({
                     <input name="voucher_no" className="input-box mono bg-gray-100" defaultValue={nextVoucherNo} readOnly />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">FY Code</label>
                     <input name="fy_code" className="input-box mono" defaultValue={formItem?.fyCode ?? ""} required />
@@ -374,7 +374,7 @@ export default async function InventoryOpeningPage({
                     <Combobox name="opn_party" options={partyOpts} defaultValue={String(formItem?.opnParty ?? "")} placeholder="Select party" className="input-box mono" />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Conv.Cont No</label>
                     <Combobox name="conv_cont_no" options={convContOpts} defaultValue={formItem?.convContNo ?? ""} placeholder="Select contract" className="input-box mono" />
@@ -393,7 +393,7 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Brand</label>
                     <select name="brand" className="input-box" defaultValue={formItem?.brand ?? ""}>
@@ -408,7 +408,7 @@ export default async function InventoryOpeningPage({
                     <input name="ratio" list="io-blends" className="input-box mono" defaultValue={formItem?.ratio ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-6 gap-x-3">
+                <div className="grid grid-cols-6 gap-x-3 gform">
                   <div>
                     <label className="label block mb-1">Warp</label>
                     <input name="qty_warp" type="number" step="any" className="input-box mono" defaultValue={formItem?.qtyWarp ?? ""} />
@@ -434,8 +434,8 @@ export default async function InventoryOpeningPage({
                     <input name="amount" type="number" step="any" className="input-box mono" defaultValue={formItem?.openingAmount ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
-                  <div className="col-span-3">
+                <div className="grid grid-cols-4 gap-x-4 gform">
+                  <div className="col-span-3 gform-full">
                     <label className="label block mb-1">Remarks</label>
                     <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
                   </div>
@@ -449,7 +449,7 @@ export default async function InventoryOpeningPage({
 
             {tab === "grey" && (
               <div className="space-y-3">
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Date</label>
                     <input name="entry_date" type="date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
@@ -468,7 +468,7 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div className="col-span-2">
                     <label className="label block mb-1">Product Name</label>
                     <input name="description" className="input-box" defaultValue={formItem?.description ?? ""} required />
@@ -483,7 +483,7 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Gray Width</label>
                     <input name="gray_width" type="number" step="any" className="input-box mono" defaultValue={formItem?.grayWidth ?? ""} />
@@ -514,7 +514,7 @@ export default async function InventoryOpeningPage({
                     <input name="design_no" className="input-box mono" defaultValue={formItem?.designNo ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Loom Type</label>
                     <select name="loom_type" className="input-box" defaultValue={formItem?.loomType ?? ""}>
@@ -526,12 +526,12 @@ export default async function InventoryOpeningPage({
                       <option value="SHUTTLE">SHUTTLE</option>
                     </select>
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-3 gform-full">
                     <label className="label block mb-1">Remarks</label>
                     <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-7 gap-x-3">
+                <div className="grid grid-cols-7 gap-x-3 gform">
                   <div>
                     <label className="label block mb-1">Lot No / Item Code</label>
                     <input name="item_code" className="input-box mono" defaultValue={formItem?.itemCode ?? ""} required />
@@ -565,7 +565,7 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Than</label>
                     <input name="than" type="number" step="any" className="input-box mono" defaultValue={formItem?.than ?? ""} />
@@ -584,7 +584,7 @@ export default async function InventoryOpeningPage({
 
             {tab === "beam" && (
               <div className="space-y-3">
-                <div className="grid grid-cols-5 gap-x-4">
+                <div className="grid grid-cols-5 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Date</label>
                     <input name="entry_date" type="date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
@@ -610,7 +610,7 @@ export default async function InventoryOpeningPage({
                   <label className="label block mb-1">Description</label>
                   <input name="description" className="input-box w-full" defaultValue={formItem?.description ?? ""} required />
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">B. Length</label>
                     <input name="qty" type="number" step="any" className="input-box mono" defaultValue={formItem?.openingQty ?? ""} />
@@ -628,7 +628,7 @@ export default async function InventoryOpeningPage({
                     <input name="unit" list="io-units" className="input-box" defaultValue={formItem?.unit ?? "MTR"} />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-x-4">
+                <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Location</label>
                     <select name="location" className="input-box" defaultValue={formItem?.location ?? ""}>
@@ -647,7 +647,7 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-x-4">
+                <div className="grid grid-cols-3 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Set #</label>
                     <input name="set_no" className="input-box mono" defaultValue={formItem?.setNo ?? ""} />

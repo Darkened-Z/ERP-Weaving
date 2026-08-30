@@ -116,7 +116,7 @@ export default async function EodImagesPage({
         <div className="border border-black p-6 mb-6">
           <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4">Upload image</div>
           <form action={saveImage}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Date</label>
                 <input name="img_date" type="date" className="input-box mono" defaultValue={today()} required />

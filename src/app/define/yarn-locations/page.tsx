@@ -82,7 +82,7 @@ export default async function YarnLocationsPage({
               </div>
               <form action={saveLocation}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
-                <div className="grid grid-cols-1 gap-y-3">
+                <div className="grid grid-cols-1 gap-y-3 gform">
                   <div>
                     <label className="label block mb-1">Code</label>
                     <input name="code" type="number" className="input-box mono" defaultValue={formItem?.code ?? ""} required />

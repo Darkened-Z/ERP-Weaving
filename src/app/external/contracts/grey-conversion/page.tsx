@@ -635,7 +635,7 @@ export default async function GreyConvContractPage({
 
             <div className="grid grid-cols-12 gap-3 mb-3">
               <div className="col-span-8">
-                <div className="grid grid-cols-5 gap-3 mb-3">
+                <div className="grid grid-cols-5 gap-3 mb-3 gform">
                   <div>
                     <label className="label block mb-1">Cont. Date</label>
                     <input name="cont_date" type="date" className="input-box mono" defaultValue={formItem?.contDate ?? today} />
@@ -670,7 +670,7 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-5 gap-3 mb-3">
+                <div className="grid grid-cols-5 gap-3 mb-3 gform">
                   <div>
                     <label className="label block mb-1">Exp. Date</label>
                     <input name="exp_date" type="date" className="input-box mono" defaultValue={formItem?.expDate ?? ""} />
@@ -680,7 +680,7 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="grid grid-cols-4 gap-3 mb-3 gform">
                   <div>
                     <label className="label block mb-1">Party <span className="text-[10px] text-[var(--muted)]">(F9 to find)</span></label>
                     <FindingPicker name="party" defaultValue={formItem?.party ?? ""} rows={partyFindRows} title="ACCOUNT — FIND PARTY" placeholder="Select party" className="input-box mono text-[13px] cursor-pointer" />
@@ -705,7 +705,7 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="grid grid-cols-4 gap-3 mb-3 gform">
                   <div>
                     <label className="label block mb-1">Qty (Mtr)</label>
                     <input name="qty_mtr" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.qtyMtr ?? ""} />
@@ -716,7 +716,7 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="grid grid-cols-4 gap-3 mb-3 gform">
                   <div>
                     <label className="label block mb-1">Rate Per Pick (N / Mtr)</label>
                     <input name="rate_per_pick" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePerPick ?? ""} />
@@ -737,7 +737,7 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="grid grid-cols-4 gap-3 mb-3 gform">
                   <div className="col-span-2">
                     <label className="label block mb-1">Broaker</label>
                     <Combobox name="broker" options={partyOpts} defaultValue={formItem?.broker ?? ""} placeholder="Select broker" className="input-box mono text-[13px]" />
@@ -752,7 +752,7 @@ export default async function GreyConvContractPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="grid grid-cols-4 gap-3 mb-3 gform">
                   <div className="col-span-2">
                     <label className="label block mb-1">Gray Qlty Code (Const) <span className="text-[10px] text-[var(--muted)]">(F9 to search by Read/Pick)</span></label>
                     <GreyQualityPicker name="gray_qlty_code" defaultValue={formItem?.grayQltyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />

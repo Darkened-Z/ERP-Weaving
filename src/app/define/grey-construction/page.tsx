@@ -266,7 +266,7 @@ export default async function GreyConstructionPage({
             <input type="hidden" name="width" defaultValue={formItem?.width ?? ""} />
             <input type="hidden" name="blend" defaultValue={formItem?.blend ?? ""} />
 
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4 gform">
               <div>
                 <label className="label block mb-1">Read</label>
                 <input name="reed" type="number" step="any" className="input-box mono" defaultValue={formItem?.reed ?? ""} />
@@ -314,7 +314,7 @@ export default async function GreyConstructionPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4 gform">
               <div>
                 <label className="label block mb-1">Status</label>
                 <select name="status" className="input-box" defaultValue={formItem?.status ?? "A"}>

@@ -532,7 +532,7 @@ export default async function AdjustmentPage({
             <form action={saveAdjustment}>
               {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Adj No</label>
                   <input
