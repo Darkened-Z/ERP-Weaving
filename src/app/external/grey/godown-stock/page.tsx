@@ -195,6 +195,8 @@ export default async function GodownStockPage({
       c.contractNo,
       {
         purchase_party: c.party ?? "",
+        // Basic purchase rate comes from the grey PURCHASE contract → drives total/commission.
+        rate: c.ratePerMtr,
         contact_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
         dsp_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
         _contact_quality_pick: c.greyCode ?? "",
@@ -912,7 +914,7 @@ export default async function GodownStockPage({
                       watch="pur_cont_no"
                       map={purMap}
                       combos={["purchase_party"]}
-                      inputs={["contact_quality"]}
+                      inputs={["contact_quality", "rate"]}
                     />
                   </div>
 
