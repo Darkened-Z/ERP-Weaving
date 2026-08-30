@@ -788,8 +788,9 @@ export default async function GodownStockPage({
                   .gform input[type=number]{max-width:135px}
                   .gform select.input-box{height:26px;padding:1px 4px}
                   .gform .btn-sm{padding:2px 8px;font-size:11px}
+                  .gform>div{grid-column:auto}
                   .gform>.col-span-4,.gform>.col-span-5,.gform>.col-span-6,.gform>.col-span-8,.gform>.col-span-10,.gform>.col-span-12{grid-column:1 / -1}
-                  @media(max-width:820px){.gform{grid-template-columns:1fr}}
+                  @media(max-width:820px){.gform{grid-template-columns:1fr}.gform>div{grid-column:1 / -1 !important}}
                 ` }} />
                 <div className="grid grid-cols-12 gap-x-2 gap-y-2 gform">
                   <div className="col-span-2">
