@@ -5,6 +5,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { TypeToggle } from "@/components/type-toggle";
 import { ContractOpenButton } from "@/components/contract-open-button";
+import { ContractInfoPanel } from "@/components/contract-info-panel";
 import { FindingPicker } from "@/components/finding-picker";
 import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -323,6 +324,31 @@ export default async function GodownStockPage({
       contractMap[c.contNo].contact_quality = rich;
       contractMap[c.contNo].dsp_quality = rich;
     }
+  }
+
+  // Full detail of each conversion contract, for the side info panel (updates on pick).
+  const contractInfoMap: Record<string, { label: string; value: string }[]> = {};
+  for (const c of convContracts) {
+    const constr = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? c.grayQltyCode : c.grayCode ?? "";
+    const cnts = countMap[c.contNo] ?? [];
+    const warp = cnts.filter((x) => x.type === "WARP").map((x) => x.code).filter(Boolean).join(", ");
+    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => x.code).filter(Boolean).join(", ");
+    const rpw =
+      c.read != null && c.pick != null
+        ? `${fmtN(c.read)}×${fmtN(c.pick)}${c.width != null ? `×${fmtN(c.width)}` : ""}`
+        : "";
+    contractInfoMap[c.contNo] = [
+      { label: "Party", value: c.party ?? "" },
+      { label: "Quality", value: constr },
+      { label: "Read×Pick×Wd", value: rpw },
+      { label: "Warp", value: warp },
+      { label: "Weft", value: weft },
+      { label: "Conv Rate", value: fmtN(c.convRatePerMtr, 2) },
+      { label: "Gray Rate", value: fmtN(c.grayRatePerMtr, 2) },
+      { label: "Qty Mtr", value: fmtN(c.qtyMtr) },
+      { label: "Date", value: c.contDate ?? "" },
+      { label: "Status", value: c.status ?? "" },
+    ];
   }
 
   const nextVNoVal = await db
@@ -880,7 +906,7 @@ export default async function GodownStockPage({
                   </div>
 
                   <div className="col-span-6">
-                    <label className="label block mb-1">Cont # <span className="text-[9px] text-[var(--muted)]">(F9 — party's contracts)</span></label>
+                    <label className="label block mb-1">Pur Conv Contract <span className="text-[9px] text-[var(--muted)]">(F9 — party's contracts)</span></label>
                     <FindingPicker
                       name="cont_no"
                       defaultValue={formStock?.contNo ?? ""}
@@ -899,7 +925,7 @@ export default async function GodownStockPage({
                     />
                   </div>
                   <div className="col-span-6">
-                    <label className="label block mb-1">Pur Cont # <span className="text-[9px] text-[var(--muted)]">(filtered by party)</span></label>
+                    <label className="label block mb-1">Pur Grey Contract <span className="text-[9px] text-[var(--muted)]">(filtered by party)</span></label>
                     <FindingPicker
                       name="pur_cont_no"
                       defaultValue={formStock?.purContNo ?? ""}
@@ -926,6 +952,10 @@ export default async function GodownStockPage({
                     <input name="contact_quality" className="input-box mono w-full" defaultValue={formStock?.contactQuality ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} />
                     {/* Despatch quality mirrors the contract quality; kept as a hidden field so the record still stores it. */}
                     <input type="hidden" name="dsp_quality" defaultValue={formStock?.dspQuality ?? formStock?.contactQuality ?? ""} />
+                  </div>
+
+                  <div className="col-span-12">
+                    <ContractInfoPanel watch="cont_no" map={contractInfoMap} title="PUR CONV CONTRACT — INFO" />
                   </div>
 
                   {/* Measurements — one dense row */}
