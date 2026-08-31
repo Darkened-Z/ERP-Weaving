@@ -15,9 +15,11 @@ type CountFill = {
 export function GodownCalc({
   godownParty,
   countMap,
+  countLabel = {},
 }: {
   godownParty: string;
   countMap: Record<string, CountFill[]>;
+  countLabel?: Record<string, string>;
 }) {
   useEffect(() => {
     const form = document.getElementById("gdn-save-form") as HTMLFormElement | null;
@@ -132,7 +134,7 @@ export function GodownCalc({
       const rows = countMap[d.value ?? ""] ?? [];
       if (!rows.length) return; // this contract carries no counts — leave the grid alone
       const codes = fields("count_code");
-      const CNT = ["count_code", "count_type", "count_cal_count", "count_ends", "count_rate_per_lbs", "count_wt_per_mtr", "count_cost_per_mtr", "count_tot_lbs"];
+      const CNT = ["count_code", "count_desc", "count_type", "count_cal_count", "count_ends", "count_rate_per_lbs", "count_wt_per_mtr", "count_cost_per_mtr", "count_tot_lbs"];
       // Picking a contract DISTRIBUTES its warp/weft counts onto the grid (overwrite; clear extra rows).
       codes.forEach((codeEl, i) => {
         const tr = codeEl.closest("tr");
@@ -142,6 +144,7 @@ export function GodownCalc({
         const row = rows[i];
         if (row) {
           cell("count_code", row.code);
+          cell("count_desc", row.code ? countLabel[String(row.code)] ?? "" : ""); // e.g. "2" → "30/S MVS PV 65;35"
           cell("count_type", row.type);
           cell("count_cal_count", row.calCount);
           cell("count_ends", row.ends);
@@ -163,6 +166,6 @@ export function GodownCalc({
       form.removeEventListener("change", onChange);
       document.removeEventListener("combobox:change", onCombo);
     };
-  }, [godownParty, countMap]);
+  }, [godownParty, countMap, countLabel]);
   return null;
 }

@@ -126,11 +126,15 @@ export default async function GodownStockPage({
     .from(schema.yarnCounts)
     .where(eq(schema.yarnCounts.status, "A"))
     .orderBy(schema.yarnCounts.countCode);
+  // Full count label = description + fibre type, e.g. count "2" → "30/S MVS PV 65;35".
+  const countLabelByCode = new Map(
+    yarnCountList.map((c) => [String(c.countCode), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()])
+  );
   const gsCountFillMap: Record<string, Record<string, string>> = {};
   for (const c of yarnCountList) {
-    gsCountFillMap[String(c.countCode)] = { count_desc: c.description ?? "", count_type: c.type ?? "" };
+    gsCountFillMap[String(c.countCode)] = { count_desc: countLabelByCode.get(String(c.countCode)) ?? "", count_type: c.type ?? "" };
   }
-  const gsCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
+  const gsCountDescByCode = countLabelByCode;
 
   const convContracts = await db
     .select()
@@ -179,6 +183,8 @@ export default async function GodownStockPage({
       {
         purchase_party: c.party ?? "",
         rate_conversion: c.rateMtr ?? c.convRatePerMtr,
+        // Rate Sal auto-fills from the conversion contract's grey rate (Oracle: 163.45).
+        rate_sal: c.grayRatePerMtr ?? "",
         contact_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
         dsp_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
         _contact_quality_pick: c.grayQltyCode ?? "",
@@ -213,15 +219,17 @@ export default async function GodownStockPage({
     salContracts.map((c) => [
       c.contractNo,
       {
-        rate_sal: c.ratePerMtr ?? "",
+        // Each sale contract's own rate shows in its display box beside the picker
+        // (does NOT overwrite Rate Sal, which now carries the conversion grey rate).
+        sal_cont_rate_disp: c.ratePerMtr ?? "",
+        grey_sale_rate_disp: c.ratePerMtr ?? "",
         grey_sale_cont: c.contractNo,
-        contact_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
-        dsp_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
         _contact_quality_pick: c.greyCode ?? "",
         _dsp_quality_pick: c.greyCode ?? "",
       },
     ])
   );
+  const salRateByNo = new Map(salContracts.map((c) => [c.contractNo, c.ratePerMtr]));
 
   // Full-page F9 finder rows for the grey PURCHASE / SALE contracts — rich
   // Oracle-style LOV columns (Prd. Desc, qty, rate, term, date, status).
@@ -331,8 +339,14 @@ export default async function GodownStockPage({
   for (const c of convContracts) {
     const constr = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? c.grayQltyCode : c.grayCode ?? "";
     const cnts = countMap[c.contNo] ?? [];
-    const warp = cnts.filter((x) => x.type === "WARP").map((x) => x.code).filter(Boolean).join(", ");
-    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => x.code).filter(Boolean).join(", ");
+    // Show each warp/weft count with its full description (Oracle: "2" → "2 — 30/S MVS PV 65;35").
+    const lbl = (code: string | null) => {
+      if (!code) return "";
+      const l = countLabelByCode.get(String(code));
+      return l ? `${code} — ${l}` : String(code);
+    };
+    const warp = cnts.filter((x) => x.type === "WARP").map((x) => lbl(x.code)).filter(Boolean).join(", ");
+    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => lbl(x.code)).filter(Boolean).join(", ");
     const rpw =
       c.read != null && c.pick != null
         ? `${fmtN(c.read)}×${fmtN(c.pick)}${c.width != null ? `×${fmtN(c.width)}` : ""}`
@@ -927,7 +941,7 @@ export default async function GodownStockPage({
                       watch="cont_no"
                       map={contractMap}
                       combos={["purchase_party"]}
-                      inputs={["rate_conversion", "contact_quality", "dsp_quality"]}
+                      inputs={["rate_conversion", "contact_quality", "dsp_quality", "rate_sal"]}
                     />
                   </div>
                   <div className="col-span-6">
@@ -1013,11 +1027,11 @@ export default async function GodownStockPage({
                     defaultDays={formStock?.days ?? ""}
                   />
                   <div className="col-span-2">
-                    <label className="label block mb-1">Rate Sal</label>
+                    <label className="label block mb-1">Rate Sal <span className="text-[9px] text-[var(--muted)]">(auto — grey rate)</span></label>
                     <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateSal ?? ""} />
                   </div>
 
-                  {/* Sale contracts */}
+                  {/* Sale contracts — compact rows, each contract's rate shown beside it (below Rate Sal) */}
                   <div className="col-span-4">
                     <label className="label block mb-1">Sal Cont #</label>
                     <FindingPicker
@@ -1033,7 +1047,7 @@ export default async function GodownStockPage({
                       watch="sal_cont_no"
                       map={salMap}
                       combos={["grey_sale_cont"]}
-                      inputs={["rate_sal", "contact_quality"]}
+                      inputs={["sal_cont_rate_disp"]}
                     />
                     <RowAutoFill watch="count_code" map={gsCountFillMap} />
                     <datalist id="gs-yarn-counts">
@@ -1042,7 +1056,11 @@ export default async function GodownStockPage({
                       ))}
                     </datalist>
                   </div>
-                  <div className="col-span-8">
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Sal Rate</label>
+                    <input name="sal_cont_rate_disp" type="number" step="any" className={roCls + " text-right"} defaultValue={salRateByNo.get(formStock?.salContNo ?? "") ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                  <div className="col-span-4">
                     <label className="label block mb-1">Grey Sale Cont</label>
                     <FindingPicker
                       name="grey_sale_cont"
@@ -1054,6 +1072,15 @@ export default async function GodownStockPage({
                       placeholder="Grey sale contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
                     />
+                    <AutoFill
+                      watch="grey_sale_cont"
+                      map={salMap}
+                      inputs={["grey_sale_rate_disp"]}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Rate</label>
+                    <input name="grey_sale_rate_disp" type="number" step="any" className={roCls + " text-right"} defaultValue={salRateByNo.get(formStock?.greySaleCont ?? "") ?? ""} readOnly tabIndex={-1} />
                   </div>
 
                   {/* Charges paired with their amounts — full row, no gaps */}
@@ -1278,7 +1305,7 @@ export default async function GodownStockPage({
                   </div>
                 </div>
 
-                <GodownCalc godownParty={godownParty} countMap={countMap} />
+                <GodownCalc godownParty={godownParty} countMap={countMap} countLabel={Object.fromEntries(countLabelByCode)} />
               </form>
             </div>
           </div>
