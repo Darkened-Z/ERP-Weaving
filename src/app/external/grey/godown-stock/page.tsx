@@ -113,9 +113,12 @@ export default async function GodownStockPage({
     label: p.description, // show the party NAME only (the code sits in the CODE field); still searchable by code via `desc`
     desc: p.code,
   }));
-  // Auto godown: prefer the grey-stock trading godown (Oracle "GODOWN - GREY STOCK (TRADING)"),
-  // then any account containing "GODOWN".
+  // Auto godown (fixed): the level-5 account under the "STOCK - GREY" head
+  // (code 1.01.25.15 → "Godown - Grey Stock Treading"). All grey purchase stock &
+  // sales are booked into this godown. Falls back to a description match if the head is renamed.
+  const greyStockHead = parties.find((p) => p.level === 4 && /stock\s*-\s*grey/i.test(p.description));
   const godownParty =
+    (greyStockHead ? partyAccounts.find((p) => p.code.startsWith(greyStockHead.code + "."))?.description : undefined) ??
     partyAccounts.find((p) => /godown/i.test(p.description) && /grey\s*stock/i.test(p.description))?.description ??
     partyAccounts.find((p) => /godown/i.test(p.description))?.description ??
     "";
