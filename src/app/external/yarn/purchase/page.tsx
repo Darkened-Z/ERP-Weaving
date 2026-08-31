@@ -7,6 +7,7 @@ import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { FindingPicker } from "@/components/finding-picker";
+import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
@@ -254,6 +255,7 @@ export default async function YarnPurchaseVoucherPage({
     contractMap[c.contNo] = {
       party: c.partyCode ? descByCode[c.partyCode] ?? c.partyCode : "",
       broker: c.broker ? descByCode[c.broker] ?? c.broker : "",
+      percent: c.agePercent ?? "",
       per_bag: c.brokagePerBag ?? "",
       pur: received,
       bal: (c.qtyBags ?? 0) - received,
@@ -1133,8 +1135,9 @@ export default async function YarnPurchaseVoucherPage({
                       watch="cont"
                       map={contractMap}
                       combos={["party", "broker"]}
-                      inputs={["per_bag", "pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
+                      inputs={["percent", "per_bag", "pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                     />
+                    <YarnContractApply lineMap={lineContractMap} />
                   </div>
                   {/* PUR / BAL / SAL AVG RATE hidden per client feedback — kept as hidden inputs
                      so the contract AutoFill still writes to them and save still records the values. */}
