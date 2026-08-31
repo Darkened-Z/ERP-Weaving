@@ -215,6 +215,9 @@ export default async function GreyStockLedgerPage({
             </p>
           </div>
           <div className="flex gap-2">
+            <a href={`/reports/grey/stock-account-ledger?from=${from}&to=${to}${party ? `&party=${encodeURIComponent(party)}` : ""}`} className="btn btn-outline btn-sm no-print">
+              Value Ledger (Dr/Cr)
+            </a>
             <PrintButton />
             <ExcelExportButton
               rows={rows.map((r) => ({
