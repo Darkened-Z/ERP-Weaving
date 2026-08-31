@@ -85,6 +85,7 @@ export default async function GreyStockPage({
   const totalBalance = rows.reduce((s, r) => s + (r.balance ?? 0), 0);
 
   const actionButtons: { label: string; href: string }[] = [
+    { label: "Grey Register (Party-wise)", href: `/external/reports/grey-stock/party-register${filterQs}` },
     { label: "Stock + Lgr", href: `/external/reports/grey-stock/stock-lgr${filterQs}` },
     { label: "Sal Cont Date + Gdn Register", href: `/external/reports/grey-stock/gdn-register${filterQs}` },
     { label: "Sal Cont + Lgr", href: `/external/reports/grey-stock/sal-cont-lgr${filterQs}` },

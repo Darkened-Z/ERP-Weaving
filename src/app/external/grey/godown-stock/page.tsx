@@ -119,6 +119,16 @@ export default async function GodownStockPage({
     partyAccounts.find((p) => /godown/i.test(p.description) && /grey\s*stock/i.test(p.description))?.description ??
     partyAccounts.find((p) => /godown/i.test(p.description))?.description ??
     "";
+  // Printing Name lists ONLY printing parties — the "CREDITORS - PRINTING" group
+  // (level-5 accounts under the PRINTING head, e.g. BAHOO / RADO / IMTIAZ PRINT).
+  const printingHead =
+    parties.find((p) => p.level === 3 && /printing/i.test(p.description)) ??
+    parties.find((p) => p.level < 5 && /printing/i.test(p.description));
+  const printingOpts = printingHead
+    ? partyAccounts
+        .filter((p) => p.code.startsWith(printingHead.code + "."))
+        .map((p) => ({ value: p.description, label: p.description, desc: p.code }))
+    : partyOpts;
   const partyCodeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
   // Picking a party fills its account code live (Oracle: choose Amir → code 868 appears).
   const partyCodeFillMap: Record<string, Record<string, string>> = Object.fromEntries(
@@ -1147,12 +1157,12 @@ export default async function GodownStockPage({
                   </div>
 
                   <div className="col-span-6">
-                    <label className="label block mb-1">Printing Name</label>
+                    <label className="label block mb-1">Printing Name <span className="text-[9px] text-[var(--muted)]">(printing parties)</span></label>
                     <Combobox
                       name="printing_name"
-                      options={partyOpts}
+                      options={printingOpts}
                       defaultValue={formStock?.printingName ?? ""}
-                      placeholder="Party or free text…"
+                      placeholder="Select printing party…"
                     />
                   </div>
                   <div className="col-span-6">
