@@ -113,8 +113,12 @@ export default async function GodownStockPage({
     label: p.description, // show the party NAME only (the code sits in the CODE field); still searchable by code via `desc`
     desc: p.code,
   }));
+  // Auto godown: prefer the grey-stock trading godown (Oracle "GODOWN - GREY STOCK (TRADING)"),
+  // then any account containing "GODOWN".
   const godownParty =
-    partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+    partyAccounts.find((p) => /godown/i.test(p.description) && /grey\s*stock/i.test(p.description))?.description ??
+    partyAccounts.find((p) => /godown/i.test(p.description))?.description ??
+    "";
   const partyCodeByDesc = new Map(partyAccounts.map((p) => [p.description, p.code]));
   // Picking a party fills its account code live (Oracle: choose Amir → code 868 appears).
   const partyCodeFillMap: Record<string, Record<string, string>> = Object.fromEntries(
@@ -219,8 +223,9 @@ export default async function GodownStockPage({
     salContracts.map((c) => [
       c.contractNo,
       {
-        // Each sale contract's own rate shows in its display box beside the picker
-        // (does NOT overwrite Rate Sal, which now carries the conversion grey rate).
+        // The picked sale contract's rate flows into the locked Rate Sal, and also
+        // shows in the small display box beside its own picker.
+        rate_sal: c.ratePerMtr ?? "",
         sal_cont_rate_disp: c.ratePerMtr ?? "",
         grey_sale_rate_disp: c.ratePerMtr ?? "",
         grey_sale_cont: c.contractNo,
@@ -1027,8 +1032,8 @@ export default async function GodownStockPage({
                     defaultDays={formStock?.days ?? ""}
                   />
                   <div className="col-span-2">
-                    <label className="label block mb-1">Rate Sal <span className="text-[9px] text-[var(--muted)]">(auto — grey rate)</span></label>
-                    <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateSal ?? ""} />
+                    <label className="label block mb-1">Rate Sal <span className="text-[9px] text-[var(--muted)]">(locked — auto from contract)</span></label>
+                    <input name="rate_sal" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.rateSal ?? ""} readOnly tabIndex={-1} />
                   </div>
 
                   {/* Sale contracts — compact rows, each contract's rate shown beside it (below Rate Sal) */}
@@ -1047,7 +1052,7 @@ export default async function GodownStockPage({
                       watch="sal_cont_no"
                       map={salMap}
                       combos={["grey_sale_cont"]}
-                      inputs={["sal_cont_rate_disp"]}
+                      inputs={["sal_cont_rate_disp", "rate_sal"]}
                     />
                     <RowAutoFill watch="count_code" map={gsCountFillMap} />
                     <datalist id="gs-yarn-counts">
@@ -1075,7 +1080,7 @@ export default async function GodownStockPage({
                     <AutoFill
                       watch="grey_sale_cont"
                       map={salMap}
-                      inputs={["grey_sale_rate_disp"]}
+                      inputs={["grey_sale_rate_disp", "rate_sal"]}
                     />
                   </div>
                   <div className="col-span-2">
