@@ -115,8 +115,15 @@ export default async function KachiParchiPage({
     label: `${p.code} — ${p.description}`,
     desc: p.code,
   }));
+  // Purchase Party auto = the grey-stock godown (level-5 under the "STOCK - GREY" head,
+  // code 1.01.25.15 → "Godown - Grey Stock Treading"). We pick up (uthana) grey lying in
+  // this godown; stock/avg below aggregate what was purchased into it.
+  const greyStockHead = parties.find((p) => p.level === 4 && /stock\s*-\s*grey/i.test(p.description));
   const godownParty =
-    partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ?? "";
+    (greyStockHead ? partyAccounts.find((p) => p.code.startsWith(greyStockHead.code + "."))?.description : undefined) ??
+    partyAccounts.find((p) => /godown/i.test(p.description) && /grey\s*stock/i.test(p.description))?.description ??
+    partyAccounts.find((p) => p.description.toUpperCase().includes("GODOWN"))?.description ??
+    "";
   // Printing Name lists ONLY printing parties (the "CREDITORS - PRINTING" group).
   const printingHead =
     parties.find((p) => p.level === 3 && /printing/i.test(p.description)) ??
@@ -176,11 +183,18 @@ export default async function KachiParchiPage({
   let stockMtrCalc: number | null = null;
   let avgCalc: number | null = null;
   if (formItem?.purchaseParty && formItem?.dspQuality) {
-    const [inAgg] = await db
+    // Replay every movement for this godown+quality in date order: purchases IN
+    // (godown stock) and consumptions OUT (other kachi parchis). Balances and the
+    // moving weighted-average rate use NET METER / net amount. IMPORTANT: whenever the
+    // meter balance hits 0 the average lot RESETS — the next purchase's rate starts the
+    // average fresh, never carrying the depleted lot forward.
+    const insRows = await db
       .select({
-        t: sql<number>`coalesce(sum(${schema.extGodownStock.than}), 0)`,
-        m: sql<number>`coalesce(sum(${schema.extGodownStock.meter}), 0)`,
-        amt: sql<number>`coalesce(sum(${schema.extGodownStock.meter} * coalesce(${schema.extGodownStock.rate}, 0)), 0)`,
+        date: schema.extGodownStock.vDate,
+        id: schema.extGodownStock.id,
+        than: schema.extGodownStock.than,
+        mtr: schema.extGodownStock.netMeter,
+        rate: schema.extGodownStock.rate,
       })
       .from(schema.extGodownStock)
       .where(
@@ -190,10 +204,14 @@ export default async function KachiParchiPage({
           eq(schema.extGodownStock.type, "STOCK")
         )
       );
-    const [outAgg] = await db
+    const outsRows = await db
       .select({
-        t: sql<number>`coalesce(sum(${schema.extKachiParchi.than}), 0)`,
-        m: sql<number>`coalesce(sum(${schema.extKachiParchi.meter}), 0)`,
+        date: schema.extKachiParchi.vDate,
+        id: schema.extKachiParchi.id,
+        than: schema.extKachiParchi.than,
+        meter: schema.extKachiParchi.meter,
+        elMeter: schema.extKachiParchi.elMeter,
+        baadMeter: schema.extKachiParchi.baadMeter,
       })
       .from(schema.extKachiParchi)
       .where(
@@ -203,10 +221,46 @@ export default async function KachiParchiPage({
           sql`${schema.extKachiParchi.id} != ${formItem.id}`
         )
       );
-    stockThanCalc = (inAgg?.t ?? 0) - (outAgg?.t ?? 0);
-    stockMtrCalc = Math.round(((inAgg?.m ?? 0) - (outAgg?.m ?? 0)) * 100) / 100;
-    avgCalc =
-      (inAgg?.m ?? 0) > 0 ? Math.round(((inAgg?.amt ?? 0) / (inAgg?.m ?? 1)) * 100) / 100 : null;
+
+    type Mv = { date: string; id: number; kind: "IN" | "OUT"; than: number; mtr: number; rate: number };
+    const moves: Mv[] = [
+      ...insRows.map((r) => ({ date: r.date ?? "", id: r.id, kind: "IN" as const, than: r.than ?? 0, mtr: r.mtr ?? 0, rate: r.rate ?? 0 })),
+      ...outsRows.map((r) => ({
+        date: r.date ?? "",
+        id: r.id,
+        kind: "OUT" as const,
+        than: r.than ?? 0,
+        mtr: (r.meter ?? 0) - (r.elMeter ?? 0) - (r.baadMeter ?? 0), // net consumed
+        rate: 0,
+      })),
+    ].sort((a, b) =>
+      a.date === b.date
+        ? a.kind === b.kind
+          ? a.id - b.id
+          : a.kind === "IN" ? -1 : 1 // same day: purchases before consumptions
+        : a.date.localeCompare(b.date)
+    );
+
+    const EPS = 0.001;
+    let balThan = 0;
+    let balMtr = 0;
+    let accAmt = 0; // net amount of the CURRENT lot (since the last time balance hit 0)
+    for (const mv of moves) {
+      if (mv.kind === "IN") {
+        balThan += mv.than;
+        balMtr += mv.mtr;
+        accAmt += mv.mtr * mv.rate;
+      } else {
+        const avg = balMtr > EPS ? accAmt / balMtr : 0;
+        balThan -= mv.than;
+        balMtr -= mv.mtr;
+        accAmt -= mv.mtr * avg; // remove consumed value at the running average
+      }
+      if (balMtr <= EPS) accAmt = 0; // depleted → average restarts from scratch
+    }
+    stockThanCalc = Math.round(balThan * 100) / 100;
+    stockMtrCalc = Math.round(balMtr * 100) / 100;
+    avgCalc = balMtr > EPS ? Math.round((accAmt / balMtr) * 100) / 100 : null;
   }
 
   const gdnLineParty = formItem?.purchaseParty ?? (isAdding ? godownParty : "");
