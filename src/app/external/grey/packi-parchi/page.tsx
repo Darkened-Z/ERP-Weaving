@@ -105,6 +105,15 @@ export default async function PackiParchiPage({
   const partyOpts = parties
     .filter((p) => p.level >= 5)
     .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}`, desc: p.code }));
+  // Printing Name lists ONLY printing parties (the "CREDITORS - PRINTING" group).
+  const printingHead =
+    parties.find((p) => p.level === 3 && /printing/i.test(p.description)) ??
+    parties.find((p) => p.level < 5 && /printing/i.test(p.description));
+  const printingOpts = printingHead
+    ? parties
+        .filter((p) => p.level >= 5 && p.code.startsWith(printingHead.code + "."))
+        .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}`, desc: p.code }))
+    : partyOpts;
   const partyCodeByDesc = new Map(parties.filter((p) => p.level >= 5).map((p) => [p.description, p.code]));
 
   const yarnCountList = await db
@@ -1237,11 +1246,12 @@ export default async function PackiParchiPage({
                 />
               </div>
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Printing Name</label>
-                <input
+                <label className="label block mb-1">Printing Name <span className="text-[9px] text-[var(--muted)]">(printing parties)</span></label>
+                <Combobox
                   name="printing_name"
-                  className="input-box mono"
+                  options={printingOpts}
                   defaultValue={formItem?.printingName ?? ""}
+                  placeholder="Select printing party…"
                 />
               </div>
               <div className="lg:col-span-3">
