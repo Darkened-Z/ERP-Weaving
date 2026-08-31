@@ -163,6 +163,12 @@ export default async function GodownStockPage({
   const qualityByCode: Record<string, string> = Object.fromEntries(
     constructions.map((c) => [c.code, c.description])
   );
+  // The conv-contract table holds BOTH conversion (type CONV) and sale (type SALE)
+  // contracts. CONV feeds the Pur Conv Contract picker; SALE joins the grey-sale
+  // contracts in the Sal Cont pickers. Only running (status R) contracts are offered.
+  const isRunning = (s: string | null | undefined) => (s ?? "R").toUpperCase() === "R";
+  const convOnlyContracts = convContracts.filter((c) => (c.type ?? "CONV").toUpperCase() !== "SALE" && isRunning(c.status));
+  const saleConvContracts = convContracts.filter((c) => (c.type ?? "").toUpperCase() === "SALE" && isRunning(c.status));
   // Full-page F9 finder rows for Cont# — the party's running contracts shown as a
   // rich Oracle-style LOV (date, party, quality, read×pick×width, qty, rate, status).
   const fmtN = (n: number | null | undefined, d = 0) =>
@@ -176,7 +182,7 @@ export default async function GodownStockPage({
     { key: "date", label: "Date", width: 86 },
     { key: "status", label: "St", width: 34 },
   ];
-  const contractFindRows = convContracts.map((c) => {
+  const contractFindRows = convOnlyContracts.map((c) => {
     const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
     return {
       value: c.contNo,
@@ -232,12 +238,12 @@ export default async function GodownStockPage({
     .select()
     .from(schema.extGreySalContract)
     .orderBy(desc(schema.extGreySalContract.id));
-  const salMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
-    salContracts.map((c) => [
+  // Sale-side contracts = grey-sale contracts + the SALE-type conv contracts. Picking
+  // either flows its rate into the locked Rate Sal and the display box beside the picker.
+  const salMap: Record<string, Record<string, string | number | null>> = Object.fromEntries([
+    ...salContracts.map((c) => [
       c.contractNo,
       {
-        // The picked sale contract's rate flows into the locked Rate Sal, and also
-        // shows in the small display box beside its own picker.
         rate_sal: c.ratePerMtr ?? "",
         sal_cont_rate_disp: c.ratePerMtr ?? "",
         grey_sale_rate_disp: c.ratePerMtr ?? "",
@@ -245,9 +251,24 @@ export default async function GodownStockPage({
         _contact_quality_pick: c.greyCode ?? "",
         _dsp_quality_pick: c.greyCode ?? "",
       },
-    ])
-  );
-  const salRateByNo = new Map(salContracts.map((c) => [c.contractNo, c.ratePerMtr]));
+    ] as const),
+    ...saleConvContracts.map((c) => [
+      c.contNo,
+      {
+        // SALE-type conv contract: the sale rate is its grey rate.
+        rate_sal: c.grayRatePerMtr ?? "",
+        sal_cont_rate_disp: c.grayRatePerMtr ?? "",
+        grey_sale_rate_disp: c.grayRatePerMtr ?? "",
+        grey_sale_cont: c.contNo,
+        _contact_quality_pick: c.grayQltyCode ?? "",
+        _dsp_quality_pick: c.grayQltyCode ?? "",
+      },
+    ] as const),
+  ]);
+  const salRateByNo = new Map<string, number | null>([
+    ...salContracts.map((c) => [c.contractNo, c.ratePerMtr] as const),
+    ...saleConvContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const),
+  ]);
 
   // Full-page F9 finder rows for the grey PURCHASE / SALE contracts — rich
   // Oracle-style LOV columns (Prd. Desc, qty, rate, term, date, status).
@@ -261,7 +282,7 @@ export default async function GodownStockPage({
     { key: "status", label: "St", width: 34 },
   ];
   const greySaleColumns = greyPurColumns;
-  const purFindRows = purContracts.map((c) => {
+  const purFindRows = purContracts.filter((c) => isRunning(c.status)).map((c) => {
     const prd = (c.greyCode ? qualityByCode[c.greyCode] : "") || c.greyCode || "";
     return {
       value: c.contractNo,
@@ -297,6 +318,27 @@ export default async function GodownStockPage({
       },
     };
   });
+  // SALE-type conv contracts, shaped for the sale-contract LOV, then merged with the
+  // grey-sale contracts so both feed the Sal Cont # / Grey Sale Cont pickers.
+  const saleConvFindRows = saleConvContracts.map((c) => {
+    const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
+    return {
+      value: c.contNo,
+      code: c.contNo,
+      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      filterKey: c.party ?? "",
+      cells: {
+        cont: c.contNo,
+        desc: prd,
+        qty: fmtN(c.qtyMtr),
+        rate: fmtN(c.grayRatePerMtr, 2),
+        term: "",
+        date: c.contDate ?? "",
+        status: c.status ?? "",
+      },
+    };
+  });
+  const saleAllFindRows = [...saleConvFindRows, ...salFindRows];
 
   const warpRows = await db
     .select()
@@ -944,13 +986,12 @@ export default async function GodownStockPage({
                   </div>
 
                   <div className="col-span-6">
-                    <label className="label block mb-1">Pur Conv Contract <span className="text-[9px] text-[var(--muted)]">(F9 — party's contracts)</span></label>
+                    <label className="label block mb-1">Pur Conv Contract <span className="text-[9px] text-[var(--muted)]">(F9 — all running conv contracts)</span></label>
                     <FindingPicker
                       name="cont_no"
                       defaultValue={formStock?.contNo ?? ""}
                       rows={contractFindRows}
                       columns={contractColumns}
-                      filterByField="purchase_party"
                       title="CONVERSION CONTRACT LIST"
                       placeholder="Contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
@@ -963,13 +1004,12 @@ export default async function GodownStockPage({
                     />
                   </div>
                   <div className="col-span-6">
-                    <label className="label block mb-1">Pur Grey Contract <span className="text-[9px] text-[var(--muted)]">(filtered by party)</span></label>
+                    <label className="label block mb-1">Pur Grey Contract <span className="text-[9px] text-[var(--muted)]">(F9 — all running grey contracts)</span></label>
                     <FindingPicker
                       name="pur_cont_no"
                       defaultValue={formStock?.purContNo ?? ""}
                       rows={purFindRows}
                       columns={greyPurColumns}
-                      filterByField="purchase_party"
                       title="GREY PURCHASE CONTRACT LIST"
                       placeholder="Pur contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
@@ -1055,9 +1095,9 @@ export default async function GodownStockPage({
                     <FindingPicker
                       name="sal_cont_no"
                       defaultValue={formStock?.salContNo ?? ""}
-                      rows={salFindRows}
+                      rows={saleAllFindRows}
                       columns={greySaleColumns}
-                      title="GREY SALE CONTRACT LIST"
+                      title="SALE CONTRACT LIST (conv-sale + grey-sale)"
                       placeholder="Sal contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
                     />
@@ -1083,10 +1123,9 @@ export default async function GodownStockPage({
                     <FindingPicker
                       name="grey_sale_cont"
                       defaultValue={formStock?.greySaleCont ?? ""}
-                      rows={salFindRows}
+                      rows={saleAllFindRows}
                       columns={greySaleColumns}
-                      filterByField="purchase_party"
-                      title="GREY SALE CONTRACT LIST"
+                      title="SALE CONTRACT LIST (conv-sale + grey-sale)"
                       placeholder="Grey sale contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
                     />
