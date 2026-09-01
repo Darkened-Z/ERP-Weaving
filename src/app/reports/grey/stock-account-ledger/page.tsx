@@ -3,17 +3,18 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
-import { and, gte, lte, sql } from "drizzle-orm";
+import { and, gte, lte, or, sql } from "drizzle-orm";
 import { fmt, escLike, sixMonthsAgo, todayIso, partyByNameOptions } from "../../_shared";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GREY STOCK — ACCOUNT LEDGER (value / Dr-Cr).
- * The grey-stock trading account seen as debit/credit: each godown-stock line books a
- * PURCHASE (Dr = net meter × cost rate) and a SALE (Cr = net meter × sale rate). The
- * running column tracks cumulative profit (Sale − Purchase); the footer shows total
- * purchase, total sale and the net profit / loss.
+ * The grey-stock godown account as debit/credit:
+ *   DEBIT  = grey purchased INTO the godown  (ext_godown_stock)      → net meter × purchase rate
+ *   CREDIT = grey sold OUT via Packi Parchi  (ext_packi_parchi)      → net meter × grey rate
+ * Movements are replayed in date order with a running balance; the footer shows total
+ * purchase (Dr), total sale (Cr) and the closing balance.
  */
 export default async function GreyStockAccountLedgerPage({
   searchParams,
@@ -24,60 +25,101 @@ export default async function GreyStockAccountLedgerPage({
   const from = p.from?.trim() || sixMonthsAgo();
   const to = p.to?.trim() || todayIso();
   const party = p.party?.trim() ?? "";
+  const like = party ? `%${escLike(party)}%` : null;
 
   const partyOpts = await partyByNameOptions();
   const accounts = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
     .from(schema.chartOfAccounts);
-  const partyCodeByName = new Map(accounts.map((a) => [a.description ?? "", a.code]));
+  const codeByName = new Map(accounts.map((a) => [a.description ?? "", a.code]));
 
-  const conds = [
-    gte(schema.extGodownStock.vDate, from),
-    lte(schema.extGodownStock.vDate, to),
-  ];
-  if (party) conds.push(sql`${schema.extGodownStock.purchaseParty} LIKE ${`%${escLike(party)}%`} ESCAPE '\\'`);
-
-  const stock = await db
+  // DEBIT side — purchases into the godown.
+  const purConds = [gte(schema.extGodownStock.vDate, from), lte(schema.extGodownStock.vDate, to)];
+  if (like) purConds.push(sql`${schema.extGodownStock.purchaseParty} LIKE ${like} ESCAPE '\\'`);
+  const purchases = await db
     .select({
       vNo: schema.extGodownStock.vNo,
       vDate: schema.extGodownStock.vDate,
       party: schema.extGodownStock.purchaseParty,
       quality: schema.extGodownStock.contactQuality,
-      dspQuality: schema.extGodownStock.dspQuality,
       than: schema.extGodownStock.than,
       netMeter: schema.extGodownStock.netMeter,
       meter: schema.extGodownStock.meter,
       rate: schema.extGodownStock.rate,
-      rateSal: schema.extGodownStock.rateSal,
     })
     .from(schema.extGodownStock)
-    .where(and(...conds))
-    .orderBy(schema.extGodownStock.vDate, schema.extGodownStock.id);
+    .where(and(...purConds));
 
-  let runProfit = 0;
-  const rows = stock.map((s) => {
-    const mtr = s.netMeter ?? s.meter ?? 0;
-    const purchase = Math.round(mtr * (s.rate ?? 0));
-    const sale = Math.round(mtr * (s.rateSal ?? 0));
-    const profit = sale - purchase;
-    runProfit += profit;
-    return {
-      vNo: s.vNo ?? "",
-      vDate: s.vDate ?? "",
-      party: s.party ?? "—",
-      quality: s.quality || s.dspQuality || "",
-      than: s.than ?? 0,
-      mtr,
-      purchase,
-      sale,
-      profit,
-      running: runProfit,
-    };
+  // CREDIT side — sales out via packi parchi.
+  const salConds = [gte(schema.extPackiParchi.vDate, from), lte(schema.extPackiParchi.vDate, to)];
+  if (like)
+    salConds.push(
+      or(
+        sql`${schema.extPackiParchi.saleParty} LIKE ${like} ESCAPE '\\'`,
+        sql`${schema.extPackiParchi.purchaseParty} LIKE ${like} ESCAPE '\\'`,
+      )!,
+    );
+  const sales = await db
+    .select({
+      vNo: schema.extPackiParchi.vNo,
+      vDate: schema.extPackiParchi.vDate,
+      party: schema.extPackiParchi.saleParty,
+      quality: schema.extPackiParchi.quality,
+      than: schema.extPackiParchi.than,
+      meterNet: schema.extPackiParchi.meterNet,
+      greyRate: schema.extPackiParchi.greyRate,
+    })
+    .from(schema.extPackiParchi)
+    .where(and(...salConds));
+
+  type Row = {
+    date: string;
+    vNo: string;
+    kind: "DR" | "CR";
+    party: string;
+    narration: string;
+    dr: number;
+    cr: number;
+  };
+
+  const rows: Row[] = [
+    ...purchases.map((s) => {
+      const mtr = s.netMeter ?? s.meter ?? 0;
+      return {
+        date: s.vDate ?? "",
+        vNo: s.vNo ?? "",
+        kind: "DR" as const,
+        party: s.party ?? "—",
+        narration: `Purchase · ${s.than ?? 0} than / ${fmt(mtr)} mtr @ ${s.rate ?? 0}${s.quality ? ` · ${s.quality}` : ""}`,
+        dr: Math.round(mtr * (s.rate ?? 0)),
+        cr: 0,
+      };
+    }),
+    ...sales.map((s) => {
+      const mtr = s.meterNet ?? 0;
+      return {
+        date: s.vDate ?? "",
+        vNo: s.vNo ?? "",
+        kind: "CR" as const,
+        party: s.party ?? "—",
+        narration: `Sale (Packi) · ${s.than ?? 0} than / ${fmt(mtr)} mtr @ ${s.greyRate ?? 0}${s.quality ? ` · ${s.quality}` : ""}`,
+        dr: 0,
+        cr: Math.round(mtr * (s.greyRate ?? 0)),
+      };
+    }),
+  ].sort((a, b) =>
+    a.date === b.date ? (a.kind === b.kind ? 0 : a.kind === "DR" ? -1 : 1) : a.date.localeCompare(b.date),
+  );
+
+  let bal = 0;
+  const ledger = rows.map((r) => {
+    bal += r.dr - r.cr;
+    return { ...r, balance: bal };
   });
 
-  const totalPurchase = rows.reduce((a, r) => a + r.purchase, 0);
-  const totalSale = rows.reduce((a, r) => a + r.sale, 0);
-  const netProfit = totalSale - totalPurchase;
+  const totalDr = rows.reduce((a, r) => a + r.dr, 0);
+  const totalCr = rows.reduce((a, r) => a + r.cr, 0);
+  const closing = totalDr - totalCr;
 
   return (
     <Shell active="rpt-grey-stock-ledger">
@@ -86,26 +128,34 @@ export default async function GreyStockAccountLedgerPage({
           <div>
             <h1 className="page-title">GREY STOCK — ACCOUNT LEDGER</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {rows.length} entries &middot; {from} to {to} &middot; purchase = Dr, sale = Cr
+              {ledger.length} entries &middot; {from} to {to} &middot; purchase = Dr, packi sale = Cr
             </p>
           </div>
           <div className="flex gap-2">
             <PrintButton />
             <ExcelExportButton
-              rows={rows}
+              rows={ledger.map((r) => ({
+                date: r.date,
+                vNo: r.vNo,
+                type: r.kind,
+                party: r.party,
+                narration: r.narration,
+                dr: r.dr,
+                cr: r.cr,
+                balance: r.balance,
+              }))}
               columns={[
-                { key: "vDate", label: "Date" },
+                { key: "date", label: "Date" },
                 { key: "vNo", label: "V.No" },
+                { key: "type", label: "Type" },
                 { key: "party", label: "Party" },
-                { key: "quality", label: "Quality" },
-                { key: "than", label: "Than" },
-                { key: "mtr", label: "Mtr" },
-                { key: "purchase", label: "Purchase (Dr)" },
-                { key: "sale", label: "Sale (Cr)" },
-                { key: "profit", label: "Profit" },
+                { key: "narration", label: "Narration" },
+                { key: "dr", label: "Debit" },
+                { key: "cr", label: "Credit" },
+                { key: "balance", label: "Balance" },
               ]}
               filename="grey-stock-account-ledger"
-              sheetName="StockLedger"
+              sheetName="AccountLedger"
             />
           </div>
         </div>
@@ -125,7 +175,7 @@ export default async function GreyStockAccountLedgerPage({
             <input type="date" name="to" defaultValue={to} className="input-box mono" />
           </div>
           <div>
-            <label className="label block mb-1">Party <span className="text-[9px] text-[var(--muted)]">(supplier)</span></label>
+            <label className="label block mb-1">Party <span className="text-[9px] text-[var(--muted)]">(supplier / customer)</span></label>
             <Combobox name="party" options={partyOpts} defaultValue={party} placeholder="All parties" />
           </div>
           <div className="sm:col-span-4 flex gap-2">
@@ -136,18 +186,16 @@ export default async function GreyStockAccountLedgerPage({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-black border-2 border-black mb-6 no-print">
           <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">Rs {fmt(totalPurchase)}</div>
+            <div className="mono text-xl font-bold">Rs {fmt(totalDr)}</div>
             <div className="stat-label">Total Purchase (Dr)</div>
           </div>
           <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">Rs {fmt(totalSale)}</div>
+            <div className="mono text-xl font-bold">Rs {fmt(totalCr)}</div>
             <div className="stat-label">Total Sale (Cr)</div>
           </div>
           <div className="bg-white p-4">
-            <div className={`mono text-xl font-bold ${netProfit >= 0 ? "" : "text-[var(--danger)]"}`}>
-              Rs {fmt(netProfit)} {netProfit >= 0 ? "Profit" : "Loss"}
-            </div>
-            <div className="stat-label">Net Profit / Loss</div>
+            <div className="mono text-xl font-bold">Rs {fmt(Math.abs(closing))} {closing >= 0 ? "Dr" : "Cr"}</div>
+            <div className="stat-label">Closing Balance</div>
           </div>
         </div>
 
@@ -157,49 +205,48 @@ export default async function GreyStockAccountLedgerPage({
               <tr>
                 <th>Date</th>
                 <th>V.No</th>
+                <th>Type</th>
                 <th>Party</th>
-                <th>Quality</th>
-                <th className="text-right">Than</th>
-                <th className="text-right">Mtr</th>
-                <th className="text-right">Purchase (Dr)</th>
-                <th className="text-right">Sale (Cr)</th>
-                <th className="text-right">Profit</th>
-                <th className="text-right">Running P/L</th>
+                <th>Narration</th>
+                <th className="text-right">Debit</th>
+                <th className="text-right">Credit</th>
+                <th className="text-right">Balance</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {ledger.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center text-[var(--muted)] py-8">No entries in this range</td>
+                  <td colSpan={8} className="text-center text-[var(--muted)] py-8">No movements in this range</td>
                 </tr>
               ) : (
-                rows.map((r, i) => (
+                ledger.map((r, i) => (
                   <tr key={i}>
-                    <td className="mono text-[13px]">{r.vDate}</td>
+                    <td className="mono text-[13px]">{r.date}</td>
                     <td className="mono text-[13px] font-bold">{r.vNo}</td>
+                    <td>
+                      <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold">{r.kind}</span>
+                    </td>
                     <td className="text-[13px]">
                       {r.party}
-                      {partyCodeByName.get(r.party) ? <span className="text-[11px] text-[var(--muted)]"> ({partyCodeByName.get(r.party)})</span> : null}
+                      {codeByName.get(r.party) ? <span className="text-[11px] text-[var(--muted)]"> ({codeByName.get(r.party)})</span> : null}
                     </td>
-                    <td className="text-[13px]">{r.quality || "-"}</td>
-                    <td className="mono text-right">{r.than ? fmt(r.than) : "-"}</td>
-                    <td className="mono text-right">{r.mtr ? fmt(r.mtr) : "-"}</td>
-                    <td className="mono text-right">{r.purchase ? fmt(r.purchase) : "-"}</td>
-                    <td className="mono text-right">{r.sale ? fmt(r.sale) : "-"}</td>
-                    <td className={`mono text-right font-semibold ${r.profit < 0 ? "text-[var(--danger)]" : ""}`}>{r.profit ? fmt(r.profit) : "-"}</td>
-                    <td className="mono text-right font-bold">{fmt(r.running)}</td>
+                    <td className="text-[12px] text-[var(--muted)]">{r.narration}</td>
+                    <td className="mono text-right">{r.dr ? fmt(r.dr) : ""}</td>
+                    <td className="mono text-right">{r.cr ? fmt(r.cr) : ""}</td>
+                    <td className="mono text-right font-semibold">
+                      {fmt(Math.abs(r.balance))} <span className="text-[11px] text-[var(--muted)]">{r.balance >= 0 ? "Dr" : "Cr"}</span>
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
-            {rows.length > 0 && (
+            {ledger.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-black font-bold">
-                  <td colSpan={6} className="text-right uppercase tracking-[0.05em]">Total</td>
-                  <td className="mono text-right">{fmt(totalPurchase)}</td>
-                  <td className="mono text-right">{fmt(totalSale)}</td>
-                  <td className={`mono text-right ${netProfit < 0 ? "text-[var(--danger)]" : ""}`}>{fmt(netProfit)}</td>
-                  <td className="mono text-right">{fmt(netProfit)}</td>
+                  <td colSpan={5} className="text-right uppercase tracking-[0.05em]">Closing</td>
+                  <td className="mono text-right">{fmt(totalDr)}</td>
+                  <td className="mono text-right">{fmt(totalCr)}</td>
+                  <td className="mono text-right">{fmt(Math.abs(closing))} {closing >= 0 ? "Dr" : "Cr"}</td>
                 </tr>
               </tfoot>
             )}
