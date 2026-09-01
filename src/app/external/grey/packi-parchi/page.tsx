@@ -891,6 +891,10 @@ export default async function PackiParchiPage({
                 <label className="label block mb-1">Avg Rate</label>
                 <input className={roCls + " text-right"} defaultValue={ppAvgRate ?? ""} readOnly tabIndex={-1} />
               </div>
+              <div className="lg:col-span-1">
+                <label className="label block mb-1">Stock Value</label>
+                <input className={roCls + " text-right"} defaultValue={ppStockMtr != null && ppAvgRate != null ? Math.round(ppStockMtr * ppAvgRate) : ""} readOnly tabIndex={-1} />
+              </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">PP.No</label>
                 <input
