@@ -535,6 +535,21 @@ export default async function YarnPurchaseVoucherPage({
       return codeByDescSrv.get(s) ?? "";
     };
     const partyCoa = resolvePartyCoa(party);
+    // Ledger narration: "<count desc> (<bags>) bags (<lbs>) lbs @ <rate>" per line — not just the party name.
+    const countRowsSrv = await db
+      .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+      .from(schema.yarnCounts);
+    const countLabelSrv = new Map(
+      countRowsSrv.map((c) => [String(c.code), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()])
+    );
+    const ledgerNarr =
+      validLines
+        .filter((l) => (l.bag ?? 0) > 0 || (l.lbs ?? 0) > 0)
+        .map((l) => {
+          const lbl = l.count ? countLabelSrv.get(String(l.count)) || l.count : "";
+          return `${lbl} (${l.bag ?? 0}) bags (${l.lbs ?? 0}) lbs @ ${l.rate ?? 0}`;
+        })
+        .join(", ") || `Cont#${cont ?? ""} ${party ?? ""}`.trim();
     const total = round2(validLines.reduce((s, l) => s + (l.lbs ?? 0) * (l.rate ?? 0), 0));
     const canPostGL = !!fyCode && !!partyCoa && total > 0;
     const yarnPurStockAcc = canPostGL ? await acc("YARN_PURCHASE_STOCK") : "";
@@ -591,20 +606,20 @@ export default async function YarnPurchaseVoucherPage({
               vno: existingLvNo,
               vdate: vDate,
               accCode: partyCoa,
-              narration: `Cont#${cont ?? ""} ${party ?? ""}`.trim(),
+              narration: ledgerNarr,
               balanceAmount: total,
             });
             const details: (typeof schema.transDetail.$inferInsert)[] = [
               {
                 fyCode, vtype: VTYPE, vno: existingLvNo, srno: 1,
                 accCode: yarnPurStockAcc, partyCode: partyCoa, contNo: cont,
-                narration: `Yarn purchase ${cont ?? ""}`.trim(),
+                narration: ledgerNarr,
                 debit: total, credit: 0,
               },
               {
                 fyCode, vtype: VTYPE, vno: existingLvNo, srno: 2,
                 accCode: partyCoa, partyCode: partyCoa, contNo: cont,
-                narration: `Yarn purchase ${cont ?? ""}`.trim(),
+                narration: ledgerNarr,
                 debit: 0, credit: total,
               },
             ];
@@ -659,20 +674,20 @@ export default async function YarnPurchaseVoucherPage({
                 vno: nextL,
                 vdate: vDate,
                 accCode: partyCoa,
-                narration: `Cont#${cont ?? ""} ${party ?? ""}`.trim(),
+                narration: ledgerNarr,
                 balanceAmount: total,
               });
               const details: (typeof schema.transDetail.$inferInsert)[] = [
                 {
                   fyCode, vtype: VTYPE, vno: nextL, srno: 1,
                   accCode: yarnPurStockAcc, partyCode: partyCoa, contNo: cont,
-                  narration: `Yarn purchase ${cont ?? ""}`.trim(),
+                  narration: ledgerNarr,
                   debit: total, credit: 0,
                 },
                 {
                   fyCode, vtype: VTYPE, vno: nextL, srno: 2,
                   accCode: partyCoa, partyCode: partyCoa, contNo: cont,
-                  narration: `Yarn purchase ${cont ?? ""}`.trim(),
+                  narration: ledgerNarr,
                   debit: 0, credit: total,
                 },
               ];
