@@ -1227,6 +1227,14 @@ export default async function YarnPurchaseVoucherPage({
 
                 <div className="mt-6">
                   <RowAutoFill watch="line_cont_no" map={lineContractMap} />
+                  {/* Picking the contract in a line also fills the header broker + brokerage
+                     + contract info (rate/lbs → purchase rate). Party is left as selected. */}
+                  <AutoFill
+                    watch="line_cont_no"
+                    map={contractMap}
+                    combos={["broker"]}
+                    inputs={["percent", "per_bag", "pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
+                  />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
                   <RowAutoFill watch="line_party_count" map={partyCountFillMap} />
                   <PartyCountSelectFilter partyField="party" selectName="line_party_count" countsByParty={countsByParty} allCounts={allPartyCountOpts} />
