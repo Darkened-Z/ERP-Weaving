@@ -257,6 +257,17 @@ export default async function GodownStockPage({
     ...salContracts.map((c) => [c.contractNo, c.ratePerMtr] as const),
     ...saleConvContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const),
   ]);
+  // Sal Cont # opens the grey CONVERSION contracts; picking one fills the sale rate from
+  // its grey rate. (Grey Sale Cont opens the grey SALE contracts — different list.)
+  const convRateByNo = new Map<string, number | null>(
+    convOnlyContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const)
+  );
+  const convSaleMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    convOnlyContracts.map((c) => [
+      c.contNo,
+      { rate_sal: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
+    ])
+  );
 
   // Full-page F9 finder rows for the grey PURCHASE / SALE contracts — rich
   // Oracle-style LOV columns (Prd. Desc, qty, rate, term, date, status).
@@ -1071,22 +1082,22 @@ export default async function GodownStockPage({
                     <input name="total_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.total ?? ""} readOnly tabIndex={-1} />
                   </div>
 
-                  {/* Sale contracts — compact rows, each contract's rate shown beside it (below Rate Sal) */}
+                  {/* Two different contract lists: Conv Cont # → conversion contracts,
+                      Grey Sale Cont → sale contracts. Each shows its rate beside it. */}
                   <div className="col-span-4">
-                    <label className="label block mb-1">Sal Cont #</label>
+                    <label className="label block mb-1">Conv Cont # <span className="text-[9px] text-[var(--muted)]">(conversion contracts)</span></label>
                     <FindingPicker
                       name="sal_cont_no"
                       defaultValue={formStock?.salContNo ?? ""}
-                      rows={saleAllFindRows}
-                      columns={greySaleColumns}
-                      title="SALE CONTRACT LIST (conv-sale + grey-sale)"
-                      placeholder="Sal contract #…"
+                      rows={contractFindRows}
+                      columns={contractColumns}
+                      title="GREY CONVERSION CONTRACT LIST"
+                      placeholder="Conv contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
                     />
                     <AutoFill
                       watch="sal_cont_no"
-                      map={salMap}
-                      combos={["grey_sale_cont"]}
+                      map={convSaleMap}
                       inputs={["sal_cont_rate_disp", "rate_sal"]}
                     />
                     <RowAutoFill watch="count_code" map={gsCountFillMap} />
@@ -1097,8 +1108,8 @@ export default async function GodownStockPage({
                     </datalist>
                   </div>
                   <div className="col-span-2">
-                    <label className="label block mb-1">Sal Rate</label>
-                    <input name="sal_cont_rate_disp" type="number" step="any" className={roCls + " text-right"} defaultValue={salRateByNo.get(formStock?.salContNo ?? "") ?? ""} readOnly tabIndex={-1} />
+                    <label className="label block mb-1">Conv Rate</label>
+                    <input name="sal_cont_rate_disp" type="number" step="any" className={roCls + " text-right"} defaultValue={convRateByNo.get(formStock?.salContNo ?? "") ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div className="col-span-4">
                     <label className="label block mb-1">Grey Sale Cont</label>
