@@ -115,6 +115,14 @@ export default async function PackiParchiPage({
         .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}`, desc: p.code }))
     : partyOpts;
   const partyCodeByDesc = new Map(parties.filter((p) => p.level >= 5).map((p) => [p.description, p.code]));
+  // Purchase Party auto = the grey-stock godown (level-5 under the "STOCK - GREY" head).
+  // Packi consumes grey lying in this godown (Kachi Parchi step removed).
+  const partyAccounts = parties.filter((p) => p.level >= 5);
+  const greyStockHead = parties.find((p) => p.level === 4 && /stock\s*-\s*grey/i.test(p.description));
+  const godownParty =
+    (greyStockHead ? partyAccounts.find((p) => p.code.startsWith(greyStockHead.code + "."))?.description : undefined) ??
+    partyAccounts.find((p) => /godown/i.test(p.description) && /grey\s*stock/i.test(p.description))?.description ??
+    "";
 
   const yarnCountList = await db
     .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
@@ -136,35 +144,6 @@ export default async function PackiParchiPage({
     label: `${c.code} — ${c.description}`,
   }));
 
-  const kachiParchis = await db
-    .select()
-    .from(schema.extKachiParchi)
-    .orderBy(desc(schema.extKachiParchi.id));
-  const kpOpt = (k: (typeof kachiParchis)[number]) => ({
-    value: k.vNo,
-    label: `${k.vNo} — ${k.saleParty ?? ""} ${k.dspQuality ?? ""}`.trim(),
-  });
-  const kpUnconvOpts = kachiParchis
-    .filter((k) => k.ppVno == null || k.id === formItem?.kpId || k.vNo === formItem?.kpNo)
-    .map(kpOpt);
-  const kpAllOpts = kachiParchis.map(kpOpt);
-  // The KP's sale party holds the cloth after the kachi sale, so this packi
-  // purchase is made from that party.
-  const kpMap: Record<string, Record<string, string | number>> = {};
-  for (const k of kachiParchis) {
-    kpMap[k.vNo] = {
-      kp_id: k.id,
-      purchase_party: k.saleParty ?? "",
-      quality: k.dspQuality ?? "",
-      than: k.than ?? "",
-      kp_meter: k.meter ?? "",
-      grey_rate_kp: k.greyRate ?? "",
-      el_cumi_num: k.elCumiNum ?? "",
-      el_cumi_den: k.elCumiDen ?? "",
-      pp_date: k.vDate,
-      v_date: k.vDate,
-    };
-  }
 
   const convContracts = await db
     .select()
@@ -210,6 +189,65 @@ export default async function PackiParchiPage({
     })
     .from(schema.extPackiParchi);
   const upcomingVNo = "PP-" + String((nextVNoRow[0]?.m ?? 0) + 1).padStart(4, "0");
+
+  // Godown stock + moving average for this godown+quality — grey purchased IN
+  // (ext_godown_stock) minus sold OUT via other packi parchis, replayed in date order.
+  // NET METER / net amount; the average RESETS whenever the meter balance hits 0.
+  let ppStockThan: number | null = null;
+  let ppStockMtr: number | null = null;
+  let ppAvgRate: number | null = null;
+  if (formItem?.purchaseParty && formItem?.quality) {
+    const insRows = await db
+      .select({
+        date: schema.extGodownStock.vDate,
+        id: schema.extGodownStock.id,
+        than: schema.extGodownStock.than,
+        mtr: schema.extGodownStock.netMeter,
+        rate: schema.extGodownStock.rate,
+      })
+      .from(schema.extGodownStock)
+      .where(
+        and(
+          eq(schema.extGodownStock.gdnParty, formItem.purchaseParty),
+          eq(schema.extGodownStock.dspQuality, formItem.quality),
+          eq(schema.extGodownStock.type, "STOCK"),
+        ),
+      );
+    const outsRows = await db
+      .select({
+        date: schema.extPackiParchi.vDate,
+        id: schema.extPackiParchi.id,
+        than: schema.extPackiParchi.than,
+        mtr: schema.extPackiParchi.meterNet,
+      })
+      .from(schema.extPackiParchi)
+      .where(
+        and(
+          eq(schema.extPackiParchi.purchaseParty, formItem.purchaseParty),
+          eq(schema.extPackiParchi.quality, formItem.quality),
+          sql`${schema.extPackiParchi.id} != ${formItem.id}`,
+        ),
+      );
+    type Mv = { date: string; id: number; kind: "IN" | "OUT"; than: number; mtr: number; rate: number };
+    const moves: Mv[] = [
+      ...insRows.map((r) => ({ date: r.date ?? "", id: r.id, kind: "IN" as const, than: r.than ?? 0, mtr: r.mtr ?? 0, rate: r.rate ?? 0 })),
+      ...outsRows.map((r) => ({ date: r.date ?? "", id: r.id, kind: "OUT" as const, than: r.than ?? 0, mtr: r.mtr ?? 0, rate: 0 })),
+    ].sort((a, b) => (a.date === b.date ? (a.kind === b.kind ? a.id - b.id : a.kind === "IN" ? -1 : 1) : a.date.localeCompare(b.date)));
+    const EPS = 0.001;
+    let balThan = 0, balMtr = 0, accAmt = 0;
+    for (const mv of moves) {
+      if (mv.kind === "IN") {
+        balThan += mv.than; balMtr += mv.mtr; accAmt += mv.mtr * mv.rate;
+      } else {
+        const avg = balMtr > EPS ? accAmt / balMtr : 0;
+        balThan -= mv.than; balMtr -= mv.mtr; accAmt -= mv.mtr * avg;
+      }
+      if (balMtr <= EPS) accAmt = 0; // depleted → average restarts from scratch
+    }
+    ppStockThan = Math.round(balThan * 100) / 100;
+    ppStockMtr = Math.round(balMtr * 100) / 100;
+    ppAvgRate = balMtr > EPS ? Math.round((accAmt / balMtr) * 100) / 100 : null;
+  }
 
   async function saveParchi(formData: FormData) {
     "use server";
@@ -284,9 +322,9 @@ export default async function PackiParchiPage({
         .where(eq(schema.extKachiParchi.id, kpIdRaw))
         .limit(1);
     }
-    if (!kpRows.length) redirect(errPath("kp_required"));
-    const kpLinkId = kpRows[0].id;
-    const kpNo = kpRows[0].vNo;
+    // Kachi Parchi is optional now — Packi works standalone (consumes from the godown).
+    const kpLinkId = kpRows.length ? kpRows[0].id : null;
+    const kpNo = kpRows.length ? kpRows[0].vNo : null;
 
     // Oracle-parity: PP-form's monetary calcs use Round(...) to whole rupees / whole meters.
     // Keep integer rounding here rather than 2dp because that's what Oracle reports.
@@ -535,7 +573,7 @@ export default async function PackiParchiPage({
           })
           .where(eq(schema.extPackiParchi.id, id));
 
-        if (curVNo) {
+        if (curVNo && kpLinkId != null) {
           await tx
             .update(schema.extKachiParchi)
             .set({ ppVno: curVNo })
@@ -587,10 +625,12 @@ export default async function PackiParchiPage({
             .returning({ id: schema.extPackiParchi.id });
           const insertedId = inserted[0].id;
 
-          await tx
-            .update(schema.extKachiParchi)
-            .set({ ppVno: vNo })
-            .where(eq(schema.extKachiParchi.id, kpLinkId));
+          if (kpLinkId != null) {
+            await tx
+              .update(schema.extKachiParchi)
+              .set({ ppVno: vNo })
+              .where(eq(schema.extKachiParchi.id, kpLinkId));
+          }
 
           if (bagRows.length) {
             await tx.insert(schema.extPackiParchiBag).values(bagRows.map((b) => ({ ...b, parchiId: insertedId })));
@@ -724,11 +764,6 @@ export default async function PackiParchiPage({
             V.No already exists. Try again.
           </div>
         )}
-        {params.error === "kp_required" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Pick a Kachi Parchi (KP.No) to convert first.
-          </div>
-        )}
         {params.error === "meter_net" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Meter Net must be greater than 0. Check KP.Meter and deductions.
@@ -833,61 +868,28 @@ export default async function PackiParchiPage({
               </div>
 
               <div className="lg:col-span-6">
-                <label className="label block mb-1">Purchase Party</label>
+                <label className="label block mb-1">Purchase Party <span className="text-[9px] text-[var(--muted)]">(grey-stock godown — locked)</span></label>
                 <div className="grid grid-cols-[100px_1fr] gap-2">
-                  <input id="pp-purchase-party-code" className={roCls} placeholder="Code" readOnly tabIndex={-1} />
-                  <Combobox
-                    name="purchase_party"
-                    options={partyOpts}
-                    defaultValue={formItem?.purchaseParty ?? ""}
-                    placeholder="Select party…"
-                    descTargetId="pp-purchase-party-code"
-                  />
+                  <input className={roCls} defaultValue={partyCodeByDesc.get(formItem?.purchaseParty || godownParty) ?? ""} readOnly tabIndex={-1} />
+                  <input className={roCls} defaultValue={formItem?.purchaseParty || godownParty} readOnly tabIndex={-1} />
                 </div>
+                <input type="hidden" name="purchase_party" defaultValue={formItem?.purchaseParty || godownParty} />
               </div>
               <div className="lg:col-span-2">
-                <label className="label block mb-1">KP.No</label>
-                <div id="pp-kp-wrap-unconv" style={{ display: formItem?.kpAll === "Y" ? "none" : undefined }}>
-                  <Combobox
-                    name="kp_no"
-                    options={kpUnconvOpts}
-                    defaultValue={formItem?.kpNo ?? ""}
-                    placeholder="Unconverted KP…"
-                  />
+                <label className="label block mb-1">Godown Stock <span className="text-[9px] text-[var(--muted)]">(than / mtr)</span></label>
+                <div className="grid grid-cols-2 gap-1">
+                  <input className={roCls + " text-right"} defaultValue={ppStockThan ?? ""} readOnly tabIndex={-1} title="Stock Than" />
+                  <input className={roCls + " text-right"} defaultValue={ppStockMtr ?? ""} readOnly tabIndex={-1} title="Stock Mtr" />
                 </div>
-                <div id="pp-kp-wrap-all" style={{ display: formItem?.kpAll === "Y" ? undefined : "none" }}>
-                  <Combobox
-                    name="kp_no_all"
-                    options={kpAllOpts}
-                    defaultValue={formItem?.kpNo ?? ""}
-                    placeholder="Any KP…"
-                  />
-                </div>
+                {/* Kachi Parchi step removed — Packi is standalone. Hidden KP fields keep
+                   older converted records intact on re-save. */}
+                <input type="hidden" name="kp_no" defaultValue={formItem?.kpNo ?? ""} />
                 <input type="hidden" name="kp_id" defaultValue={formItem?.kpId ?? ""} />
-                <AutoFill
-                  watch="kp_no"
-                  map={kpMap}
-                  combos={["purchase_party", "quality"]}
-                  inputs={["kp_id", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
-                />
-                <AutoFill
-                  watch="kp_no_all"
-                  map={kpMap}
-                  combos={["purchase_party", "quality"]}
-                  inputs={["kp_id", "than", "kp_meter", "grey_rate_kp", "el_cumi_num", "el_cumi_den", "pp_date", "v_date"]}
-                />
                 <PackiCalc />
               </div>
-              <div className="lg:col-span-1 flex items-end pb-2">
-                <label className="flex items-center gap-1 text-[11px] mono">
-                  <input
-                    type="checkbox"
-                    name="kp_all"
-                    defaultChecked={formItem?.kpAll === "Y"}
-                    className="mono"
-                  />
-                  KP-ALL
-                </label>
+              <div className="lg:col-span-1">
+                <label className="label block mb-1">Avg Rate</label>
+                <input className={roCls + " text-right"} defaultValue={ppAvgRate ?? ""} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">PP.No</label>
@@ -946,7 +948,7 @@ export default async function PackiParchiPage({
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="label block mb-1">KP.Meter</label>
+                <label className="label block mb-1">Meter <span className="text-[9px] text-[var(--muted)]">(from godown stock)</span></label>
                 <input
                   name="kp_meter"
                   type="number"

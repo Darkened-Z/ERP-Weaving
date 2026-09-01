@@ -112,7 +112,6 @@ const SECTIONS = [
         items: [
           { href: "/external/grey/godown-stock", label: "Grey Purchase In Stock", key: "ext-godown" },
           { href: "/external/grey/transfer", label: "Grey Transfer", key: "ext-gt" },
-          { href: "/external/grey/kachi-parchi", label: "Kachi Parchi", key: "ext-kp" },
           { href: "/external/grey/packi-parchi", label: "Packi Parchi", key: "ext-pp" },
         ],
       },
