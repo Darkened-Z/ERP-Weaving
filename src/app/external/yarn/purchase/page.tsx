@@ -284,6 +284,7 @@ export default async function YarnPurchaseVoucherPage({
       line_count_desc: [baseDesc, blend].filter(Boolean).join(" ").trim(),
       line_brand: c.brand ?? "",
       line_rate: c.ratePerLbs ?? "",
+      line_qty: c.qtyBags ?? "", // bags from the contract (only fills if the cell is empty)
     };
   }
 
@@ -1134,7 +1135,7 @@ export default async function YarnPurchaseVoucherPage({
                     <AutoFill
                       watch="cont"
                       map={contractMap}
-                      combos={["party", "broker"]}
+                      combos={["broker"]}
                       inputs={["percent", "per_bag", "pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                     />
                     <YarnContractApply lineMap={lineContractMap} />

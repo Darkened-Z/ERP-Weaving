@@ -88,6 +88,7 @@ export function Combobox({
   const [sel, setSel] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hiddenRef = useRef<HTMLInputElement>(null);
 
   const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
   const display = typed !== null ? typed : val ? labelFor(val) : "";
@@ -121,6 +122,12 @@ export function Combobox({
     document.dispatchEvent(
       new CustomEvent("combobox:change", { detail: { name, value: o.value } })
     );
+    // Also fire a native change on the hidden field so row-scoped listeners
+    // (RowAutoFill in a line grid) fill sibling cells from the picked value.
+    if (hiddenRef.current) {
+      hiddenRef.current.value = o.value;
+      hiddenRef.current.dispatchEvent(new Event("change", { bubbles: true }));
+    }
     inputRef.current?.focus();
   };
 
@@ -178,7 +185,7 @@ export function Combobox({
 
   return (
     <div ref={rootRef} className="relative">
-      <input type="hidden" name={name} value={val} readOnly />
+      <input ref={hiddenRef} type="hidden" name={name} value={val} readOnly />
       <input
         ref={inputRef}
         className={`${className} pr-7`}
