@@ -848,7 +848,7 @@ export default async function PackiParchiPage({
                   tabIndex={-1}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Posted</label>
                 <input
                   className={roCls + " text-[12px]"}
@@ -857,7 +857,7 @@ export default async function PackiParchiPage({
                   tabIndex={-1}
                 />
               </div>
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-3 hidden">
                 <label className="label block mb-1">Modified</label>
                 <input
                   className={roCls + " text-[12px]"}
@@ -899,7 +899,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.ppNo ?? ""}
                 />
               </div>
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 hidden">
                 <label className="label block mb-1">PP. Date</label>
                 <input
                   name="pp_date"
@@ -957,7 +957,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.kpMeter ?? ""}
                 />
               </div>
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-3 hidden">
                 <label className="label block mb-1">Broker Name</label>
                 <Combobox
                   name="broker_name"
@@ -966,7 +966,7 @@ export default async function PackiParchiPage({
                   placeholder="Select broker…"
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">KP. Meter</label>
                 <input
                   className={roCls + " text-right"}
@@ -975,7 +975,7 @@ export default async function PackiParchiPage({
                   tabIndex={-1}
                 />
               </div>
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 hidden">
                 <label className="label block mb-1">Broker %</label>
                 <input
                   name="broker_percent"
@@ -986,7 +986,7 @@ export default async function PackiParchiPage({
                 />
               </div>
 
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Meter Kam</label>
                 <input
                   name="meter_kam"
@@ -1068,7 +1068,7 @@ export default async function PackiParchiPage({
                 />
               </div>
 
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">W.O.K.C</label>
                 <input
                   name="wokc"
@@ -1098,7 +1098,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.greyRate ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Type</label>
                 <select name="type" className="input-box mono" defaultValue={formItem?.type ?? "OK"}>
                   <option value="">—</option>
@@ -1110,7 +1110,7 @@ export default async function PackiParchiPage({
                   )}
                 </select>
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Kaat %</label>
                 <input
                   name="kaat_percent"
@@ -1145,7 +1145,7 @@ export default async function PackiParchiPage({
                   combos={["purchase_party"]}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Checkery</label>
                 <input
                   name="checkery"
@@ -1155,7 +1155,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.checkery ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Commission</label>
                 <input
                   name="commission"
@@ -1217,7 +1217,7 @@ export default async function PackiParchiPage({
                 />
               </div>
 
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Grey Rate Kp</label>
                 <input
                   name="grey_rate_kp"
@@ -1227,7 +1227,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.greyRateKp ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Kaat %</label>
                 <input
                   name="kaat_percent_sale"
@@ -1237,7 +1237,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.kaatPercentSale ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Checkery</label>
                 <input
                   name="checkery_sale"
@@ -1300,7 +1300,7 @@ export default async function PackiParchiPage({
                   readOnly
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">W.O.C</label>
                 <input
                   name="woc"
@@ -1310,7 +1310,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.woc ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">W.C</label>
                 <input
                   name="wc"
@@ -1320,7 +1320,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.wc ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">W.C.K</label>
                 <input
                   name="wck"
@@ -1330,7 +1330,7 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.wck ?? ""}
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Commission Total</label>
                 <input
                   name="commission_total"
@@ -1341,7 +1341,7 @@ export default async function PackiParchiPage({
                   readOnly
                 />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Diff</label>
                 <input
                   name="diff"
