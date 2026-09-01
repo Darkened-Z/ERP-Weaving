@@ -152,6 +152,9 @@ export default async function GreyStockReportPage({
             </p>
           </div>
           <div className="flex gap-2">
+            <a href={`/reports/grey/stock-detail-ledger?from=${from}&to=${to}${party ? `&party=${encodeURIComponent(party)}` : ""}${quality ? `&quality=${encodeURIComponent(quality)}` : ""}`} className="btn btn-outline btn-sm no-print">
+              Detail Ledger
+            </a>
             <a href={`/reports/grey/stock-account-ledger?from=${from}&to=${to}${party ? `&party=${encodeURIComponent(party)}` : ""}`} className="btn btn-outline btn-sm no-print">
               Value Ledger (Dr/Cr)
             </a>

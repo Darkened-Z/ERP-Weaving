@@ -90,7 +90,7 @@ export default async function GreyStockAccountLedgerPage({
         vNo: s.vNo ?? "",
         kind: "DR" as const,
         party: s.party ?? "—",
-        narration: `Purchase · ${s.than ?? 0} than / ${fmt(mtr)} mtr @ ${s.rate ?? 0}${s.quality ? ` · ${s.quality}` : ""}`,
+        narration: `${s.than ?? 0} THAN ${fmt(mtr)} MTR @ ${s.rate ?? 0}${s.quality ? ` , ${s.quality}` : ""} (GODOWN - GREY STOCK)`,
         dr: Math.round(mtr * (s.rate ?? 0)),
         cr: 0,
       };
@@ -102,7 +102,7 @@ export default async function GreyStockAccountLedgerPage({
         vNo: s.vNo ?? "",
         kind: "CR" as const,
         party: s.party ?? "—",
-        narration: `Sale (Packi) · ${s.than ?? 0} than / ${fmt(mtr)} mtr @ ${s.greyRate ?? 0}${s.quality ? ` · ${s.quality}` : ""}`,
+        narration: `${s.than ?? 0} THAN ${fmt(mtr)} MTR @ ${s.greyRate ?? 0}${s.quality ? ` , ${s.quality}` : ""} (PACKI SALE)`,
         dr: 0,
         cr: Math.round(mtr * (s.greyRate ?? 0)),
       };
