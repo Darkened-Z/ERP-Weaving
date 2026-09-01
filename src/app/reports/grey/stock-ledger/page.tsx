@@ -20,9 +20,10 @@ type Bucket = {
   quality: string;
   inThan: number;
   inMtr: number;
-  inAmt: number; // Σ(godown net-meter × purchase rate) — used for the avg rate
+  inAmt: number; // Σ(godown net-meter × purchase rate)
   outThan: number;
   outMtr: number;
+  outAmt: number; // Σ(packi net-meter × sale rate)
 };
 
 export default async function GreyStockReportPage({
@@ -69,6 +70,7 @@ export default async function GreyStockReportPage({
       vDate: schema.extPackiParchi.vDate,
       than: sql<number>`coalesce(${schema.extPackiParchi.than}, 0)`,
       meter: sql<number>`coalesce(${schema.extPackiParchi.meterNet}, 0)`,
+      rate: sql<number>`coalesce(${schema.extPackiParchi.greyRate}, 0)`,
     })
     .from(schema.extPackiParchi)
     .where(pConds.length ? and(...pConds) : undefined);
@@ -104,7 +106,7 @@ export default async function GreyStockReportPage({
   const bucketFor = (q: string | null) => {
     const key = q ?? "—";
     let b = map.get(key);
-    if (!b) { b = { quality: key, inThan: 0, inMtr: 0, inAmt: 0, outThan: 0, outMtr: 0 }; map.set(key, b); }
+    if (!b) { b = { quality: key, inThan: 0, inMtr: 0, inAmt: 0, outThan: 0, outMtr: 0, outAmt: 0 }; map.set(key, b); }
     return b;
   };
 
@@ -113,7 +115,13 @@ export default async function GreyStockReportPage({
     const b = bucketFor(r.quality);
     b.inThan += r.than; b.inMtr += r.meter; b.inAmt += r.meter * r.rate;
   }
-  for (const rows of [packiRows, gtRows, gdRows]) {
+  // Packi sales carry a rate → contribute to the sale value.
+  for (const r of packiRows) {
+    if (!inRange(r.vDate)) continue;
+    const b = bucketFor(r.quality);
+    b.outThan += r.than; b.outMtr += r.meter; b.outAmt += r.meter * r.rate;
+  }
+  for (const rows of [gtRows, gdRows]) {
     for (const r of rows) {
       if (!inRange(r.vDate)) continue;
       const b = bucketFor(r.quality);
@@ -125,8 +133,8 @@ export default async function GreyStockReportPage({
     .map((b) => {
       const balThan = b.inThan - b.outThan;
       const balMtr = Math.round((b.inMtr - b.outMtr) * 100) / 100;
-      const avgRate = b.inMtr > 0 ? b.inAmt / b.inMtr : 0;
-      return { ...b, balThan, balMtr, avgRate, amount: Math.round(balMtr * avgRate) };
+      // Amount = purchase value − sale value (net), matching the Oracle GREY STOCK "Amt".
+      return { ...b, balThan, balMtr, amount: Math.round(b.inAmt - b.outAmt) };
     })
     .filter((b) => b.inThan || b.inMtr || b.outThan || b.outMtr)
     .sort((a, b) => a.quality.localeCompare(b.quality));
