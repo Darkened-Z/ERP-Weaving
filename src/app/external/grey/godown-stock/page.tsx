@@ -3,8 +3,6 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
-import { TypeToggle } from "@/components/type-toggle";
-import { ContractOpenButton } from "@/components/contract-open-button";
 import { ContractInfoPanel } from "@/components/contract-info-panel";
 import { FindingPicker } from "@/components/finding-picker";
 import { TermSelect } from "@/components/term-select";
@@ -42,9 +40,7 @@ const today = () => pkToday();
 const TYPE_OPTIONS = ["STOCK", "OTHERS"];
 const STATUS_OPTIONS = ["", "OK", "REJ", "Y"];
 const EL_METER_MODE_OPTIONS = ["", "1/5", "1/10"];
-const CONV_GREY_TYPES = ["", "CONV", "GREY"];
 
-const LINE_ROWS = 4;
 const COUNT_ROWS = 4;
 
 export default async function GodownStockPage({
@@ -81,14 +77,6 @@ export default async function GodownStockPage({
 
   const selected = isEditing ? stocks.find((s) => s.id === idParam) ?? null : null;
   const formStock = isAdding ? null : selected;
-
-  const lines = formStock
-    ? await db
-        .select()
-        .from(schema.extGodownStockLine)
-        .where(eq(schema.extGodownStockLine.stockId, formStock.id))
-        .orderBy(schema.extGodownStockLine.srNo)
-    : [];
 
   const counts = formStock
     ? await db
@@ -745,10 +733,6 @@ export default async function GodownStockPage({
     redirect(`/external/grey/godown-stock?id=${id}`);
   }
 
-  const lineGridRows: (typeof lines[number] | null)[] = Array.from(
-    { length: Math.max(LINE_ROWS, lines.length) },
-    (_, i) => lines[i] ?? null
-  );
   const countGridRows: (typeof counts[number] | null)[] = Array.from(
     { length: Math.max(COUNT_ROWS, counts.length) },
     (_, i) => counts[i] ?? null
@@ -758,7 +742,6 @@ export default async function GodownStockPage({
     n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
   const roCls = "input-box mono bg-gray-100";
-  const greenCls = "input-box mono bg-green-50";
   const gridCellCls = "input-box mono text-[13px] py-1";
   const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
 
@@ -836,8 +819,8 @@ export default async function GodownStockPage({
 
         <form id="gdn-find-form" method="GET" action="/external/grey/godown-stock" className="hidden"></form>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-3">
-          <div className="lg:col-span-3">
+        <div className="grid grid-cols-1 gap-4 mb-3">
+          <div>
             <div className="border border-black p-4">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
@@ -975,14 +958,9 @@ export default async function GodownStockPage({
                     <input name="gdn_code_display" className={roCls} defaultValue={partyCodeByDesc.get(formStock?.gdnParty ?? godownParty) ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div className="col-span-10">
-                    <label className="label block mb-1">Gdn Party <span className="text-[9px] text-[var(--muted)]">(own godown — auto)</span></label>
-                    <Combobox
-                      name="gdn_party"
-                      options={partyOpts}
-                      defaultValue={formStock?.gdnParty ?? godownParty}
-                      placeholder="Select party…"
-                    />
-                    <AutoFill watch="gdn_party" map={partyCodeFillMap} inputs={["gdn_code_display"]} />
+                    <label className="label block mb-1">Gdn Party <span className="text-[9px] text-[var(--muted)]">(grey-stock godown — locked)</span></label>
+                    <input className={roCls} defaultValue={formStock?.gdnParty || godownParty} readOnly tabIndex={-1} />
+                    <input type="hidden" name="gdn_party" defaultValue={formStock?.gdnParty || godownParty} />
                   </div>
 
                   <div className="col-span-6">
@@ -1066,7 +1044,7 @@ export default async function GodownStockPage({
                     <input name="net_meter_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.netMeter ?? ""} readOnly tabIndex={-1} />
                   </div>
 
-                  {/* Rates / term row */}
+                  {/* Rate / term row — purchase rate editable, sale rate fixed, total below the rate */}
                   <div className="col-span-2">
                     <label className="label block mb-1">(1/5 or 1/10)</label>
                     <select name="el_meter_mode" className="input-box mono" defaultValue={formStock?.elMeterMode ?? ""}>
@@ -1076,8 +1054,8 @@ export default async function GodownStockPage({
                     </select>
                   </div>
                   <div className="col-span-2">
-                    <label className="label block mb-1">Rate Conversion</label>
-                    <input name="rate_conversion" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rateConversion ?? ""} />
+                    <label className="label block mb-1">Rate Purchase <span className="text-[9px] text-[var(--muted)]">(editable)</span></label>
+                    <input name="rate" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rate ?? ""} />
                   </div>
                   <TermSelect
                     defaultTerm={formStock?.term ?? "CASH"}
@@ -1085,8 +1063,12 @@ export default async function GodownStockPage({
                     defaultDays={formStock?.days ?? ""}
                   />
                   <div className="col-span-2">
-                    <label className="label block mb-1">Rate Sal <span className="text-[9px] text-[var(--muted)]">(locked — auto from contract)</span></label>
+                    <label className="label block mb-1">Rate Sale <span className="text-[9px] text-[var(--muted)]">(fixed — from contract)</span></label>
                     <input name="rate_sal" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.rateSal ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                  <div className="col-span-3">
+                    <label className="label block mb-1">Total <span className="text-[9px] text-[var(--muted)]">(net mtr × purchase)</span></label>
+                    <input name="total_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.total ?? ""} readOnly tabIndex={-1} />
                   </div>
 
                   {/* Sale contracts — compact rows, each contract's rate shown beside it (below Rate Sal) */}
@@ -1166,14 +1148,10 @@ export default async function GodownStockPage({
                     <input name="commission_amt_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
                   </div>
 
-                  {/* Totals */}
+                  {/* Net Balance = Total − Kaat − Checkery − Commission */}
                   <div className="col-span-3">
-                    <label className="label block mb-1">Total</label>
-                    <input name="total_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.total ?? ""} readOnly tabIndex={-1} />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="label block mb-1">Balance</label>
-                    <input name="balance_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.balance ?? ""} readOnly tabIndex={-1} />
+                    <label className="label block mb-1">Net Balance <span className="text-[9px] text-[var(--muted)]">(total − kaat/checkery/comm)</span></label>
+                    <input name="balance_display" type="number" step="any" className={roCls + " text-right font-bold"} defaultValue={formStock?.balance ?? ""} readOnly tabIndex={-1} />
                   </div>
 
                   <div className="col-span-12">
@@ -1227,61 +1205,14 @@ export default async function GodownStockPage({
                     <input name="img_hash" className="input-box mono" defaultValue={formStock?.imgHash ?? ""} />
                   </div>
 
-                  <div className="col-span-12">
-                    <div className="border border-black bg-green-50 p-3">
-                      <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">Rate Display</div>
-                      <div className="grid grid-cols-12 gap-3 items-end">
-                        <div className="col-span-3">
-                          <label className="label block mb-1">Sal Avg Rate</label>
-                          <input
-                            name="sal_avg_rate"
-                            type="number"
-                            step="any"
-                            className={greenCls + " text-right"}
-                            defaultValue={formStock?.salAvgRate ?? ""}
-                            readOnly
-                            tabIndex={-1}
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <label className="label block mb-1">Conv/Grey Type</label>
-                          <select name="conv_grey_type" className={greenCls} defaultValue={formStock?.convGreyType ?? ""}>
-                            {CONV_GREY_TYPES.map((c) => (
-                              <option key={c} value={c}>{c || "—"}</option>
-                            ))}
-                          </select>
-                          <div className="mt-1 flex flex-col items-start gap-1">
-                            <TypeToggle
-                              targetName="conv_grey_type"
-                              values={[
-                                { label: "Sal", value: "GREY" },
-                                { label: "Conv", value: "CONV" },
-                              ]}
-                            />
-                            <ContractOpenButton typeField="conv_grey_type" />
-                          </div>
-                        </div>
-                        <div className="col-span-3">
-                          <label className="label block mb-1">Rate</label>
-                          <input
-                            name="rate"
-                            type="number"
-                            step="any"
-                            className={greenCls + " text-right"}
-                            defaultValue={formStock?.rate ?? ""}
-                          />
-                        </div>
-                        <div className="col-span-3 flex items-end">
-                          <button
-                            formAction={setStatusOk}
-                            className="btn btn-outline btn-sm w-full"
-                            disabled={!formStock}
-                          >
-                            OK
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="col-span-3 flex items-end">
+                    <button
+                      formAction={setStatusOk}
+                      className="btn btn-outline btn-sm w-full"
+                      disabled={!formStock}
+                    >
+                      OK
+                    </button>
                   </div>
 
                   <div className="col-span-3">
@@ -1367,47 +1298,6 @@ export default async function GodownStockPage({
             </div>
           </div>
 
-          <div className="lg:col-span-1">
-            <div className="border border-black">
-              <div className="px-3 py-2 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold bg-gray-50">
-                Than Entry ({LINE_ROWS} rows)
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="px-1 py-1 border-b border-black" style={{ width: 28 }}>Sr#</th>
-                      <th className="px-1 py-1 border-b border-black text-right">Than</th>
-                      <th className="px-1 py-1 border-b border-black text-right">Mtr</th>
-                      <th className="px-1 py-1 border-b border-black">Status</th>
-                      <th className="px-1 py-1 border-b border-black" style={{ width: 20 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineGridRows.map((r, i) => (
-                      <tr key={r?.id ?? `l-${i}`}>
-                        <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i + 1}</td>
-                        <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                          <input form="gdn-save-form" name="line_than" type="number" step="1" className={gridCellNumCls} defaultValue={r?.than ?? ""} />
-                        </td>
-                        <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                          <input form="gdn-save-form" name="line_mtr" type="number" step="any" className={gridCellNumCls} defaultValue={r?.mtr ?? ""} />
-                        </td>
-                        <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                          <select form="gdn-save-form" name="line_status" className={gridCellCls} defaultValue={r?.status ?? ""}>
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s} value={s}>{s || "—"}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-0.5 py-0.5 border-b border-[var(--border-light)] text-center text-[var(--muted)] cursor-pointer" title="Clear row">X</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="border border-black">
