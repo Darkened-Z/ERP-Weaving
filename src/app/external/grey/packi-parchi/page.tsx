@@ -210,64 +210,45 @@ export default async function PackiParchiPage({
     .from(schema.extPackiParchi);
   const upcomingVNo = "PP-" + String((nextVNoRow[0]?.m ?? 0) + 1).padStart(4, "0");
 
-  // Godown stock + moving average for this godown+quality — grey purchased IN
-  // (ext_godown_stock) minus sold OUT via other packi parchis, replayed in date order.
-  // NET METER / net amount; the average RESETS whenever the meter balance hits 0.
-  let ppStockThan: number | null = null;
-  let ppStockMtr: number | null = null;
-  let ppAvgRate: number | null = null;
-  if (formItem?.purchaseParty && formItem?.quality) {
+  // Godown stock per quality (than/mtr/avg/value) for this godown — grey purchased IN
+  // (ext_godown_stock) minus sold OUT via packi. NET METER / net amount; the average
+  // RESETS whenever the meter balance hits 0. Used for the live display when a quality is
+  // picked (qualityStockMap) and the current record's boxes.
+  const stockParty = formItem?.purchaseParty || godownParty;
+  type SMv = { date: string; id: number; kind: "IN" | "OUT"; than: number; mtr: number; rate: number };
+  const byQ = new Map<string, SMv[]>();
+  if (stockParty) {
     const insRows = await db
-      .select({
-        date: schema.extGodownStock.vDate,
-        id: schema.extGodownStock.id,
-        than: schema.extGodownStock.than,
-        mtr: schema.extGodownStock.netMeter,
-        rate: schema.extGodownStock.rate,
-      })
+      .select({ q: schema.extGodownStock.dspQuality, date: schema.extGodownStock.vDate, id: schema.extGodownStock.id, than: schema.extGodownStock.than, mtr: schema.extGodownStock.netMeter, rate: schema.extGodownStock.rate })
       .from(schema.extGodownStock)
-      .where(
-        and(
-          eq(schema.extGodownStock.gdnParty, formItem.purchaseParty),
-          eq(schema.extGodownStock.dspQuality, formItem.quality),
-          eq(schema.extGodownStock.type, "STOCK"),
-        ),
-      );
+      .where(and(eq(schema.extGodownStock.gdnParty, stockParty), eq(schema.extGodownStock.type, "STOCK")));
     const outsRows = await db
-      .select({
-        date: schema.extPackiParchi.vDate,
-        id: schema.extPackiParchi.id,
-        than: schema.extPackiParchi.than,
-        mtr: schema.extPackiParchi.meterNet,
-      })
+      .select({ q: schema.extPackiParchi.quality, date: schema.extPackiParchi.vDate, id: schema.extPackiParchi.id, than: schema.extPackiParchi.than, mtr: schema.extPackiParchi.meterNet })
       .from(schema.extPackiParchi)
-      .where(
-        and(
-          eq(schema.extPackiParchi.purchaseParty, formItem.purchaseParty),
-          eq(schema.extPackiParchi.quality, formItem.quality),
-          sql`${schema.extPackiParchi.id} != ${formItem.id}`,
-        ),
-      );
-    type Mv = { date: string; id: number; kind: "IN" | "OUT"; than: number; mtr: number; rate: number };
-    const moves: Mv[] = [
-      ...insRows.map((r) => ({ date: r.date ?? "", id: r.id, kind: "IN" as const, than: r.than ?? 0, mtr: r.mtr ?? 0, rate: r.rate ?? 0 })),
-      ...outsRows.map((r) => ({ date: r.date ?? "", id: r.id, kind: "OUT" as const, than: r.than ?? 0, mtr: r.mtr ?? 0, rate: 0 })),
-    ].sort((a, b) => (a.date === b.date ? (a.kind === b.kind ? a.id - b.id : a.kind === "IN" ? -1 : 1) : a.date.localeCompare(b.date)));
-    const EPS = 0.001;
+      .where(eq(schema.extPackiParchi.purchaseParty, stockParty));
+    const add = (q: string | null, mv: SMv) => { const k = (q ?? "").trim(); if (!k) return; const a = byQ.get(k); if (a) a.push(mv); else byQ.set(k, [mv]); };
+    for (const r of insRows) add(r.q, { date: r.date ?? "", id: r.id, kind: "IN", than: r.than ?? 0, mtr: r.mtr ?? 0, rate: r.rate ?? 0 });
+    for (const r of outsRows) { if (formItem?.id && r.id === formItem.id) continue; add(r.q, { date: r.date ?? "", id: r.id, kind: "OUT", than: r.than ?? 0, mtr: r.mtr ?? 0, rate: 0 }); }
+  }
+  const qualityStockMap: Record<string, Record<string, string | number>> = {};
+  const EPS = 0.001;
+  for (const [q, moves] of byQ) {
+    moves.sort((a, b) => (a.date === b.date ? (a.kind === b.kind ? a.id - b.id : a.kind === "IN" ? -1 : 1) : a.date.localeCompare(b.date)));
     let balThan = 0, balMtr = 0, accAmt = 0;
     for (const mv of moves) {
-      if (mv.kind === "IN") {
-        balThan += mv.than; balMtr += mv.mtr; accAmt += mv.mtr * mv.rate;
-      } else {
-        const avg = balMtr > EPS ? accAmt / balMtr : 0;
-        balThan -= mv.than; balMtr -= mv.mtr; accAmt -= mv.mtr * avg;
-      }
-      if (balMtr <= EPS) accAmt = 0; // depleted → average restarts from scratch
+      if (mv.kind === "IN") { balThan += mv.than; balMtr += mv.mtr; accAmt += mv.mtr * mv.rate; }
+      else { const avg = balMtr > EPS ? accAmt / balMtr : 0; balThan -= mv.than; balMtr -= mv.mtr; accAmt -= mv.mtr * avg; }
+      if (balMtr <= EPS) accAmt = 0;
     }
-    ppStockThan = Math.round(balThan * 100) / 100;
-    ppStockMtr = Math.round(balMtr * 100) / 100;
-    ppAvgRate = balMtr > EPS ? Math.round((accAmt / balMtr) * 100) / 100 : null;
+    const than = Math.round(balThan * 100) / 100;
+    const mtr = Math.round(balMtr * 100) / 100;
+    const avg = balMtr > EPS ? Math.round((accAmt / balMtr) * 100) / 100 : 0;
+    qualityStockMap[q] = { grey_stock_than_disp: than, grey_stock_mtr_disp: mtr, grey_stock_avg_disp: avg, stock_value_disp: Math.round(mtr * avg) };
   }
+  const curStock = formItem?.quality ? qualityStockMap[formItem.quality.trim()] : undefined;
+  const ppStockThan = curStock ? Number(curStock.grey_stock_than_disp) : null;
+  const ppStockMtr = curStock ? Number(curStock.grey_stock_mtr_disp) : null;
+  const ppAvgRate = curStock ? Number(curStock.grey_stock_avg_disp) : null;
 
   async function saveParchi(formData: FormData) {
     "use server";
@@ -898,22 +879,24 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Godown Stock <span className="text-[9px] text-[var(--muted)]">(than / mtr)</span></label>
                 <div className="grid grid-cols-2 gap-1">
-                  <input className={roCls + " text-right"} defaultValue={ppStockThan ?? ""} readOnly tabIndex={-1} title="Stock Than" />
-                  <input className={roCls + " text-right"} defaultValue={ppStockMtr ?? ""} readOnly tabIndex={-1} title="Stock Mtr" />
+                  <input name="grey_stock_than_disp" className={roCls + " text-right"} defaultValue={ppStockThan ?? ""} readOnly tabIndex={-1} title="Stock Than" />
+                  <input name="grey_stock_mtr_disp" className={roCls + " text-right"} defaultValue={ppStockMtr ?? ""} readOnly tabIndex={-1} title="Stock Mtr" />
                 </div>
                 {/* Kachi Parchi step removed — Packi is standalone. Hidden KP fields keep
                    older converted records intact on re-save. */}
                 <input type="hidden" name="kp_no" defaultValue={formItem?.kpNo ?? ""} />
                 <input type="hidden" name="kp_id" defaultValue={formItem?.kpId ?? ""} />
+                {/* Live stock: picking a quality fills these boxes from the godown stock. */}
+                <AutoFill watch="quality" map={qualityStockMap} inputs={["grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp"]} />
                 <PackiCalc />
               </div>
               <div className="lg:col-span-1">
                 <label className="label block mb-1">Avg Rate</label>
-                <input className={roCls + " text-right"} defaultValue={ppAvgRate ?? ""} readOnly tabIndex={-1} />
+                <input name="grey_stock_avg_disp" className={roCls + " text-right"} defaultValue={ppAvgRate ?? ""} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-1">
                 <label className="label block mb-1">Stock Value</label>
-                <input className={roCls + " text-right"} defaultValue={ppStockMtr != null && ppAvgRate != null ? Math.round(ppStockMtr * ppAvgRate) : ""} readOnly tabIndex={-1} />
+                <input name="stock_value_disp" className={roCls + " text-right"} defaultValue={ppStockMtr != null && ppAvgRate != null ? Math.round(ppStockMtr * ppAvgRate) : ""} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">PP.No</label>
