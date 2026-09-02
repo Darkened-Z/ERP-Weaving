@@ -286,6 +286,7 @@ export default async function PackiParchiPage({
     const convContNo = txt(formData.get("conv_cont_no"));
     const saleParty = txt(formData.get("sale_party"));
     const convContNoSale = txt(formData.get("conv_cont_no_sale"));
+    const convContSale2 = txt(formData.get("conv_cont_sale2"));
     const commissionSale = num(formData.get("commission_sale"));
     const greyRateKp = num(formData.get("grey_rate_kp"));
     const kaatPercentSale = num(formData.get("kaat_percent_sale"));
@@ -568,7 +569,7 @@ export default async function PackiParchiPage({
             meterRe, meterKam, meterNet: meterNetC, than, kpMeter, brokerName, brokerPercent,
             meterFineNum, meterFineDen, greyRate, wokc, wkcBrk: wkcBrkC, elCumiNum, elCumiDen,
             elMeter: elMeterC, elMeterMode, type, kaatPercent, checkery: checkeryC, commission, convContNo,
-            saleParty, convContNoSale, commissionSale, greyRateKp, kaatPercentSale,
+            saleParty, convContNoSale, convContSale2, commissionSale, greyRateKp, kaatPercentSale,
             checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
             wc, wck, printingName, commissionTotal: commissionTotalC, diff: diffC, termSal, dueDate,
             typeRej, imgNo, kpId: kpLinkId,
@@ -619,7 +620,7 @@ export default async function PackiParchiPage({
               meterRe, meterKam, meterNet: meterNetC, than, kpMeter, brokerName, brokerPercent,
               meterFineNum, meterFineDen, greyRate, wokc, wkcBrk: wkcBrkC, elCumiNum, elCumiDen,
               elMeter: elMeterC, elMeterMode, type, kaatPercent, checkery: checkeryC, commission, convContNo,
-              saleParty, convContNoSale, commissionSale, greyRateKp, kaatPercentSale,
+              saleParty, convContNoSale, convContSale2, commissionSale, greyRateKp, kaatPercentSale,
               checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
               wc, wck, printingName, commissionTotal: commissionTotalC, diff: diffC, termSal, dueDate,
               typeRej, imgNo, kpId: kpLinkId,
@@ -1209,12 +1210,12 @@ export default async function PackiParchiPage({
                 </div>
               </div>
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Sale / Conv Contract <span className="text-[9px] text-[var(--muted)]">(sale party ke contracts)</span></label>
+                <label className="label block mb-1">Grey Sale Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
                 <Combobox
                   name="conv_cont_no_sale"
-                  options={[...salContractOpts, ...convOpts]}
+                  options={salContractOpts}
                   defaultValue={formItem?.convContNoSale ?? ""}
-                  placeholder="Grey sale / conversion contract…"
+                  placeholder="Grey sale contract…"
                   filterByField="sale_party"
                 />
                 <AutoFill
@@ -1229,6 +1230,16 @@ export default async function PackiParchiPage({
                     <option key={c.countCode} value={c.countCode}>{c.countCode} — {c.description}{c.type ? ` ${c.type}` : ""}</option>
                   ))}
                 </datalist>
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Conversion Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
+                <Combobox
+                  name="conv_cont_sale2"
+                  options={convOpts}
+                  defaultValue={formItem?.convContSale2 ?? ""}
+                  placeholder="Conversion contract…"
+                  filterByField="sale_party"
+                />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less on bill)</span></label>

@@ -1406,6 +1406,7 @@ export const extPackiParchi = sqliteTable("ext_packi_parchi", {
   convContNo: text("conv_cont_no"),
   saleParty: text("sale_party"),
   convContNoSale: text("conv_cont_no_sale"),
+  convContSale2: text("conv_cont_sale2"),
   commissionSale: real("commission_sale"),
   greyRateKp: real("grey_rate_kp"),
   kaatPercentSale: real("kaat_percent_sale"),
