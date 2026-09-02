@@ -1093,7 +1093,7 @@ export default async function PackiParchiPage({
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="label block mb-1">Grey Rate</label>
+                <label className="label block mb-1">Purchase Rate <span className="text-[9px] text-[var(--muted)]">(see avg rate)</span></label>
                 <input
                   name="grey_rate"
                   type="number"
@@ -1101,6 +1101,10 @@ export default async function PackiParchiPage({
                   className="input-box mono text-right"
                   defaultValue={formItem?.greyRate ?? ""}
                 />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="label block mb-1">Purchase Amount</label>
+                <input name="grey_amt_pur_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} defaultValue={formItem?.meterNet != null && formItem?.greyRate != null ? Math.round(formItem.meterNet * formItem.greyRate) : ""} />
               </div>
               <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Type</label>
@@ -1211,7 +1215,7 @@ export default async function PackiParchiPage({
                 </datalist>
               </div>
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Commission</label>
+                <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less on bill)</span></label>
                 <input
                   name="commission_sale"
                   type="number"
@@ -1219,6 +1223,10 @@ export default async function PackiParchiPage({
                   className="input-box mono text-right"
                   defaultValue={formItem?.commissionSale ?? ""}
                 />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Sale Net</label>
+                <input name="sale_net_disp" type="number" step="any" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
               </div>
 
               <div className="lg:col-span-2 hidden">
@@ -1280,7 +1288,11 @@ export default async function PackiParchiPage({
                   defaultValue={formItem?.brokerPercentSale ?? ""}
                 />
               </div>
-              <div className="lg:col-span-10">
+              <div className="lg:col-span-2">
+                <label className="label block mb-1">Broker Amount</label>
+                <input name="broker_amt_sal_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
+              </div>
+              <div className="lg:col-span-8">
                 <label className="label block mb-1">Remarks</label>
                 <input
                   name="remarks"

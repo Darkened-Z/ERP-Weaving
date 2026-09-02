@@ -94,6 +94,11 @@ function recompute() {
   setNum("sal_amt_diff", salAmtDiff);
   setNum("commission_total", commissionTotal);
   setNum("diff", diff);
+
+  // Visible summary boxes the owner asked for.
+  setNum("grey_amt_pur_disp", greyAmtPur); // Purchase amount = net meter × purchase (grey) rate
+  setNum("broker_amt_sal_disp", brokerAmtSal); // brokerage amount from the sale-side broker %
+  setNum("sale_net_disp", salAmtTot); // sale-side net
 }
 
 function syncDueDate() {
