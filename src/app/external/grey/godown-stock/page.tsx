@@ -378,8 +378,10 @@ export default async function GodownStockPage({
         ? ` ${fmtN(c.read)}×${fmtN(c.pick)}${c.width != null ? `×${fmtN(c.width)}` : ""}`
         : "";
     const cnts = countMap[c.contNo] ?? [];
-    const warp = cnts.filter((x) => x.type === "WARP").map((x) => x.code).filter(Boolean).join(",");
-    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => x.code).filter(Boolean).join(",");
+    // Show the warp/weft yarn-count DESCRIPTION ("30/S MVS PV 65;35"), not the bare code.
+    const dlbl = (code: string | null) => (code ? countLabelByCode.get(String(code)) || String(code) : "");
+    const warp = cnts.filter((x) => x.type === "WARP").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
+    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
     const wf = warp || weft ? ` [W:${warp || "-"} F:${weft || "-"}]` : "";
     const rich = `${desc}${rpw}${wf}`.trim();
     if (contractMap[c.contNo] && rich) {

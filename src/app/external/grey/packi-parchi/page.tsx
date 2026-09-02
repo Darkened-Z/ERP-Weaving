@@ -135,6 +135,11 @@ export default async function PackiParchiPage({
     ppCountFillMap[String(c.countCode)] = { count_desc: c.description ?? "", count_type: c.type ?? "" };
   }
   const ppCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
+  // Warp/weft count codes on a construction (e.g. "2") resolve to the yarn-count
+  // description (e.g. "30/S MVS PV 65;35") — same as the godown info panel.
+  const countLabelByCode = new Map(
+    yarnCountList.map((c) => [String(c.countCode), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()]),
+  );
 
   const constructions = await db
     .select({
@@ -149,12 +154,17 @@ export default async function PackiParchiPage({
     })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.description);
-  // Rich construction line: "<reed> X <pick>  <warp count(s)> X <weft count(s)>" (Oracle style).
+  // Rich construction line: "<reed> X <pick>  <warp desc> [× <weft desc>]" (Oracle style).
+  // Warp/weft show the yarn-count DESCRIPTION ("30/S MVS PV 65;35"), not the bare code.
+  const lblCount = (code: string | number | null | undefined) => {
+    if (code == null || code === "") return "";
+    return countLabelByCode.get(String(code)) || String(code);
+  };
   const richConstruction = (c: (typeof constructions)[number]) => {
     const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
-    const warp = [c.warpCount, c.warp2].filter(Boolean).join(" X ");
-    const weft = [c.weftCount, c.weft2].filter(Boolean).join(" X ");
-    const wf = warp || weft ? `${warp}${warp && weft ? " X " : ""}${weft}` : "";
+    const warp = [c.warpCount, c.warp2].map(lblCount).filter(Boolean).join(" / ");
+    const weft = [c.weftCount, c.weft2].map(lblCount).filter(Boolean).join(" / ");
+    const wf = warp && weft ? (warp === weft ? warp : `${warp} × ${weft}`) : warp || weft;
     return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
   };
   // Quality is keyed by construction CODE (e.g. GC-001) everywhere, so packi and godown
