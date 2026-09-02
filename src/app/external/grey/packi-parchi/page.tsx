@@ -267,6 +267,35 @@ export default async function PackiParchiPage({
     const avg = balMtr > EPS ? Math.round((accAmt / balMtr) * 100) / 100 : 0;
     qualityStockMap[q] = { grey_stock_than_disp: than, grey_stock_mtr_disp: mtr, grey_stock_avg_disp: avg, stock_value_disp: Math.round(mtr * avg) };
   }
+
+  // Kachi-style contract fill (ported into Packi): picking a sale-side contract
+  // resolves its grey construction, so the Quality + rich construction + the godown
+  // stock (than / mtr / avg / value) and meter/than all auto-fill — just like the
+  // mill's old "godown + contract → meter/than/avg" step.
+  const contractFill = (code: string | null | undefined): Record<string, string | number> => {
+    if (!code) return {};
+    const con = constByCode.get(code);
+    const s = qualityStockMap[code];
+    const f: Record<string, string | number> = { quality: code, quality_rich_disp: con ? richConstruction(con) : "" };
+    if (s) {
+      f.grey_stock_than_disp = s.grey_stock_than_disp;
+      f.grey_stock_mtr_disp = s.grey_stock_mtr_disp;
+      f.grey_stock_avg_disp = s.grey_stock_avg_disp;
+      f.stock_value_disp = s.stock_value_disp;
+      f.than = s.grey_stock_than_disp;
+      f.kp_meter = s.grey_stock_mtr_disp;
+    }
+    return f;
+  };
+  for (const c of salContracts) Object.assign(salContractMap[c.contractNo], contractFill(c.greyCode));
+  for (const c of convContracts)
+    convContractMap[c.contNo] = {
+      ...(convContractMap[c.contNo] ?? {}),
+      sale_party: c.party ?? "",
+      grey_rate_kp: c.grayRatePerMtr ?? "",
+      ...contractFill(c.grayQltyCode),
+    };
+
   const curStock = formItem?.quality ? qualityStockMap[formItem.quality.trim()] : undefined;
   const ppStockThan = curStock ? Number(curStock.grey_stock_than_disp) : null;
   const ppStockMtr = curStock ? Number(curStock.grey_stock_mtr_disp) : null;
@@ -1244,8 +1273,8 @@ export default async function PackiParchiPage({
                 <AutoFill
                   watch="conv_cont_no_sale"
                   map={salContractMap}
-                  combos={["broker_name_sale", "sale_party"]}
-                  inputs={["grey_rate_kp"]}
+                  combos={["quality", "broker_name_sale", "sale_party"]}
+                  inputs={["grey_rate_kp", "quality_rich_disp", "grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp", "than", "kp_meter"]}
                 />
                 <RowAutoFill watch="count_code" map={ppCountFillMap} />
                 <datalist id="pp-yarn-counts">
@@ -1266,9 +1295,21 @@ export default async function PackiParchiPage({
                   placeholder="Conversion contract…"
                   className="input-box mono text-[13px] cursor-pointer"
                 />
+                <AutoFill
+                  watch="conv_cont_sale2"
+                  map={convContractMap}
+                  combos={["quality", "sale_party"]}
+                  inputs={["grey_rate_kp", "quality_rich_disp", "grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp", "than", "kp_meter"]}
+                />
+              </div>
+
+              {/* Sale money, in bill order: rate amount → commission % (±) → commission value → net */}
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Sale Amount <span className="text-[9px] text-[var(--muted)]">(rate × mtr)</span></label>
+                <input name="sale_amt_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less on bill)</span></label>
+                <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less %)</span></label>
                 <input
                   name="commission_sale"
                   type="number"
@@ -1276,6 +1317,10 @@ export default async function PackiParchiPage({
                   className="input-box mono text-right"
                   defaultValue={formItem?.commissionSale ?? ""}
                 />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Commission Amount</label>
+                <input name="commission_amt_sal_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Sale Net</label>

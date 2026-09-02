@@ -99,6 +99,8 @@ function recompute() {
   setNum("grey_amt_pur_disp", greyAmtPur); // Purchase amount = net meter × purchase (grey) rate
   setNum("broker_amt_sal_disp", brokerAmtSal); // brokerage amount from the sale-side broker %
   setNum("sale_net_disp", salAmtTot); // sale-side net
+  setNum("sale_amt_disp", greyAmtSal); // sale rate amount (before commission)
+  setNum("commission_amt_sal_disp", commissionSaleAmt); // commission value (+add / −less on bill)
 }
 
 function syncDueDate() {
