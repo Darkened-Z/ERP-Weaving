@@ -116,11 +116,34 @@ function syncKpList() {
   if (all) all.style.display = checked ? "" : "none";
 }
 
-export function PackiCalc() {
+type CountFill = { code: string | null; type: string; calCount: number | null; ends: number | null; ratePerLbs: number | null; wtPerMtr: number | null; costPerMtr: number | null };
+
+// Fill the count grid's TOT Lbs from wt/mtr × net meter (the yarn consumed).
+function recalcCountTot() {
+  const form = document.getElementById("pp-save-form");
+  if (!form) return;
+  const meterNet = parseFloat(form.querySelector<HTMLInputElement>('[name="meter_net"]')?.value ?? "");
+  if (!Number.isFinite(meterNet)) return;
+  const wts = Array.from(form.querySelectorAll<HTMLInputElement>('[name="count_wt"]'));
+  const tots = Array.from(form.querySelectorAll<HTMLInputElement>('[name="count_tot"]'));
+  wts.forEach((w, i) => {
+    const wv = parseFloat(w.value);
+    const t = tots[i];
+    if (t && Number.isFinite(wv)) t.value = String(Math.round(wv * meterNet * 100) / 100);
+  });
+}
+
+export function PackiCalc({
+  convCountMap = {},
+  countLabel = {},
+}: {
+  convCountMap?: Record<string, CountFill[]>;
+  countLabel?: Record<string, string>;
+} = {}) {
   useEffect(() => {
     const onInput = (e: Event) => {
       const t = e.target as HTMLInputElement;
-      if (t?.name && WATCH.has(t.name)) recompute();
+      if (t?.name && WATCH.has(t.name)) { recompute(); recalcCountTot(); }
     };
     const onChange = (e: Event) => {
       const t = e.target as HTMLInputElement;
@@ -131,16 +154,65 @@ export function PackiCalc() {
         if (t.value && numOf("broker_percent_sale") == null) setNum("broker_percent_sale", 1, 2);
         recompute();
       }
-      if (t?.name && WATCH.has(t.name)) recompute();
+      if (t?.name && WATCH.has(t.name)) { recompute(); recalcCountTot(); }
     };
+
+    const setCombo = (name: string, value: string) =>
+      document.dispatchEvent(new CustomEvent("combobox:set", { detail: { name, value } }));
+
+    const distributeCounts = (contNo: string) => {
+      const form = document.getElementById("pp-save-form");
+      if (!form) return;
+      const codes = Array.from(form.querySelectorAll<HTMLInputElement>('[name="count_code"]'));
+      const rows = convCountMap[contNo] ?? [];
+      const NAMES = ["count_code", "count_desc", "count_type", "count_cal", "count_ends", "count_rate", "count_wt", "count_cost", "count_tot"];
+      codes.forEach((codeEl, i) => {
+        const tr = codeEl.closest("tr");
+        if (!tr) return;
+        const cell = (name: string, v: string | number | null) => {
+          const el = tr.querySelector<HTMLInputElement>(`[name="${name}"]`);
+          if (el) { el.value = v == null ? "" : String(v); el.dispatchEvent(new Event("input", { bubbles: true })); }
+        };
+        const row = rows[i];
+        if (row) {
+          cell("count_code", row.code);
+          cell("count_desc", row.code ? countLabel[String(row.code)] ?? "" : "");
+          cell("count_type", row.type);
+          cell("count_cal", row.calCount);
+          cell("count_ends", row.ends);
+          cell("count_rate", row.ratePerLbs);
+          cell("count_wt", row.wtPerMtr);
+          cell("count_cost", row.costPerMtr);
+        } else {
+          for (const n of NAMES) cell(n, "");
+        }
+      });
+      recalcCountTot();
+    };
+
+    // Grey Sale Contract and Conversion Contract are one-at-a-time; picking the
+    // conversion contract also distributes its warp/weft counts into the grid.
+    const onCombo = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string };
+      if (d?.name === "conv_cont_no_sale" && d.value) {
+        setCombo("conv_cont_sale2", "");
+        distributeCounts(""); // grey-sale contract carries no warp/weft counts → clear the grid
+      } else if (d?.name === "conv_cont_sale2" && d.value) {
+        setCombo("conv_cont_no_sale", "");
+        distributeCounts(d.value);
+      }
+    };
+
     document.addEventListener("input", onInput, true);
     document.addEventListener("change", onChange, true);
+    document.addEventListener("combobox:change", onCombo);
     syncDueDate();
     syncKpList();
     return () => {
       document.removeEventListener("input", onInput, true);
       document.removeEventListener("change", onChange, true);
+      document.removeEventListener("combobox:change", onCombo);
     };
-  }, []);
+  }, [convCountMap, countLabel]);
   return null;
 }

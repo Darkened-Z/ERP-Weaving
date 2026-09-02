@@ -196,6 +196,31 @@ export default async function PackiParchiPage({
     ])
   );
 
+  // Warp/weft counts of each conversion contract — distributed into the UPDATE COUNT
+  // grid when that contract is picked on the sale side (same as the godown form).
+  const convWarpRows = await db
+    .select()
+    .from(schema.extGreyConvWarp)
+    .orderBy(schema.extGreyConvWarp.contractId, schema.extGreyConvWarp.srNo);
+  const convWeftRows = await db
+    .select()
+    .from(schema.extGreyConvWeft)
+    .orderBy(schema.extGreyConvWeft.contractId, schema.extGreyConvWeft.srNo);
+  const convContNoById = new Map(convContracts.map((c) => [c.id, c.contNo]));
+  type PpCountFill = { code: string | null; type: string; calCount: number | null; ends: number | null; ratePerLbs: number | null; wtPerMtr: number | null; costPerMtr: number | null };
+  const convCountMap: Record<string, PpCountFill[]> = {};
+  const pushConvCount = (contractId: number, cType: string, r: typeof convWarpRows[number]) => {
+    const key = convContNoById.get(contractId);
+    if (!key) return;
+    (convCountMap[key] ??= []).push({
+      code: r.count, type: cType, calCount: r.calCount, ends: r.ends,
+      ratePerLbs: r.ratePerLbs, wtPerMtr: r.wtPerMtr, costPerMtr: r.costPerMtr,
+    });
+  };
+  for (const w of convWarpRows) pushConvCount(w.contractId, "WARP", w);
+  for (const w of convWeftRows) pushConvCount(w.contractId, "WEFT", w);
+  const countLabelObj = Object.fromEntries(countLabelByCode);
+
   const salContracts = await db
     .select()
     .from(schema.extGreySalContract)
@@ -992,7 +1017,7 @@ export default async function PackiParchiPage({
                 <input type="hidden" name="kp_id" defaultValue={formItem?.kpId ?? ""} />
                 {/* Live stock: picking a quality fills these boxes from the godown stock. */}
                 <AutoFill watch="quality" map={qualityStockMap} inputs={["grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp"]} />
-                <PackiCalc />
+                <PackiCalc convCountMap={convCountMap} countLabel={countLabelObj} />
               </div>
               <div className="lg:col-span-1">
                 <label className="label block mb-1">Avg Rate</label>
