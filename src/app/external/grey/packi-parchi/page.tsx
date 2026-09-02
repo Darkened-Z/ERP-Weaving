@@ -232,17 +232,33 @@ export default async function PackiParchiPage({
   const constByCode = new Map(constructions.map((c) => [c.code, c]));
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+  // Grey Sale picker carries a Term column (the sale term lives on the sale contract).
   const saleContractColumns = [
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "quality", label: "Quality (read×pick warp×weft)" },
+    { key: "rate", label: "Rate", width: 70, align: "right" as const },
+    { key: "term", label: "Term", width: 74 },
+    { key: "date", label: "Date", width: 86 },
+  ];
+  const convContractColumns = [
     { key: "cont", label: "Cont #", width: 88 },
     { key: "quality", label: "Quality (read×pick warp×weft)" },
     { key: "rate", label: "Rate", width: 70, align: "right" as const },
     { key: "date", label: "Date", width: 86 },
   ];
+  // Sale term shown/normalised: DUE when the contract says credit/due or has days.
+  const saleTermText = (c: (typeof salContracts)[number]) =>
+    `${c.paymentTerm ?? ""}${c.days ? ` ${c.days}d` : ""}`.trim();
+  const normSaleTerm = (c: (typeof salContracts)[number]) => {
+    const pt = (c.paymentTerm ?? "").toUpperCase();
+    if (!pt && !c.days) return "";
+    return pt.includes("DUE") || pt.includes("CRED") || (c.days ?? 0) > 0 ? "DUE" : "CASH";
+  };
   const salContractFindRows = salContracts.map((c) => {
     const con = c.greyCode ? constByCode.get(c.greyCode) : undefined;
     return {
       value: c.contractNo, code: c.contractNo, description: c.party ?? "", filterKey: c.party ?? "",
-      cells: { cont: c.contractNo, quality: con ? richConstruction(con) : (c.greyCode ?? ""), rate: fmtN(c.ratePerMtr, 2), date: c.contractDate ?? "" },
+      cells: { cont: c.contractNo, quality: con ? richConstruction(con) : (c.greyCode ?? ""), rate: fmtN(c.ratePerMtr, 2), term: saleTermText(c), date: c.contractDate ?? "" },
     };
   });
   const convContractFindRows = convContracts.map((c) => {
@@ -259,6 +275,7 @@ export default async function PackiParchiPage({
         grey_rate_kp: c.ratePerMtr ?? "",
         broker_name_sale: c.broker ?? "",
         sale_party: c.party ?? "",
+        term_sal: normSaleTerm(c),
       },
     ])
   );
@@ -1360,7 +1377,7 @@ export default async function PackiParchiPage({
                   watch="conv_cont_no_sale"
                   map={salContractMap}
                   combos={["quality", "broker_name_sale", "sale_party"]}
-                  inputs={["grey_rate_kp", "quality_rich_disp", "grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp", "than", "kp_meter"]}
+                  inputs={["grey_rate_kp", "quality_rich_disp", "grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp", "than", "kp_meter", "term_sal"]}
                 />
                 <RowAutoFill watch="count_code" map={ppCountFillMap} />
                 <datalist id="pp-yarn-counts">
@@ -1375,7 +1392,7 @@ export default async function PackiParchiPage({
                   name="conv_cont_sale2"
                   defaultValue={formItem?.convContSale2 ?? ""}
                   rows={convContractFindRows}
-                  columns={saleContractColumns}
+                  columns={convContractColumns}
                   filterByField="sale_party"
                   title="CONVERSION CONTRACT"
                   placeholder="Conversion contract…"
