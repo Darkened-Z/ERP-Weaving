@@ -231,6 +231,10 @@ export function PackiCalc({
     document.addEventListener("combobox:change", onCombo);
     syncDueDate();
     syncKpList();
+    // Compute once on mount so an edited record shows its totals/summaries without
+    // the user having to touch a field first (every sibling calc does this).
+    recompute();
+    recalcCountTot();
     return () => {
       document.removeEventListener("input", onInput, true);
       document.removeEventListener("change", onChange, true);

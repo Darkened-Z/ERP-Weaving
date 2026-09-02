@@ -7,10 +7,8 @@ import { and, gte, lte, sql } from "drizzle-orm";
 import {
   fmt,
   fmt2,
-  escLike,
   sixMonthsAgo,
   todayIso,
-  partyByNameOptions,
   yarnCountOptions,
 } from "../../_shared";
 
@@ -19,16 +17,14 @@ export const dynamic = "force-dynamic";
 export default async function YarnCountBalancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; party?: string; count?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; count?: string }>;
 }) {
   const p = await searchParams;
   const from = p.from?.trim() || sixMonthsAgo();
   const to = p.to?.trim() || todayIso();
-  const party = p.party?.trim() ?? "";
   const count = p.count?.trim() ?? "";
 
-  const [partyOpts, countOpts, allCounts] = await Promise.all([
-    partyByNameOptions(),
+  const [countOpts, allCounts] = await Promise.all([
     yarnCountOptions(),
     db.select().from(schema.yarnCounts),
   ]);
@@ -37,10 +33,6 @@ export default async function YarnCountBalancePage({
     gte(schema.intYarnReceipt.vDate, from),
     lte(schema.intYarnReceipt.vDate, to),
   ];
-  if (party) {
-    const pat = `%${escLike(party)}%`;
-    receiptConds.push(sql`${schema.intYarnReceipt.party} LIKE ${pat} ESCAPE '\\'`);
-  }
   if (count) receiptConds.push(sql`${schema.intYarnReceipt.countCode} = ${count}`);
 
   const transferConds = [
@@ -155,7 +147,7 @@ export default async function YarnCountBalancePage({
           </div>
         </div>
 
-        <form method="GET" action="" className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-4 no-print">
+        <form method="GET" action="" className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4 no-print">
           <div>
             <label className="label block mb-1">Date From</label>
             <input type="date" name="from" defaultValue={from} className="input-box mono" />
@@ -165,14 +157,10 @@ export default async function YarnCountBalancePage({
             <input type="date" name="to" defaultValue={to} className="input-box mono" />
           </div>
           <div>
-            <label className="label block mb-1">Party</label>
-            <Combobox name="party" options={partyOpts} defaultValue={party} placeholder="All parties" />
-          </div>
-          <div>
             <label className="label block mb-1">Count</label>
             <Combobox name="count" options={countOpts} defaultValue={count} placeholder="All counts" />
           </div>
-          <div className="sm:col-span-4 flex gap-2">
+          <div className="sm:col-span-3 flex gap-2">
             <button type="submit" className="btn btn-sm">Apply</button>
             <a href="/reports/yarn/count-balance" className="btn btn-outline btn-sm">Clear</a>
           </div>

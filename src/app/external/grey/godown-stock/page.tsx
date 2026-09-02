@@ -593,9 +593,13 @@ export default async function GodownStockPage({
       tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
       vno: number,
     ) => {
-      if (!canPostGrey || vno <= 0) return;
+      if (vno <= 0) return;
+      // Always clear any prior GDN rows for this voucher, THEN re-post only if it
+      // still qualifies — otherwise editing a posted voucher into a non-postable
+      // state (Type≠STOCK, party cleared, netMeter≤0) would orphan stale GL rows.
       await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "GDN"), eq(schema.transDetail.vno, vno)));
       await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "GDN"), eq(schema.transMain.vno, vno)));
+      if (!canPostGrey) return;
       await tx.insert(schema.transMain).values({
         fyCode: glFyCode, vtype: "GDN", vno, vdate: vDate, accCode: supplierCoa,
         narration: greyNarr, balanceAmount: total,
@@ -651,7 +655,8 @@ export default async function GodownStockPage({
               .set({
                 than: line.than,
                 mtr: line.mtr,
-                status: prev.status ?? line.status,
+                // Protect consumed ("Y") lines from status change; others stay editable.
+                status: prev.status === "Y" ? "Y" : line.status,
               })
               .where(eq(schema.extGodownStockLine.id, prev.id));
           } else {

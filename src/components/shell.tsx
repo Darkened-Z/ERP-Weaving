@@ -141,6 +141,7 @@ const SECTIONS = [
           { href: "/reports/grey/conv-bill-kp-pp", label: "Grey Conversion Bill (KP/PP)", key: "rpt-grey-conv-bill-kp-pp" },
           { href: "/reports/grey/packi-parchi-bill", label: "Packi Parchi Bill/Register", key: "rpt-grey-packi-parchi-bill" },
           { href: "/reports/grey/delivery-order", label: "Grey Delivery Order", key: "rpt-grey-delivery-order" },
+          { href: "/reports/grey/delivery-order-tax", label: "Grey Delivery Order (Tax)", key: "rpt-grey-delivery-order-tax" },
           { href: "/reports/grey/despatch-detail-srno", label: "Despatch Detail by Sr No", key: "rpt-grey-despatch-srno" },
         ],
       },

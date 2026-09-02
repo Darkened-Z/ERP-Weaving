@@ -8,6 +8,8 @@ import { today as todayFn, monthsAgo } from "@/lib/time";
 export const dynamic = "force-dynamic";
 
 const fmt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
+const fmt2 = (n: number) =>
+  new Intl.NumberFormat("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 function escLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => "\\" + m);
@@ -425,7 +427,7 @@ export default async function GreyRegisterPage({
                     </td>
                     <td className="text-[13px]">{r.weave ?? "-"}</td>
                     <td className="mono text-right">{r.quantityMtr != null ? fmt(r.quantityMtr) : "-"}</td>
-                    <td className="mono text-right">{r.ratePerMtr != null ? fmt(r.ratePerMtr) : "-"}</td>
+                    <td className="mono text-right">{r.ratePerMtr != null ? fmt2(r.ratePerMtr) : "-"}</td>
                     <td className="mono text-right font-bold">{r.amount != null ? fmt(r.amount) : "-"}</td>
                     <td className="mono text-right">{r.extMtr != null ? fmt(r.extMtr) : "-"}</td>
                     <td>{statusBadge(r.status)}</td>

@@ -672,7 +672,7 @@ export default async function YarnSaleVoucherPage({
               .values(validLines.map((l) => ({ ...l, voucherId: id })));
           }
 
-          if (doGl) {
+          {
             const lvRow = await tx
               .select({ lvNo: schema.extYarnSalVoucher.lvNo })
               .from(schema.extYarnSalVoucher)
@@ -680,12 +680,14 @@ export default async function YarnSaleVoucherPage({
               .limit(1);
             const vno = lvRow[0]?.lvNo ?? 0;
             if (vno > 0) {
+              // Always clear prior YSV rows, then re-post only if it still qualifies.
               await tx
                 .delete(schema.transDetail)
                 .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, vno)));
               await tx
                 .delete(schema.transMain)
                 .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, vno)));
+              if (!doGl) return;
 
               await tx.insert(schema.transMain).values({
                 fyCode,

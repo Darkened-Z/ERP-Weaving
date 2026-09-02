@@ -1,7 +1,6 @@
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
-import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
 import { today as todayFn } from "@/lib/time";
@@ -34,7 +33,6 @@ export default async function CountsAccountsPage({
   const from = params.from?.trim() || monthsBackFrom(today, 3);
   const to = params.to?.trim() || today;
   const countQ = params.count?.trim() || "";
-  const partyQ = params.party?.trim() || "";
   const rawSection = (params.section?.trim() || "all").toLowerCase();
   const section: Section = rawSection === "warp" || rawSection === "weft" ? rawSection : "all";
 
@@ -53,11 +51,6 @@ export default async function CountsAccountsPage({
   const inSection = (code: string | null | undefined) =>
     !sectionSet ? true : !!code && sectionSet.has(code);
 
-  const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
-    .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 4`);
-
   const yarnCountRows = await db
     .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
     .from(schema.yarnCounts);
@@ -68,7 +61,6 @@ export default async function CountsAccountsPage({
     lte(schema.intYarnReceipt.vDate, to),
   ];
   if (countQ) receiptConds.push(sql`${schema.intYarnReceipt.countCode} LIKE ${"%" + escLike(countQ) + "%"} ESCAPE '\\'`);
-  if (partyQ) receiptConds.push(eq(schema.intYarnReceipt.party, partyQ));
 
   const receipts = await db
     .select({
@@ -120,12 +112,8 @@ export default async function CountsAccountsPage({
     input: Math.round(r.input),
     consumed: Math.round(r.consumed),
     wastage: Math.round(r.wastage),
-    pct: totIn > 0 ? Math.round((r.wastage / r.input) * 10000) / 100 : 0,
+    pct: r.input > 0 ? Math.round((r.wastage / r.input) * 10000) / 100 : 0,
   }));
-
-  const partyOpts = parties
-    .filter((p) => p.description)
-    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
 
   return (
     <Shell active="w-counts">
@@ -158,14 +146,13 @@ export default async function CountsAccountsPage({
           <div className="mono text-[12px] mt-2">
             Period: {from} to {to}
             {countQ ? ` · Count: ${countQ}` : ""}
-            {partyQ ? ` · Party: ${partyQ}` : ""}
           </div>
         </div>
 
         <form
           method="GET"
           action=""
-          className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 no-print"
+          className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 no-print"
         >
           <div>
             <label className="label block mb-1">From</label>
@@ -184,10 +171,6 @@ export default async function CountsAccountsPage({
               className="input-box mono"
               placeholder="e.g. 20/1"
             />
-          </div>
-          <div>
-            <label className="label block mb-1">Party</label>
-            <Combobox name="party" options={partyOpts} defaultValue={partyQ} placeholder="Party" />
           </div>
           <div>
             <label className="label block mb-1">Section</label>

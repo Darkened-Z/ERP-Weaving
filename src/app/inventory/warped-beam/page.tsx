@@ -395,13 +395,16 @@ export default async function WarpedBeamReceivingPage({
               .where(eq(schema.beams.beamNo, ob));
           }
 
-          if (shouldPostGl && lvNo > 0) {
+          if (lvNo > 0) {
+            // Always clear prior EXT rows, then re-post only if it still qualifies —
+            // so editing into a non-postable state reverses the ledger, not orphans it.
             await tx.delete(schema.transDetail).where(
               and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, lvNo)),
             );
             await tx.delete(schema.transMain).where(
               and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, lvNo)),
             );
+            if (!shouldPostGl) return;
 
             await tx.insert(schema.transMain).values({
               fyCode,

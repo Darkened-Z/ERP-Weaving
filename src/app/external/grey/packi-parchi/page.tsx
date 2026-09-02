@@ -614,15 +614,18 @@ export default async function PackiParchiPage({
       tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
       vNoForGl: string
     ) => {
-      if (!canPostGl) return;
       const vno = parseVno(vNoForGl);
       if (vno <= 0) return;
+      // Always clear prior GPV rows, THEN re-post only if it still qualifies — so
+      // editing a posted packi into a non-postable state (sale party/rate cleared)
+      // reverses the old ledger instead of orphaning it.
       await tx
         .delete(schema.transDetail)
         .where(and(eq(schema.transDetail.vtype, "GPV"), eq(schema.transDetail.vno, vno)));
       await tx
         .delete(schema.transMain)
         .where(and(eq(schema.transMain.vtype, "GPV"), eq(schema.transMain.vno, vno)));
+      if (!canPostGl) return;
 
       await tx.insert(schema.transMain).values({
         fyCode,

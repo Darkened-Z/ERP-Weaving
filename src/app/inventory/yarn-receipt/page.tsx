@@ -297,7 +297,14 @@ export default async function YarnReceiptPage({
       redirect(`/inventory/yarn-receipt${backQ}&error=purcont_required`);
     }
 
-    const bags = num(formData.get("bags"));
+    // Total Bags is a read-only client total — recompute server-side from Warp+Weft
+    // bags so a stale/tampered value can't skew the stock aggregate.
+    const warpBagsN = num(formData.get("warp"));
+    const weftBagsN = num(formData.get("weft"));
+    const bags =
+      warpBagsN != null || weftBagsN != null
+        ? (warpBagsN ?? 0) + (weftBagsN ?? 0)
+        : num(formData.get("bags"));
     let qtyLbs = num(formData.get("qtyLbs"));
 
     const cartonNos = formData.getAll("cartonNo") as string[];
