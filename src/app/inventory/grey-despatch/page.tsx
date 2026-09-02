@@ -620,7 +620,9 @@ export default async function GreyDespatchPage({
         }
         if (countValues.length) await tx.insert(schema.intGreyDespatchUpdateCount).values(countValues);
 
-        if (partyCoa && fyCode && vno > 0) {
+        if (vno > 0) {
+          // Always clear prior GL rows, THEN re-post only if it still qualifies — so
+          // de-posting an edited despatch reverses the ledger instead of orphaning it.
           await tx.delete(schema.transDetail).where(
             and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, vno))
           );
@@ -628,6 +630,7 @@ export default async function GreyDespatchPage({
             and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
           );
 
+          if (partyCoa && fyCode) {
           await tx.insert(schema.transMain).values({
             fyCode,
             vtype: VTYPE,
@@ -690,6 +693,7 @@ export default async function GreyDespatchPage({
           const totalCredit = details.reduce((s, x) => s + (x.credit ?? 0), 0);
           if (Math.abs(totalDebit - totalCredit) >= 0.01) throw new Error("Unbalanced voucher");
           await tx.insert(schema.transDetail).values(details);
+          }
         }
 
         return did;

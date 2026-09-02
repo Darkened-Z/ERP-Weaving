@@ -2,8 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { eq, sql, desc, and } from "drizzle-orm";
-import { acc } from "@/lib/gl-accounts";
+import { eq, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
@@ -143,19 +142,9 @@ export default async function GreyDespatchDamiPage({
     try {
       savedId = await db.transaction(async (tx) => {
         let did: number;
-        let resolvedLvNo: number | null;
         if (isUpdate) {
           await tx.update(schema.intGreyDespatchDami).set(data).where(eq(schema.intGreyDespatchDami.id, id));
           did = id;
-          resolvedLvNo = data.lvNo;
-          if (resolvedLvNo == null) {
-            const [row] = await tx
-              .select({ lvNo: schema.intGreyDespatchDami.lvNo })
-              .from(schema.intGreyDespatchDami)
-              .where(eq(schema.intGreyDespatchDami.id, id))
-              .limit(1);
-            resolvedLvNo = row?.lvNo ?? null;
-          }
         } else {
           const existing = await tx.select({ vNo: schema.intGreyDespatchDami.vNo }).from(schema.intGreyDespatchDami);
           const [lvRowIn] = await tx
@@ -174,29 +163,11 @@ export default async function GreyDespatchDamiPage({
             })
             .returning({ id: schema.intGreyDespatchDami.id });
           did = ins.id;
-          resolvedLvNo = data.lvNo ?? nextLvNo;
         }
 
-        const [company] = await tx
-          .select({ currentFy: schema.companyProfile.currentFy })
-          .from(schema.companyProfile)
-          .limit(1);
-        const fyCode = company?.currentFy ?? "";
-        const partyDesc = (party ?? "").trim();
-        const partyCoa = partyDesc
-          ? /^\d+(\.\d+)+$/.test(partyDesc)
-            ? partyDesc
-            : partyCodeByDesc.get(partyDesc) ?? ""
-          : "";
-        if (fyCode && resolvedLvNo != null && partyCoa) {
-          await tx.delete(schema.transDetail).where(
-            and(eq(schema.transDetail.vtype, "GDP"), eq(schema.transDetail.vno, resolvedLvNo))
-          );
-          await tx.delete(schema.transMain).where(
-            and(eq(schema.transMain.vtype, "GDP"), eq(schema.transMain.vno, resolvedLvNo))
-          );
-          void acc;
-        }
+        // Dami posts NO GL of its own. It must not delete under the shared "GDP"
+        // vtype keyed by its own lvNo — that collides with grey-despatch's lNo
+        // sequence and would wipe real despatch postings. (No GL touch here.)
 
         return did;
       });
@@ -238,16 +209,10 @@ export default async function GreyDespatchDamiPage({
       .from(schema.intGreyDespatchDami)
       .where(eq(schema.intGreyDespatchDami.id, id))
       .limit(1);
-    const lvNo = existing?.lvNo ?? null;
+    void existing;
     await db.transaction(async (tx) => {
-      if (lvNo != null) {
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, "GDP"), eq(schema.transDetail.vno, lvNo))
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, "GDP"), eq(schema.transMain.vno, lvNo))
-        );
-      }
+      // Dami has no GL of its own — must not delete shared "GDP" rows (that vno
+      // belongs to grey-despatch's lNo sequence). Only remove the dami row.
       await tx.delete(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, id));
     });
     revalidatePath("/inventory/grey-despatch-dami");

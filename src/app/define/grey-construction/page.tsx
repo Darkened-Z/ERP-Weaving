@@ -88,24 +88,20 @@ export default async function GreyConstructionPage({
     const warp3 = (formData.get("warp_3") as string)?.trim() || null;
     const warp4 = (formData.get("warp_4") as string)?.trim() || null;
     const warp5 = (formData.get("warp_5") as string)?.trim() || null;
-    const warp6 = (formData.get("warp_6") as string)?.trim() || null;
-    const warp7 = (formData.get("warp_7") as string)?.trim() || null;
-    const warp8 = (formData.get("warp_8") as string)?.trim() || null;
     const weftCount = (formData.get("weft_count") as string)?.trim() || null;
     const weft2 = (formData.get("weft_2") as string)?.trim() || null;
     const weft3 = (formData.get("weft_3") as string)?.trim() || null;
     const weft4 = (formData.get("weft_4") as string)?.trim() || null;
     const weft5 = (formData.get("weft_5") as string)?.trim() || null;
-    const weft6 = (formData.get("weft_6") as string)?.trim() || null;
-    const weft7 = (formData.get("weft_7") as string)?.trim() || null;
-    const weft8 = (formData.get("weft_8") as string)?.trim() || null;
     const blend = (formData.get("blend") as string)?.trim() || null;
     const status = (formData.get("status") as string)?.trim() || "A";
 
+    // NOTE: warp6-8 / weft6-8 are intentionally omitted — the form doesn't render
+    // them, so including them here would force-null any imported values on edit.
     const data = {
       code, description, reed, pick, width,
-      warpCount, warp2, warp3, warp4, warp5, warp6, warp7, warp8,
-      weftCount, weft2, weft3, weft4, weft5, weft6, weft7, weft8,
+      warpCount, warp2, warp3, warp4, warp5,
+      weftCount, weft2, weft3, weft4, weft5,
       blend, status,
     };
 
