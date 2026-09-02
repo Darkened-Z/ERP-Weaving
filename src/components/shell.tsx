@@ -222,6 +222,7 @@ const SECTIONS = [
   {
     label: "Weaving Reports",
     items: [
+      { href: "/reports/weaving/count-report", label: "Counts Accounts Report", key: "w-count-report" },
       { href: "/reports/weaving/counts-accounts", label: "Counts Accounts", key: "w-counts" },
       { href: "/reports/weaving/counts-accounts-design", label: "Counts Accounts by Design", key: "w-counts-design" },
       { href: "/reports/weaving/counts-accounts-summary", label: "Counts Accounts Summary", key: "w-counts-sum" },
