@@ -196,7 +196,8 @@ export default async function GodownStockPage({
         // Rate Purchase = the conversion contract's GREY rate (Oracle: 163.45), not the conv rate.
         rate: c.grayRatePerMtr ?? "",
         contact_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
-        dsp_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
+        // dsp_quality holds the construction CODE (matches packi quality + report lookups).
+        dsp_quality: c.grayQltyCode ?? "",
         _contact_quality_pick: c.grayQltyCode ?? "",
         _dsp_quality_pick: c.grayQltyCode ?? "",
       },
@@ -215,7 +216,7 @@ export default async function GodownStockPage({
         // Basic purchase rate comes from the grey PURCHASE contract → drives total/commission.
         rate: c.ratePerMtr,
         contact_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
-        dsp_quality: c.greyCode ? qualityByCode[c.greyCode] ?? "" : "",
+        dsp_quality: c.greyCode ?? "",
         _contact_quality_pick: c.greyCode ?? "",
         _dsp_quality_pick: c.greyCode ?? "",
       },
@@ -383,7 +384,7 @@ export default async function GodownStockPage({
     const rich = `${desc}${rpw}${wf}`.trim();
     if (contractMap[c.contNo] && rich) {
       contractMap[c.contNo].contact_quality = rich;
-      contractMap[c.contNo].dsp_quality = rich;
+      // dsp_quality stays the construction CODE (not the rich string) for stock matching.
     }
   }
 

@@ -156,12 +156,14 @@ export default async function PackiParchiPage({
     const wf = warp || weft ? `${warp}${warp && weft ? " X " : ""}${weft}` : "";
     return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
   };
+  // Quality is keyed by construction CODE (e.g. GC-001) everywhere, so packi and godown
+  // stock line up. Label shows code + the rich construction.
   const qualityOpts = constructions.map((c) => ({
-    value: c.description,
+    value: c.code,
     label: `${c.code} — ${richConstruction(c) || c.description}`,
   }));
   const qualityRichMap: Record<string, Record<string, string>> = Object.fromEntries(
-    constructions.map((c) => [c.description, { quality_rich_disp: richConstruction(c), quality_print_rich_disp: richConstruction(c) }])
+    constructions.map((c) => [c.code, { quality_rich_disp: richConstruction(c), quality_print_rich_disp: richConstruction(c) }])
   );
 
 
