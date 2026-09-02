@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PackiCalc } from "@/components/packi-calc";
@@ -189,11 +190,30 @@ export default async function PackiParchiPage({
     .select()
     .from(schema.extGreySalContract)
     .orderBy(desc(schema.extGreySalContract.contractNo));
-  const salContractOpts = salContracts.map((c) => ({
-    value: c.contractNo,
-    label: c.party ? `${c.contractNo} — ${c.party}` : c.contractNo,
-    filterKey: c.party ?? "",
-  }));
+  // Rich contract LOVs (show the CONTRACT — cont#, quality read×pick warp×weft, rate — not the party).
+  const constByCode = new Map(constructions.map((c) => [c.code, c]));
+  const fmtN = (n: number | null | undefined, d = 0) =>
+    n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+  const saleContractColumns = [
+    { key: "cont", label: "Cont #", width: 88 },
+    { key: "quality", label: "Quality (read×pick warp×weft)" },
+    { key: "rate", label: "Rate", width: 70, align: "right" as const },
+    { key: "date", label: "Date", width: 86 },
+  ];
+  const salContractFindRows = salContracts.map((c) => {
+    const con = c.greyCode ? constByCode.get(c.greyCode) : undefined;
+    return {
+      value: c.contractNo, code: c.contractNo, description: c.party ?? "", filterKey: c.party ?? "",
+      cells: { cont: c.contractNo, quality: con ? richConstruction(con) : (c.greyCode ?? ""), rate: fmtN(c.ratePerMtr, 2), date: c.contractDate ?? "" },
+    };
+  });
+  const convContractFindRows = convContracts.map((c) => {
+    const con = c.grayQltyCode ? constByCode.get(c.grayQltyCode) : undefined;
+    return {
+      value: c.contNo, code: c.contNo, description: c.party ?? "", filterKey: c.party ?? "",
+      cells: { cont: c.contNo, quality: con ? richConstruction(con) : (c.grayQltyCode ?? ""), rate: fmtN(c.grayRatePerMtr, 2), date: c.contDate ?? "" },
+    };
+  });
   const salContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     salContracts.map((c) => [
       c.contractNo,
@@ -1211,12 +1231,15 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Grey Sale Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
-                <Combobox
+                <FindingPicker
                   name="conv_cont_no_sale"
-                  options={salContractOpts}
                   defaultValue={formItem?.convContNoSale ?? ""}
-                  placeholder="Grey sale contract…"
+                  rows={salContractFindRows}
+                  columns={saleContractColumns}
                   filterByField="sale_party"
+                  title="GREY SALE CONTRACT"
+                  placeholder="Grey sale contract…"
+                  className="input-box mono text-[13px] cursor-pointer"
                 />
                 <AutoFill
                   watch="conv_cont_no_sale"
@@ -1233,12 +1256,15 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Conversion Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
-                <Combobox
+                <FindingPicker
                   name="conv_cont_sale2"
-                  options={convOpts}
                   defaultValue={formItem?.convContSale2 ?? ""}
-                  placeholder="Conversion contract…"
+                  rows={convContractFindRows}
+                  columns={saleContractColumns}
                   filterByField="sale_party"
+                  title="CONVERSION CONTRACT"
+                  placeholder="Conversion contract…"
+                  className="input-box mono text-[13px] cursor-pointer"
                 />
               </div>
               <div className="lg:col-span-3">
