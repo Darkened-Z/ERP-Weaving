@@ -9,7 +9,7 @@ import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
@@ -564,6 +564,48 @@ export default async function GodownStockPage({
 
     const nowIso = new Date().toISOString();
 
+    // Grey purchase GL posting (VTYPE GDN): DR grey-stock godown account, CR the
+    // supplier (purchase party). Amount = net meter × purchase rate. Only for a
+    // STOCK (purchase-in) voucher. Narration follows the mill's grey convention.
+    const [gdnCompany] = await db
+      .select({ currentFy: schema.companyProfile.currentFy })
+      .from(schema.companyProfile)
+      .limit(1);
+    const glFyCode = gdnCompany?.currentFy ?? "";
+    const glAccts = await db
+      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+      .from(schema.chartOfAccounts)
+      .where(sql`${schema.chartOfAccounts.level} >= 5`);
+    const glCodeByDesc = new Map(glAccts.map((a) => [a.description, String(a.code)]));
+    const glCodeSet = new Set(glAccts.map((a) => String(a.code)));
+    const resolveGlCoa = (s: string | null): string => {
+      if (!s) return "";
+      const t = s.trim();
+      if (glCodeSet.has(t) || /^\d+(\.\d+)+$/.test(t)) return t;
+      return glCodeByDesc.get(t) ?? "";
+    };
+    const supplierCoa = resolveGlCoa(purchaseParty);
+    const greyStockCoa = resolveGlCoa(gdnParty);
+    const greyNarr =
+      `${than ?? 0} THAN ${netMeter} MTR @ ${rateVal}, ${dspQuality || contactQuality || ""} (GREY PURCHASE)`.trim();
+    const canPostGrey = !!(glFyCode && supplierCoa && greyStockCoa && total > 0 && type === "STOCK");
+    const postGreyGl = async (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      vno: number,
+    ) => {
+      if (!canPostGrey || vno <= 0) return;
+      await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "GDN"), eq(schema.transDetail.vno, vno)));
+      await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "GDN"), eq(schema.transMain.vno, vno)));
+      await tx.insert(schema.transMain).values({
+        fyCode: glFyCode, vtype: "GDN", vno, vdate: vDate, accCode: supplierCoa,
+        narration: greyNarr, balanceAmount: total,
+      });
+      await tx.insert(schema.transDetail).values([
+        { fyCode: glFyCode, vtype: "GDN", vno, srno: 1, accCode: greyStockCoa, partyCode: supplierCoa, narration: greyNarr, debit: total, credit: 0 },
+        { fyCode: glFyCode, vtype: "GDN", vno, srno: 2, accCode: supplierCoa, partyCode: supplierCoa, narration: greyNarr, debit: 0, credit: total },
+      ]);
+    };
+
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
 
@@ -624,6 +666,11 @@ export default async function GodownStockPage({
         if (validCounts.length) {
           await tx.insert(schema.extGodownStockCount).values(validCounts.map((c) => ({ ...c, stockId: id })));
         }
+        const [curRow] = await tx
+          .select({ lvNo: schema.extGodownStock.lvNo })
+          .from(schema.extGodownStock)
+          .where(eq(schema.extGodownStock.id, id));
+        await postGreyGl(tx, curRow?.lvNo ?? 0);
       });
 
       revalidatePath("/external/grey/godown-stock");
@@ -663,6 +710,7 @@ export default async function GodownStockPage({
           if (validCounts.length) {
             await tx.insert(schema.extGodownStockCount).values(validCounts.map((c) => ({ ...c, stockId: insertedId })));
           }
+          await postGreyGl(tx, nextL);
           return insertedId;
         });
       } catch (e: unknown) {
@@ -708,10 +756,20 @@ export default async function GodownStockPage({
       redirect(`/external/grey/godown-stock?id=${id}&error=in_use`);
     }
 
+    const [delRow] = await db
+      .select({ lvNo: schema.extGodownStock.lvNo })
+      .from(schema.extGodownStock)
+      .where(eq(schema.extGodownStock.id, id));
+    const delLv = delRow?.lvNo ?? 0;
+
     await db.transaction(async (tx) => {
       await tx.delete(schema.extGodownStockCount).where(eq(schema.extGodownStockCount.stockId, id));
       await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.stockId, id));
       await tx.delete(schema.extGodownStock).where(eq(schema.extGodownStock.id, id));
+      if (delLv > 0) {
+        await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "GDN"), eq(schema.transDetail.vno, delLv)));
+        await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "GDN"), eq(schema.transMain.vno, delLv)));
+      }
     });
     revalidatePath("/external/grey/godown-stock");
     redirect("/external/grey/godown-stock");
