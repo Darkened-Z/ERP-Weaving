@@ -601,6 +601,8 @@ export default async function PackiParchiPage({
     // Sale-side broker: DR brokerage expense, CR the broker's own account.
     const brokerSaleCoa = resolvePartyCoa(brokerNameSale);
     const brokerageExpCode = canPostGl && brokerSaleCoa && brokerAmtSal > 0 ? await acc("SALE_BROKERAGE_EXP") : "";
+    // Ledger description (mill convention): "<than> THAN <mtr> MTR @ <rate>, <quality> (PACKI SALE)".
+    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${quality ?? ""} (PACKI SALE)`.trim();
 
     const parseVno = (v: string | null | undefined): number => {
       if (!v) return 0;
@@ -628,7 +630,7 @@ export default async function PackiParchiPage({
         vno,
         vdate: vDate,
         accCode: partyCoa,
-        narration: `PP#${vNoForGl ?? ""} KP#${kpNo ?? ""}`.trim(),
+        narration: `${ppNarr}  [PP#${vNoForGl ?? ""}${kpNo ? ` KP#${kpNo}` : ""}]`.trim(),
         balanceAmount: greyAmtSal,
       });
 
@@ -640,6 +642,7 @@ export default async function PackiParchiPage({
           srno: 1,
           accCode: partyCoa,
           partyCode: partyCoa,
+          narration: ppNarr,
           debit: greyAmtSal,
           credit: 0,
         },
@@ -650,6 +653,7 @@ export default async function PackiParchiPage({
           srno: 2,
           accCode: greyCommissionCode,
           partyCode: partyCoa,
+          narration: ppNarr,
           debit: 0,
           credit: commissionTotalC,
         },
