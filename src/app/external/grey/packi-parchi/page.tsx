@@ -136,13 +136,33 @@ export default async function PackiParchiPage({
   const ppCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
 
   const constructions = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+    })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.description);
+  // Rich construction line: "<reed> X <pick>  <warp count(s)> X <weft count(s)>" (Oracle style).
+  const richConstruction = (c: (typeof constructions)[number]) => {
+    const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
+    const warp = [c.warpCount, c.warp2].filter(Boolean).join(" X ");
+    const weft = [c.weftCount, c.weft2].filter(Boolean).join(" X ");
+    const wf = warp || weft ? `${warp}${warp && weft ? " X " : ""}${weft}` : "";
+    return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
+  };
   const qualityOpts = constructions.map((c) => ({
     value: c.description,
-    label: `${c.code} — ${c.description}`,
+    label: `${c.code} — ${richConstruction(c) || c.description}`,
   }));
+  const qualityRichMap: Record<string, Record<string, string>> = Object.fromEntries(
+    constructions.map((c) => [c.description, { quality_rich_disp: richConstruction(c), quality_print_rich_disp: richConstruction(c) }])
+  );
 
 
   const convContracts = await db
@@ -913,7 +933,7 @@ export default async function PackiParchiPage({
                 />
               </div>
 
-              <div className="lg:col-span-6">
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Quality</label>
                 <Combobox
                   name="quality"
@@ -922,14 +942,25 @@ export default async function PackiParchiPage({
                   placeholder="Quality…"
                 />
               </div>
-              <div className="lg:col-span-6">
-                <label className="label block mb-1">Quality Print</label>
-                <input
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Construction <span className="text-[9px] text-[var(--muted)]">(reed×pick  warp×weft)</span></label>
+                <input name="quality_rich_disp" className={roCls} readOnly tabIndex={-1} defaultValue={formItem?.quality ? (qualityRichMap[formItem.quality]?.quality_rich_disp ?? "") : ""} />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Quality Print <span className="text-[9px] text-[var(--muted)]">(for bill)</span></label>
+                <Combobox
                   name="quality_print"
-                  className="input-box mono"
+                  options={qualityOpts}
                   defaultValue={formItem?.qualityPrint ?? ""}
+                  placeholder="Any quality…"
                 />
               </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Print Construction</label>
+                <input name="quality_print_rich_disp" className={roCls} readOnly tabIndex={-1} defaultValue={formItem?.qualityPrint ? (qualityRichMap[formItem.qualityPrint]?.quality_print_rich_disp ?? "") : ""} />
+              </div>
+              <AutoFill watch="quality" map={qualityRichMap} inputs={["quality_rich_disp"]} />
+              <AutoFill watch="quality_print" map={qualityRichMap} inputs={["quality_print_rich_disp"]} />
 
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Meter Re</label>
