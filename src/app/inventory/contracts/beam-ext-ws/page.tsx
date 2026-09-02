@@ -257,16 +257,16 @@ export default async function BeamContractExtWsPage({
       ends: number | null;
       wtPerMtr: number;
     }[] = [];
-    const widthDiv = noOfWidth > 0 ? noOfWidth : 1;
     for (let i = 1; i <= DETAIL_ROWS; i++) {
       const countCode = txt(formData.get(`d_count_code_${i}`));
       const brand = txt(formData.get(`d_brand_${i}`));
       const calCount = num(formData.get(`d_cal_count_${i}`));
       const ends = num(formData.get(`d_ends_${i}`));
       if (!countCode && !brand && calCount == null && ends == null) continue;
+      // WT/Mtr = ENDS ÷ 731.52 ÷ Cal Count (same as grey conversion; not width-divided).
       const wtPerMtr =
         calCount && calCount > 0
-          ? round((((ends ?? 0) * 1.0936) / 840 / calCount) / widthDiv, 6)
+          ? round((ends ?? 0) / 731.52 / calCount, 6)
           : 0;
       detailParsed.push({
         srNo: detailParsed.length + 1,
@@ -853,7 +853,7 @@ export default async function BeamContractExtWsPage({
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black">
-                  WT/Mtr = ((Ends × 1.0936 / 840) / Cal Count) / No. of Width. Empty detail rows are ignored on save.
+                  WT/Mtr = Ends ÷ 731.52 ÷ Cal Count. Empty detail rows are ignored on save.
                 </div>
               </div>
 

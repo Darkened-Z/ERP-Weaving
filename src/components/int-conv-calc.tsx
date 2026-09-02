@@ -115,8 +115,8 @@ export function IntConvCalc() {
 const BEAM_ROW_SOURCE = /^d_(cal_count|ends)_\d$/;
 
 /**
- * Live warping-beam detail math (Oracle uses 840 here, and divides by no-of-width):
- * per-row wt = ((ends × 1.0936 / 840) / calCount) / noOfWidth.
+ * Live warping-beam detail math. WT per meter = ENDS ÷ 731.52 ÷ Cal Count
+ * (same as grey conversion; No. of Width is NOT part of this).
  * Fills d_wt_N plus the ends_total / wt_total header displays.
  */
 export function BeamWtCalc() {
@@ -135,8 +135,6 @@ export function BeamWtCalc() {
     };
 
     const recompute = () => {
-      const now = val("no_of_width");
-      const width = now > 0 ? now : 1;
       let endsSum = 0;
       let wtSum = 0;
       for (let i = 1; i <= 6; i++) {
@@ -151,7 +149,7 @@ export function BeamWtCalc() {
         const ends = val(`d_ends_${i}`);
         const wt =
           Number.isFinite(cal) && cal > 0
-            ? round(((ends * 1.0936) / 840 / cal) / width, 6)
+            ? round(ends / 731.52 / cal, 6)
             : 0;
         set(`d_wt_${i}`, String(wt));
         endsSum += ends;
