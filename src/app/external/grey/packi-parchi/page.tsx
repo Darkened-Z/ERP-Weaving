@@ -522,6 +522,9 @@ export default async function PackiParchiPage({
 
     const canPostGl = !!(fyCode && partyCoa && greyAmtSal > 0);
     const greyCommissionCode = canPostGl ? await acc("GREY_COMMISSION_INCOME") : "";
+    // Sale-side broker: DR brokerage expense, CR the broker's own account.
+    const brokerSaleCoa = resolvePartyCoa(brokerNameSale);
+    const brokerageExpCode = canPostGl && brokerSaleCoa && brokerAmtSal > 0 ? await acc("SALE_BROKERAGE_EXP") : "";
 
     const parseVno = (v: string | null | undefined): number => {
       if (!v) return 0;
@@ -581,11 +584,35 @@ export default async function PackiParchiPage({
           fyCode,
           vtype: "GPV",
           vno,
-          srno: 3,
+          srno: details.length + 1,
           accCode: partyCoa,
           partyCode: partyCoa,
           debit: 0,
           credit: clearDiff,
+        });
+      }
+      // Sale-side brokerage: DR brokerage expense, CR the broker (balanced pair,
+      // does not disturb the party/commission netting above).
+      if (brokerageExpCode && brokerSaleCoa && brokerAmtSal > 0) {
+        details.push({
+          fyCode,
+          vtype: "GPV",
+          vno,
+          srno: details.length + 1,
+          accCode: brokerageExpCode,
+          partyCode: brokerSaleCoa,
+          debit: brokerAmtSal,
+          credit: 0,
+        });
+        details.push({
+          fyCode,
+          vtype: "GPV",
+          vno,
+          srno: details.length + 1,
+          accCode: brokerSaleCoa,
+          partyCode: brokerSaleCoa,
+          debit: 0,
+          credit: brokerAmtSal,
         });
       }
       const dSum = details.reduce((s, x) => s + (x.debit ?? 0), 0);
