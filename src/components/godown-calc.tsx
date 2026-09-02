@@ -67,8 +67,10 @@ export function GodownCalc({
       const checkeryAmt = Math.round(netMeter * num("checkery"));
       const commissionAmt = Math.round((netMeter * rate * num("commission")) / 100);
       const total = Math.round(netMeter * rate);
-      // Profit = sale rate − cost rate (per meter and amount) so the ledger shows margin.
-      const saleRate = num("rate_sal");
+      // Profit = sale rate − cost rate. Sale rate comes from the Grey Sale Cont's rate
+      // (Rate Sale field removed); mirror it into the hidden rate_sal so it still saves.
+      const saleRate = num("grey_sale_rate_disp");
+      put("rate_sal", saleRate ? String(saleRate) : "");
       const hasBoth = saleRate > 0 && rate > 0;
       const profitPerMtr = hasBoth ? r2(saleRate - rate) : 0;
       const profitAmt = hasBoth ? Math.round(netMeter * (saleRate - rate)) : 0;
@@ -87,7 +89,7 @@ export function GodownCalc({
     };
 
     const sources = [
-      "meter", "el_cumi_num", "el_cumi_den", "kami_mtr", "rate", "rate_sal",
+      "meter", "el_cumi_num", "el_cumi_den", "kami_mtr", "rate", "grey_sale_rate_disp",
       "kaat_percent", "checkery", "commission", "count_wt_per_mtr",
     ];
     const onInput = (e: Event) => {
@@ -114,6 +116,12 @@ export function GodownCalc({
 
     const onCombo = (e: Event) => {
       const d = (e as CustomEvent).detail as { name?: string; value?: string };
+      // Conv Cont # and Grey Sale Cont are one-at-a-time: picking one clears the other.
+      if (d?.name === "sal_cont_no" && d.value) {
+        document.dispatchEvent(new CustomEvent("combobox:set", { detail: { name: "grey_sale_cont", value: "" } }));
+      } else if (d?.name === "grey_sale_cont" && d.value) {
+        document.dispatchEvent(new CustomEvent("combobox:set", { detail: { name: "sal_cont_no", value: "" } }));
+      }
       if (d?.name !== "cont_no") return;
       const rows = countMap[d.value ?? ""] ?? [];
       if (!rows.length) return; // this contract carries no counts — leave the grid alone

@@ -193,9 +193,8 @@ export default async function GodownStockPage({
       c.contNo,
       {
         purchase_party: c.party ?? "",
-        rate_conversion: c.rateMtr ?? c.convRatePerMtr,
-        // Rate Sal auto-fills from the conversion contract's grey rate (Oracle: 163.45).
-        rate_sal: c.grayRatePerMtr ?? "",
+        // Rate Purchase = the conversion contract's GREY rate (Oracle: 163.45), not the conv rate.
+        rate: c.grayRatePerMtr ?? "",
         contact_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
         dsp_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
         _contact_quality_pick: c.grayQltyCode ?? "",
@@ -232,8 +231,6 @@ export default async function GodownStockPage({
     ...salContracts.map((c) => [
       c.contractNo,
       {
-        rate_sal: c.ratePerMtr ?? "",
-        sal_cont_rate_disp: c.ratePerMtr ?? "",
         grey_sale_rate_disp: c.ratePerMtr ?? "",
         grey_sale_cont: c.contractNo,
         _contact_quality_pick: c.greyCode ?? "",
@@ -243,9 +240,6 @@ export default async function GodownStockPage({
     ...saleConvContracts.map((c) => [
       c.contNo,
       {
-        // SALE-type conv contract: the sale rate is its grey rate.
-        rate_sal: c.grayRatePerMtr ?? "",
-        sal_cont_rate_disp: c.grayRatePerMtr ?? "",
         grey_sale_rate_disp: c.grayRatePerMtr ?? "",
         grey_sale_cont: c.contNo,
         _contact_quality_pick: c.grayQltyCode ?? "",
@@ -265,7 +259,7 @@ export default async function GodownStockPage({
   const convSaleMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     convOnlyContracts.map((c) => [
       c.contNo,
-      { rate_sal: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
+      { rate: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
     ])
   );
 
@@ -989,7 +983,7 @@ export default async function GodownStockPage({
                       watch="cont_no"
                       map={contractMap}
                       combos={["purchase_party"]}
-                      inputs={["rate_conversion", "contact_quality", "dsp_quality", "rate_sal"]}
+                      inputs={["rate", "contact_quality", "dsp_quality"]}
                     />
                   </div>
                   <div className="col-span-6">
@@ -1065,7 +1059,7 @@ export default async function GodownStockPage({
                     </select>
                   </div>
                   <div className="col-span-2">
-                    <label className="label block mb-1">Rate Purchase <span className="text-[9px] text-[var(--muted)]">(editable)</span></label>
+                    <label className="label block mb-1">Rate Purchase <span className="text-[9px] text-[var(--muted)]">(grey rate — from contract)</span></label>
                     <input name="rate" type="number" step="any" className="input-box mono text-right" defaultValue={formStock?.rate ?? ""} />
                   </div>
                   <TermSelect
@@ -1073,10 +1067,8 @@ export default async function GodownStockPage({
                     defaultDate={formStock?.dueDate ?? ""}
                     defaultDays={formStock?.days ?? ""}
                   />
-                  <div className="col-span-2">
-                    <label className="label block mb-1">Rate Sale <span className="text-[9px] text-[var(--muted)]">(fixed — from contract)</span></label>
-                    <input name="rate_sal" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.rateSal ?? ""} readOnly tabIndex={-1} />
-                  </div>
+                  {/* Rate Sale removed from the UI; kept hidden so the sale rate still saves (set from the Grey Sale Cont rate). */}
+                  <input type="hidden" name="rate_sal" defaultValue={formStock?.rateSal ?? ""} />
                   <div className="col-span-3">
                     <label className="label block mb-1">Total <span className="text-[9px] text-[var(--muted)]">(net mtr × purchase)</span></label>
                     <input name="total_display" type="number" step="any" className={roCls + " text-right"} defaultValue={formStock?.total ?? ""} readOnly tabIndex={-1} />
@@ -1098,7 +1090,7 @@ export default async function GodownStockPage({
                     <AutoFill
                       watch="sal_cont_no"
                       map={convSaleMap}
-                      inputs={["sal_cont_rate_disp", "rate_sal"]}
+                      inputs={["sal_cont_rate_disp", "rate"]}
                     />
                     <RowAutoFill watch="count_code" map={gsCountFillMap} />
                     <datalist id="gs-yarn-counts">
@@ -1125,7 +1117,7 @@ export default async function GodownStockPage({
                     <AutoFill
                       watch="grey_sale_cont"
                       map={salMap}
-                      inputs={["grey_sale_rate_disp", "rate_sal"]}
+                      inputs={["grey_sale_rate_disp"]}
                     />
                   </div>
                   <div className="col-span-2">
