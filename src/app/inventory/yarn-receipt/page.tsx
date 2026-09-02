@@ -6,6 +6,7 @@ import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
 import { AutoAmount } from "@/components/auto-amount";
+import { YarnReceiptCounts } from "@/components/yarn-receipt-counts";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
@@ -155,6 +156,22 @@ export default async function YarnReceiptPage({
   const partyDescByCode: Record<string, string> = {};
   for (const p of parties) partyDescByCode[p.code] = p.description;
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+
+  // Delivered-FROM party is limited to the "DEBITORS - CONVERSION WVG" head
+  // (code 1.01.01.01.*) — same head used by the grey-conversion contracts.
+  const [convWvgHead] = await db
+    .select({ code: schema.chartOfAccounts.code })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE '%CONVERSION%WVG%'`)
+    .limit(1);
+  const convWvgPrefix = convWvgHead?.code ? convWvgHead.code + "." : null;
+  const convPartyOpts = convWvgPrefix
+    ? parties.filter((p) => p.code.startsWith(convWvgPrefix)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
+    : partyOpts;
+
+  // Delivered-TO is the yarn-stock godown — defaulted (changeable) for new vouchers.
+  const yarnGodownDesc =
+    parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ?? "";
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
   const countBrandMap: Record<string, Record<string, string>> = Object.fromEntries(
@@ -233,9 +250,12 @@ export default async function YarnReceiptPage({
   }
   const convMap: Record<string, Record<string, string | number>> = {};
   for (const c of convContracts) {
+    const toRate = c.ratePerMtr1 ?? c.ratePerMtr2 ?? "";
     convMap[c.contNo] = {
       yarnPartyTo: c.party ?? "",
-      ratePerLbsTo: c.ratePerMtr1 ?? c.ratePerMtr2 ?? "",
+      ratePerLbsTo: toRate,
+      // Count-detail Rate/Lbs mirrors the delivered-to rate (owner's rule).
+      ratePerLbs: toRate,
     };
   }
 
@@ -567,16 +587,17 @@ export default async function YarnReceiptPage({
               <input type="hidden" name="one" defaultValue="1" readOnly />
               <AutoAmount qty="qtyLbs" rate="ratePerLbs" target="amount" />
               <RowCalc target="netLbs" a="netKgs" factor={2.2046} round={3} />
+              <YarnReceiptCounts />
               <AutoFill
                 watch="purContNo"
                 map={purMap}
                 combos={["party", "countCode"]}
-                inputs={["ratioText", "brand", "ratePerLbs", "remarks"]}
+                inputs={["ratioText", "brand", "remarks"]}
               />
               <AutoFill
                 watch="convContNo"
                 map={convMap}
-                inputs={["yarnPartyTo", "ratePerLbsTo"]}
+                inputs={["yarnPartyTo", "ratePerLbsTo", "ratePerLbs"]}
               />
               <AutoFill watch="countCode" map={countBrandMap} inputs={["brand"]} />
 
@@ -630,18 +651,18 @@ export default async function YarnReceiptPage({
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Trn. Type</label>
-                        <select name="trnType" className="input-box mono" defaultValue={editing?.trnType ?? ""}>
-                          <option value=""></option>
-                          <option value="RCPT">RCPT</option>
-                          <option value="RETN">RETN</option>
-                          <option value="PUR">PUR</option>
-                          <option value="CONV">CONV</option>
+                        <select name="trnType" className="input-box mono" defaultValue={editing?.trnType ?? (isAdding ? "RCPT" : "")}>
+                          <option value="RCPT">RCPT — Receive</option>
+                          <option value="RETN">RETN — Return</option>
+                          {editing?.trnType && !["RCPT", "RETN"].includes(editing.trnType) && (
+                            <option value={editing.trnType}>{editing.trnType}</option>
+                          )}
                         </select>
                       </div>
 
                       <div className="md:col-span-8">
-                        <label className="label block mb-1">Party</label>
-                        <Combobox name="party" options={partyOpts} defaultValue={editing?.party ?? ""} placeholder="Select party" />
+                        <label className="label block mb-1">Party <span className="text-[9px] text-[var(--muted)]">(DEBITORS - CONVERSION WVG)</span></label>
+                        <Combobox name="party" options={convPartyOpts} defaultValue={editing?.party ?? ""} placeholder="Select party" />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Condition</label>
@@ -681,8 +702,8 @@ export default async function YarnReceiptPage({
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">DELIVERED TO</div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Yarn Party To</label>
-                        <Combobox name="yarnPartyTo" options={partyOpts} defaultValue={editing?.yarnPartyTo ?? ""} placeholder="Party…" />
+                        <label className="label block mb-1">Yarn Party To <span className="text-[9px] text-[var(--muted)]">(godown — default, changeable)</span></label>
+                        <Combobox name="yarnPartyTo" options={partyOpts} defaultValue={editing?.yarnPartyTo ?? (isAdding ? yarnGodownDesc : "")} placeholder="Party…" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
@@ -727,24 +748,24 @@ export default async function YarnReceiptPage({
                         <Combobox name="countCode" options={countOpts} defaultValue={editing?.countCode ?? ""} placeholder="Select count" />
                       </div>
                       <div className="md:col-span-4">
-                        <label className="label block mb-1">Warp</label>
-                        <input name="warp" className="input-box mono" defaultValue={editing?.warp ?? ""} />
+                        <label className="label block mb-1">Warp Bags</label>
+                        <input name="warp" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.warp ?? ""} />
                       </div>
                       <div className="md:col-span-4">
-                        <label className="label block mb-1">Weft</label>
-                        <input name="weft" className="input-box mono" defaultValue={editing?.weft ?? ""} />
+                        <label className="label block mb-1">Weft Bags</label>
+                        <input name="weft" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.weft ?? ""} />
                       </div>
 
                       <div className="md:col-span-3">
-                        <label className="label block mb-1">Bags</label>
-                        <input name="bags" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.bags ?? ""} />
+                        <label className="label block mb-1">Total Bags <span className="text-[9px] text-[var(--muted)]">(warp + weft)</span></label>
+                        <input name="bags" type="number" step="0.01" className="input-box mono text-right bg-gray-100" defaultValue={editing?.bags ?? ""} readOnly tabIndex={-1} />
                       </div>
                       <div className="md:col-span-3">
-                        <label className="label block mb-1">Qty Lbs</label>
+                        <label className="label block mb-1">Qty Lbs <span className="text-[9px] text-[var(--muted)]">(auto ×100, editable)</span></label>
                         <input name="qtyLbs" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.qtyLbs ?? ""} />
                       </div>
                       <div className="md:col-span-3">
-                        <label className="label block mb-1">Rate / Lbs</label>
+                        <label className="label block mb-1">Rate / Lbs <span className="text-[9px] text-[var(--muted)]">(= delivered-to)</span></label>
                         <input name="ratePerLbs" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.ratePerLbs ?? ""} />
                       </div>
                       <div className="md:col-span-3">
