@@ -211,9 +211,18 @@ export default async function IntGreyConversionContractPage({
   const maxLContNo = lRow?.maxL ?? 0;
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Internal conversion is inventory-only — the Party list is limited to the
+  // "DEBITORS - CONVERSION WVG" head (code 1.01.01.01.*).
+  const [convWvgHead] = await db
+    .select({ code: schema.chartOfAccounts.code })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE '%CONVERSION%WVG%'`)
+    .limit(1);
+  const convWvgPrefix = convWvgHead?.code ? convWvgHead.code + "." : null;
+  const convParties = convWvgPrefix ? parties.filter((p) => p.code.startsWith(convWvgPrefix)) : parties;
   // Full-page finding list rows for the Party field (value stays the description
   // so save + PartyCountGrid keep working).
-  const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
+  const partyFindRows = convParties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const greyOpts = greyList.map((g) => {
     const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
     const w = g.width ? `${g.width}" ` : "";
