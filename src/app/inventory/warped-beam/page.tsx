@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -99,6 +99,48 @@ export default async function WarpedBeamReceivingPage({
     .orderBy(schema.chartOfAccounts.description);
   const partyOpts = parties.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
   const partyDescByCode = new Map(parties.map((p) => [String(p.code), p.description]));
+  const codeByDesc = new Map(parties.map((p) => [p.description, String(p.code)]));
+
+  const headByLike = async (like: string) => {
+    const [h] = await db
+      .select({ code: schema.chartOfAccounts.code })
+      .from(schema.chartOfAccounts)
+      .where(sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE ${like}`)
+      .limit(1);
+    return h?.code ? String(h.code) + "." : null;
+  };
+  const optsUnder = (prefix: string | null) =>
+    prefix ? parties.filter((p) => String(p.code).startsWith(prefix)).map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` })) : partyOpts;
+
+  // Beam Receiving From = sizing party → only CREDITOR - SIZING COMMERCIAL (3.03.06.02.*).
+  const sizingPrefix = await headByLike("%SIZING%COMMERCIAL%");
+  const sizingPartyOpts = optsUnder(sizingPrefix);
+  // Bm Sale Party = converting party → DEBITORS - CONVERSION WVG (1.01.01.01.*).
+  const convPrefix = await headByLike("%CONVERSION%WVG%");
+  const convPartyOpts = optsUnder(convPrefix);
+  // Beam Stock-Loaded = the loaded-beam godown, defaulted + locked.
+  const beamLoadedGodown =
+    parties.find((p) => /godown/i.test(p.description) && /(loaded\s*beam|beam\s*(loaded|stock))/i.test(p.description))?.description ?? "";
+
+  // Sizing contracts (Beam Contract Ext W/S) — shown under the sizing party, filtered
+  // to that party; picking one auto-fills its per-beam sizing rate into the grid.
+  const sizingContracts = await db
+    .select({
+      contNo: schema.intBeamContractExtWs.contNo,
+      sizingParty: schema.intBeamContractExtWs.sizingParty,
+      ratePerBeam: schema.intBeamContractExtWs.ratePerBeam,
+      status: schema.intBeamContractExtWs.status,
+    })
+    .from(schema.intBeamContractExtWs)
+    .orderBy(desc(schema.intBeamContractExtWs.contNo));
+  const sizingContractOpts = sizingContracts.map((c) => ({
+    value: c.contNo,
+    label: `${c.contNo}${c.ratePerBeam != null ? ` — @${c.ratePerBeam}` : ""}${c.status ? ` (${c.status})` : ""}`,
+    filterKey: c.sizingParty ? codeByDesc.get(c.sizingParty) ?? "" : "",
+  }));
+  const sizingContractMap = Object.fromEntries(
+    sizingContracts.map((c) => [c.contNo, { sizingRate: c.ratePerBeam ?? "" }]),
+  );
 
   const beamRows = await db
     .select({
@@ -752,17 +794,18 @@ export default async function WarpedBeamReceivingPage({
                 </div>
 
                 <div className="lg:col-span-3">
-                  <label className="label block mb-1">Beam Receiving From</label>
+                  <label className="label block mb-1">Beam Receiving From <span className="text-[9px] text-[var(--muted)]">(sizing party)</span></label>
                   <Combobox
                     name="beamReceivingFrom"
-                    options={partyOpts}
+                    options={sizingPartyOpts}
                     defaultValue={editing?.beamReceivingFrom ?? ""}
-                    placeholder="party account"
+                    placeholder="sizing party"
                   />
                 </div>
                 <div className="lg:col-span-3">
-                  <label className="label block mb-1">Beam Stock-Loaded</label>
-                  <input name="beamStockLoaded" className="input-box mono" defaultValue={editing?.beamStockLoaded ?? ""} />
+                  <label className="label block mb-1">Beam Stock-Loaded <span className="text-[9px] text-[var(--muted)]">(godown — locked)</span></label>
+                  <input className={roCls} defaultValue={editing?.beamStockLoaded || beamLoadedGodown} readOnly tabIndex={-1} />
+                  <input type="hidden" name="beamStockLoaded" defaultValue={editing?.beamStockLoaded || beamLoadedGodown} />
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Total Amount</label>
@@ -827,8 +870,24 @@ export default async function WarpedBeamReceivingPage({
                   <input name="resultCountSzg" className="input-box mono" defaultValue={editing?.resultCountSzg ?? ""} />
                 </div>
                 <div className="lg:col-span-3">
-                  <label className="label block mb-1">Bm Sale Party</label>
-                  <Combobox name="bmSaleParty" options={partyOpts} defaultValue={editing?.bmSaleParty ?? ""} placeholder="party account" />
+                  <label className="label block mb-1">Bm Sale Party <span className="text-[9px] text-[var(--muted)]">(converting — DEBITORS CONV WVG)</span></label>
+                  <Combobox name="bmSaleParty" options={convPartyOpts} defaultValue={editing?.bmSaleParty ?? ""} placeholder="converting party" />
+                </div>
+
+                <div className="lg:col-span-4">
+                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(sizing party's)</span></label>
+                  <Combobox
+                    name="sizingContNo"
+                    options={sizingContractOpts}
+                    defaultValue=""
+                    placeholder="Sizing contract…"
+                    filterByField="beamReceivingFrom"
+                  />
+                  <AutoFill watch="sizingContNo" map={sizingContractMap} inputs={["sizingRate"]} />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">Sizing Rate <span className="text-[9px] text-[var(--muted)]">(→ grid)</span></label>
+                  <input name="sizingRate" type="number" step="any" className="input-box mono text-right" defaultValue="" />
                 </div>
               </div>
 
@@ -952,10 +1011,11 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-6">
                   <div className="grid grid-cols-2 gap-2">
+                    <div><label className="label block mb-1">Net Weight (Kg) <span className="text-[9px] text-[var(--muted)]">(bags+cones − packing)</span></label><input name="netWeightDisp" type="number" step="any" className="input-box mono text-right bg-gray-100" defaultValue="" readOnly tabIndex={-1} /></div>
+                    <div><label className="label block mb-1">Net Weight Rate (Kg)</label><input name="netWeightRate" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.netWeightRate ?? ""} /></div>
                     <div><label className="label block mb-1">Total Amount</label><input name="totalAmountFinal" type="number" step="any" className="input-box mono text-right bg-gray-100" defaultValue={editing?.totalAmountFinal ?? ""} readOnly tabIndex={-1} /></div>
                     <div><label className="label block mb-1">Gst / Ftx</label><input name="gstFtx" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.gstFtx ?? ""} /></div>
-                    <div><label className="label block mb-1">Net Weight Rate (Kg)</label><input name="netWeightRate" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.netWeightRate ?? ""} /></div>
-                    <div><label className="label block mb-1">Amt Tot</label><input name="amtTot" type="number" step="any" className="input-box mono text-right bg-green-50" defaultValue={editing?.amtTot ?? ""} readOnly tabIndex={-1} /></div>
+                    <div className="col-span-2"><label className="label block mb-1">Amt Tot</label><input name="amtTot" type="number" step="any" className="input-box mono text-right bg-green-50" defaultValue={editing?.amtTot ?? ""} readOnly tabIndex={-1} /></div>
                   </div>
                 </div>
               </div>
