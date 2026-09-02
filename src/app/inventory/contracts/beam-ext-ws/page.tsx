@@ -168,6 +168,16 @@ export default async function BeamContractExtWsPage({
     .orderBy(schema.products.description);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Converter Party is limited to the "DEBITORS - CONVERSION WVG" head (code 1.01.01.01.*).
+  const [convWvgHead] = await db
+    .select({ code: schema.chartOfAccounts.code })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE '%CONVERSION%WVG%'`)
+    .limit(1);
+  const convWvgPrefix = convWvgHead?.code ? convWvgHead.code + "." : null;
+  const convWvgOpts = convWvgPrefix
+    ? parties.filter((p) => p.code.startsWith(convWvgPrefix)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
+    : partyOpts;
   const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const greyOpts = greyList.map((g) => {
     const rp = g.reed && g.pick ? `R${g.reed} P${g.pick} · ` : "";
@@ -628,10 +638,10 @@ export default async function BeamContractExtWsPage({
                   />
                 </div>
                 <div className="lg:col-span-3">
-                  <label className="label block mb-1">Converter Party</label>
+                  <label className="label block mb-1">Converter Party <span className="text-[9px] text-[var(--muted)]">(conversion-wvg debtors)</span></label>
                   <Combobox
                     name="converter_party"
-                    options={partyOpts}
+                    options={convWvgOpts}
                     defaultValue={formContract?.converterParty ?? ""}
                     placeholder="Select party"
                   />
