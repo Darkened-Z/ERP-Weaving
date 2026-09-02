@@ -296,6 +296,21 @@ export default async function PackiParchiPage({
       ...contractFill(c.grayQltyCode),
     };
 
+  // Grey Quality (the quality being SOLD) lists only qualities actually present in
+  // the godown stock (balance > 0), with their stock shown in the label. The record
+  // being edited keeps its own quality selectable even if now depleted. (Quality
+  // Print stays the full construction list — any random quality is allowed there.)
+  const richByCode = new Map(constructions.map((c) => [c.code, richConstruction(c) || c.description]));
+  const stockQualityOpts = Object.entries(qualityStockMap)
+    .filter(([, s]) => Number(s.grey_stock_mtr_disp) > 0 || Number(s.grey_stock_than_disp) > 0)
+    .map(([code, s]) => ({
+      value: code,
+      label: `${code} — ${richByCode.get(code) ?? code}  [${s.grey_stock_than_disp} than / ${s.grey_stock_mtr_disp} mtr]`,
+    }));
+  if (formItem?.quality && !stockQualityOpts.some((o) => o.value === formItem.quality)) {
+    stockQualityOpts.unshift({ value: formItem.quality, label: `${formItem.quality} — ${richByCode.get(formItem.quality) ?? formItem.quality}` });
+  }
+
   const curStock = formItem?.quality ? qualityStockMap[formItem.quality.trim()] : undefined;
   const ppStockThan = curStock ? Number(curStock.grey_stock_than_disp) : null;
   const ppStockMtr = curStock ? Number(curStock.grey_stock_mtr_disp) : null;
@@ -996,12 +1011,12 @@ export default async function PackiParchiPage({
               </div>
 
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Quality</label>
+                <label className="label block mb-1">Quality <span className="text-[9px] text-[var(--muted)]">(in-stock only)</span></label>
                 <Combobox
                   name="quality"
-                  options={qualityOpts}
+                  options={stockQualityOpts}
                   defaultValue={formItem?.quality ?? ""}
-                  placeholder="Quality…"
+                  placeholder="Quality in stock…"
                 />
               </div>
               <div className="lg:col-span-3">
