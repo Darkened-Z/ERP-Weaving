@@ -1452,6 +1452,8 @@ export const extPackiParchiCount = sqliteTable("ext_packi_parchi_count", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   parchiId: integer("parchi_id").notNull().references(() => extPackiParchi.id, { onDelete: "cascade" }),
   code: text("code"),
+  descr: text("descr"),
+  brand: text("brand"),
   type: text("type"),
   calCount: real("cal_count"),
   ends: integer("ends"),

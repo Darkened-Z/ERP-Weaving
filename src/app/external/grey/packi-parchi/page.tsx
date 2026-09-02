@@ -207,13 +207,16 @@ export default async function PackiParchiPage({
     .from(schema.extGreyConvWeft)
     .orderBy(schema.extGreyConvWeft.contractId, schema.extGreyConvWeft.srNo);
   const convContNoById = new Map(convContracts.map((c) => [c.id, c.contNo]));
-  type PpCountFill = { code: string | null; type: string; calCount: number | null; ends: number | null; ratePerLbs: number | null; wtPerMtr: number | null; costPerMtr: number | null };
+  type PpCountFill = { code: string | null; descr: string | null; brand: string | null; type: string; calCount: number | null; ends: number | null; ratePerLbs: number | null; wtPerMtr: number | null; costPerMtr: number | null };
   const convCountMap: Record<string, PpCountFill[]> = {};
   const pushConvCount = (contractId: number, cType: string, r: typeof convWarpRows[number]) => {
     const key = convContNoById.get(contractId);
     if (!key) return;
     (convCountMap[key] ??= []).push({
-      code: r.count, type: cType, calCount: r.calCount, ends: r.ends,
+      code: r.count,
+      descr: r.descr ?? (r.count ? countLabelByCode.get(String(r.count)) ?? null : null),
+      brand: r.brand ?? null,
+      type: cType, calCount: r.calCount, ends: r.ends,
       ratePerLbs: r.ratePerLbs, wtPerMtr: r.wtPerMtr, costPerMtr: r.costPerMtr,
     });
   };
@@ -502,6 +505,8 @@ export default async function PackiParchiPage({
     }
 
     const countCode = formData.getAll("count_code") as string[];
+    const countDescr = formData.getAll("count_desc") as string[];
+    const countBrand = formData.getAll("count_brand") as string[];
     const countType = formData.getAll("count_type") as string[];
     const countCal = formData.getAll("count_cal") as string[];
     const countEnds = formData.getAll("count_ends") as string[];
@@ -512,6 +517,8 @@ export default async function PackiParchiPage({
 
     const validCounts: {
       code: string | null;
+      descr: string | null;
+      brand: string | null;
       type: string | null;
       calCount: number | null;
       ends: number | null;
@@ -536,6 +543,8 @@ export default async function PackiParchiPage({
       if (!code && !t && cal == null && ends == null && rate == null && wt == null && cost == null && tot == null) continue;
       validCounts.push({
         code: code || null,
+        descr: (countDescr[i] || "").trim() || null,
+        brand: (countBrand[i] || "").trim() || null,
         type: t || null,
         calCount: cal,
         ends,
@@ -1644,6 +1653,7 @@ export default async function PackiParchiPage({
                       <th style={{ width: "30px" }}>#</th>
                       <th>Count Code</th>
                       <th>Count Desc</th>
+                      <th>Brand</th>
                       <th>Type</th>
                       <th className="text-right">Cal Count</th>
                       <th className="text-right">Ends</th>
@@ -1659,7 +1669,8 @@ export default async function PackiParchiPage({
                       <tr key={row?.id ?? `ec-${i}`}>
                         <td className="mono text-[11px] text-center text-[var(--muted)]">{i + 1}</td>
                         <td><input name="count_code" list="pp-yarn-counts" className={gridCellCls} defaultValue={row?.code ?? ""} style={{ width: 60 }} /></td>
-                        <td><input name="count_desc" className={gridCellCls} defaultValue={row?.code ? (ppCountDescByCode.get(String(row.code)) ?? "") : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} /></td>
+                        <td><input name="count_desc" className={gridCellCls} defaultValue={row?.descr ?? (row?.code ? (ppCountDescByCode.get(String(row.code)) ?? "") : "")} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} /></td>
+                        <td><input name="count_brand" className={gridCellCls} defaultValue={row?.brand ?? ""} style={{ minWidth: 100 }} /></td>
                         <td><input name="count_type" className={gridCellCls} defaultValue={row?.type ?? ""} style={{ width: 80 }} /></td>
                         <td><input name="count_cal" type="number" step="any" className={gridCellNumCls} defaultValue={row?.calCount ?? ""} /></td>
                         <td><input name="count_ends" type="number" step="1" className={gridCellNumCls} defaultValue={row?.ends ?? ""} /></td>
@@ -1684,6 +1695,25 @@ export default async function PackiParchiPage({
                     ))}
                   </tbody>
                 </table>
+              </div>
+              {/* Consumption totals: warp lbs + weft lbs = total lbs, and Σ(tot × rate) */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+                <div>
+                  <label className="label block mb-1">Warp Lbs</label>
+                  <input name="count_warp_lbs_disp" className={roCls + " text-right"} readOnly tabIndex={-1} />
+                </div>
+                <div>
+                  <label className="label block mb-1">Weft Lbs</label>
+                  <input name="count_weft_lbs_disp" className={roCls + " text-right"} readOnly tabIndex={-1} />
+                </div>
+                <div>
+                  <label className="label block mb-1">Total Lbs <span className="text-[9px] text-[var(--muted)]">(consumed)</span></label>
+                  <input name="count_tot_lbs_disp" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
+                </div>
+                <div>
+                  <label className="label block mb-1">Total Amount</label>
+                  <input name="count_amt_disp" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
+                </div>
               </div>
             </div>
 

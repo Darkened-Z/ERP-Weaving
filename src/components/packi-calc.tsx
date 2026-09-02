@@ -116,21 +116,41 @@ function syncKpList() {
   if (all) all.style.display = checked ? "" : "none";
 }
 
-type CountFill = { code: string | null; type: string; calCount: number | null; ends: number | null; ratePerLbs: number | null; wtPerMtr: number | null; costPerMtr: number | null };
+type CountFill = { code: string | null; descr: string | null; brand: string | null; type: string; calCount: number | null; ends: number | null; ratePerLbs: number | null; wtPerMtr: number | null; costPerMtr: number | null };
 
-// Fill the count grid's TOT Lbs from wt/mtr × net meter (the yarn consumed).
+// Count grid: TOT Lbs = wt/mtr × net meter (yarn consumed), then warp/weft/total
+// lbs and the amount (Σ tot × rate) footers.
 function recalcCountTot() {
   const form = document.getElementById("pp-save-form");
   if (!form) return;
   const meterNet = parseFloat(form.querySelector<HTMLInputElement>('[name="meter_net"]')?.value ?? "");
-  if (!Number.isFinite(meterNet)) return;
-  const wts = Array.from(form.querySelectorAll<HTMLInputElement>('[name="count_wt"]'));
-  const tots = Array.from(form.querySelectorAll<HTMLInputElement>('[name="count_tot"]'));
-  wts.forEach((w, i) => {
+  const rows = Array.from(form.querySelectorAll<HTMLInputElement>('[name="count_wt"]'));
+  let warpLbs = 0, weftLbs = 0, amt = 0;
+  rows.forEach((w) => {
+    const tr = w.closest("tr");
+    if (!tr) return;
+    const totEl = tr.querySelector<HTMLInputElement>('[name="count_tot"]');
     const wv = parseFloat(w.value);
-    const t = tots[i];
-    if (t && Number.isFinite(wv)) t.value = String(Math.round(wv * meterNet * 100) / 100);
+    let tv = parseFloat(totEl?.value ?? "");
+    if (Number.isFinite(wv) && Number.isFinite(meterNet)) {
+      tv = Math.round(wv * meterNet * 100) / 100;
+      if (totEl) totEl.value = String(tv);
+    }
+    if (!Number.isFinite(tv)) tv = 0;
+    const type = (tr.querySelector<HTMLInputElement>('[name="count_type"]')?.value ?? "").toUpperCase();
+    const rate = parseFloat(tr.querySelector<HTMLInputElement>('[name="count_rate"]')?.value ?? "") || 0;
+    if (type.includes("WARP")) warpLbs += tv;
+    else if (type.includes("WEFT")) weftLbs += tv;
+    amt += tv * rate;
   });
+  const put = (n: string, v: number) => {
+    const el = form.querySelector<HTMLInputElement>(`[name="${n}"]`);
+    if (el) el.value = String(Math.round(v * 100) / 100);
+  };
+  put("count_warp_lbs_disp", warpLbs);
+  put("count_weft_lbs_disp", weftLbs);
+  put("count_tot_lbs_disp", warpLbs + weftLbs);
+  put("count_amt_disp", amt);
 }
 
 export function PackiCalc({
@@ -144,6 +164,7 @@ export function PackiCalc({
     const onInput = (e: Event) => {
       const t = e.target as HTMLInputElement;
       if (t?.name && WATCH.has(t.name)) { recompute(); recalcCountTot(); }
+      else if (t?.name?.startsWith("count_")) recalcCountTot();
     };
     const onChange = (e: Event) => {
       const t = e.target as HTMLInputElement;
@@ -155,6 +176,7 @@ export function PackiCalc({
         recompute();
       }
       if (t?.name && WATCH.has(t.name)) { recompute(); recalcCountTot(); }
+      else if (t?.name?.startsWith("count_")) recalcCountTot();
     };
 
     const setCombo = (name: string, value: string) =>
@@ -165,7 +187,7 @@ export function PackiCalc({
       if (!form) return;
       const codes = Array.from(form.querySelectorAll<HTMLInputElement>('[name="count_code"]'));
       const rows = convCountMap[contNo] ?? [];
-      const NAMES = ["count_code", "count_desc", "count_type", "count_cal", "count_ends", "count_rate", "count_wt", "count_cost", "count_tot"];
+      const NAMES = ["count_code", "count_desc", "count_brand", "count_type", "count_cal", "count_ends", "count_rate", "count_wt", "count_cost", "count_tot"];
       codes.forEach((codeEl, i) => {
         const tr = codeEl.closest("tr");
         if (!tr) return;
@@ -176,7 +198,8 @@ export function PackiCalc({
         const row = rows[i];
         if (row) {
           cell("count_code", row.code);
-          cell("count_desc", row.code ? countLabel[String(row.code)] ?? "" : "");
+          cell("count_desc", row.descr ?? (row.code ? countLabel[String(row.code)] ?? "" : ""));
+          cell("count_brand", row.brand);
           cell("count_type", row.type);
           cell("count_cal", row.calCount);
           cell("count_ends", row.ends);
