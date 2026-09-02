@@ -163,14 +163,6 @@ export default async function WarpedBeamReceivingPage({
     ]),
   );
 
-  const warpContracts = await db
-    .select({ contNo: schema.intBeamContractExtWs.contNo, ratePerBeam: schema.intBeamContractExtWs.ratePerBeam })
-    .from(schema.intBeamContractExtWs)
-    .orderBy(schema.intBeamContractExtWs.contNo);
-  const warpFillMap = Object.fromEntries(
-    warpContracts.map((c) => [c.contNo, { conv: c.ratePerBeam }]),
-  );
-
   const brandRows = await db
     .select({ name: schema.yarnBrands.name })
     .from(schema.yarnBrands)
@@ -194,6 +186,7 @@ export default async function WarpedBeamReceivingPage({
       unPostedBills: txt(formData.get("unPostedBills")),
       billNo: txt(formData.get("billNo")),
       billDate: txt(formData.get("billDate")),
+      billDueDate: txt(formData.get("billDueDate")),
       billingStatus: txt(formData.get("billingStatus")),
       beamReceivingFrom: txt(formData.get("beamReceivingFrom")),
       beamStockLoaded: txt(formData.get("beamStockLoaded")),
@@ -643,7 +636,7 @@ export default async function WarpedBeamReceivingPage({
     await db.transaction(async (tx) => {
       await tx
         .update(schema.intWarpedBeamReceiving)
-        .set({ billNo: null, billDate: null, billingStatus: null, delBill: "Y", modifiedDate: new Date().toISOString() })
+        .set({ billNo: null, billDate: null, billDueDate: null, billingStatus: null, delBill: "Y", modifiedDate: new Date().toISOString() })
         .where(eq(schema.intWarpedBeamReceiving.id, id));
     });
     revalidatePath("/inventory/warped-beam");
@@ -852,6 +845,10 @@ export default async function WarpedBeamReceivingPage({
                   <label className="label block mb-1">Bill Date</label>
                   <input name="billDate" type="date" className="input-box mono" defaultValue={editing?.billDate ?? ""} />
                 </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">Bill Due Date</label>
+                  <input name="billDueDate" type="date" className="input-box mono" defaultValue={editing?.billDueDate ?? ""} />
+                </div>
                 <div className="lg:col-span-1">
                   <label className="label block mb-1">BILLING STAUTS</label>
                   <input name="billingStatus" className="input-box mono" defaultValue={editing?.billingStatus ?? ""} />
@@ -908,7 +905,6 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 80 }} className="text-right">Empty (KG)</th>
                         <th style={{ width: 90 }} className="text-right">Yarn Bms Net LBS</th>
                         <th style={{ width: 90 }} className="text-right">Beam Length</th>
-                        <th style={{ width: 90 }}>Warping cnt No</th>
                         <th style={{ width: 70 }} className="text-right">Wt</th>
                         <th style={{ width: 70 }} className="text-right">Width</th>
                         <th style={{ width: 70 }} className="text-right">Ends</th>
@@ -937,7 +933,6 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="emptyKg" type="number" step="any" className={gridCellNumCls} defaultValue={l?.emptyKg ?? ""} /></td>
                             <td><input name="yarnBmsNetLbs" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.yarnBmsNetLbs ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="beamLength" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLength ?? ""} /></td>
-                            <td><input name="warpingCntNo" list="iwb-warp-cont-list" className={gridCellCls} defaultValue={l?.warpingCntNo ?? ""} /></td>
                             <td><input name="wt" type="number" step="any" className={gridCellNumCls} defaultValue={l?.wt ?? ""} /></td>
                             <td><input name="width" type="number" step="any" className={gridCellNumCls} defaultValue={l?.width ?? ""} /></td>
                             <td><input name="ends" type="number" step="1" className={gridCellNumCls} defaultValue={l?.ends ?? ""} /></td>
@@ -966,18 +961,12 @@ export default async function WarpedBeamReceivingPage({
                   </option>
                 ))}
               </datalist>
-              <datalist id="iwb-warp-cont-list">
-                {warpContracts.map((c) => (
-                  <option key={c.contNo} value={c.contNo} />
-                ))}
-              </datalist>
               <datalist id="iwb-brands">
                 {brandRows.map((b) => (
                   <option key={b.name} value={b.name} />
                 ))}
               </datalist>
               <RowAutoFill watch="beamNo" map={beamFillMap} />
-              <RowAutoFill watch="warpingCntNo" map={warpFillMap} />
               <RowCalc target="amount" a="beamLength" b="conv" />
               <WarpedBeamCalc />
 
