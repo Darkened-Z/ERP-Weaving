@@ -1224,12 +1224,12 @@ export default async function PackiParchiPage({
                 </div>
               </div>
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Conv. Cont #</label>
+                <label className="label block mb-1">Sale / Conv Contract <span className="text-[9px] text-[var(--muted)]">(sale party ke contracts)</span></label>
                 <Combobox
                   name="conv_cont_no_sale"
-                  options={salContractOpts}
+                  options={[...salContractOpts, ...convOpts]}
                   defaultValue={formItem?.convContNoSale ?? ""}
-                  placeholder="Sale contract…"
+                  placeholder="Grey sale / conversion contract…"
                   filterByField="sale_party"
                 />
                 <AutoFill

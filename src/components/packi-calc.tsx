@@ -124,6 +124,11 @@ export function PackiCalc() {
       const t = e.target as HTMLInputElement;
       if (t?.name === "term_sal") syncDueDate();
       if (t?.name === "kp_all") syncKpList();
+      // Picking a broker defaults its commission to 1% (still editable).
+      if (t?.name === "broker_name_sale") {
+        if (t.value && numOf("broker_percent_sale") == null) setNum("broker_percent_sale", 1, 2);
+        recompute();
+      }
       if (t?.name && WATCH.has(t.name)) recompute();
     };
     document.addEventListener("input", onInput, true);
