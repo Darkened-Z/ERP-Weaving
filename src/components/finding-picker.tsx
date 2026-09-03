@@ -137,6 +137,7 @@ export function FindingPicker({
       <div className="flex gap-1">
         <input
           readOnly
+          data-lov-picker
           className={className}
           value={selected ? `${selected.code} — ${selected.description}` : value}
           placeholder={placeholder}

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 // Data-entry controls we walk with Enter. Excludes hidden/submit/button controls.
 const FIELD_SELECTOR =
-  'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])';
+  'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]):not([disabled]):not([readonly]), input[data-lov-picker]:not([disabled]), select:not([disabled]), textarea:not([disabled])';
 
 function isVisible(el: HTMLElement) {
   return el.offsetParent !== null || el.getClientRects().length > 0;
@@ -143,6 +143,14 @@ export function FormKeyboard() {
       if (!field) return;
       const form = field.closest("form");
       if (!form) return;
+
+      // Custom LOV pickers (FindingPicker) are readonly, so Enter/F9 must OPEN them
+      // (the generic advance would otherwise skip straight past them).
+      if ((e.key === "Enter" || e.key === "F9") && field.hasAttribute("data-lov-picker")) {
+        e.preventDefault();
+        field.click();
+        return;
+      }
 
       // F9 — open a searchable List-of-Values from the field's <datalist> or a <select>'s options
       if (e.key === "F9") {
