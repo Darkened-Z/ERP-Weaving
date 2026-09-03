@@ -164,7 +164,8 @@ export default async function PackiParchiPage({
     const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
     const warp = [c.warpCount, c.warp2].map(lblCount).filter(Boolean).join(" / ");
     const weft = [c.weftCount, c.weft2].map(lblCount).filter(Boolean).join(" / ");
-    const wf = warp && weft ? (warp === weft ? warp : `${warp} × ${weft}`) : warp || weft;
+    // Always show BOTH warp and weft (even when identical) so the weft is never hidden.
+    const wf = warp && weft ? `${warp} × ${weft}` : warp || weft;
     return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
   };
   // Quality is keyed by construction CODE (e.g. GC-001) everywhere, so packi and godown
