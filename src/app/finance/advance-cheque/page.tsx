@@ -565,7 +565,12 @@ export default async function AdvanceChequePage({
                           <td className="text-[var(--muted)] text-center">{i + 1}</td>
                           <td><input name="line_party" list="adv-party-accts" className="input-box mono text-[12px]" defaultValue={pf?.party ?? ""} /></td>
                           <td><input name="line_party_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.party) ?? "" : ""} readOnly tabIndex={-1} /></td>
-                          <td><input name="line_adv" list="adv-adv-accts" className="input-box mono text-[12px]" defaultValue={pf?.bankAdv ?? ""} /></td>
+                          <td>
+                            <select name="line_adv" className="input-box mono text-[12px]" defaultValue={pf?.bankAdv ?? ""}>
+                              <option value="">— select —</option>
+                              {advOpts.map((o) => (<option key={o.value} value={o.value}>{o.value} — {o.desc}</option>))}
+                            </select>
+                          </td>
                           <td><input name="line_adv_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.bankAdv) ?? "" : ""} readOnly tabIndex={-1} /></td>
                           <td><input name="line_chq_no" className="input-box mono text-[12px]" /></td>
                           <td><input name="line_chq_date" type="date" className="input-box mono text-[12px]" /></td>
@@ -589,9 +594,6 @@ export default async function AdvanceChequePage({
               <RowAutoFill watch="line_adv" map={advTitleMap} />
               <datalist id="adv-party-accts">
                 {partyOpts.map((o) => (<option key={o.value} value={o.value}>{o.desc}</option>))}
-              </datalist>
-              <datalist id="adv-adv-accts">
-                {advOpts.map((o) => (<option key={o.value} value={o.value}>{o.desc}</option>))}
               </datalist>
             </form>
           </div>
