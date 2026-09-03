@@ -64,7 +64,14 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 
 ## Finance — Advance Cheque (`finance/advance-cheque`)
 - Advance-cheque lifecycle register. **VTYPE `ADV`**, phase in `trans_main.trnType` = `ISSUE` / `CLEAR` / `BOUNCE`. Each phase = one balanced 2-line voucher; status derived by grouping ADV vouchers on `chqNo` (BOUNCE→bounced, else CLEAR→cleared, else issued).
+- **Issue is a multi-line grid** (`issueCheques`): each row = one cheque (party / bank-advance / chq no / date / amount / narration) → posts **one ISSUE voucher per row** so each cheque stays an independent lifecycle unit. Batch validates all rows, dedupes cheque numbers within-batch + against existing ADV issues. Row pickers = datalists (`adv-party-accts` all L≥4, `adv-adv-accts` = `1.01.15.03.*`); `RowAutoFill` fills the title columns.
 - **Issue:** Dr Party (`accCode`) / Cr Bank-Advance. Party = any L≥4 acct; Bank-Advance picker filtered to `1.01.15.03.*` (per-bank advance sub-accts). Cheque No unique across ADV/ISSUE.
+
+## Finance — Cheque Books (`finance/cheque-books`)
+- Cheque-book master + cheque dashboard (modelled on the client's reference). Table **`cheque_books`** (schema.ts): name (unique), bankAcc (COA), accountNo, prefix, startNo, leaves, status, createdAt. Created in Turso via raw DDL (additive; `drizzle-kit push` sees no diff).
+- **Dashboard** (all derived from `trans_detail.chq_no` + `trans_main`): status counters (Issued/Cleared/Returned/Unused/Total), **Upcoming** (outstanding issued, chqDate ≥ today) + **Past Due** (chqDate < today) cheque tables. One register entry per cheque no from its "origin" line (ADV ISSUE / BP / CP / BR / CR — never the ADV CLEAR/BOUNCE reversal); status: ADV bounce→Returned, ADV clear→Cleared, BR/CR→Received, else Issued.
+- **Per-book usage**: leaf n = `startNo..startNo+leaves-1`; a leaf is "used" if `prefix+n` or bare `n` matches a register cheque no. Shows used/total bar + Issued/Cleared/Returned/Unused summary. CRUD (create/edit; ADMIN delete); dup name → `error=exists` via `isUniqueViolation`.
+- Nav: Finance → Cheque Books (`fin-cheque-books`), next to Advance Cheque.
 - **Clear:** Dr Bank-Advance / Cr Bank (`1.01.15.02.*`). **Bounce:** Dr Bank-Advance / Cr party dishonour (`1.01.15.04.*` "CHQ FAILLED <party>"). Both guard against double-processing (already cleared/bounced).
 - **Re-issue** (on a bounced cheque): opens a fresh ISSUE form prefilled with party+amount, new cheque no. (GL = normal issue; whether to also move from dishonour→advance is an owner call — left as plain re-issue.)
 - Delete (ADMIN) removes the issue + its clear/bounce (all vnos sharing the chq no). Postings flow into `/ledger` + `/reports/cheque-status` like other cheque vouchers. Reuses `getSession`, `assertPeriodOpen`, `Combobox`, `ConfirmButton` — same pattern as BP.

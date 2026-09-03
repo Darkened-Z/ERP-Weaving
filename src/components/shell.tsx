@@ -172,6 +172,7 @@ const SECTIONS = [
       { href: "/finance/br", label: "Bank Receipt Voucher", key: "fin-br" },
       { href: "/finance/bp", label: "Bank Payment Voucher", key: "fin-bp" },
       { href: "/finance/advance-cheque", label: "Advance Cheque", key: "fin-advance-cheque" },
+      { href: "/finance/cheque-books", label: "Cheque Books", key: "fin-cheque-books" },
       { href: "/finance/jv", label: "Journal Voucher", key: "fin-jv" },
       { href: "/finance/pr", label: "Petty Cash Receipt", key: "fin-pr" },
       { href: "/finance/pc", label: "Petty Cash Payment", key: "fin-pc" },

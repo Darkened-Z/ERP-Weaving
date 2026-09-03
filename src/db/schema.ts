@@ -2165,3 +2165,17 @@ export const quickContracts = sqliteTable("quick_contracts", {
   ixStatus: index("ix_quick_contract_status").on(t.status),
   ixCreated: index("ix_quick_contract_created").on(t.createdAt),
 }));
+
+// Physical cheque books: a bank account's book of numbered leaves. Usage/status
+// per leaf is derived from vouchers (trans_detail.chq_no) at read time.
+export const chequeBooks = sqliteTable("cheque_books", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+  bankAcc: text("bank_acc").notNull(),
+  accountNo: text("account_no"),
+  prefix: text("prefix"),
+  startNo: integer("start_no").notNull(),
+  leaves: integer("leaves").notNull(),
+  status: text("status").notNull().default("ACTIVE"),
+  createdAt: text("created_at"),
+});
