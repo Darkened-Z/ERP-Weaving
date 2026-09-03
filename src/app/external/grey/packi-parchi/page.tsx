@@ -1409,40 +1409,38 @@ export default async function PackiParchiPage({
                 />
               </div>
 
-              {/* Sale money, in bill order: rate amount → commission % (±) → commission value → net */}
+              {/* Sale money as value + amount pairs (Oracle order): Rate → Rate Amount,
+                  Commission → Commission Amount, Checkery → Checkery Amount, Net Amount. */}
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Sale Amount <span className="text-[9px] text-[var(--muted)]">(rate × mtr)</span></label>
+                <label className="label block mb-1">Rate <span className="text-[9px] text-[var(--muted)]">(grey sale rate)</span></label>
+                <input name="grey_rate_kp" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.greyRateKp ?? ""} />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Rate Amount <span className="text-[9px] text-[var(--muted)]">(rate × mtr)</span></label>
                 <input name="sale_amt_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less %)</span></label>
-                <input
-                  name="commission_sale"
-                  type="number"
-                  step="any"
-                  className="input-box mono text-right"
-                  defaultValue={formItem?.commissionSale ?? ""}
-                />
+                <input name="commission_sale" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.commissionSale ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission Amount</label>
                 <input name="commission_amt_sal_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-3">
-                <label className="label block mb-1">Sale Net</label>
+                <label className="label block mb-1">Checkery</label>
+                <input name="checkery_sale" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.checkerySale ?? ""} />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">Checkery Amount</label>
+                <input name="checkery_amt_sal_disp" type="number" step="any" className={roCls + " text-right"} readOnly tabIndex={-1} />
+              </div>
+              <div className="lg:col-span-6">
+                <label className="label block mb-1">Net Amount</label>
                 <input name="sale_net_disp" type="number" step="any" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
               </div>
 
-              <div className="lg:col-span-2 hidden">
-                <label className="label block mb-1">Grey Rate Kp</label>
-                <input
-                  name="grey_rate_kp"
-                  type="number"
-                  step="any"
-                  className="input-box mono text-right"
-                  defaultValue={formItem?.greyRateKp ?? ""}
-                />
-              </div>
+              {/* Kaat % kept in the net math but not shown as a field. */}
               <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Kaat %</label>
                 <input
@@ -1451,16 +1449,6 @@ export default async function PackiParchiPage({
                   step="any"
                   className="input-box mono text-right"
                   defaultValue={formItem?.kaatPercentSale ?? ""}
-                />
-              </div>
-              <div className="lg:col-span-2 hidden">
-                <label className="label block mb-1">Checkery</label>
-                <input
-                  name="checkery_sale"
-                  type="number"
-                  step="any"
-                  className="input-box mono text-right"
-                  defaultValue={formItem?.checkerySale ?? ""}
                 />
               </div>
               <div className="lg:col-span-3">
