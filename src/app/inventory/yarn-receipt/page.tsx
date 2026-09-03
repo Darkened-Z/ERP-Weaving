@@ -5,6 +5,7 @@ import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
+import { PartyCountRate } from "@/components/party-count-rate";
 import { AutoAmount } from "@/components/auto-amount";
 import { YarnReceiptCounts } from "@/components/yarn-receipt-counts";
 import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
@@ -166,9 +167,16 @@ export default async function YarnReceiptPage({
     ? parties.filter((p) => underAnyPrefix(p.code, convPrefixes)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
     : partyOpts;
 
-  // Delivered-TO is the yarn-stock godown — defaulted (changeable) for new vouchers.
+  // Delivered-TO defaults to the yarn-stock godown — resolved by its COA code
+  // `1.01.25.01.0001` (the description regex alone lands on GODOWN - REWINDER
+  // YARN STOCK first, which sorts before GODOWN - YARN STOCK (WVG)).
   const yarnGodownDesc =
+    parties.find((p) => String(p.code) === "1.01.25.01.0001")?.description ??
     parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ?? "";
+  // The field stays changeable: every godown / sizing account is selectable.
+  const godownOpts = parties
+    .filter((p) => String(p.code).startsWith("1.01.25.01.") || /godown|sizing/i.test(p.description))
+    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
   const fmtN = (n: number | null | undefined, d = 0) =>
@@ -250,6 +258,28 @@ export default async function YarnReceiptPage({
     convMap[c.contNo] = {
       yarnPartyTo: c.party ?? "",
     };
+  }
+
+  // Rate/Lbs auto on Party + Count pick: the (party, count) rate from party_counts
+  // (count joined via yarn_counts.id → its text code), falling back to the party's
+  // running purchase-contract rate for that count. Keyed "<party desc>||<count code>".
+  const pcRateRows = await db
+    .select({
+      partyCode: schema.partyCounts.partyCode,
+      countCode: schema.yarnCounts.countCode,
+      rate: schema.partyCounts.ratePerLbs,
+    })
+    .from(schema.partyCounts)
+    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
+  const partyCountRateMap: Record<string, number> = {};
+  for (const r of pcRateRows) {
+    if (!r.countCode || r.rate == null) continue;
+    partyCountRateMap[`${partyDescByCode[r.partyCode] ?? r.partyCode}||${r.countCode}`] = r.rate;
+  }
+  for (const c of purContracts) {
+    if (!c.partyCode || !c.countCode || c.ratePerLbs == null) continue;
+    const key = `${partyDescByCode[c.partyCode] ?? c.partyCode}||${c.countCode}`;
+    if (!(key in partyCountRateMap)) partyCountRateMap[key] = c.ratePerLbs;
   }
 
   // Server-computed stock for the selected voucher's (count, party, location).
@@ -622,10 +652,17 @@ export default async function YarnReceiptPage({
               <AutoFill
                 watch="convContNo"
                 map={convMap}
-                inputs={["yarnPartyTo"]}
+                combos={["yarnPartyTo"]}
               />
               {/* Picking a count shows how much of it is already in the godown */}
               <AutoFill watch="countCode" map={countStockMap} inputs={["stock_bage_disp", "stock_lbs_disp"]} />
+              {/* Party + Count picked → that party-count's Rate/Lbs fills both rate boxes */}
+              <PartyCountRate
+                partyField="party"
+                countField="countCode"
+                map={partyCountRateMap}
+                targets={["ratePerLbs", "ratePerLbsTo"]}
+              />
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
@@ -728,9 +765,8 @@ export default async function YarnReceiptPage({
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">DELIVERED TO</div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Yarn Party To <span className="text-[9px] text-[var(--muted)]">(godown — locked)</span></label>
-                        <input className="input-box mono bg-gray-100" defaultValue={editing?.yarnPartyTo || yarnGodownDesc} readOnly tabIndex={-1} />
-                        <input type="hidden" name="yarnPartyTo" defaultValue={editing?.yarnPartyTo || yarnGodownDesc} />
+                        <label className="label block mb-1">Yarn Party To <span className="text-[9px] text-[var(--muted)]">(godown yarn stock — changeable)</span></label>
+                        <Combobox name="yarnPartyTo" options={godownOpts} defaultValue={editing?.yarnPartyTo || yarnGodownDesc} placeholder="Godown / sizing…" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>

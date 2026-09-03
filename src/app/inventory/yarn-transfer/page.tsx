@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
+import { PartyCountRate } from "@/components/party-count-rate";
 import { AutoAmount } from "@/components/auto-amount";
 import { QtyBagsLbs } from "@/components/qty-bags-lbs";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -165,9 +166,16 @@ export default async function YarnTransferPage({
     stockLbs = agg[0]?.lbs ?? 0;
   }
 
-  // Location From defaults to the yarn-stock godown; Location To offers the loom sheds.
+  // Location From defaults to the yarn-stock godown — resolved by its COA code
+  // `1.01.25.01.0001` (the description regex alone lands on GODOWN - REWINDER
+  // YARN STOCK first, which sorts before GODOWN - YARN STOCK (WVG)).
   const yarnGodownDesc =
+    parties.find((p) => String(p.code) === "1.01.25.01.0001")?.description ??
     parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ?? "";
+  // Every godown / sizing account is selectable in both location pickers.
+  const godownOpts = parties
+    .filter((p) => String(p.code).startsWith("1.01.25.01.") || /godown|sizing/i.test(p.description))
+    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const shedRows = await db
     .selectDistinct({ shed: schema.looms.shed })
     .from(schema.looms)
@@ -179,11 +187,15 @@ export default async function YarnTransferPage({
     .map((v) => ({ value: `Loom Shed ${v} (WVG)`, label: `Loom Shed ${v} (WVG)` }));
   const locFromOpts = [
     ...(yarnGodownDesc ? [{ value: yarnGodownDesc, label: yarnGodownDesc }] : []),
-    ...locOpts.filter((o) => o.value !== yarnGodownDesc),
+    ...godownOpts.filter((o) => o.value !== yarnGodownDesc),
+    ...locOpts.filter((o) => o.value !== yarnGodownDesc && !godownOpts.some((g) => g.value === o.value)),
   ];
   const locToOpts = [
     ...shedOpts,
-    ...locOpts.filter((o) => !shedOpts.some((s) => s.value === o.value)),
+    ...godownOpts,
+    ...locOpts.filter(
+      (o) => !shedOpts.some((s) => s.value === o.value) && !godownOpts.some((g) => g.value === o.value),
+    ),
   ];
 
   // Per-count godown stock (net RCPT−RETN) + avg purchase rate, from yarn receipts
@@ -208,8 +220,26 @@ export default async function YarnTransferPage({
     countInfoMap[r.countCode] = {
       stock_bage_disp: Math.round((r.bags ?? 0) * 100) / 100,
       stock_lbs_disp: Math.round((r.lbs ?? 0) * 100) / 100,
-      ratePerLbs: avg,
+      // A zero avg is omitted so the party-count rate fallback can fill the box.
+      ...(avg > 0 ? { ratePerLbs: avg } : {}),
     };
+  }
+
+  // Rate/Lbs fallback when the godown has no receipt avg for the count: the
+  // (party, count) rate from party_counts (count joined via yarn_counts.id).
+  const partyDescByCode = new Map(parties.map((p) => [String(p.code), p.description]));
+  const pcRateRows = await db
+    .select({
+      partyCode: schema.partyCounts.partyCode,
+      countCode: schema.yarnCounts.countCode,
+      rate: schema.partyCounts.ratePerLbs,
+    })
+    .from(schema.partyCounts)
+    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
+  const partyCountRateMap: Record<string, number> = {};
+  for (const r of pcRateRows) {
+    if (!r.countCode || r.rate == null) continue;
+    partyCountRateMap[`${partyDescByCode.get(r.partyCode) ?? r.partyCode}||${r.countCode}`] = r.rate;
   }
 
   async function saveAction(formData: FormData) {
@@ -500,6 +530,14 @@ export default async function YarnTransferPage({
               <AutoFill watch="transferFromParty" map={fromToMap} combos={["transferToParty"]} />
               {/* Picking a count fills its godown stock (bag & lbs) + the party count rate */}
               <AutoFill watch="countCode" map={countInfoMap} inputs={["stock_bage_disp", "stock_lbs_disp", "ratePerLbs"]} />
+              {/* No godown avg for the count → the (party, count) rate fills the empty box */}
+              <PartyCountRate
+                partyField="transferFromParty"
+                countField="countCode"
+                map={partyCountRateMap}
+                targets={["ratePerLbs"]}
+                onlyWhenEmpty
+              />
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
