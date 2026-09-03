@@ -289,7 +289,10 @@ export default async function WarpedBeamReceivingPage({
       Math.round(
         (validLines.reduce((s, l) => s + (l.amount ?? 0), 0) + (header.freightCharges ?? 0)) * 100,
       ) / 100;
-    const bagConeWt = (header.bagsWeight ?? 0) + (header.conesWeight ?? 0);
+    // Kgs is per-bag / per-cone weight: multiply by Qty (blank Qty = weight already a total).
+    const bagConeWt =
+      (header.bagsQty || 1) * (header.bagsWeight ?? 0) +
+      (header.conesQty || 1) * (header.conesWeight ?? 0);
     const packWt =
       (header.gulleyWeight ?? 0) + (header.emtBagWeight ?? 0) + (header.shoperWeight ?? 0) +
       (header.wasteWeight ?? 0) + (header.gattaWeight ?? 0) + (header.headConeKgs ?? 0);
