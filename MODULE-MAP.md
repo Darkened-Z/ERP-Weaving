@@ -71,7 +71,7 @@ On EDIT, every GL-posting form must **delete old (vtype,vno) rows UNCONDITIONALL
 
 ## Reports
 - **General Ledger `/ledger`** = the Oracle ACCOUNTS LEDGER (WVG): SR# · Date · Type · V.No · Narration · Dr · Cr · Balance, opening + running + closing. Carries the grey/yarn/packi narrations.
-- **Weaving Counts Accounts Report `/reports/weaving/count-report`** (+ `/ledger` detail): party × count — Seed (yarn sale voucher) − Consumed (packi count) = Balance, Rate, Amount. (Full per-conversion-contract detail layout still TODO.)
+- **Weaving Counts Accounts Report `/reports/weaving/count-report`** (+ `/ledger` detail): party × count — Seed (yarn sale voucher) − Consumed (packi count) = Balance, Rate, Amount. The **detail** (`count-report/ledger`) now groups by conversion contract (Oracle CONV.C# layout): CONV.C# header → packi rows (than/meters/warp/weft/tot/rate/amount) → CONV.C# TOTAL subtotal → GRAND TOTAL + Seed/Consumed/Balance summary.
 - **Grey stock** reports (`reports/grey/stock-ledger`, `stock-detail-ledger`, `stock-account-ledger`) + `external/reports/grey-stock/*` + GREY REGISTER (`external/reports/grey-register`, party-wise).
 - `reports/weaving/counts-accounts` + `yarn/count-balance`: **Party filter removed** (count-wise reports; party-scoping was semantically broken — party×count lives in count-report).
 - Narration conventions: grey `<than> THAN <mtr> MTR @ <rate>, <quality> (GREY PURCHASE|PACKI SALE)`; yarn `<count desc> (<bags>) bags (<lbs>) lbs @ <rate>`.
@@ -86,7 +86,7 @@ On EDIT, every GL-posting form must **delete old (vtype,vno) rows UNCONDITIONALL
 - Turso creds in `app/.env.turso` (local scripts only; never expose).
 
 ## Still open (flagged, awaiting owner)
-1. Weaving Counts **per-conversion-contract DETAIL** report (full Oracle layout).
+1. Weaving Counts detail now groups by CONV.C# (done). Remaining polish vs Oracle: per-contract construction/ends header row, Resultant Count + Conv Rate columns (fields undefined — need owner input), and validating numbers once real data exists.
 2. **Knotting** edit ↔ loom mount/un-mount workflow (auto re-mount vs manual).
 3. Warped-beam amount example (110 vs 100) — owner to verify.
 4. **Cheque handling** upgrade (lifecycle states, PDC register, bounce workflow) — scoped, not started.
