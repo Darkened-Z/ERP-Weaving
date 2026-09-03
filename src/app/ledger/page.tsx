@@ -226,6 +226,7 @@ export default async function LedgerPage({
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: 44 }}>SR#</th>
                     <th>Date</th>
                     <th>Type</th>
                     <th>V.No</th>
@@ -237,6 +238,7 @@ export default async function LedgerPage({
                 </thead>
                 <tbody>
                   <tr className="bg-gray-50 font-semibold">
+                    <td className="mono text-[12px] text-center text-[var(--muted)]">0</td>
                     <td className="mono text-[13px]">{dateFrom}</td>
                     <td>
                       <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase">
@@ -260,6 +262,7 @@ export default async function LedgerPage({
                   </tr>
                   {entries.map((entry, idx) => (
                     <tr key={idx}>
+                      <td className="mono text-[12px] text-center text-[var(--muted)]">{idx + 1}</td>
                       <td className="mono text-[13px]">{entry.vdate}</td>
                       <td>
                         <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase">
@@ -285,7 +288,7 @@ export default async function LedgerPage({
                   {entries.length === 0 && (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="text-center text-[13px] text-[var(--muted)] py-6"
                       >
                         No transactions in this date range.
@@ -295,7 +298,7 @@ export default async function LedgerPage({
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-black">
-                    <td colSpan={4} className="font-bold text-[13px] uppercase tracking-[0.05em]">
+                    <td colSpan={5} className="font-bold text-[13px] uppercase tracking-[0.05em]">
                       Closing Balance ({dateTo})
                     </td>
                     <td className="mono text-right font-bold">{formatNum(totalDr)}</td>
