@@ -2124,6 +2124,8 @@ export const intDailyProductionSet = sqliteTable("int_daily_production_set", {
   dlvStatus: text("dlv_status"),
   wastWtKg: real("wast_wt_kg"),
   beamNo: text("beam_no"),
+  loomNo: integer("loom_no"),
+  contNo: text("cont_no"),
   ends: integer("ends"),
   bLength: real("b_length"),
   rcvdMtr: real("rcvd_mtr"),

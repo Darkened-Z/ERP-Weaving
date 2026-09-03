@@ -86,6 +86,17 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Live Amount + Total** via `src/components/knotting-calc.tsx` (`KnottingCalc`): amount = ends × ratePerEnds (else ratePerBeam per active row), net = amount + ext amt, running Total in `#ks-total`. Server recomputes the same on save (grid amount/net are display).
 - **Empty-row guard**: a line saves only if it has beam/set/loom/ends/amount — `issue_date`/`k_date`/`shd_hash` (auto-defaults) alone no longer create blank lines.
 
+## Inventory — Daily Production (`inventory/daily-production`)
+- Consumes the knotting mount: a loom's RUNNING beam + its contract flow into production.
+- **Header Grey Conversion Contract LOV** (`FindingPicker` name `conv_contract`, rows from `intGreyConversionContract` status=R with warp `brand`): columns Cont No/Party/Design/Product-Quality/Width/R×P/Qty/Brand. `AutoFill` fills `productQuality` + `convContParty` (Comboboxes) + `productBrand` (input).
+- **SET grid pickers** (`int_daily_production_set` gained `loom_no` + `cont_no`; both migrated to Turso):
+  - **Loom# (F9)** = `FindingPicker` name `loomNo`, **`filterByField="shedNo"`** so only the header shed's looms show (Loom/Shed/RPM/Status/Beam/Contract). Pick → `RowAutoFill` (watch `loomNo`, `loomFillMap`) fills that row's `beamNo`, `beamSetNo`, `setHash`(set no), `beamStatus`(RUNNING), `ends`, `bLength`, `contNo` from the loom's RUNNING beam (`beams` where loomNo=…, statusWrk=RUNNING).
+  - **Beam # (F9)** = "SET NO LIST" `FindingPicker` name `beamNo` over RUNNING beams (Beam Set/Set No/Beam No/Set Status/Wrk/Ends/Length/Cont No). Existing `RowAutoFill watch=beamNo` (`beamFillMap`, now also fills `beamStatus`+`contNo`).
+  - **Cont No** readonly cell (persisted `cont_no`).
+- Beam Status stays a `<select>` from `beam_statuses` (EMPTY/F-ROLL/L-ROLL/LOADED/R-CUT/RE-KNOT/RUNNING); Wast WT KG column for first-roll waste.
+- Existing beam lifecycle on save unchanged (statusWrk apply, last-roll→EMPTY, edit reversal). Folding Stock still computed (produced − despatched).
+- **PENDING (item 8):** GL post of production into FOLDING GREY STOCK `1.01.01.01.0013` — awaiting owner's credit head + rate basis (see `_setup/daily-production-plan.md`).
+
 ## Contracts (`inventory/contracts/*`, `external/contracts/*`)
 - **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).
 - **Beam Ext W/S (`beam-ext-ws`)**: Converter Party = `conversionDebtorPrefixes`. **WT/Mtr = Ends ÷ 731.52 ÷ Cal Count** (no width division; matches grey conversion).

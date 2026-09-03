@@ -2,7 +2,8 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { RowAutoFill } from "@/components/auto-fill";
+import { RowAutoFill, AutoFill } from "@/components/auto-fill";
+import { FindingPicker } from "@/components/finding-picker";
 import { ProductionSetCalc } from "@/components/production-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -100,6 +101,11 @@ export default async function DailyProductionPage({
       length: schema.beams.length,
       beamSetNo: schema.beams.beamSetNo,
       setNo: schema.beams.setNo,
+      setStatus: schema.beams.setStatus,
+      statusWrk: schema.beams.statusWrk,
+      contractNo: schema.beams.contractNo,
+      loomNo: schema.beams.loomNo,
+      knVno: schema.beams.knVno,
     })
     .from(schema.beams)
     .orderBy(schema.beams.beamNo);
@@ -180,6 +186,135 @@ export default async function DailyProductionPage({
       bLength: b.length ?? null,
       beamSetNo: b.beamSetNo ?? null,
       setHash: b.setNo ?? null,
+      beamStatus: b.statusWrk ?? null,
+      contNo: b.contractNo ?? null,
+    };
+  }
+
+  // Mounted (RUNNING) beams — the SET NO LIST + loom→beam source.
+  const runningBeams = beamCatalog.filter((b) => (b.statusWrk ?? "").toUpperCase() === "RUNNING");
+  const beamPickerRows = runningBeams.map((b) => ({
+    value: b.beamNo as string,
+    code: b.beamNo as string,
+    description: b.setNo ?? b.beamSetNo ?? "",
+    cells: {
+      beamSetNo: b.beamSetNo ?? "",
+      setNo: b.setNo ?? "",
+      beamNo: b.beamNo ?? "",
+      setStatus: b.setStatus ?? "",
+      statusWrk: b.statusWrk ?? "",
+      ends: b.ends ?? "",
+      beamLength: b.length ?? "",
+      contNo: b.contractNo ?? "",
+    },
+  }));
+  const beamCols = [
+    { key: "beamSetNo", label: "Beam Set", width: 90 },
+    { key: "setNo", label: "Set No", width: 70 },
+    { key: "beamNo", label: "Beam No", width: 80 },
+    { key: "setStatus", label: "Set Status", width: 90 },
+    { key: "statusWrk", label: "Wrk", width: 80 },
+    { key: "ends", label: "Ends", width: 70, align: "right" as const },
+    { key: "beamLength", label: "Length", width: 75, align: "right" as const },
+    { key: "contNo", label: "Cont No", width: 100 },
+  ];
+  const beamByLoom = new Map<number, (typeof runningBeams)[number]>();
+  for (const b of runningBeams) if (b.loomNo != null && !beamByLoom.has(b.loomNo)) beamByLoom.set(b.loomNo, b);
+
+  // Loom LOV (shed-scoped via filterKey) + fill map from each loom's RUNNING beam.
+  const loomRows2 = await db
+    .select({ loomNo: schema.looms.loomNo, shed: schema.looms.shed, rpm: schema.looms.rpm, statusWrk: schema.looms.statusWrk, currentContract: schema.looms.currentContract })
+    .from(schema.looms)
+    .orderBy(schema.looms.shed, schema.looms.loomNo);
+  const loomPickerRows = loomRows2.map((lm) => {
+    const b = beamByLoom.get(lm.loomNo);
+    return {
+      value: String(lm.loomNo),
+      code: String(lm.loomNo),
+      description: `Shed ${lm.shed}`,
+      filterKey: lm.shed ?? "",
+      cells: { loomNo: lm.loomNo, shed: lm.shed ?? "", rpm: lm.rpm ?? "", status: lm.statusWrk ?? "", beamNo: b?.beamNo ?? "", contNo: (lm.currentContract ?? b?.contractNo) ?? "" },
+    };
+  });
+  const loomCols = [
+    { key: "loomNo", label: "Loom", width: 60 },
+    { key: "shed", label: "Shed", width: 60 },
+    { key: "rpm", label: "RPM", width: 55, align: "right" as const },
+    { key: "status", label: "Status", width: 85 },
+    { key: "beamNo", label: "Beam", width: 85 },
+    { key: "contNo", label: "Contract", width: 100 },
+  ];
+  const loomFillMap: Record<string, Record<string, string | number | null>> = {};
+  for (const lm of loomRows2) {
+    const b = beamByLoom.get(lm.loomNo);
+    loomFillMap[String(lm.loomNo)] = {
+      beamNo: b?.beamNo ?? null,
+      beamSetNo: b?.beamSetNo ?? null,
+      setHash: b?.setNo ?? null,
+      beamStatus: b ? (b.statusWrk ?? "RUNNING") : null,
+      ends: b?.ends ?? null,
+      bLength: b?.length ?? null,
+      contNo: (lm.currentContract ?? b?.contractNo) ?? null,
+    };
+  }
+
+  // Grey conversion contract LOV (header) → product quality / brand / party.
+  const convContracts = await db
+    .select({
+      id: schema.intGreyConversionContract.id,
+      contNo: schema.intGreyConversionContract.contNo,
+      party: schema.intGreyConversionContract.party,
+      designNo: schema.intGreyConversionContract.designNo,
+      productName: schema.intGreyConversionContract.productName,
+      productQuality: schema.intGreyConversionContract.productQuality,
+      grayQltyCode: schema.intGreyConversionContract.grayQltyCode,
+      width: schema.intGreyConversionContract.width,
+      read: schema.intGreyConversionContract.read,
+      pick: schema.intGreyConversionContract.pick,
+      qtyMtr: schema.intGreyConversionContract.qtyMtr,
+    })
+    .from(schema.intGreyConversionContract)
+    .where(eq(schema.intGreyConversionContract.status, "R"))
+    .orderBy(desc(schema.intGreyConversionContract.contDate));
+  const warpBrandRows = await db
+    .select({ contractId: schema.intGreyConversionWarp.contractId, brand: schema.intGreyConversionWarp.brand })
+    .from(schema.intGreyConversionWarp);
+  const brandByContract = new Map<number, string>();
+  for (const w of warpBrandRows) if (w.brand && !brandByContract.has(w.contractId)) brandByContract.set(w.contractId, w.brand);
+  const contractPickerRows = convContracts.map((c) => {
+    const q = c.productQuality ?? c.productName ?? c.grayQltyCode ?? "";
+    return {
+      value: c.contNo,
+      code: c.contNo,
+      description: q,
+      cells: {
+        contNo: c.contNo,
+        party: c.party ?? "",
+        designNo: c.designNo ?? "",
+        product: q,
+        width: c.width ?? "",
+        readPick: c.read != null && c.pick != null ? `${c.read}×${c.pick}` : "",
+        qty: c.qtyMtr ?? "",
+        brand: brandByContract.get(c.id) ?? "",
+      },
+    };
+  });
+  const contractCols = [
+    { key: "contNo", label: "Cont No", width: 90 },
+    { key: "party", label: "Party", width: 150 },
+    { key: "designNo", label: "Design", width: 80 },
+    { key: "product", label: "Product/Quality", width: 150 },
+    { key: "width", label: "Width", width: 55, align: "right" as const },
+    { key: "readPick", label: "R×P", width: 75 },
+    { key: "qty", label: "Qty", width: 70, align: "right" as const },
+    { key: "brand", label: "Brand", width: 100 },
+  ];
+  const contractFillMap: Record<string, Record<string, string | number | null>> = {};
+  for (const c of convContracts) {
+    contractFillMap[c.contNo] = {
+      productQuality: c.productQuality ?? c.productName ?? c.grayQltyCode ?? "",
+      productBrand: brandByContract.get(c.id) ?? "",
+      convContParty: c.party ?? "",
     };
   }
 
@@ -280,6 +415,8 @@ export default async function DailyProductionPage({
     const beamStatusArr = formData.getAll("beamStatus") as string[];
     const wastWtKgArr = formData.getAll("wastWtKg") as string[];
     const beamNoArr = formData.getAll("beamNo") as string[];
+    const loomNoArr = formData.getAll("loomNo") as string[];
+    const contNoArr = formData.getAll("contNo") as string[];
     const endsArr = formData.getAll("ends") as string[];
     const bLengthArr = formData.getAll("bLength") as string[];
     const rcvdMtrArr = formData.getAll("rcvdMtr") as string[];
@@ -303,6 +440,8 @@ export default async function DailyProductionPage({
       beamStatus: string | null;
       wastWtKg: number | null;
       beamNo: string | null;
+      loomNo: number | null;
+      contNo: string | null;
       ends: number | null;
       bLength: number | null;
       rcvdMtr: number | null;
@@ -325,12 +464,14 @@ export default async function DailyProductionPage({
       const bs = (beamStatusArr[i] || "").trim();
       const ww = num(wastWtKgArr[i]);
       const bn = (beamNoArr[i] || "").trim();
+      const ln = intVal(loomNoArr[i]);
+      const cn = (contNoArr[i] || "").trim();
       const en = intVal(endsArr[i]);
       const bl = num(bLengthArr[i]);
       const rm = num(rcvdMtrArr[i]);
       const df = num(diffArr[i]);
       const sh = num(shrinkageArr[i]);
-      if (!setHash && !mmThanSrNo && aC == null && bC == null && cC == null && cpC == null && ppc == null && tc == null && rc == null && !bsn && !kt && !kd && !bs && ww == null && !bn && en == null && bl == null && rm == null && df == null && sh == null) continue;
+      if (!setHash && !mmThanSrNo && aC == null && bC == null && cC == null && cpC == null && ppc == null && tc == null && rc == null && !bsn && !kt && !kd && !bs && ww == null && !bn && ln == null && !cn && en == null && bl == null && rm == null && df == null && sh == null) continue;
       // Server-authoritative total: Total = A + B + C + CP + PPC. Any manually
       // typed totalCount is discarded — the client shows it as a readonly cell.
       const anyCount = aC != null || bC != null || cC != null || cpC != null || ppc != null;
@@ -354,6 +495,8 @@ export default async function DailyProductionPage({
         beamStatus: bs || null,
         wastWtKg: ww,
         beamNo: bn || null,
+        loomNo: ln,
+        contNo: cn || null,
         ends: en,
         bLength: bl,
         rcvdMtr: rm,
@@ -826,6 +969,8 @@ export default async function DailyProductionPage({
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <ProductionSetCalc beamStats={beamStats} />
               <RowAutoFill watch="beamNo" map={beamFillMap} />
+              <RowAutoFill watch="loomNo" map={loomFillMap} />
+              <AutoFill watch="conv_contract" map={contractFillMap} combos={["productQuality", "convContParty"]} inputs={["productBrand"]} />
               <datalist id="beams-list">
                 {beamCatalog.map((b) => (
                   <option key={b.beamNo ?? ""} value={b.beamNo ?? ""}>
@@ -897,11 +1042,23 @@ export default async function DailyProductionPage({
                     <input name="designNo" className="input-box mono" defaultValue={editing?.designNo ?? ""} />
                   </div>
 
+                  <div className="md:col-span-6">
+                    <label className="label block mb-1">Conv Contract (F9) — fills quality / brand / party</label>
+                    <FindingPicker
+                      name="conv_contract"
+                      defaultValue=""
+                      rows={contractPickerRows}
+                      columns={contractCols}
+                      title="CONTRACT LIST — GREY CONVERSION"
+                      placeholder="F9 grey conversion contract"
+                      className="input-box mono cursor-pointer"
+                    />
+                  </div>
                   <div className="md:col-span-3">
                     <label className="label block mb-1">Grade</label>
                     <input name="grade" className="input-box mono" defaultValue={editing?.grade ?? ""} />
                   </div>
-                  <div className="md:col-span-9">
+                  <div className="md:col-span-3">
                     <label className="label block mb-1">Remarks</label>
                     <input name="remarks" className="input-box" defaultValue={editing?.remarks ?? ""} />
                   </div>
@@ -916,7 +1073,7 @@ export default async function DailyProductionPage({
                   SET# GRID — mm/Than Sr No, Counts, Beam Details
                 </div>
                 <div className="overflow-x-auto">
-                  <table style={{ minWidth: "1800px" }}>
+                  <table style={{ minWidth: "2200px" }}>
                     <thead>
                       <tr>
                         <th style={{ width: 34 }}>Sr#</th>
@@ -934,7 +1091,9 @@ export default async function DailyProductionPage({
                         <th style={{ width: 115 }}>K/S/M Date</th>
                         <th style={{ width: 100 }}>Beam Status</th>
                         <th className="text-right" style={{ width: 75 }}>Wast WT KG</th>
-                        <th style={{ width: 80 }}>Beam #</th>
+                        <th style={{ width: 160 }}>Loom# (F9)</th>
+                        <th style={{ width: 160 }}>Beam # (F9)</th>
+                        <th style={{ width: 100 }}>Cont No</th>
                         <th className="text-right" style={{ width: 60 }}>Ends</th>
                         <th className="text-right" style={{ width: 75 }}>B.Length</th>
                         <th className="text-right" style={{ width: 75 }}>Rcvd/Mtr</th>
@@ -980,8 +1139,31 @@ export default async function DailyProductionPage({
                             </td>
                             <td><input name="wastWtKg" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.wastWtKg ?? ""} /></td>
                             <td>
-                              <input name="beamNo" list="beams-list" className="input-box mono text-[12px]" defaultValue={s?.beamNo ?? ""} />
+                              <FindingPicker
+                                name="loomNo"
+                                defaultValue={s?.loomNo != null ? String(s.loomNo) : ""}
+                                rows={loomPickerRows}
+                                columns={loomCols}
+                                filterByField="shedNo"
+                                title="LOOM LIST"
+                                placeholder="F9 loom"
+                                className="input-box mono text-[12px] cursor-pointer"
+                              />
+                            </td>
+                            <td>
+                              <FindingPicker
+                                name="beamNo"
+                                defaultValue={s?.beamNo ?? ""}
+                                rows={beamPickerRows}
+                                columns={beamCols}
+                                title="SET NO LIST — RUNNING BEAMS"
+                                placeholder="F9 beam"
+                                className="input-box mono text-[12px] cursor-pointer"
+                              />
                               <span data-near-empty className="mono text-[9px] text-[var(--danger)] font-bold ml-1"></span>
+                            </td>
+                            <td>
+                              <input name="contNo" className="input-box mono text-[12px] bg-gray-50" defaultValue={s?.contNo ?? ""} readOnly tabIndex={-1} />
                             </td>
                             <td><input name="ends" type="number" step="1" className="input-box mono text-[12px] text-right" defaultValue={s?.ends ?? ""} /></td>
                             <td><input name="bLength" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bLength ?? ""} /></td>
