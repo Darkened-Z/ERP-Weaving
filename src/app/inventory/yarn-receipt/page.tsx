@@ -174,9 +174,6 @@ export default async function YarnReceiptPage({
     parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ?? "";
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
-  const countBrandMap: Record<string, Record<string, string>> = Object.fromEntries(
-    countList.map((c) => [c.code, { brand: c.description ?? "" }])
-  );
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
 
@@ -243,19 +240,18 @@ export default async function YarnReceiptPage({
       countCode: c.countCode ?? "",
       ratioText: c.ratio ?? "",
       brand: c.brand ?? "",
+      // Rate comes from the PARTY'S COUNT contract (owner's rule) — fills both the
+      // delivered-to rate and the count-detail rate.
       ratePerLbs: c.ratePerLbs ?? "",
+      ratePerLbsTo: c.ratePerLbs ?? "",
       remarks: c.remarks ?? "",
       party: c.partyCode ? partyDescByCode[c.partyCode] ?? c.partyCode : "",
     };
   }
   const convMap: Record<string, Record<string, string | number>> = {};
   for (const c of convContracts) {
-    const toRate = c.ratePerMtr1 ?? c.ratePerMtr2 ?? "";
     convMap[c.contNo] = {
       yarnPartyTo: c.party ?? "",
-      ratePerLbsTo: toRate,
-      // Count-detail Rate/Lbs mirrors the delivered-to rate (owner's rule).
-      ratePerLbs: toRate,
     };
   }
 
@@ -280,6 +276,31 @@ export default async function YarnReceiptPage({
       .where(and(...whereClauses));
     stockBag = agg[0]?.bags ?? 0;
     stockLbs = agg[0]?.lbs ?? 0;
+  }
+
+  // Existing godown stock of each count BEFORE this voucher (net of RCPT − RETN in the
+  // yarn-stock godown, excluding the current voucher). Shown when a count is picked.
+  const godownStockRows = yarnGodownDesc
+    ? await db
+        .select({
+          countCode: schema.intYarnReceipt.countCode,
+          bags: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType} = 'RETN' THEN -${schema.intYarnReceipt.bags} ELSE ${schema.intYarnReceipt.bags} END), 0)`,
+          lbs: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType} = 'RETN' THEN -${schema.intYarnReceipt.qtyLbs} ELSE ${schema.intYarnReceipt.qtyLbs} END), 0)`,
+        })
+        .from(schema.intYarnReceipt)
+        .where(and(
+          eq(schema.intYarnReceipt.yarnPartyTo, yarnGodownDesc),
+          ...(editing ? [ne(schema.intYarnReceipt.id, editing.id)] : []),
+        ))
+        .groupBy(schema.intYarnReceipt.countCode)
+    : [];
+  const countStockMap: Record<string, Record<string, number>> = {};
+  for (const r of godownStockRows) {
+    if (!r.countCode) continue;
+    countStockMap[r.countCode] = {
+      stock_bage_disp: Math.round((r.bags ?? 0) * 100) / 100,
+      stock_lbs_disp: Math.round((r.lbs ?? 0) * 100) / 100,
+    };
   }
 
   async function saveAction(formData: FormData) {
@@ -599,14 +620,15 @@ export default async function YarnReceiptPage({
                 watch="purContNo"
                 map={purMap}
                 combos={["party", "countCode"]}
-                inputs={["ratioText", "brand", "remarks"]}
+                inputs={["ratioText", "brand", "remarks", "ratePerLbs", "ratePerLbsTo"]}
               />
               <AutoFill
                 watch="convContNo"
                 map={convMap}
-                inputs={["yarnPartyTo", "ratePerLbsTo", "ratePerLbs"]}
+                inputs={["yarnPartyTo"]}
               />
-              <AutoFill watch="countCode" map={countBrandMap} inputs={["brand"]} />
+              {/* Picking a count shows how much of it is already in the godown */}
+              <AutoFill watch="countCode" map={countStockMap} inputs={["stock_bage_disp", "stock_lbs_disp"]} />
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
@@ -742,12 +764,12 @@ export default async function YarnReceiptPage({
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">COUNT-DETAIL</div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Stock Bage</label>
-                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockBag} readOnly tabIndex={-1} />
+                        <label className="label block mb-1">Stock Bage <span className="text-[9px] text-[var(--muted)]">(count in godown)</span></label>
+                        <input name="stock_bage_disp" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.countCode ? (countStockMap[editing.countCode]?.stock_bage_disp ?? displayedStockBag) : ""} readOnly tabIndex={-1} />
                       </div>
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Stock Lbs</label>
-                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockLbs} readOnly tabIndex={-1} />
+                        <label className="label block mb-1">Stock Lbs <span className="text-[9px] text-[var(--muted)]">(count in godown)</span></label>
+                        <input name="stock_lbs_disp" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.countCode ? (countStockMap[editing.countCode]?.stock_lbs_disp ?? displayedStockLbs) : ""} readOnly tabIndex={-1} />
                       </div>
 
                       <div className="md:col-span-4">
