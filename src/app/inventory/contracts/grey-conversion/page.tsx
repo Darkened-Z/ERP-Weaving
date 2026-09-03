@@ -13,6 +13,7 @@ import { BrokerRateCalc } from "@/components/broker-rate-calc";
 import { CountPicker } from "@/components/count-picker";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc } from "drizzle-orm";
+import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today as todayFn } from "@/lib/time";
@@ -211,15 +212,13 @@ export default async function IntGreyConversionContractPage({
   const maxLContNo = lRow?.maxL ?? 0;
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  // Internal conversion is inventory-only — the Party list is limited to the
-  // "DEBITORS - CONVERSION WVG" head (code 1.01.01.01.*).
-  const [convWvgHead] = await db
-    .select({ code: schema.chartOfAccounts.code })
-    .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE '%CONVERSION%WVG%'`)
-    .limit(1);
-  const convWvgPrefix = convWvgHead?.code ? convWvgHead.code + "." : null;
-  const convParties = convWvgPrefix ? parties.filter((p) => p.code.startsWith(convWvgPrefix)) : parties;
+  // Internal conversion is inventory-only — the Party list is limited to the DEBTORS
+  // conversion heads (WVG 1.01.01.01 + COMMERCIAL 1.01.01.19) via the shared helper,
+  // so every conversion party is selectable and all pages behave the same.
+  const convPrefixes = await conversionDebtorPrefixes();
+  const convParties = convPrefixes.length
+    ? parties.filter((p) => underAnyPrefix(p.code, convPrefixes))
+    : parties;
   // Full-page finding list rows for the Party field (value stays the description
   // so save + PartyCountGrid keep working).
   const partyFindRows = convParties.map((p) => ({ value: p.description, code: p.code, description: p.description }));

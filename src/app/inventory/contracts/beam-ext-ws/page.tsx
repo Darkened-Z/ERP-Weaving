@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { BeamWtCalc } from "@/components/int-conv-calc";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
+import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
@@ -168,15 +169,12 @@ export default async function BeamContractExtWsPage({
     .orderBy(schema.products.description);
 
   const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  // Converter Party is limited to the "DEBITORS - CONVERSION WVG" head (code 1.01.01.01.*).
-  const [convWvgHead] = await db
-    .select({ code: schema.chartOfAccounts.code })
-    .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE '%CONVERSION%WVG%'`)
-    .limit(1);
-  const convWvgPrefix = convWvgHead?.code ? convWvgHead.code + "." : null;
-  const convWvgOpts = convWvgPrefix
-    ? parties.filter((p) => p.code.startsWith(convWvgPrefix)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
+  // Converter Party is limited to the DEBTORS conversion heads (WVG 1.01.01.01 +
+  // COMMERCIAL 1.01.01.19) via the shared helper — same set as the grey-conversion
+  // contract + yarn receipt.
+  const convPrefixes = await conversionDebtorPrefixes();
+  const convWvgOpts = convPrefixes.length
+    ? parties.filter((p) => underAnyPrefix(p.code, convPrefixes)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
     : partyOpts;
   const partyFindRows = parties.map((p) => ({ value: p.description, code: p.code, description: p.description }));
   const greyOpts = greyList.map((g) => {

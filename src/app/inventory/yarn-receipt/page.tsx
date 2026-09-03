@@ -7,6 +7,7 @@ import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
 import { AutoAmount } from "@/components/auto-amount";
 import { YarnReceiptCounts } from "@/components/yarn-receipt-counts";
+import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
@@ -157,16 +158,12 @@ export default async function YarnReceiptPage({
   for (const p of parties) partyDescByCode[p.code] = p.description;
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
-  // Delivered-FROM party is limited to the "DEBITORS - CONVERSION WVG" head
-  // (code 1.01.01.01.*) — same head used by the grey-conversion contracts.
-  const [convWvgHead] = await db
-    .select({ code: schema.chartOfAccounts.code })
-    .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE '%CONVERSION%WVG%'`)
-    .limit(1);
-  const convWvgPrefix = convWvgHead?.code ? convWvgHead.code + "." : null;
-  const convPartyOpts = convWvgPrefix
-    ? parties.filter((p) => p.code.startsWith(convWvgPrefix)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
+  // Delivered-FROM party is limited to the DEBTORS conversion heads (WVG 1.01.01.01 +
+  // COMMERCIAL 1.01.01.19) via the shared helper — same set as the grey-conversion
+  // contract + beam-ext-ws.
+  const convPrefixes = await conversionDebtorPrefixes();
+  const convPartyOpts = convPrefixes.length
+    ? parties.filter((p) => underAnyPrefix(p.code, convPrefixes)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
     : partyOpts;
 
   // Delivered-TO is the yarn-stock godown — defaulted (changeable) for new vouchers.
