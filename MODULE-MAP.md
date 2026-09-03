@@ -62,6 +62,13 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Net Weight** box = (bags+cones) − packing; × Net Weight Rate = Total → GST = Amt Tot. **GL (VTYPE `EXT`):** DR `WARPING_SIZING_EXP`(+GST) / CR party. Bill No + Bill Date + **Bill Due Date** + Billing Status.
 - Delete-of-old GL rows UNCONDITIONAL on edit (then re-post if qualifies).
 
+## Finance — Advance Cheque (`finance/advance-cheque`)
+- Advance-cheque lifecycle register. **VTYPE `ADV`**, phase in `trans_main.trnType` = `ISSUE` / `CLEAR` / `BOUNCE`. Each phase = one balanced 2-line voucher; status derived by grouping ADV vouchers on `chqNo` (BOUNCE→bounced, else CLEAR→cleared, else issued).
+- **Issue:** Dr Party (`accCode`) / Cr Bank-Advance. Party = any L≥4 acct; Bank-Advance picker filtered to `1.01.15.03.*` (per-bank advance sub-accts). Cheque No unique across ADV/ISSUE.
+- **Clear:** Dr Bank-Advance / Cr Bank (`1.01.15.02.*`). **Bounce:** Dr Bank-Advance / Cr party dishonour (`1.01.15.04.*` "CHQ FAILLED <party>"). Both guard against double-processing (already cleared/bounced).
+- **Re-issue** (on a bounced cheque): opens a fresh ISSUE form prefilled with party+amount, new cheque no. (GL = normal issue; whether to also move from dishonour→advance is an owner call — left as plain re-issue.)
+- Delete (ADMIN) removes the issue + its clear/bounce (all vnos sharing the chq no). Postings flow into `/ledger` + `/reports/cheque-status` like other cheque vouchers. Reuses `getSession`, `assertPeriodOpen`, `Combobox`, `ConfirmButton` — same pattern as BP.
+
 ## Contracts (`inventory/contracts/*`, `external/contracts/*`)
 - **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).
 - **Beam Ext W/S (`beam-ext-ws`)**: Converter Party = `conversionDebtorPrefixes`. **WT/Mtr = Ends ÷ 731.52 ÷ Cal Count** (no width division; matches grey conversion).
