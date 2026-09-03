@@ -1,6 +1,8 @@
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
+import { RowClearButton } from "@/components/row-clear-button";
+import { RowAutoFill } from "@/components/auto-fill";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
@@ -14,6 +16,7 @@ export const dynamic = "force-dynamic";
 const VTYPE = "ADV";
 const BASE = "/finance/advance-cheque";
 const TITLE = "ADVANCE CHEQUE (WVG)";
+const LINE_ROWS = 6;
 
 // Per-bank advance-cheque accounts (Dr on clear/bounce, Cr on issue).
 const ADV_PREFIX = "1.01.15.03.";
@@ -77,32 +80,53 @@ function periodRedirect(e: unknown): never {
   throw e;
 }
 
-// ── Issue: Dr Party / Cr Bank-Advance ────────────────────────────────────────
-async function issueCheque(formData: FormData) {
+// ── Issue (batch): each grid line = one cheque = Dr Party / Cr Bank-Advance ───
+async function issueCheques(formData: FormData) {
   "use server";
   try {
     const session = await getSession();
     const utCode = session?.userId ?? null;
-
-    const party = txt(formData.get("party"));
-    const bankAdv = txt(formData.get("bank_adv"));
-    const chqNo = txt(formData.get("chq_no"));
-    const chqDate = txt(formData.get("chq_date"));
-    const amount = num(formData.get("amount"));
-    const narration = txt(formData.get("narration"));
     const vdate = txt(formData.get("v_date")) ?? today();
 
-    if (!party || !bankAdv || !chqNo || amount === null || amount <= 0) {
-      redirect(`${BASE}?error=invalid&adding=1`);
+    const parties = formData.getAll("line_party") as string[];
+    const advs = formData.getAll("line_adv") as string[];
+    const chqNos = formData.getAll("line_chq_no") as string[];
+    const chqDates = formData.getAll("line_chq_date") as string[];
+    const amounts = formData.getAll("line_amt") as string[];
+    const narrs = formData.getAll("line_narr") as string[];
+
+    const rowCount = Math.max(parties.length, advs.length, amounts.length);
+    const lines: { party: string; adv: string; chqNo: string; chqDate: string | null; amount: number; narration: string | null }[] = [];
+    for (let i = 0; i < rowCount; i++) {
+      const party = (parties[i] ?? "").trim();
+      const adv = (advs[i] ?? "").trim();
+      const chqNo = (chqNos[i] ?? "").trim();
+      const amount = num(amounts[i]);
+      // Fully-empty row → skip.
+      if (!party && !adv && !chqNo && amount === null) continue;
+      if (!party || !adv || !chqNo || amount === null || amount <= 0) {
+        redirect(`${BASE}?error=invalid&adding=1`);
+      }
+      lines.push({ party, adv, chqNo, chqDate: (chqDates[i] ?? "").trim() || null, amount: amount!, narration: (narrs[i] ?? "").trim() || null });
     }
+    if (!lines.length) redirect(`${BASE}?error=invalid&adding=1`);
+
     await assertPeriodOpen(vdate, "FINANCE");
-    if (!(await validAccounts([party!, bankAdv!]))) {
+
+    // Duplicate cheque numbers within the batch.
+    const seen = new Set<string>();
+    for (const l of lines) {
+      if (seen.has(l.chqNo)) redirect(`${BASE}?error=dup_chq&adding=1`);
+      seen.add(l.chqNo);
+    }
+
+    if (!(await validAccounts(lines.flatMap((l) => [l.party, l.adv])))) {
       redirect(`${BASE}?error=bad_account&adding=1`);
     }
 
-    // Cheque no must be unique across ADV issues.
-    const dup = await db
-      .select({ vno: schema.transMain.vno })
+    // Cheque numbers already used on an existing ADV issue.
+    const clash = await db
+      .select({ chqNo: schema.transDetail.chqNo })
       .from(schema.transMain)
       .innerJoin(
         schema.transDetail,
@@ -112,45 +136,31 @@ async function issueCheque(formData: FormData) {
           eq(schema.transDetail.vno, schema.transMain.vno),
         ),
       )
-      .where(
-        and(
-          eq(schema.transMain.vtype, VTYPE),
-          eq(schema.transMain.trnType, "ISSUE"),
-          eq(schema.transDetail.chqNo, chqNo!),
-        ),
-      )
+      .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.trnType, "ISSUE"), inArray(schema.transDetail.chqNo, Array.from(seen))))
       .limit(1);
-    if (dup.length) redirect(`${BASE}?error=dup_chq&adding=1`);
+    if (clash.length) redirect(`${BASE}?error=dup_chq&adding=1`);
 
     const fyCode = await currentFy();
     if (!fyCode) redirect(`${BASE}?error=no_fy&adding=1`);
     const vtime = nowTime();
-    const narr = `ADVANCE CHQ ISSUE #${chqNo}${chqDate ? ` DT ${chqDate}` : ""}${narration ? ` — ${narration}` : ""}`;
 
-    let newId = 0;
-    newId = await db.transaction(async (tx) => {
-      const vno = await nextVno(tx, fyCode);
-      const inserted = await tx
-        .insert(schema.transMain)
-        .values({
+    await db.transaction(async (tx) => {
+      let vno = await nextVno(tx, fyCode);
+      for (const l of lines) {
+        const narr = `ADVANCE CHQ ISSUE #${l.chqNo}${l.chqDate ? ` DT ${l.chqDate}` : ""}${l.narration ? ` — ${l.narration}` : ""}`;
+        await tx.insert(schema.transMain).values({
           fyCode, vtype: VTYPE, vno, vdate, vtime,
-          accCode: party, trnType: "ISSUE", narration: narr, balanceAmount: amount, utCode,
-        })
-        .returning({ id: schema.transMain.id });
-      await tx.insert(schema.transDetail).values([
-        {
-          fyCode, vtype: VTYPE, vno, srno: 1, accCode: party!, partyCode: bankAdv,
-          narration: narr, debit: amount!, credit: 0, chqNo, chqDate,
-        },
-        {
-          fyCode, vtype: VTYPE, vno, srno: 2, accCode: bankAdv!, partyCode: party,
-          narration: narr, debit: 0, credit: amount!, chqNo, chqDate,
-        },
-      ]);
-      return inserted[0].id;
+          accCode: l.party, trnType: "ISSUE", narration: narr, balanceAmount: l.amount, utCode,
+        });
+        await tx.insert(schema.transDetail).values([
+          { fyCode, vtype: VTYPE, vno, srno: 1, accCode: l.party, partyCode: l.adv, narration: narr, debit: l.amount, credit: 0, chqNo: l.chqNo, chqDate: l.chqDate },
+          { fyCode, vtype: VTYPE, vno, srno: 2, accCode: l.adv, partyCode: l.party, narration: narr, debit: 0, credit: l.amount, chqNo: l.chqNo, chqDate: l.chqDate },
+        ]);
+        vno++;
+      }
     });
     revalidatePath(BASE);
-    redirect(`${BASE}?id=${newId}`);
+    redirect(BASE);
   } catch (e) {
     periodRedirect(e);
   }
@@ -366,6 +376,8 @@ export default async function AdvanceChequePage({
   const advOpts = accounts.filter((a) => a.code.startsWith(ADV_PREFIX)).map(opt);
   const bankOpts = accounts.filter((a) => a.code.startsWith(BANK_PREFIX)).map(opt);
   const dishonourOpts = accounts.filter((a) => a.code.startsWith(DISHONOUR_PREFIX)).map(opt);
+  const partyTitleMap = Object.fromEntries(partyOpts.map((o) => [o.value, { line_party_title: o.desc }]));
+  const advTitleMap = Object.fromEntries(advOpts.map((o) => [o.value, { line_adv_title: o.desc }]));
 
   // Load ADV vouchers + detail for the register.
   const mains = fyCode
@@ -442,7 +454,7 @@ export default async function AdvanceChequePage({
   const target = hasId ? cheques.find((c) => c.issueId === idParam) ?? null : null;
 
   const ERR: Record<string, string> = {
-    invalid: "Party, bank-advance account, cheque no. and a positive amount are required.",
+    invalid: "Each line needs a party, bank-advance account, cheque no. and a positive amount. Add at least one line.",
     bad_account: "One or more account codes are unknown or not a detail (level 4+) account.",
     dup_chq: "This cheque number is already issued. Use a different number.",
     no_fy: "Company fiscal year is not configured.",
@@ -515,49 +527,72 @@ export default async function AdvanceChequePage({
           </div>
         </div>
 
-        {/* Issue / Re-issue form */}
+        {/* Issue / Re-issue form — multi-line: many parties / accounts / cheques at once */}
         {showIssueForm && (
           <div className="border border-black p-4 mb-6">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4">
-              {isReissue ? "Re-issue Advance Cheque (fresh cheque, same party)" : "New Advance Cheque — Issue"}
+              {isReissue ? "Re-issue Advance Cheque (fresh cheque no, prefilled from bounced cheque)" : "New Advance Cheque — Issue (add multiple parties / cheques)"}
             </div>
-            <form action={issueCheque}>
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
-                <div className="lg:col-span-2">
+            <form action={issueCheques}>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform mb-4">
+                <div className="lg:col-span-3">
                   <label className="label block mb-1">Date</label>
                   <input name="v_date" type="date" className="input-box mono" defaultValue={today()} required />
                 </div>
-                <div className="lg:col-span-5">
-                  <label className="label block mb-1">Party (Dr — jisko cheque diya)</label>
-                  <Combobox name="party" options={partyOpts} defaultValue={isReissue ? target?.party ?? "" : ""} placeholder="Debtor / Creditor" />
-                </div>
-                <div className="lg:col-span-5">
-                  <label className="label block mb-1">Bank Advance Cheque A/C (Cr)</label>
-                  <Combobox name="bank_adv" options={advOpts} defaultValue={isReissue ? target?.bankAdv ?? "" : ""} placeholder="1.01.15.03.*" />
-                </div>
-                <div className="lg:col-span-3">
-                  <label className="label block mb-1">Cheque No</label>
-                  <input name="chq_no" className="input-box mono" placeholder="New cheque no" required />
-                </div>
-                <div className="lg:col-span-3">
-                  <label className="label block mb-1">Cheque Date</label>
-                  <input name="chq_date" type="date" className="input-box mono" />
-                </div>
-                <div className="lg:col-span-3">
-                  <label className="label block mb-1">Amount</label>
-                  <input name="amount" type="number" step="any" min="0" className="input-box mono text-right" defaultValue={isReissue ? target?.amount ?? "" : ""} required />
-                </div>
-                <div className="lg:col-span-3 flex items-end">
-                  <button type="submit" className="btn btn-sm w-full">Issue Cheque</button>
-                </div>
-                <div className="lg:col-span-9">
-                  <label className="label block mb-1">Narration</label>
-                  <input name="narration" className="input-box" placeholder="Optional" />
-                </div>
-                <div className="lg:col-span-3 flex items-end">
-                  <a href={BASE} className="btn btn-outline btn-sm w-full">Cancel</a>
-                </div>
               </div>
+
+              <div className="overflow-x-auto border border-black">
+                <table className="mono text-[12px]" style={{ minWidth: 1280 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 36 }}>Sr#</th>
+                      <th style={{ width: 150 }}>Party (Dr)</th>
+                      <th style={{ width: 210 }}>Party Title</th>
+                      <th style={{ width: 150 }}>Bank Advance A/C (Cr)</th>
+                      <th style={{ width: 210 }}>Advance Title</th>
+                      <th style={{ width: 120 }}>Chq No</th>
+                      <th style={{ width: 140 }}>Chq Date</th>
+                      <th style={{ width: 120 }} className="text-right">Amount</th>
+                      <th style={{ width: 170 }}>Narration</th>
+                      <th style={{ width: 36 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: LINE_ROWS }).map((_, i) => {
+                      const pf = i === 0 && isReissue ? target : null;
+                      return (
+                        <tr key={i}>
+                          <td className="text-[var(--muted)] text-center">{i + 1}</td>
+                          <td><input name="line_party" list="adv-party-accts" className="input-box mono text-[12px]" defaultValue={pf?.party ?? ""} /></td>
+                          <td><input name="line_party_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.party) ?? "" : ""} readOnly tabIndex={-1} /></td>
+                          <td><input name="line_adv" list="adv-adv-accts" className="input-box mono text-[12px]" defaultValue={pf?.bankAdv ?? ""} /></td>
+                          <td><input name="line_adv_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.bankAdv) ?? "" : ""} readOnly tabIndex={-1} /></td>
+                          <td><input name="line_chq_no" className="input-box mono text-[12px]" /></td>
+                          <td><input name="line_chq_date" type="date" className="input-box mono text-[12px]" /></td>
+                          <td><input name="line_amt" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" defaultValue={pf?.amount ?? ""} /></td>
+                          <td><input name="line_narr" className="input-box text-[12px]" /></td>
+                          <td className="text-center"><RowClearButton /></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center gap-2 mt-4 no-print flex-wrap">
+                <button type="submit" className="btn btn-sm">{isReissue ? "Re-issue" : "Issue Cheque(s)"}</button>
+                <a href={BASE} className="btn btn-outline btn-sm">Cancel</a>
+                <span className="text-[11px] text-[var(--muted)] ml-2">Har line = ek cheque (Dr party / Cr bank-advance). Khali lines chhod dein.</span>
+              </div>
+
+              <RowAutoFill watch="line_party" map={partyTitleMap} />
+              <RowAutoFill watch="line_adv" map={advTitleMap} />
+              <datalist id="adv-party-accts">
+                {partyOpts.map((o) => (<option key={o.value} value={o.value}>{o.desc}</option>))}
+              </datalist>
+              <datalist id="adv-adv-accts">
+                {advOpts.map((o) => (<option key={o.value} value={o.value}>{o.desc}</option>))}
+              </datalist>
             </form>
           </div>
         )}
