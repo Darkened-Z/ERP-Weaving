@@ -1,0 +1,92 @@
+# Module & Page Changes Map
+
+Single reference for the **deliberate, mill-specific customizations** on each page/module.
+Read this before touching a page so nothing already built gets reversed. When you change
+a page, update its entry here.
+
+Conventions: quality is keyed by grey-construction **CODE** (e.g. `GC-001`) everywhere.
+Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy = push to
+`main` (Vercel auto-deploys). No AI markers in commits/repo.
+
+---
+
+## Shared building blocks (use these; don't re-implement per page)
+
+| File | What it gives |
+|---|---|
+| `src/lib/grey-quality.ts` | `countLabelMap`, `wfPart` (count desc, collapses identical warp/weft), `richConstruction` (reed×pick + warp/weft), `normQuality` (any stored quality → construction code). Used by packi + godown; use in any new grey page/report. |
+| `src/lib/coa-heads.ts` | `conversionDebtorPrefixes()` = DEBTORS conversion heads **WVG `1.01.01.01` + COMMERCIAL `1.01.01.19`**; `underAnyPrefix()`. Any "conversion party" picker filters on these. |
+| `src/lib/gl-accounts.ts` | `acc(key)` posting-account resolver + `PostingKey` enum. Keys incl. `GREY_COMMISSION_INCOME`, `SALE_BROKERAGE_EXP` (=`3.03.25.03.0003`), `YARN_PURCHASE_STOCK`, `YARN_SALE_INCOME`, `WARPING_SIZING_EXP`, `GST_OUTPUT`. |
+| `src/lib/db-errors.ts` | `isUniqueViolation(e)` → friendly "already exists" on duplicate keys. |
+| `src/components/finding-picker.tsx` | F9 LOV picker. Now **keyboard-reachable** (Enter/F9 opens it; `data-lov-picker`). |
+| `src/components/form-keyboard.tsx` | Global Enter=next / F9=lookup / Ctrl+S=save. Skips readonly inputs EXCEPT `data-lov-picker`. |
+| `src/components/auto-fill.tsx` | `AutoFill` (combobox:change → fill combos/inputs), `RowAutoFill`, `RowCalc`. |
+| `src/components/qty-bags-lbs.tsx` | Qty Lbs = Qty Bags × 100 (editable). |
+
+---
+
+## Grey — Godown Stock (`external/grey/godown-stock`)
+- **Purchase Party** = supplier (kept). **Gdn Party** auto-locked to the grey-stock godown `1.01.25.15.0001` ("Godown - Grey Stock Treading").
+- Godown is **total-wise** (total Than + Meter), NOT than-by-than. Than-entry grid removed (final).
+- **Rate Purchase** = grey rate from contract (editable); Rate Sale field removed (hidden `rate_sal` set from grey_sale_rate_disp). Total below rate; Balance → Net Balance.
+- **Conv Cont#** (conversion) vs **Grey Sale Cont** (sale) are **one-at-a-time** (picking one clears the other, via GodownCalc).
+- Contract pickers show **all parties' running contracts**. Quality field shows construction rich; `dsp_quality` = **CODE** (normalized on save via `gqNormQuality`; never the rich string).
+- **GL posting (VTYPE `GDN`, added):** DR grey-stock godown acct / CR supplier, amount = net meter × purchase rate, narration `<than> THAN <mtr> MTR @ rate, <quality> (GREY PURCHASE)`. Only `type==="STOCK"`; delete removes it; delete-of-old-rows is UNCONDITIONAL then re-post if qualifies.
+- Line-status edit: `prev.status === "Y" ? "Y" : line.status`.
+
+## Grey — Packi Parchi (`external/grey/packi-parchi`)
+- **Standalone** (Kachi Parchi deleted). Purchase Party locked to grey-stock godown. KP optional (null-safe).
+- **Quality** dropdown = **in-stock only** (`stockQualityOpts`, balance>0), label `code — <count desc> [than/mtr]`. Stock aggregates by construction CODE (`normQuality`) so the same quality across lots = ONE line. Quality Print = full list. Construction/Print-Construction fields show `richConstruction`.
+- Live stock (than/mtr/avg/value, zero-reset moving average) fills on quality pick. Avg = net-amount ÷ net-meter.
+- **Sale side, one-at-a-time:** Grey Sale Contract (`conv_cont_no_sale`) + Conversion Contract (`conv_cont_sale2`) mutually exclusive (PackiCalc onCombo). Rich FindingPicker LOVs (Cont# · quality · rate · date), filtered by sale party; party does NOT open inside.
+- **Contract pick fills** quality + construction + godown stock + meter/than (kachi-style). Conversion contract also **distributes warp/weft counts** into the UPDATE COUNT grid (`ext_grey_conv_warp/_weft`), incl. **Count Desc + Brand column** (persisted: `descr`/`brand` on `ext_packi_parchi_count`); TOT Lbs = wt/mtr × net meter. Consumption totals footer (Warp/Weft/Total Lbs, Total Amount).
+- **Grey Sale Contract** carries the sale **Term** (paymentTerm/days) → fills Term Sal; its LOV shows a Term column.
+- **Sale money as value+amount pairs:** Rate (grey sale rate, from contract) → Rate Amount (rate×mtr) · Commission (%±) → Commission Amount · Checkery → Checkery Amount · Net Amount. (`kaat_percent_sale` hidden, still in net math.)
+- **GL (VTYPE `GPV`):** DR saleParty (greyAmtSal) / CR `GREY_COMMISSION_INCOME` (commission) / CR party (clearDiff) — commission-agent model. Broker pair: DR `SALE_BROKERAGE_EXP` / CR broker acct. Narration `<than> THAN <mtr> MTR @ rate, <quality> (PACKI SALE)` on header + lines. Delete-of-old UNCONDITIONAL then re-post.
+- **Do NOT** add naive inventory GL to packi (it's commission-model).
+
+## Yarn — Receipt (`inventory/yarn-receipt`)
+- **Trn Type** = RCPT/RETN only. **Party (delivered-from)** = conversion heads (`conversionDebtorPrefixes`). **Yarn Party To** = yarn-stock godown `1.01.25.01.0001`, **locked**.
+- Count-detail: **Warp Bags + Weft Bags = Total Bags** (server recomputes bags = warp+weft), **Qty Lbs** auto ×100 (editable), **Rate/Lbs = party's purchase-contract rate** (fills both Rate/Lbs + Rate/Lbs To). **Brand** comes from the contract, NOT the count description. **Stock Bage/Lbs** = the count's godown stock (RCPT−RETN) before this voucher.
+
+## Yarn — Internal Transfer (`inventory/yarn-transfer`)
+- **Location From** default = yarn-stock godown. **Location To** = loom sheds (from `looms.shed`).
+- **Stock Bage/Lbs + Rate/Lbs** auto from the count's godown stock / avg receipt rate. **Qty Lbs** auto = bags×100. **Amount** auto. **Brand** not auto-filled from count description.
+
+## Inventory — Warped Beam Receiving (`inventory/warped-beam`)
+- **Beam Receiving From** = sizing party (`CREDITOR - SIZING COMMERCIAL 3.03.06.02`). **Bm Sale Party** = converting party (`conversionDebtorPrefixes`). **Beam Stock-Loaded** locked to godown `1.01.25.01.0002`.
+- **Sizing Contract** picker (filtered by sizing party) → **Sizing Rate** → grid rate.
+- Grid columns removed: Warping cnt No, Empty (KG), Yarn Bms Net LBS, Wt, Length, **Beam Loadd (HR)**. Remaining: Sr# · R.Date · Yarn Lot No · Yarn Brand · Set No · Beam Set No · Beam No · Beam Status · Beam Length · Width · Ends · Rate · Conv · **Amount** · GP NO · Upd. (Amount is near the END.)
+- **Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × SIZING RATE** (header sizing rate, variable — 50/100/110). Formula note shown under Sizing Rate.
+- **Total Length + Total Amount** at grid end. Top header "Total Amount" **hidden** (was duplicate).
+- **Net Weight** box = (bags+cones) − packing; × Net Weight Rate = Total → GST = Amt Tot. **GL (VTYPE `EXT`):** DR `WARPING_SIZING_EXP`(+GST) / CR party. Bill No + Bill Date + **Bill Due Date** + Billing Status.
+- Delete-of-old GL rows UNCONDITIONAL on edit (then re-post if qualifies).
+
+## Contracts (`inventory/contracts/*`, `external/contracts/*`)
+- **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).
+- **Beam Ext W/S (`beam-ext-ws`)**: Converter Party = `conversionDebtorPrefixes`. **WT/Mtr = Ends ÷ 731.52 ÷ Cal Count** (no width division; matches grey conversion).
+
+## GL posting — the delete-before-guard rule (systemic)
+On EDIT, every GL-posting form must **delete old (vtype,vno) rows UNCONDITIONALLY**, then re-post only if it qualifies — otherwise editing a voucher into a non-postable state orphans stale ledger rows. Fixed in: godown (GDN), packi (GPV), yarn-sale (YSV), warped-beam (EXT), grey-despatch (GDP). Yarn-purchase (YPV) was already correct. **grey-despatch-dami posts NO GL** — it must never delete shared GDP rows (was wiping real despatch postings).
+
+## Reports
+- **General Ledger `/ledger`** = the Oracle ACCOUNTS LEDGER (WVG): SR# · Date · Type · V.No · Narration · Dr · Cr · Balance, opening + running + closing. Carries the grey/yarn/packi narrations.
+- **Weaving Counts Accounts Report `/reports/weaving/count-report`** (+ `/ledger` detail): party × count — Seed (yarn sale voucher) − Consumed (packi count) = Balance, Rate, Amount. (Full per-conversion-contract detail layout still TODO.)
+- **Grey stock** reports (`reports/grey/stock-ledger`, `stock-detail-ledger`, `stock-account-ledger`) + `external/reports/grey-stock/*` + GREY REGISTER (`external/reports/grey-register`, party-wise).
+- `reports/weaving/counts-accounts` + `yarn/count-balance`: **Party filter removed** (count-wise reports; party-scoping was semantically broken — party×count lives in count-report).
+- Narration conventions: grey `<than> THAN <mtr> MTR @ <rate>, <quality> (GREY PURCHASE|PACKI SALE)`; yarn `<count desc> (<bags>) bags (<lbs>) lbs @ <rate>`.
+
+## Define / Masters
+- 13 master forms (weavers, staff, yarn-fibers, do-parties, grey-dsp, chart-define, company-units, cities, beam-status, yarn-brands, yarn-blends, locations, yarn-locations) show a friendly "already exists" on duplicate (via `isUniqueViolation`), not a crash.
+- **Grey Construction**: edit no longer nulls the unrendered warp6-8/weft6-8.
+
+## Known caveats / data
+- `ext_godown_stock`, `ext_packi_parchi`, `ext_grey_sal_contract` are mostly EMPTY in Turso → reports show "no records" until entries exist; numbers can't be validated yet.
+- Conversion contracts present: GCC-0003 (CONV, grey rate 163.45), GCC-0004 (SALE, 173.52).
+- Turso creds in `app/.env.turso` (local scripts only; never expose).
+
+## Still open (flagged, awaiting owner)
+1. Weaving Counts **per-conversion-contract DETAIL** report (full Oracle layout).
+2. **Knotting** edit ↔ loom mount/un-mount workflow (auto re-mount vs manual).
+3. Warped-beam amount example (110 vs 100) — owner to verify.
+4. **Cheque handling** upgrade (lifecycle states, PDC register, bounce workflow) — scoped, not started.
