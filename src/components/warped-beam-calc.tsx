@@ -47,7 +47,10 @@ export function WarpedBeamCalc() {
       set(q("total_length_disp"), lengthSum);
       set(q("total_amount_disp"), amountSum);
 
-      const bagConeWt = val(q("bagsWeight")) + val(q("conesWeight"));
+      // Kgs is per-bag / per-cone weight: multiply by Qty (blank Qty = weight already a total).
+      const bagConeWt =
+        (val(q("bagsQty")) || 1) * val(q("bagsWeight")) +
+        (val(q("conesQty")) || 1) * val(q("conesWeight"));
       const packWt =
         val(q("gulleyWeight")) +
         val(q("emtBagWeight")) +
