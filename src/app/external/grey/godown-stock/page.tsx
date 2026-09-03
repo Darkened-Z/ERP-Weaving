@@ -13,6 +13,7 @@ import { eq, sql, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
+import { normQuality as gqNormQuality } from "@/lib/grey-quality";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 
@@ -450,15 +451,11 @@ export default async function GodownStockPage({
     const contactQuality = txt(formData.get("contact_quality"));
     // Always store dsp_quality as the construction CODE (never the rich string), so
     // the same quality bought across lots aggregates into one stock entry in packi/reports.
+    // Uses the shared normalizer (@/lib/grey-quality) — same logic packi reads with.
     const rawDspQuality = txt(formData.get("dsp_quality"));
-    const normalizeQualityCode = (v: string | null): string | null => {
-      if (!v) return v;
-      if (qualityByCode[v] !== undefined) return v;
-      const first = v.split(/\s+/)[0];
-      if (qualityByCode[first] !== undefined) return first;
-      return Object.keys(qualityByCode).find((c) => v.startsWith(c)) ?? v;
-    };
-    const dspQuality = normalizeQualityCode(rawDspQuality);
+    const dspQuality = rawDspQuality
+      ? gqNormQuality(rawDspQuality, new Set(Object.keys(qualityByCode)))
+      : rawDspQuality;
     const than = intVal(formData.get("than"));
     const meter = num(formData.get("meter"));
     const elCumiNum = intVal(formData.get("el_cumi_num"));

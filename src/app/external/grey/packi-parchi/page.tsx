@@ -14,6 +14,7 @@ import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
+import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
 
 export const dynamic = "force-dynamic";
 
@@ -135,11 +136,10 @@ export default async function PackiParchiPage({
     ppCountFillMap[String(c.countCode)] = { count_desc: c.description ?? "", count_type: c.type ?? "" };
   }
   const ppCountDescByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
-  // Warp/weft count codes on a construction (e.g. "2") resolve to the yarn-count
-  // description (e.g. "30/S MVS PV 65;35") — same as the godown info panel.
-  const countLabelByCode = new Map(
-    yarnCountList.map((c) => [String(c.countCode), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()]),
-  );
+  // Grey-construction/quality display lives in @/lib/grey-quality (single source of
+  // truth shared with godown + reports). Thin local wrappers keep every call site
+  // unchanged while the logic stays in one place.
+  const countLabelByCode = countLabelMap(yarnCountList);
 
   const constructions = await db
     .select({
@@ -154,25 +154,8 @@ export default async function PackiParchiPage({
     })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.description);
-  // Rich construction line: "<reed> X <pick>  <warp desc> [× <weft desc>]" (Oracle style).
-  // Warp/weft show the yarn-count DESCRIPTION ("30/S MVS PV 65;35"), not the bare code.
-  const lblCount = (code: string | number | null | undefined) => {
-    if (code == null || code === "") return "";
-    return countLabelByCode.get(String(code)) || String(code);
-  };
-  // Count description only (warp × weft, collapsed when identical) — no reed×pick.
-  // Used for the short dropdown labels so the construction isn't shown twice.
-  const wfPart = (c: (typeof constructions)[number]) => {
-    const warp = [c.warpCount, c.warp2].map(lblCount).filter(Boolean).join(" / ");
-    const weft = [c.weftCount, c.weft2].map(lblCount).filter(Boolean).join(" / ");
-    return warp && weft ? (warp === weft ? warp : `${warp} × ${weft}`) : warp || weft;
-  };
-  // Full construction (reed×pick + warp/weft) — used only in the Construction field.
-  const richConstruction = (c: (typeof constructions)[number]) => {
-    const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
-    const wf = wfPart(c);
-    return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
-  };
+  const wfPart = (c: (typeof constructions)[number]) => gqWfPart(c, countLabelByCode);
+  const richConstruction = (c: (typeof constructions)[number]) => gqRichConstruction(c, countLabelByCode);
   // Quality is keyed by construction CODE (e.g. GC-001) everywhere, so packi and godown
   // stock line up. Label shows code + the rich construction.
   const qualityOpts = constructions.map((c) => ({
@@ -300,15 +283,8 @@ export default async function PackiParchiPage({
   // Normalise any stored quality (a bare code "GC-001" OR a rich string like
   // "GC-001 71×56×61 [W:2 F:2]") to the construction CODE, so the SAME quality
   // bought in multiple godown lots aggregates into ONE stock entry (not several).
-  const codeList = constructions.map((c) => c.code).filter((c): c is string => !!c);
-  const normQuality = (q: string | null | undefined): string => {
-    if (!q) return "";
-    const t = q.trim();
-    if (constByCode.has(t)) return t;
-    const first = t.split(/\s+/)[0];
-    if (constByCode.has(first)) return first;
-    return codeList.find((c) => t.startsWith(c)) ?? t;
-  };
+  const codeSet = new Set(constructions.map((c) => c.code).filter((c): c is string => !!c));
+  const normQuality = (q: string | null | undefined): string => gqNormQuality(q, codeSet);
 
   const stockParty = formItem?.purchaseParty || godownParty;
   type SMv = { date: string; id: number; kind: "IN" | "OUT"; than: number; mtr: number; rate: number };
