@@ -579,6 +579,59 @@ export default async function DailyProductionPage({
       });
     }
 
+    // ---- Folding grey stock GL inputs (DR 1.01.01.01.0013 / CR conv party) ----
+    // amount = Σ produced meters × the row's grey-conversion contract rate.
+    const FOLDING_STOCK_ACC = "1.01.01.01.0013";
+    const [companyFy] = await db
+      .select({ currentFy: schema.companyProfile.currentFy })
+      .from(schema.companyProfile)
+      .limit(1);
+    const fyCode = companyFy?.currentFy ?? "";
+    const foldingContNos = Array.from(new Set(validSets.map((s) => s.contNo).filter((x): x is string => !!x)));
+    const convRateByCont = new Map<string, number>();
+    if (foldingContNos.length) {
+      const crows = await db
+        .select({
+          contNo: schema.intGreyConversionContract.contNo,
+          conv: schema.intGreyConversionContract.convRatePerMtr,
+          gray: schema.intGreyConversionContract.grayRatePerMtr,
+          rm: schema.intGreyConversionContract.rateMtr,
+        })
+        .from(schema.intGreyConversionContract)
+        .where(inArray(schema.intGreyConversionContract.contNo, foldingContNos));
+      for (const r of crows) convRateByCont.set(r.contNo, r.conv ?? r.gray ?? r.rm ?? 0);
+    }
+    const foldingAmount =
+      Math.round(
+        validSets.reduce((sum, s) => sum + (s.totalCount ?? 0) * (s.contNo ? convRateByCont.get(s.contNo) ?? 0 : 0), 0) * 100,
+      ) / 100;
+    // Credit party = header conv party; fall back to the row-contract's party so a
+    // loom-only pick (contract auto from beam) still posts to the right party.
+    let convPartyDesc = header.convContParty ?? "";
+    if (!convPartyDesc && foldingContNos.length) {
+      const [cp] = await db
+        .select({ party: schema.intGreyConversionContract.party })
+        .from(schema.intGreyConversionContract)
+        .where(eq(schema.intGreyConversionContract.contNo, foldingContNos[0]))
+        .limit(1);
+      convPartyDesc = cp?.party ?? "";
+    }
+    let convPartyCode = "";
+    if (convPartyDesc) {
+      const sp = convPartyDesc.trim();
+      if (/^\d+(\.\d+)+$/.test(sp)) convPartyCode = sp;
+      else {
+        const [pr] = await db
+          .select({ code: schema.chartOfAccounts.code })
+          .from(schema.chartOfAccounts)
+          .where(eq(schema.chartOfAccounts.description, sp))
+          .limit(1);
+        convPartyCode = pr?.code ?? "";
+      }
+    }
+    const canPostFolding = !!fyCode && !!convPartyCode && foldingAmount > 0;
+    const foldingNarr = `FOLDING GREY STOCK — ${header.shedNo ?? ""}`.trim();
+
     const nowIso = new Date().toISOString();
 
     try {
@@ -708,6 +761,17 @@ export default async function DailyProductionPage({
               await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
             }
           }
+
+          // Folding grey stock GL (delete-before-guard): DR folding stock / CR conv party.
+          await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "DP"), eq(schema.transDetail.vno, id)));
+          await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "DP"), eq(schema.transMain.vno, id)));
+          if (canPostFolding) {
+            await tx.insert(schema.transMain).values({ fyCode, vtype: "DP", vno: id, vdate: header.vDate, accCode: FOLDING_STOCK_ACC, narration: foldingNarr, balanceAmount: foldingAmount });
+            await tx.insert(schema.transDetail).values([
+              { fyCode, vtype: "DP", vno: id, srno: 1, accCode: FOLDING_STOCK_ACC, partyCode: convPartyCode, narration: foldingNarr, debit: foldingAmount, credit: 0 },
+              { fyCode, vtype: "DP", vno: id, srno: 2, accCode: convPartyCode, partyCode: FOLDING_STOCK_ACC, narration: foldingNarr, debit: 0, credit: foldingAmount },
+            ]);
+          }
         });
         revalidatePath("/inventory/daily-production");
         redirect(`/inventory/daily-production?id=${id}`);
@@ -790,6 +854,15 @@ export default async function DailyProductionPage({
               await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
             }
           }
+
+          // Folding grey stock GL: DR folding stock / CR conv party.
+          if (canPostFolding) {
+            await tx.insert(schema.transMain).values({ fyCode, vtype: "DP", vno: insertedId, vdate: header.vDate, accCode: FOLDING_STOCK_ACC, narration: foldingNarr, balanceAmount: foldingAmount });
+            await tx.insert(schema.transDetail).values([
+              { fyCode, vtype: "DP", vno: insertedId, srno: 1, accCode: FOLDING_STOCK_ACC, partyCode: convPartyCode, narration: foldingNarr, debit: foldingAmount, credit: 0 },
+              { fyCode, vtype: "DP", vno: insertedId, srno: 2, accCode: convPartyCode, partyCode: FOLDING_STOCK_ACC, narration: foldingNarr, debit: 0, credit: foldingAmount },
+            ]);
+          }
           return insertedId;
         });
         revalidatePath("/inventory/daily-production");
@@ -837,6 +910,8 @@ export default async function DailyProductionPage({
           .set({ statusWrk: "EMPTY", loomNo: null })
           .where(eq(schema.beams.beamNo, os.beamNo));
       }
+      await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "DP"), eq(schema.transDetail.vno, id)));
+      await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "DP"), eq(schema.transMain.vno, id)));
       await tx.delete(schema.intDailyProductionSet).where(eq(schema.intDailyProductionSet.productionId, id));
       await tx.delete(schema.intDailyProductionDetail).where(eq(schema.intDailyProductionDetail.productionId, id));
       await tx.delete(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));
