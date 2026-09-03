@@ -802,7 +802,9 @@ export default async function WarpedBeamReceivingPage({
                   <input className={roCls} defaultValue={editing?.beamStockLoaded || beamLoadedGodown} readOnly tabIndex={-1} />
                   <input type="hidden" name="beamStockLoaded" defaultValue={editing?.beamStockLoaded || beamLoadedGodown} />
                 </div>
-                <div className="lg:col-span-2">
+                {/* Total shows at the END of the grid (below) — this top field is kept
+                    hidden so the value still records + computes, but isn't shown twice. */}
+                <div className="lg:col-span-2 hidden">
                   <label className="label block mb-1">Total Amount</label>
                   <input name="totalAmount" type="number" step="any" className={roCls + " text-right"} defaultValue={editing?.totalAmount ?? ""} readOnly />
                 </div>
