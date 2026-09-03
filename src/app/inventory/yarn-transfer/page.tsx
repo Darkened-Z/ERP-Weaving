@@ -5,6 +5,7 @@ import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
 import { AutoAmount } from "@/components/auto-amount";
+import { QtyBagsLbs } from "@/components/qty-bags-lbs";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
@@ -136,9 +137,6 @@ export default async function YarnTransferPage({
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
-  const countBrandMap: Record<string, Record<string, string>> = Object.fromEntries(
-    countList.map((c) => [c.code, { brand: c.description ?? "" }])
-  );
 
   // AutoFill map: picking a party in Transfer-From copies it to Transfer-To.
   const fromToMap: Record<string, Record<string, string>> = {};
@@ -165,6 +163,53 @@ export default async function YarnTransferPage({
       .where(and(...whereClauses));
     stockBag = agg[0]?.bags ?? 0;
     stockLbs = agg[0]?.lbs ?? 0;
+  }
+
+  // Location From defaults to the yarn-stock godown; Location To offers the loom sheds.
+  const yarnGodownDesc =
+    parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ?? "";
+  const shedRows = await db
+    .selectDistinct({ shed: schema.looms.shed })
+    .from(schema.looms)
+    .where(sql`${schema.looms.shed} IS NOT NULL`);
+  const shedOpts = shedRows
+    .map((r) => (r.shed == null ? "" : String(r.shed)))
+    .filter((v) => v !== "")
+    .sort()
+    .map((v) => ({ value: `Loom Shed ${v} (WVG)`, label: `Loom Shed ${v} (WVG)` }));
+  const locFromOpts = [
+    ...(yarnGodownDesc ? [{ value: yarnGodownDesc, label: yarnGodownDesc }] : []),
+    ...locOpts.filter((o) => o.value !== yarnGodownDesc),
+  ];
+  const locToOpts = [
+    ...shedOpts,
+    ...locOpts.filter((o) => !shedOpts.some((s) => s.value === o.value)),
+  ];
+
+  // Per-count godown stock (net RCPT−RETN) + avg purchase rate, from yarn receipts
+  // INTO the godown — shown/filled when a count is picked.
+  const rcptAgg = yarnGodownDesc
+    ? await db
+        .select({
+          countCode: schema.intYarnReceipt.countCode,
+          bags: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN -${schema.intYarnReceipt.bags} ELSE ${schema.intYarnReceipt.bags} END),0)`,
+          lbs: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN -${schema.intYarnReceipt.qtyLbs} ELSE ${schema.intYarnReceipt.qtyLbs} END),0)`,
+          rlbs: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN 0 ELSE ${schema.intYarnReceipt.qtyLbs} END),0)`,
+          ramt: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN 0 ELSE ${schema.intYarnReceipt.amount} END),0)`,
+        })
+        .from(schema.intYarnReceipt)
+        .where(eq(schema.intYarnReceipt.yarnPartyTo, yarnGodownDesc))
+        .groupBy(schema.intYarnReceipt.countCode)
+    : [];
+  const countInfoMap: Record<string, Record<string, number>> = {};
+  for (const r of rcptAgg) {
+    if (!r.countCode) continue;
+    const avg = (r.rlbs ?? 0) > 0 ? Math.round(((r.ramt ?? 0) / (r.rlbs ?? 1)) * 100) / 100 : 0;
+    countInfoMap[r.countCode] = {
+      stock_bage_disp: Math.round((r.bags ?? 0) * 100) / 100,
+      stock_lbs_disp: Math.round((r.lbs ?? 0) * 100) / 100,
+      ratePerLbs: avg,
+    };
   }
 
   async function saveAction(formData: FormData) {
@@ -451,8 +496,10 @@ export default async function YarnTransferPage({
               <input type="hidden" name="one" defaultValue="1" readOnly />
               <AutoAmount qty="qtyLbs" rate="ratePerLbs" target="amount" />
               <RowCalc target="netLbs" a="netKgs" factor={2.2046} round={3} />
+              <QtyBagsLbs formId="iyt-save-form" />
               <AutoFill watch="transferFromParty" map={fromToMap} combos={["transferToParty"]} />
-              <AutoFill watch="countCode" map={countBrandMap} inputs={["brand"]} />
+              {/* Picking a count fills its godown stock (bag & lbs) + the party count rate */}
+              <AutoFill watch="countCode" map={countInfoMap} inputs={["stock_bage_disp", "stock_lbs_disp", "ratePerLbs"]} />
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
@@ -512,8 +559,8 @@ export default async function YarnTransferPage({
                         <Combobox name="transferFromParty" options={partyOpts} defaultValue={editing?.transferFromParty ?? ""} placeholder="Select party" />
                       </div>
                       <div className="md:col-span-9">
-                        <label className="label block mb-1">Location From (GDN)</label>
-                        <Combobox name="locationFrom" options={locOpts} defaultValue={editing?.locationFrom ?? ""} placeholder="Type or select location" />
+                        <label className="label block mb-1">Location From (GDN) <span className="text-[9px] text-[var(--muted)]">(yarn-stock godown)</span></label>
+                        <Combobox name="locationFrom" options={locFromOpts} defaultValue={editing?.locationFrom ?? (isAdding ? yarnGodownDesc : "")} placeholder="Type or select location" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
@@ -530,8 +577,8 @@ export default async function YarnTransferPage({
                         <Combobox name="transferToParty" options={partyOpts} defaultValue={editing?.transferToParty ?? editing?.transferFromParty ?? ""} placeholder="Select party" />
                       </div>
                       <div className="md:col-span-9">
-                        <label className="label block mb-1">Location To (GDN)</label>
-                        <Combobox name="locationTo" options={locOpts} defaultValue={editing?.locationTo ?? ""} placeholder="Type or select location" />
+                        <label className="label block mb-1">Location To (GDN) <span className="text-[9px] text-[var(--muted)]">(loom shed)</span></label>
+                        <Combobox name="locationTo" options={locToOpts} defaultValue={editing?.locationTo ?? ""} placeholder="Type or select location" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
@@ -544,12 +591,12 @@ export default async function YarnTransferPage({
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">COUNT-DETAIL</div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Stock Bage</label>
-                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockBag} readOnly tabIndex={-1} />
+                        <label className="label block mb-1">Stock Bage <span className="text-[9px] text-[var(--muted)]">(count in godown)</span></label>
+                        <input name="stock_bage_disp" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.countCode ? (countInfoMap[editing.countCode]?.stock_bage_disp ?? displayedStockBag) : ""} readOnly tabIndex={-1} />
                       </div>
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Stock Lbs</label>
-                        <input type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={displayedStockLbs} readOnly tabIndex={-1} />
+                        <label className="label block mb-1">Stock Lbs <span className="text-[9px] text-[var(--muted)]">(count in godown)</span></label>
+                        <input name="stock_lbs_disp" type="number" step="0.01" className="input-box mono bg-gray-100 text-right" defaultValue={editing?.countCode ? (countInfoMap[editing.countCode]?.stock_lbs_disp ?? displayedStockLbs) : ""} readOnly tabIndex={-1} />
                       </div>
 
                       <div className="md:col-span-4">

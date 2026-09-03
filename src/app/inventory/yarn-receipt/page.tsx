@@ -731,8 +731,9 @@ export default async function YarnReceiptPage({
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">DELIVERED TO</div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Yarn Party To <span className="text-[9px] text-[var(--muted)]">(godown — default, changeable)</span></label>
-                        <Combobox name="yarnPartyTo" options={partyOpts} defaultValue={editing?.yarnPartyTo ?? (isAdding ? yarnGodownDesc : "")} placeholder="Party…" />
+                        <label className="label block mb-1">Yarn Party To <span className="text-[9px] text-[var(--muted)]">(godown — locked)</span></label>
+                        <input className="input-box mono bg-gray-100" defaultValue={editing?.yarnPartyTo || yarnGodownDesc} readOnly tabIndex={-1} />
+                        <input type="hidden" name="yarnPartyTo" defaultValue={editing?.yarnPartyTo || yarnGodownDesc} />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>
