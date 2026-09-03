@@ -13,7 +13,7 @@ import { eq, sql, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { normQuality as gqNormQuality } from "@/lib/grey-quality";
+import { normQuality as gqNormQuality, countLabelMap } from "@/lib/grey-quality";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 
@@ -133,9 +133,8 @@ export default async function GodownStockPage({
     .where(eq(schema.yarnCounts.status, "A"))
     .orderBy(schema.yarnCounts.countCode);
   // Full count label = description + fibre type, e.g. count "2" → "30/S MVS PV 65;35".
-  const countLabelByCode = new Map(
-    yarnCountList.map((c) => [String(c.countCode), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()])
-  );
+  // Shared builder (@/lib/grey-quality) so packi + godown build this map identically.
+  const countLabelByCode = countLabelMap(yarnCountList);
   const gsCountFillMap: Record<string, Record<string, string>> = {};
   for (const c of yarnCountList) {
     gsCountFillMap[String(c.countCode)] = { count_desc: countLabelByCode.get(String(c.countCode)) ?? "", count_type: c.type ?? "" };
