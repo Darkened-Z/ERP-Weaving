@@ -2,10 +2,11 @@ import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { today } from "@/lib/time";
+import { loadChequeRegister, type ChequeDisplay, type ChequeEntry } from "@/lib/cheque-register";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
 const BASE = "/finance/cheque-books";
 const BANK_PREFIX = "1.01.15.02.";
 const ADV_PREFIX = "1.01.15.03.";
+const MANUAL = new Set(["STOPPED", "CANCELED", "MISSED"]);
 
 const intVal = (v: FormDataEntryValue | null): number | null => {
   if (v === null || v === undefined || v === "") return null;
@@ -75,8 +77,23 @@ async function deleteBook(formData: FormData) {
   redirect(BASE);
 }
 
-type ChqStatus = "Issued" | "Cleared" | "Returned" | "Received";
-type Reg = { chqNo: string; chqDate: string; payee: string; amount: number; status: ChqStatus };
+// Set / clear a manual cheque status (STOPPED / CANCELED / MISSED); ISSUED clears it.
+async function setChequeStatus(formData: FormData) {
+  "use server";
+  const chqNo = txt(formData.get("chq_no"));
+  const status = (txt(formData.get("status")) ?? "").toUpperCase();
+  const note = txt(formData.get("note"));
+  if (!chqNo) redirect(BASE);
+  if (!MANUAL.has(status)) {
+    await db.delete(schema.chequeStatus).where(eq(schema.chequeStatus.chqNo, chqNo));
+  } else {
+    const ex = await db.select({ id: schema.chequeStatus.id }).from(schema.chequeStatus).where(eq(schema.chequeStatus.chqNo, chqNo));
+    if (ex.length) await db.update(schema.chequeStatus).set({ status, note, updatedAt: new Date().toISOString() }).where(eq(schema.chequeStatus.id, ex[0].id));
+    else await db.insert(schema.chequeStatus).values({ chqNo, status, note, updatedAt: new Date().toISOString() });
+  }
+  revalidatePath(BASE);
+  redirect(BASE);
+}
 
 export default async function ChequeBooksPage({
   searchParams,
@@ -101,96 +118,32 @@ export default async function ChequeBooksPage({
   const books = await db.select().from(schema.chequeBooks).orderBy(schema.chequeBooks.name);
   const editBook = isEditing ? books.find((b) => b.id === editId) ?? null : null;
 
-  // Cheque register — every voucher line carrying a cheque number.
-  const lines = await db
-    .select({
-      chqNo: schema.transDetail.chqNo,
-      chqDate: schema.transDetail.chqDate,
-      vtype: schema.transDetail.vtype,
-      vdate: schema.transMain.vdate,
-      trnType: schema.transMain.trnType,
-      accCode: schema.transDetail.accCode,
-      debit: schema.transDetail.debit,
-      credit: schema.transDetail.credit,
-    })
-    .from(schema.transDetail)
-    .innerJoin(
-      schema.transMain,
-      and(
-        eq(schema.transDetail.fyCode, schema.transMain.fyCode),
-        eq(schema.transDetail.vtype, schema.transMain.vtype),
-        eq(schema.transDetail.vno, schema.transMain.vno),
-      ),
-    )
-    .where(isNotNull(schema.transDetail.chqNo));
-
-  // ADV lifecycle: which cheque numbers have cleared / bounced.
-  const advClear = new Set<string>();
-  const advBounce = new Set<string>();
-  for (const l of lines) {
-    const chq = (l.chqNo ?? "").trim();
-    if (!chq || l.vtype !== "ADV") continue;
-    if (l.trnType === "CLEAR") advClear.add(chq);
-    if (l.trnType === "BOUNCE") advBounce.add(chq);
-  }
-
-  // One register entry per cheque number, from its "origin" line
-  // (ADV ISSUE, or any BP/CP/BR/CR line — never the CLEAR/BOUNCE reversal).
-  const reg = new Map<string, Reg>();
-  for (const l of lines) {
-    const chq = (l.chqNo ?? "").trim();
-    if (!chq) continue;
-    const isReversal = l.vtype === "ADV" && (l.trnType === "CLEAR" || l.trnType === "BOUNCE");
-    if (isReversal) continue;
-    const amount = (l.debit ?? 0) + (l.credit ?? 0);
-    const existing = reg.get(chq);
-    // Keep the largest-amount origin line as the representative.
-    if (existing && existing.amount >= amount) continue;
-    let status: ChqStatus;
-    if (advBounce.has(chq)) status = "Returned";
-    else if (advClear.has(chq)) status = "Cleared";
-    else if (l.vtype === "BR" || l.vtype === "CR") status = "Received";
-    else status = "Issued";
-    reg.set(chq, {
-      chqNo: chq,
-      chqDate: (l.chqDate ?? l.vdate ?? "").trim(),
-      payee: descMap.get(l.accCode) ?? l.accCode,
-      amount,
-      status,
-    });
-  }
+  const reg = await loadChequeRegister(descMap);
   const regList = Array.from(reg.values());
 
-  const counts = {
-    issued: regList.filter((r) => r.status === "Issued").length,
-    cleared: regList.filter((r) => r.status === "Cleared").length,
-    returned: regList.filter((r) => r.status === "Returned").length,
-    received: regList.filter((r) => r.status === "Received").length,
-  };
+  const counts: Record<ChequeDisplay, number> = { Issued: 0, Cleared: 0, Returned: 0, Stopped: 0, Canceled: 0, Missed: 0 };
+  for (const r of regList) counts[r.eff]++;
 
-  // Outstanding = issued & not yet cleared/returned → split by cheque date.
+  // Outstanding & un-flagged → Upcoming / Past Due by cheque date.
   const td = today();
-  const outstanding = regList.filter((r) => r.status === "Issued");
-  const upcoming = outstanding.filter((r) => r.chqDate && r.chqDate >= td).sort((a, b) => a.chqDate.localeCompare(b.chqDate));
-  const pastDue = outstanding.filter((r) => r.chqDate && r.chqDate < td).sort((a, b) => b.chqDate.localeCompare(a.chqDate));
+  const pending = regList.filter((r) => r.eff === "Issued");
+  const upcoming = pending.filter((r) => r.chqDate && r.chqDate >= td).sort((a, b) => a.chqDate.localeCompare(b.chqDate));
+  const pastDue = pending.filter((r) => r.chqDate && r.chqDate < td).sort((a, b) => b.chqDate.localeCompare(a.chqDate));
+  const noDate = pending.filter((r) => !r.chqDate);
+  const flagged = regList.filter((r) => r.derived === "Issued" && r.eff !== "Issued").sort((a, b) => a.chqNo.localeCompare(b.chqNo));
   const upcomingTot = upcoming.reduce((s, r) => s + r.amount, 0);
   const pastDueTot = pastDue.reduce((s, r) => s + r.amount, 0);
 
   // Per-book leaf usage.
   const bookUsage = books.map((b) => {
-    let used = 0, cleared = 0, issued = 0, returned = 0;
+    const tally: Record<ChequeDisplay, number> = { Issued: 0, Cleared: 0, Returned: 0, Stopped: 0, Canceled: 0, Missed: 0 };
+    let used = 0;
     for (let i = 0; i < b.leaves; i++) {
       const leaf = b.startNo + i;
-      const withPrefix = `${b.prefix ?? ""}${leaf}`;
-      const hit = reg.get(withPrefix) ?? reg.get(String(leaf));
-      if (hit) {
-        used++;
-        if (hit.status === "Cleared") cleared++;
-        else if (hit.status === "Returned") returned++;
-        else issued++;
-      }
+      const hit = reg.get(`${b.prefix ?? ""}${leaf}`) ?? reg.get(String(leaf));
+      if (hit) { used++; tally[hit.eff]++; }
     }
-    return { book: b, used, unused: b.leaves - used, cleared, issued, returned };
+    return { book: b, used, unused: b.leaves - used, tally };
   });
   const totalUnused = bookUsage.reduce((s, u) => s + u.unused, 0);
 
@@ -200,11 +153,10 @@ export default async function ChequeBooksPage({
     forbidden: "Only ADMIN can delete.",
   };
   const errorMsg = params.error ? ERR[params.error] ?? "" : "";
-
   const showForm = isAdding || isEditing;
 
-  const statusPill = (s: ChqStatus) => {
-    const bg = s === "Cleared" ? "black" : s === "Returned" ? "var(--danger)" : s === "Received" ? "var(--muted)" : "transparent";
+  const statusPill = (s: ChequeDisplay) => {
+    const bg = s === "Cleared" ? "black" : s === "Returned" || s === "Stopped" ? "var(--danger)" : s === "Canceled" || s === "Missed" ? "var(--muted)" : "transparent";
     const fg = s === "Issued" ? "black" : "white";
     return (
       <span className="inline-block text-[11px] px-2 py-0.5 uppercase font-semibold" style={{ letterSpacing: "0.05em", border: "1px solid black", background: bg, color: fg }}>
@@ -213,9 +165,22 @@ export default async function ChequeBooksPage({
     );
   };
 
-  const chequeTable = (rows: Reg[], emptyMsg: string) => (
+  const changeForm = (r: ChequeEntry) => (
+    <form action={setChequeStatus} className="flex gap-1 items-center justify-end">
+      <input type="hidden" name="chq_no" value={r.chqNo} />
+      <select name="status" defaultValue={r.eff.toUpperCase()} className="input-box mono text-[11px]" style={{ height: 26, padding: "0 4px", width: 110 }}>
+        <option value="ISSUED">Issued</option>
+        <option value="STOPPED">Stopped</option>
+        <option value="CANCELED">Canceled</option>
+        <option value="MISSED">Missed</option>
+      </select>
+      <button type="submit" className="btn btn-outline btn-sm">Set</button>
+    </form>
+  );
+
+  const chequeTable = (rows: ChequeEntry[], emptyMsg: string) => (
     <div className="overflow-x-auto">
-      <table style={{ minWidth: 520 }}>
+      <table style={{ minWidth: 640 }}>
         <thead>
           <tr>
             <th>Chq #</th>
@@ -223,6 +188,7 @@ export default async function ChequeBooksPage({
             <th className="text-right">Amount</th>
             <th>Chq Date</th>
             <th>Status</th>
+            <th className="no-print text-right">Change</th>
           </tr>
         </thead>
         <tbody>
@@ -232,11 +198,12 @@ export default async function ChequeBooksPage({
               <td className="text-[12px]">{r.payee}</td>
               <td className="mono text-right text-[13px]">{fmt(r.amount)}</td>
               <td className="mono text-[12px]">{r.chqDate || "—"}</td>
-              <td>{statusPill(r.status)}</td>
+              <td>{statusPill(r.eff)}</td>
+              <td className="no-print text-right">{changeForm(r)}</td>
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr><td colSpan={5} className="text-center text-[12px] text-[var(--muted)] py-5">{emptyMsg}</td></tr>
+            <tr><td colSpan={6} className="text-center text-[12px] text-[var(--muted)] py-5">{emptyMsg}</td></tr>
           )}
         </tbody>
       </table>
@@ -250,7 +217,7 @@ export default async function ChequeBooksPage({
           <div>
             <h1 className="page-title">Cheque Books</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {books.length} book{books.length === 1 ? "" : "s"} · statuses derived from vouchers (cheque no.)
+              {books.length} book{books.length === 1 ? "" : "s"} · statuses from vouchers; Stopped / Canceled / Missed set here
             </p>
           </div>
           <div className="no-print flex gap-2">
@@ -264,16 +231,19 @@ export default async function ChequeBooksPage({
         )}
 
         {/* Status counters */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-black border border-black mb-6">
-          <div className="bg-white p-5"><div className="stat-value">{counts.issued}</div><div className="stat-label">Issued</div></div>
-          <div className="bg-white p-5"><div className="stat-value">{counts.cleared}</div><div className="stat-label">Cleared</div></div>
-          <div className="bg-white p-5"><div className="stat-value">{counts.returned}</div><div className="stat-label">Returned</div></div>
-          <div className="bg-white p-5"><div className="stat-value">{totalUnused}</div><div className="stat-label">Unused Leaves</div></div>
-          <div className="bg-white p-5"><div className="stat-value">{regList.length}</div><div className="stat-label">Total Cheques</div></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-px bg-black border border-black mb-6">
+          <div className="bg-white p-4"><div className="stat-value">{counts.Issued}</div><div className="stat-label">Issued</div></div>
+          <div className="bg-white p-4"><div className="stat-value">{counts.Cleared}</div><div className="stat-label">Cleared</div></div>
+          <div className="bg-white p-4"><div className="stat-value">{counts.Returned}</div><div className="stat-label">Returned</div></div>
+          <div className="bg-white p-4"><div className="stat-value">{counts.Stopped}</div><div className="stat-label">Stopped</div></div>
+          <div className="bg-white p-4"><div className="stat-value">{counts.Canceled}</div><div className="stat-label">Canceled</div></div>
+          <div className="bg-white p-4"><div className="stat-value">{counts.Missed}</div><div className="stat-label">Missed</div></div>
+          <div className="bg-white p-4"><div className="stat-value">{totalUnused}</div><div className="stat-label">Unused</div></div>
+          <div className="bg-white p-4"><div className="stat-value">{regList.length}</div><div className="stat-label">Total</div></div>
         </div>
 
         {/* Upcoming + Past Due */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           <div className="border border-black">
             <div className="px-4 py-3 border-b-2 border-black flex justify-between items-baseline">
               <span className="text-[11px] uppercase tracking-[0.1em] font-semibold">Upcoming Cheques</span>
@@ -289,6 +259,16 @@ export default async function ChequeBooksPage({
             {chequeTable(pastDue, "No past-due cheques.")}
           </div>
         </div>
+
+        {/* Flagged (Stopped / Canceled / Missed) + undated */}
+        {(flagged.length > 0 || noDate.length > 0) && (
+          <div className="border border-black mb-8">
+            <div className="px-4 py-3 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold">
+              Flagged &amp; Undated Cheques
+            </div>
+            {chequeTable([...flagged, ...noDate], "None.")}
+          </div>
+        )}
 
         {/* Create / edit form */}
         {showForm && (
@@ -368,12 +348,16 @@ export default async function ChequeBooksPage({
                         </div>
                       </td>
                       <td className="text-[11px]">
-                        <span className="mr-2">{u.issued} Issued</span>
-                        <span className="mr-2">{u.cleared} Cleared</span>
-                        {u.returned > 0 && <span className="mr-2 text-[var(--danger)]">{u.returned} Returned</span>}
+                        {u.tally.Issued > 0 && <span className="mr-2">{u.tally.Issued} Issued</span>}
+                        {u.tally.Cleared > 0 && <span className="mr-2">{u.tally.Cleared} Cleared</span>}
+                        {u.tally.Returned > 0 && <span className="mr-2 text-[var(--danger)]">{u.tally.Returned} Returned</span>}
+                        {u.tally.Stopped > 0 && <span className="mr-2 text-[var(--danger)]">{u.tally.Stopped} Stopped</span>}
+                        {u.tally.Canceled > 0 && <span className="mr-2">{u.tally.Canceled} Canceled</span>}
+                        {u.tally.Missed > 0 && <span className="mr-2">{u.tally.Missed} Missed</span>}
                         <span className="text-[var(--muted)]">{u.unused} Unused</span>
                       </td>
                       <td className="no-print text-right whitespace-nowrap">
+                        <a href={`${BASE}/${u.book.id}/print`} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm mr-1">Print</a>
                         <a href={`${BASE}?edit=${u.book.id}`} className="btn btn-outline btn-sm mr-1">Edit</a>
                         {session?.roleName === "ADMIN" && (
                           <form action={deleteBook} className="inline">

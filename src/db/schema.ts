@@ -2179,3 +2179,13 @@ export const chequeBooks = sqliteTable("cheque_books", {
   status: text("status").notNull().default("ACTIVE"),
   createdAt: text("created_at"),
 });
+
+// Manual status override for a cheque (STOPPED / CANCELED / MISSED). Only meaningful
+// while a cheque is still outstanding — GL clear/bounce always wins over this.
+export const chequeStatus = sqliteTable("cheque_status", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  chqNo: text("chq_no").notNull().unique(),
+  status: text("status").notNull(),
+  note: text("note"),
+  updatedAt: text("updated_at"),
+});
