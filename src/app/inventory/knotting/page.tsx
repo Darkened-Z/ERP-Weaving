@@ -3,6 +3,8 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { FindingPicker } from "@/components/finding-picker";
+import { KnottingCalc } from "@/components/knotting-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc, and } from "drizzle-orm";
@@ -131,15 +133,15 @@ async function saveKnotting(formData: FormData) {
     const lHash = (lHashes[i] ?? "").trim();
     const kAndL = (kAndLs[i] ?? "").trim();
 
+    // A row is real only if it carries substance — a beam/set/loom/ends/amount.
+    // (issue_date, k_date and shd_hash auto-default, so they must NOT alone
+    // create a line, else blank grid rows get saved.)
     const hasAny =
       beamSetNo ||
       setNo ||
       beamNo ||
       noOfBeam !== null ||
       beamLength !== null ||
-      issueDate ||
-      kDate ||
-      shdHash ||
       lmHash ||
       extShrAge !== null ||
       dspType ||
@@ -290,6 +292,34 @@ async function saveKnotting(formData: FormData) {
           .values(lines.map((l) => ({ ...l, knottingId: id })));
       }
 
+      // Mount each picked beam on its loom (LOADED → RUNNING). Old lines were
+      // reversed above, so this re-applies the mount for the current lines.
+      const [billRow] = await tx
+        .select({ vNo: schema.intKnottingSarning.vNo })
+        .from(schema.intKnottingSarning)
+        .where(eq(schema.intKnottingSarning.id, id));
+      for (const l of lines) {
+        const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
+        if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
+          await tx
+            .update(schema.looms)
+            .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
+            .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, l.shdHash)));
+          await tx
+            .update(schema.beams)
+            .set({
+              statusWrk: "RUNNING",
+              loomNo,
+              shed: l.shdHash,
+              knVno: billRow?.vNo ?? null,
+              knDate: l.kDate ?? header.vDate,
+              ...(l.setNo ? { setNo: l.setNo } : {}),
+              ...(l.beamSetNo ? { beamSetNo: l.beamSetNo } : {}),
+            })
+            .where(eq(schema.beams.beamNo, l.beamNo));
+        }
+      }
+
       const [current] = await tx
         .select({ lvNo: schema.intKnottingSarning.lvNo })
         .from(schema.intKnottingSarning)
@@ -374,6 +404,29 @@ async function saveKnotting(formData: FormData) {
           await tx
             .insert(schema.intKnottingSarningLine)
             .values(lines.map((l) => ({ ...l, knottingId: insertedId })));
+        }
+
+        // Mount each picked beam on its loom (LOADED → RUNNING).
+        for (const l of lines) {
+          const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
+          if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
+            await tx
+              .update(schema.looms)
+              .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
+              .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, l.shdHash)));
+            await tx
+              .update(schema.beams)
+              .set({
+                statusWrk: "RUNNING",
+                loomNo,
+                shed: l.shdHash,
+                knVno: vNo,
+                knDate: l.kDate ?? header.vDate,
+                ...(l.setNo ? { setNo: l.setNo } : {}),
+                ...(l.beamSetNo ? { beamSetNo: l.beamSetNo } : {}),
+              })
+              .where(eq(schema.beams.beamNo, l.beamNo));
+          }
         }
 
         const vno = nextLv;
@@ -669,8 +722,10 @@ export default async function KnottingPage({
       statusWrk: schema.beams.statusWrk,
       beamSetNo: schema.beams.beamSetNo,
       setNo: schema.beams.setNo,
+      setStatus: schema.beams.setStatus,
       beamLength: schema.beams.length,
       ends: schema.beams.ends,
+      brVno: schema.beams.brVno,
     })
     .from(schema.beams)
     .where(eq(schema.beams.statusWrk, "LOADED"))
@@ -678,21 +733,79 @@ export default async function KnottingPage({
   const beamFillMap = Object.fromEntries(
     loadedBeams.map((b) => [
       b.beamNo,
-      { beam_set_no: b.beamSetNo, set_no: b.setNo, beam_length: b.beamLength, ends: b.ends },
+      {
+        beam_set_no: b.beamSetNo,
+        set_no: b.setNo,
+        beam_length: b.beamLength,
+        ends: b.ends,
+        beam_status: b.statusWrk,
+      },
     ]),
   );
+  // Rich LOV rows for the beam picker (Oracle "SET NO LIST").
+  const beamPickerRows = loadedBeams.map((b) => ({
+    value: b.beamNo,
+    code: b.beamNo,
+    description: b.setNo ?? b.beamSetNo ?? "",
+    cells: {
+      beamNo: b.beamNo,
+      setNo: b.setNo ?? "",
+      beamSetNo: b.beamSetNo ?? "",
+      setStatus: b.setStatus ?? b.statusWrk ?? "",
+      beamLength: b.beamLength ?? "",
+      ends: b.ends ?? "",
+      gp: b.brVno ?? "",
+    },
+  }));
+  const beamCols = [
+    { key: "beamNo", label: "Beam No", width: 90 },
+    { key: "setNo", label: "Set No", width: 80 },
+    { key: "beamSetNo", label: "Beam Set", width: 90 },
+    { key: "setStatus", label: "Status", width: 80 },
+    { key: "beamLength", label: "Length", width: 70, align: "right" as const },
+    { key: "ends", label: "Ends", width: 70, align: "right" as const },
+    { key: "gp", label: "GP/Vno", width: 90 },
+  ];
+  // Status of every beam, so an already-picked beam shows its status on edit.
+  const allBeamRows = await db
+    .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+    .from(schema.beams);
+  const beamStatusByNo = new Map(allBeamRows.map((b) => [b.beamNo, b.statusWrk]));
 
   const loomRows = await db
     .select({
       loomNo: schema.looms.loomNo,
       statusWrk: schema.looms.statusWrk,
       shed: schema.looms.shed,
+      rpm: schema.looms.rpm,
     })
     .from(schema.looms)
     .orderBy(
+      schema.looms.shed,
       sql`CASE WHEN ${schema.looms.statusWrk} = 'RUNNING' THEN 1 ELSE 0 END`,
       schema.looms.loomNo,
     );
+  const loomPickerRows = loomRows.map((lm) => ({
+    value: `${lm.shed}|${lm.loomNo}`,
+    code: String(lm.loomNo),
+    description: `Shed ${lm.shed}`,
+    filterKey: lm.shed,
+    cells: {
+      shed: lm.shed,
+      loomNo: lm.loomNo,
+      rpm: lm.rpm ?? "",
+      status: lm.statusWrk ?? "",
+    },
+  }));
+  const loomCols = [
+    { key: "shed", label: "Shed", width: 80 },
+    { key: "loomNo", label: "Loom No", width: 80 },
+    { key: "rpm", label: "RPM", width: 70, align: "right" as const },
+    { key: "status", label: "Status", width: 90 },
+  ];
+  const loomFillMap = Object.fromEntries(
+    loomPickerRows.map((r) => [r.value, { shd_hash: r.cells.shed }]),
+  );
 
   const showForm = !!formBill || isAdding;
   const rowsToShow = Math.max(LINE_ROWS, lines.length + 3);
@@ -1039,19 +1152,20 @@ export default async function KnottingPage({
                   Line Items
                 </div>
                 <div className="overflow-x-auto border border-black">
-                  <table className="mono text-[12px]" style={{ minWidth: 1600 }}>
+                  <table id="ks-lines" className="mono text-[12px]" style={{ minWidth: 1900 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 110 }}>Beam Set No</th>
                         <th style={{ width: 90 }}>Set No</th>
                         <th style={{ width: 80 }}>No Of Width</th>
-                        <th style={{ width: 70 }}>Beam #</th>
+                        <th style={{ width: 180 }}>Beam # (F9)</th>
+                        <th style={{ width: 90 }}>Beam Status</th>
                         <th style={{ width: 90 }}>Beam Length</th>
                         <th style={{ width: 130 }}>Issue Date</th>
                         <th style={{ width: 130 }}>K-Date</th>
-                        <th style={{ width: 60 }}>Shd#</th>
-                        <th style={{ width: 60 }}>Lm#</th>
+                        <th style={{ width: 70 }}>Shd#</th>
+                        <th style={{ width: 180 }}>Lm# (F9)</th>
                         <th style={{ width: 90 }}>Ext Shr.Age</th>
                         <th style={{ width: 90 }}>Dsg Type</th>
                         <th style={{ width: 110 }}>Kn.Cont.No</th>
@@ -1100,11 +1214,23 @@ export default async function KnottingPage({
                               />
                             </td>
                             <td>
-                              <input
+                              <FindingPicker
                                 name="beam_no"
-                                list="ks-beam-list"
-                                className="input-box mono text-[12px]"
                                 defaultValue={l?.beamNo ?? ""}
+                                rows={beamPickerRows}
+                                columns={beamCols}
+                                title="SET NO LIST — LOADED BEAMS"
+                                placeholder="F9 beam"
+                                className="input-box mono text-[12px] cursor-pointer"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                name="beam_status"
+                                className="input-box mono text-[12px] bg-gray-50"
+                                defaultValue={l?.beamNo ? beamStatusByNo.get(l.beamNo) ?? "" : ""}
+                                readOnly
+                                tabIndex={-1}
                               />
                             </td>
                             <td>
@@ -1135,16 +1261,21 @@ export default async function KnottingPage({
                             <td>
                               <input
                                 name="shd_hash"
-                                className="input-box mono text-[12px]"
+                                className="input-box mono text-[12px] bg-gray-50"
                                 defaultValue={l?.shdHash ?? ""}
+                                readOnly
+                                tabIndex={-1}
                               />
                             </td>
                             <td>
-                              <input
+                              <FindingPicker
                                 name="lm_hash"
-                                list="ks-loom-list"
-                                className="input-box mono text-[12px]"
-                                defaultValue={l?.lmHash ?? ""}
+                                defaultValue={l?.lmHash ? `${l?.shdHash ?? ""}|${l?.lmHash}` : ""}
+                                rows={loomPickerRows}
+                                columns={loomCols}
+                                title="LOOM LIST"
+                                placeholder="F9 loom"
+                                className="input-box mono text-[12px] cursor-pointer"
                               />
                             </td>
                             <td>
@@ -1267,27 +1398,21 @@ export default async function KnottingPage({
                     </tbody>
                   </table>
                 </div>
+                <div className="flex justify-end mt-2">
+                  <div className="border border-black px-4 py-2 flex items-center gap-3">
+                    <span className="text-[11px] uppercase tracking-[0.1em] font-semibold">Total Amount</span>
+                    <span id="ks-total" className="mono text-[15px] font-bold">0</span>
+                  </div>
+                </div>
                 <div className="text-[10px] text-[var(--muted)] mt-2">
-                  Note:- Beam Length, K.Date, Loom#, Shr.Age, Set Status UpDate Only Press Buten &apos;U&apos;
+                  Note:- Beam picked from LOADED stock; on Save the beam mounts on its loom (LOADED → RUNNING). Beam Length, K.Date, Loom#, Shr.Age update only via &apos;U&apos;.
                 </div>
               </div>
 
-              <datalist id="ks-beam-list">
-                {loadedBeams.map((b) => (
-                  <option key={b.beamNo} value={b.beamNo}>
-                    {b.statusWrk}
-                  </option>
-                ))}
-              </datalist>
-              <datalist id="ks-loom-list">
-                {loomRows.map((lm) => (
-                  <option key={`${lm.shed}-${lm.loomNo}`} value={`${lm.shed}|${lm.loomNo}`}>
-                    {`Shed ${lm.shed} · Loom ${lm.loomNo}` + (lm.statusWrk ? " · " + lm.statusWrk : "")}
-                  </option>
-                ))}
-              </datalist>
               <RowAutoFill watch="beam_no" map={beamFillMap} />
+              <RowAutoFill watch="lm_hash" map={loomFillMap} />
               <AutoFill watch="party" map={partyFillMap} inputs={["rate_per_ends", "rate_per_beam", "type"]} />
+              <KnottingCalc />
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
                 <button type="submit" className="btn btn-sm">

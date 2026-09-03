@@ -77,6 +77,15 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Re-issue** (on a bounced cheque): opens a fresh ISSUE form prefilled with party+amount, new cheque no. (GL = normal issue; whether to also move from dishonour→advance is an owner call — left as plain re-issue.)
 - Delete (ADMIN) removes the issue + its clear/bounce (all vnos sharing the chq no). Postings flow into `/ledger` + `/reports/cheque-status` like other cheque vouchers. Reuses `getSession`, `assertPeriodOpen`, `Combobox`, `ConfirmButton` — same pattern as BP.
 
+## Inventory — Knotting / Maroori / Sarning Bill (`inventory/knotting`)
+- The loom-mount operation: pick a LOADED beam + a loom → on **Save** the beam mounts (beam `beams.statusWrk` LOADED→RUNNING with loomNo/shed/knVno; loom `looms.statusWrk`→RUNNING + currentBeam). Edit reverses old lines (beam→LOADED, loom→S) then re-mounts current lines. Delete also reverses. VTYPE `KB` GL: DR expense (`KNOTTING_EXP`/`SARNING_EXP`/`MAROORI_EXP` by Type) / CR party.
+- **Party** = knotting-contract party (Combobox from `intKnottingContract` status=R); `AutoFill` fills Rate Per Ends / Rate Per Beam / Type from the contract.
+- **Line-item pickers** (both `FindingPicker` LOVs, `RowAutoFill` fills siblings):
+  - **Beam # (F9)** = "SET NO LIST" of LOADED beams (`beams` where statusWrk=LOADED); columns Beam No/Set No/Beam Set/Status/Length/Ends/GP(brVno). Pick → fills `beam_set_no`, `set_no`, `beam_length`, `ends`, `beam_status` (readonly col). `beamFillMap` keyed by beamNo.
+  - **Lm# (F9)** = LOOM LIST (`looms`, ordered by shed); value `shed|loomNo`, columns Shed/Loom/RPM/Status. Pick → fills `shd_hash` (readonly). Save splits `shed|loomNo`.
+- **Live Amount + Total** via `src/components/knotting-calc.tsx` (`KnottingCalc`): amount = ends × ratePerEnds (else ratePerBeam per active row), net = amount + ext amt, running Total in `#ks-total`. Server recomputes the same on save (grid amount/net are display).
+- **Empty-row guard**: a line saves only if it has beam/set/loom/ends/amount — `issue_date`/`k_date`/`shd_hash` (auto-defaults) alone no longer create blank lines.
+
 ## Contracts (`inventory/contracts/*`, `external/contracts/*`)
 - **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).
 - **Beam Ext W/S (`beam-ext-ws`)**: Converter Party = `conversionDebtorPrefixes`. **WT/Mtr = Ends ÷ 731.52 ÷ Cal Count** (no width division; matches grey conversion).
