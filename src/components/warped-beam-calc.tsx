@@ -2,8 +2,6 @@
 
 import { useEffect } from "react";
 
-const KG_TO_LBS = 2.2046;
-
 const val = (el: HTMLInputElement | null | undefined) => {
   const n = parseFloat(el?.value ?? "");
   return Number.isFinite(n) ? n : 0;
@@ -22,27 +20,24 @@ export function WarpedBeamCalc() {
 
     const recalc = () => {
       const sizingRate = val(q("sizingRate"));
+      const rc = val(q("resultCountSzg")); // Result Count SZG (header)
       let amountSum = 0;
       form.querySelectorAll("tbody tr").forEach((tr) => {
         const beamNo = tr.querySelector<HTMLInputElement>('[name="beamNo"]');
         const bl = tr.querySelector<HTMLInputElement>('[name="beamLength"]');
         const rate = tr.querySelector<HTMLInputElement>('[name="rate"]');
+        const ends = tr.querySelector<HTMLInputElement>('[name="ends"]');
         const conv = tr.querySelector<HTMLInputElement>('[name="conv"]');
         const amount = tr.querySelector<HTMLInputElement>('[name="amount"]');
         const hasRow = !!(beamNo?.value || (bl && bl.value));
-        // Sizing rate entered up top flows into each populated row: the visible rate
-        // always, and conv (which drives amount) only if the row has none yet.
+        // Sizing rate entered up top flows into each populated row's Rate.
         if (sizingRate > 0 && hasRow) {
           if (rate) rate.value = String(sizingRate);
           if (conv && !conv.value) conv.value = String(sizingRate);
         }
-        const loaded = tr.querySelector<HTMLInputElement>('[name="beamLoadedHnk"]');
-        const net = tr.querySelector<HTMLInputElement>('[name="yarnBmsNetLbs"]');
-        if (net && loaded?.value) {
-          set(net, (val(loaded) - val(tr.querySelector<HTMLInputElement>('[name="emptyKg"]'))) * KG_TO_LBS);
-        }
-        if (amount && bl && bl.value && conv && conv.value) {
-          set(amount, val(bl) * val(conv));
+        // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count × Rate.
+        if (amount && bl?.value && ends?.value && rc > 0) {
+          set(amount, (val(bl) * val(ends)) / 1693.2 / rc * val(rate));
         }
         amountSum += val(amount);
       });

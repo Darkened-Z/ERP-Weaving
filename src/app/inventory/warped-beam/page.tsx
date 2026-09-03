@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
-import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -267,12 +267,12 @@ export default async function WarpedBeamReceivingPage({
         row.width == null && row.ends == null && row.rate == null && row.length == null &&
         row.conv == null && row.amount == null && !row.gpNoLine;
       if (isEmpty) continue;
-      if (row.beamLoadedHnk != null) {
-        row.yarnBmsNetLbs =
-          Math.round((row.beamLoadedHnk - (row.emptyKg ?? 0)) * 2.2046 * 100) / 100;
-      }
-      if (row.beamLength != null && row.conv != null) {
-        row.amount = Math.round(row.beamLength * row.conv * 100) / 100;
+      // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × Rate.
+      const rcNum = parseFloat(header.resultCountSzg ?? "");
+      if (row.beamLength != null && row.ends != null && Number.isFinite(rcNum) && rcNum > 0) {
+        row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcNum) * (row.rate ?? 0) * 100) / 100;
+      } else {
+        row.amount = null;
       }
       validLines.push({ ...row, beamStatus: row.beamNo ? "LOADED" : null, receivingId: 0 });
     }
@@ -905,14 +905,10 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 70 }}>Beam No</th>
                         <th style={{ width: 80 }}>Beam Status</th>
                         <th style={{ width: 90 }} className="text-right">Beam Loadd (HR)</th>
-                        <th style={{ width: 80 }} className="text-right">Empty (KG)</th>
-                        <th style={{ width: 90 }} className="text-right">Yarn Bms Net LBS</th>
                         <th style={{ width: 90 }} className="text-right">Beam Length</th>
-                        <th style={{ width: 70 }} className="text-right">Wt</th>
                         <th style={{ width: 70 }} className="text-right">Width</th>
                         <th style={{ width: 70 }} className="text-right">Ends</th>
                         <th style={{ width: 70 }} className="text-right">Rate</th>
-                        <th style={{ width: 80 }} className="text-right">Length</th>
                         <th style={{ width: 70 }} className="text-right">Conv</th>
                         <th style={{ width: 90 }} className="text-right">Amount</th>
                         <th style={{ width: 80 }}>GP NO</th>
@@ -933,14 +929,10 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="beamNo" list="iwb-beam-list" className={gridCellCls} defaultValue={l?.beamNo ?? ""} /></td>
                             <td><input className={gridCellCls + " bg-gray-100"} defaultValue={l?.beamNo ? "LOADED" : l?.beamStatus ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="beamLoadedHnk" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLoadedHnk ?? ""} /></td>
-                            <td><input name="emptyKg" type="number" step="any" className={gridCellNumCls} defaultValue={l?.emptyKg ?? ""} /></td>
-                            <td><input name="yarnBmsNetLbs" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.yarnBmsNetLbs ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="beamLength" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLength ?? ""} /></td>
-                            <td><input name="wt" type="number" step="any" className={gridCellNumCls} defaultValue={l?.wt ?? ""} /></td>
                             <td><input name="width" type="number" step="any" className={gridCellNumCls} defaultValue={l?.width ?? ""} /></td>
                             <td><input name="ends" type="number" step="1" className={gridCellNumCls} defaultValue={l?.ends ?? ""} /></td>
                             <td><input name="rate" type="number" step="any" className={gridCellNumCls} defaultValue={l?.rate ?? ""} /></td>
-                            <td><input name="length" type="number" step="any" className={gridCellNumCls} defaultValue={l?.length ?? ""} /></td>
                             <td><input name="conv" type="number" step="any" className={gridCellNumCls} defaultValue={l?.conv ?? ""} /></td>
                             <td><input name="amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.amount ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="gpNoLine" className={gridCellCls} defaultValue={l?.gpNoLine ?? ""} /></td>
@@ -970,7 +962,6 @@ export default async function WarpedBeamReceivingPage({
                 ))}
               </datalist>
               <RowAutoFill watch="beamNo" map={beamFillMap} />
-              <RowCalc target="amount" a="beamLength" b="conv" />
               <WarpedBeamCalc />
 
               <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-3 border border-black p-4">
