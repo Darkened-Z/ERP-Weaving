@@ -267,10 +267,11 @@ export default async function WarpedBeamReceivingPage({
         row.width == null && row.ends == null && row.rate == null && row.length == null &&
         row.conv == null && row.amount == null && !row.gpNoLine;
       if (isEmpty) continue;
-      // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × Rate.
+      // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × Sizing Rate.
       const rcNum = parseFloat(header.resultCountSzg ?? "");
+      const sizingRateNum = num(formData.get("sizingRate")) ?? 0;
       if (row.beamLength != null && row.ends != null && Number.isFinite(rcNum) && rcNum > 0) {
-        row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcNum) * (row.rate ?? 0) * 100) / 100;
+        row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcNum) * sizingRateNum * 100) / 100;
       } else {
         row.amount = null;
       }
@@ -889,7 +890,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-12">
                   <div className="text-[11px] mono text-[var(--muted)] border border-dashed border-[var(--border-light)] px-3 py-1 bg-gray-50">
-                    Sizing formula:&nbsp; <b>Amount = Beam Length × Ends ÷ 1693.20 ÷ Result Count SZG × Rate</b>
+                    Sizing formula:&nbsp; <b>Amount = Beam Length × Ends ÷ 1693.20 ÷ Result Count SZG × Sizing Rate</b>
                   </div>
                 </div>
               </div>
