@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -33,20 +34,25 @@ export default async function WeaversPage({
     const cell = (formData.get("cell") as string)?.trim() || null;
     const phone = (formData.get("phone") as string)?.trim() || null;
 
-    if (id) {
-      await db
-        .update(schema.weavers)
-        .set({ code, name, nameShort, address, cell, phone })
-        .where(eq(schema.weavers.id, parseInt(id)));
-      revalidatePath("/define/weavers");
-      redirect(`/define/weavers?id=${id}`);
-    } else {
-      const [row] = await db
-        .insert(schema.weavers)
-        .values({ code, name, nameShort, address, cell, phone })
-        .returning();
-      revalidatePath("/define/weavers");
-      redirect(`/define/weavers?id=${row.id}`);
+    try {
+      if (id) {
+        await db
+          .update(schema.weavers)
+          .set({ code, name, nameShort, address, cell, phone })
+          .where(eq(schema.weavers.id, parseInt(id)));
+        revalidatePath("/define/weavers");
+        redirect(`/define/weavers?id=${id}`);
+      } else {
+        const [row] = await db
+          .insert(schema.weavers)
+          .values({ code, name, nameShort, address, cell, phone })
+          .returning();
+        revalidatePath("/define/weavers");
+        redirect(`/define/weavers?id=${row.id}`);
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/weavers?${id ? `id=${id}&` : ""}error=exists`);
+      throw e;
     }
   }
 
@@ -138,6 +144,11 @@ export default async function WeaversPage({
               {params.error === "in_use" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   This weaver is assigned to looms or referenced by production records and cannot be deleted.
+                </div>
+              )}
+              {params.error === "exists" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  That code already exists.
                 </div>
               )}
               <form action={save}>

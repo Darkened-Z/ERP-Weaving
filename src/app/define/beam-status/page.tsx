@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +27,18 @@ export default async function BeamStatusPage({
 
     const editId = formData.get("id") as string;
 
-    if (editId) {
-      await db
-        .update(schema.beamStatuses)
-        .set({ status })
-        .where(eq(schema.beamStatuses.id, Number(editId)));
-    } else {
-      await db.insert(schema.beamStatuses).values({ status });
+    try {
+      if (editId) {
+        await db
+          .update(schema.beamStatuses)
+          .set({ status })
+          .where(eq(schema.beamStatuses.id, Number(editId)));
+      } else {
+        await db.insert(schema.beamStatuses).values({ status });
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/beam-status?${editId ? `id=${editId}&` : ""}error=exists`);
+      throw e;
     }
 
     revalidatePath("/define/beam-status");
@@ -103,6 +109,11 @@ export default async function BeamStatusPage({
           {params.error === "in_use" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               This beam status is currently assigned to beams and cannot be deleted.
+            </div>
+          )}
+          {params.error === "exists" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              That status already exists.
             </div>
           )}
           <form action={saveStatus}>

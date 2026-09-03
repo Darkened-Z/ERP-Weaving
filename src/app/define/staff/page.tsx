@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -42,20 +43,25 @@ export default async function StaffPage({
     const shift = (formData.get("shift") as string)?.trim() || null;
     const status = (formData.get("status") as string)?.trim() || "A";
 
-    if (id) {
-      await db
-        .update(schema.productionStaff)
-        .set({ code, level, name, nameShort, cell, phone, shed, shift, status })
-        .where(eq(schema.productionStaff.id, parseInt(id)));
-      revalidatePath("/define/staff");
-      redirect(`/define/staff?id=${id}`);
-    } else {
-      const [row] = await db
-        .insert(schema.productionStaff)
-        .values({ code, level, name, nameShort, cell, phone, shed, shift, status })
-        .returning();
-      revalidatePath("/define/staff");
-      redirect(`/define/staff?id=${row.id}`);
+    try {
+      if (id) {
+        await db
+          .update(schema.productionStaff)
+          .set({ code, level, name, nameShort, cell, phone, shed, shift, status })
+          .where(eq(schema.productionStaff.id, parseInt(id)));
+        revalidatePath("/define/staff");
+        redirect(`/define/staff?id=${id}`);
+      } else {
+        const [row] = await db
+          .insert(schema.productionStaff)
+          .values({ code, level, name, nameShort, cell, phone, shed, shift, status })
+          .returning();
+        revalidatePath("/define/staff");
+        redirect(`/define/staff?id=${row.id}`);
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/staff?${id ? `id=${id}&` : ""}error=exists`);
+      throw e;
     }
   }
 
@@ -146,6 +152,11 @@ export default async function StaffPage({
               {params.error === "in_use" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   This staff member is referenced by daily production shift-incharge fields and cannot be deleted.
+                </div>
+              )}
+              {params.error === "exists" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  That code already exists.
                 </div>
               )}
               <form action={save}>

@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +36,18 @@ export default async function YarnBlendsPage({
 
     const editId = formData.get("id") as string;
 
-    if (editId) {
-      await db
-        .update(schema.yarnBlends)
-        .set({ description })
-        .where(eq(schema.yarnBlends.id, Number(editId)));
-    } else {
-      await db.insert(schema.yarnBlends).values({ description });
+    try {
+      if (editId) {
+        await db
+          .update(schema.yarnBlends)
+          .set({ description })
+          .where(eq(schema.yarnBlends.id, Number(editId)));
+      } else {
+        await db.insert(schema.yarnBlends).values({ description });
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/yarn-blends?${editId ? `id=${editId}&` : ""}error=exists`);
+      throw e;
     }
 
     revalidatePath("/define/yarn-blends");
@@ -123,6 +129,11 @@ export default async function YarnBlendsPage({
           {params.error === "in_use" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               This blend is referenced by yarn counts, grey construction, or inventory openings and cannot be deleted.
+            </div>
+          )}
+          {params.error === "exists" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              That description already exists.
             </div>
           )}
           <form action={saveBlend}>

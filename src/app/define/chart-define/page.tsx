@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -30,22 +31,27 @@ export default async function ChartDefinePage({
     const srno = Number.isNaN(srnoRaw) ? null : srnoRaw;
     const editId = formData.get("id") as string;
 
-    if (editId) {
-      const parsedEditId = parseInt(editId, 10);
-      if (Number.isNaN(parsedEditId)) return;
-      await db
-        .update(schema.chartDefine)
-        .set({ code, description, srno })
-        .where(eq(schema.chartDefine.id, parsedEditId));
-      revalidatePath("/define/chart-define");
-      redirect(`/define/chart-define?id=${parsedEditId}`);
-    } else {
-      const [row] = await db
-        .insert(schema.chartDefine)
-        .values({ code, description, srno })
-        .returning({ id: schema.chartDefine.id });
-      revalidatePath("/define/chart-define");
-      redirect(`/define/chart-define?id=${row.id}`);
+    try {
+      if (editId) {
+        const parsedEditId = parseInt(editId, 10);
+        if (Number.isNaN(parsedEditId)) return;
+        await db
+          .update(schema.chartDefine)
+          .set({ code, description, srno })
+          .where(eq(schema.chartDefine.id, parsedEditId));
+        revalidatePath("/define/chart-define");
+        redirect(`/define/chart-define?id=${parsedEditId}`);
+      } else {
+        const [row] = await db
+          .insert(schema.chartDefine)
+          .values({ code, description, srno })
+          .returning({ id: schema.chartDefine.id });
+        revalidatePath("/define/chart-define");
+        redirect(`/define/chart-define?id=${row.id}`);
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/chart-define?${editId ? `id=${editId}&` : ""}error=exists`);
+      throw e;
     }
   }
 
@@ -102,6 +108,11 @@ export default async function ChartDefinePage({
           {params.error === "in_use" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               This chart head is referenced by chart of accounts and cannot be deleted.
+            </div>
+          )}
+          {params.error === "exists" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              That code already exists.
             </div>
           )}
           <form action={saveChart}>

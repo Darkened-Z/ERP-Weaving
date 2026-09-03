@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -32,20 +33,25 @@ export default async function GreyDspPage({
     const cell = (formData.get("cell") as string)?.trim() || null;
     const phone = (formData.get("phone") as string)?.trim() || null;
 
-    if (id) {
-      await db
-        .update(schema.greyDspChart)
-        .set({ code, name, nameShort, cell, phone })
-        .where(eq(schema.greyDspChart.id, parseInt(id)));
-      revalidatePath("/define/grey-dsp");
-      redirect(`/define/grey-dsp?id=${id}`);
-    } else {
-      const [row] = await db
-        .insert(schema.greyDspChart)
-        .values({ code, name, nameShort, cell, phone })
-        .returning();
-      revalidatePath("/define/grey-dsp");
-      redirect(`/define/grey-dsp?id=${row.id}`);
+    try {
+      if (id) {
+        await db
+          .update(schema.greyDspChart)
+          .set({ code, name, nameShort, cell, phone })
+          .where(eq(schema.greyDspChart.id, parseInt(id)));
+        revalidatePath("/define/grey-dsp");
+        redirect(`/define/grey-dsp?id=${id}`);
+      } else {
+        const [row] = await db
+          .insert(schema.greyDspChart)
+          .values({ code, name, nameShort, cell, phone })
+          .returning();
+        revalidatePath("/define/grey-dsp");
+        redirect(`/define/grey-dsp?id=${row.id}`);
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/grey-dsp?${id ? `id=${id}&` : ""}error=exists`);
+      throw e;
     }
   }
 
@@ -138,6 +144,11 @@ export default async function GreyDspPage({
               {params.error === "in_use" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   This party is referenced by grey despatch, kachi parchi, or packi parchi records and cannot be deleted.
+                </div>
+              )}
+              {params.error === "exists" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  That code already exists.
                 </div>
               )}
               <form action={save}>

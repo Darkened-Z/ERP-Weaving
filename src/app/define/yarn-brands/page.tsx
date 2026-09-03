@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +36,18 @@ export default async function YarnBrandsPage({
 
     const editId = formData.get("id") as string;
 
-    if (editId) {
-      await db
-        .update(schema.yarnBrands)
-        .set({ name })
-        .where(eq(schema.yarnBrands.id, Number(editId)));
-    } else {
-      await db.insert(schema.yarnBrands).values({ name });
+    try {
+      if (editId) {
+        await db
+          .update(schema.yarnBrands)
+          .set({ name })
+          .where(eq(schema.yarnBrands.id, Number(editId)));
+      } else {
+        await db.insert(schema.yarnBrands).values({ name });
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/yarn-brands?${editId ? `id=${editId}&` : ""}error=exists`);
+      throw e;
     }
 
     revalidatePath("/define/yarn-brands");
@@ -143,6 +149,11 @@ export default async function YarnBrandsPage({
           {params.error === "in_use" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               This brand is referenced by yarn contracts, conversion contracts, or inventory openings and cannot be deleted.
+            </div>
+          )}
+          {params.error === "exists" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              That name already exists.
             </div>
           )}
           <form action={saveBrand}>

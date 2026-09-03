@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +29,18 @@ export default async function CompanyUnitsPage({
     const srno = parseInt(formData.get("srno") as string) || null;
     const editCode = formData.get("edit_code") as string;
 
-    if (editCode) {
-      await db
-        .update(schema.companyUnits)
-        .set({ code, srno, description })
-        .where(eq(schema.companyUnits.code, editCode));
-    } else {
-      await db.insert(schema.companyUnits).values({ code, srno, description });
+    try {
+      if (editCode) {
+        await db
+          .update(schema.companyUnits)
+          .set({ code, srno, description })
+          .where(eq(schema.companyUnits.code, editCode));
+      } else {
+        await db.insert(schema.companyUnits).values({ code, srno, description });
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/company-units?error=exists`);
+      throw e;
     }
 
     revalidatePath("/define/company-units");
@@ -86,6 +92,11 @@ export default async function CompanyUnitsPage({
           {params.error === "in_use" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               This company unit is referenced elsewhere and cannot be deleted.
+            </div>
+          )}
+          {params.error === "exists" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              That code already exists.
             </div>
           )}
           <form action={saveUnit}>

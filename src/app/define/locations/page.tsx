@@ -3,13 +3,14 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
 export default async function GreyLocationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const allLocations = await db.select().from(schema.locations).where(eq(schema.locations.type, "GREY")).orderBy(schema.locations.code);
@@ -28,19 +29,24 @@ export default async function GreyLocationsPage({
     const description = (formData.get("description") as string)?.trim();
     if (!code || Number.isNaN(code) || !description) return;
 
-    if (id) {
-      const parsedId = parseInt(id, 10);
-      if (Number.isNaN(parsedId)) return;
-      await db.update(schema.locations).set({ code, description, type: "GREY" }).where(eq(schema.locations.id, parsedId));
-      revalidatePath("/define/locations");
-      redirect(`/define/locations?id=${parsedId}`);
-    } else {
-      const [row] = await db
-        .insert(schema.locations)
-        .values({ code, description, type: "GREY" })
-        .returning({ id: schema.locations.id });
-      revalidatePath("/define/locations");
-      redirect(`/define/locations?id=${row.id}`);
+    try {
+      if (id) {
+        const parsedId = parseInt(id, 10);
+        if (Number.isNaN(parsedId)) return;
+        await db.update(schema.locations).set({ code, description, type: "GREY" }).where(eq(schema.locations.id, parsedId));
+        revalidatePath("/define/locations");
+        redirect(`/define/locations?id=${parsedId}`);
+      } else {
+        const [row] = await db
+          .insert(schema.locations)
+          .values({ code, description, type: "GREY" })
+          .returning({ id: schema.locations.id });
+        revalidatePath("/define/locations");
+        redirect(`/define/locations?id=${row.id}`);
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/locations?${id ? `id=${id}&` : ""}error=exists`);
+      throw e;
     }
   }
 
@@ -80,6 +86,11 @@ export default async function GreyLocationsPage({
                   )}
                 </div>
               </div>
+              {params.error === "exists" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  That code already exists.
+                </div>
+              )}
               <form action={saveLocation}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
                 <div className="grid grid-cols-1 gap-y-3 gform">

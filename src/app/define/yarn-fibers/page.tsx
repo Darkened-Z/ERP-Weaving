@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -32,22 +33,27 @@ export default async function YarnFibersPage({
     const denier = (formData.get("denier") as string)?.trim() || null;
     const length = (formData.get("length") as string)?.trim() || null;
 
-    if (id) {
-      const parsedId = parseInt(id, 10);
-      if (Number.isNaN(parsedId)) return;
-      await db
-        .update(schema.yarnFibers)
-        .set({ code, type, description, denier, length })
-        .where(eq(schema.yarnFibers.id, parsedId));
-      revalidatePath("/define/yarn-fibers");
-      redirect(`/define/yarn-fibers?id=${parsedId}`);
-    } else {
-      const [row] = await db
-        .insert(schema.yarnFibers)
-        .values({ code, type, description, denier, length })
-        .returning({ id: schema.yarnFibers.id });
-      revalidatePath("/define/yarn-fibers");
-      redirect(`/define/yarn-fibers?id=${row.id}`);
+    try {
+      if (id) {
+        const parsedId = parseInt(id, 10);
+        if (Number.isNaN(parsedId)) return;
+        await db
+          .update(schema.yarnFibers)
+          .set({ code, type, description, denier, length })
+          .where(eq(schema.yarnFibers.id, parsedId));
+        revalidatePath("/define/yarn-fibers");
+        redirect(`/define/yarn-fibers?id=${parsedId}`);
+      } else {
+        const [row] = await db
+          .insert(schema.yarnFibers)
+          .values({ code, type, description, denier, length })
+          .returning({ id: schema.yarnFibers.id });
+        revalidatePath("/define/yarn-fibers");
+        redirect(`/define/yarn-fibers?id=${row.id}`);
+      }
+    } catch (e) {
+      if (isUniqueViolation(e)) redirect(`/define/yarn-fibers?${id ? `id=${id}&` : ""}error=exists`);
+      throw e;
     }
   }
 
@@ -134,6 +140,11 @@ export default async function YarnFibersPage({
               {params.error === "in_use" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   This fiber is referenced by yarn counts and cannot be deleted.
+                </div>
+              )}
+              {params.error === "exists" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  That code already exists.
                 </div>
               )}
               <form action={save}>
