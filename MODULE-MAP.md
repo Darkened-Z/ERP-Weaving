@@ -97,6 +97,14 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - Existing beam lifecycle on save unchanged (statusWrk apply, last-roll→EMPTY, edit reversal). Folding Stock still computed (produced − despatched).
 - **Folding grey stock GL (VTYPE `DP`, vno = production id):** DR `1.01.25.01.0037` (FOLDING GREY STOCK) / CR conv party, amount = Σ (row totalCount × grey-conversion contract rate: `convRatePerMtr` → `grayRatePerMtr` → `rateMtr`). Credit party = header `convContParty`, else the row-contract's party (so a loom-only pick still posts). Delete-before-guard on edit; delete removes DP rows. (Grey-despatch reversal of folding stock = future item.)
 
+## Reports — Daily Folding Stock (`reports/weaving/folding-stock` + `/[cont]`)
+- Per grey-conversion contract, grouped by party: **Opening** (prod−desp before `from`) + **Production** (Σ `int_daily_production_set.totalCount` where `set.cont_no` = contract) − **Despatch** (Σ `int_grey_despatch_line.lengthMtrs` where `int_grey_despatch.convContNo` = contract) = **Balance**. From/To filter, party subtotals + grand total.
+- **P** link → `/[cont]` drill-down: chronological production + grey-despatch ledger for one contract (Date · V.No · A/B/C/CP · Production · Despatch · Than Sr# · running Balance).
+- Nav: Weaving reports → Daily Folding Stock (`w-folding-stock`).
+
+## Inventory — Daily Production: party-cross guard
+- On save, every row's beam contract (`set.cont_no` → its party) must share ONE party and match the header Conv Cont Party when set, else `error=party_cross` (prevents a loom whose beam belongs to a different conversion contract/party).
+
 ## Contracts (`inventory/contracts/*`, `external/contracts/*`)
 - **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).
 - **Beam Ext W/S (`beam-ext-ws`)**: Converter Party = `conversionDebtorPrefixes`. **WT/Mtr = Ends ÷ 731.52 ÷ Cal Count** (no width division; matches grey conversion).

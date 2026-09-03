@@ -108,6 +108,30 @@ entered here:
   `1.01.25.01.0037` (FOLDING GREY STOCK), or is the on-screen Folding Stock
   figure (produced − despatched) sufficient? No GL is posted by this page today.
 
+## PHASE 2 — refinements + reports (owner, batch 2)
+
+- [ ] **P1. Beam ↔ conversion-contract party match.** A row's beam contract
+      (`set.cont_no` → its party) must equal the header Conv Cont Party. If a loom's
+      beam belongs to another contract/party → block with `error=party_cross`
+      ("contract koi or, beam koi or → party cross"). All rows must share one party.
+- [ ] **P2. Daily Folding Stock report** (`/reports/weaving/folding-stock`, image 6):
+      grouped by party → per grey-conversion contract: Quality · Contract · Design# ·
+      **Opening** (net before from-date) · **Production** (Σ set.totalCount where
+      set.cont_no = contract) · **Despatch** (Σ grey-despatch meters where
+      despatch.convContNo = contract) · **Total** · **Balance** = Opening+Prod−Desp.
+- [ ] **P3. Production drill-down** (image 8) from the folding-stock report's **P**
+      link: per-contract register — Date · V.No · Production A/B/C/CP/Total · Grey
+      Despatch Date/V.No/Mtr · Than Sr# · running Balance.
+- [ ] **P4. Rejection head.** Rej meters need a GL head — create a REJECTION account
+      (like the folding stock one) and track total rejection. (Owner: "jiska head
+      bnayengy".) NEEDS the account decision (create under which head).
+- [ ] **P5. Than-serial auto-advance.** Each than (e.g. A-grade 122 m) = one serial
+      (SEP-133-26…); multiple thans auto-add rows below. (Currently one serial per
+      row generated on save — fuzzy; confirm the per-than rule.)
+- [ ] **P6.** Leave the ALT+Z PROD DETAIL (A/B/C) grid empty for now (owner).
+- [ ] **P7.** read/pick/warp/weft already flow via the contract LOV (quality + brand);
+      confirm nothing more is needed.
+
 ## Constraints (do not break)
 
 - Reuse `FindingPicker` (F9 LOV, `filterByField` for shed-scoping), `RowAutoFill`,

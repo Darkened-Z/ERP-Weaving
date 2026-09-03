@@ -589,6 +589,7 @@ export default async function DailyProductionPage({
     const fyCode = companyFy?.currentFy ?? "";
     const foldingContNos = Array.from(new Set(validSets.map((s) => s.contNo).filter((x): x is string => !!x)));
     const convRateByCont = new Map<string, number>();
+    const partyByCont = new Map<string, string>();
     if (foldingContNos.length) {
       const crows = await db
         .select({
@@ -596,10 +597,22 @@ export default async function DailyProductionPage({
           conv: schema.intGreyConversionContract.convRatePerMtr,
           gray: schema.intGreyConversionContract.grayRatePerMtr,
           rm: schema.intGreyConversionContract.rateMtr,
+          party: schema.intGreyConversionContract.party,
         })
         .from(schema.intGreyConversionContract)
         .where(inArray(schema.intGreyConversionContract.contNo, foldingContNos));
-      for (const r of crows) convRateByCont.set(r.contNo, r.conv ?? r.gray ?? r.rm ?? 0);
+      for (const r of crows) {
+        convRateByCont.set(r.contNo, r.conv ?? r.gray ?? r.rm ?? 0);
+        if (r.party) partyByCont.set(r.contNo, r.party.trim());
+      }
+    }
+    // No cross-party: every row's beam contract must share one party, and match the
+    // header conv party when set ("contract koi or, beam koi or → party cross").
+    const rowParties = new Set([...partyByCont.values()].filter(Boolean));
+    const headerConvParty = (header.convContParty ?? "").trim();
+    if (rowParties.size > 1 || (headerConvParty && [...rowParties].some((p) => p !== headerConvParty))) {
+      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=party_cross` : `?adding=1&error=party_cross`;
+      redirect(`/inventory/daily-production${q}`);
     }
     const foldingAmount =
       Math.round(
@@ -995,6 +1008,11 @@ export default async function DailyProductionPage({
         {params.error === "no_beam" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             At least one Set# row must have a Beam #.
+          </div>
+        )}
+        {params.error === "party_cross" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Party cross — every beam&apos;s contract must belong to the same conversion party. Fix the loom/contract selection.
           </div>
         )}
         {params.error === "no_grade" && (
