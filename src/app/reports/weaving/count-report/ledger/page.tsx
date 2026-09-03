@@ -104,6 +104,33 @@ export default async function WeavingCountLedgerPage({
   const consumedLbs = lines.reduce((s, l) => s + l.totLbs, 0);
   const consumedAmt = lines.reduce((s, l) => s + l.totLbs * l.rate, 0);
   const balLbs = seedLbs - consumedLbs;
+  const grand = lines.reduce(
+    (a, l) => ({
+      than: a.than + l.than, meters: a.meters + l.meters,
+      warpLbs: a.warpLbs + l.warpLbs, weftLbs: a.weftLbs + l.weftLbs, totLbs: a.totLbs + l.totLbs,
+    }),
+    { than: 0, meters: 0, warpLbs: 0, weftLbs: 0, totLbs: 0 },
+  );
+
+  // Group by conversion contract (Oracle CONV.C# layout): each contract's rows + a
+  // CONV.C# TOTAL subtotal, then the grand Consumed Total footer.
+  const byCont = new Map<string, Line[]>();
+  for (const l of lines) {
+    const k = l.cont || "—";
+    (byCont.get(k) ?? byCont.set(k, []).get(k)!).push(l);
+  }
+  const contGroups = Array.from(byCont.entries()).map(([cont, rows]) => ({
+    cont,
+    rows,
+    sub: rows.reduce(
+      (a, r) => ({
+        than: a.than + r.than, meters: a.meters + r.meters,
+        warpLbs: a.warpLbs + r.warpLbs, weftLbs: a.weftLbs + r.weftLbs,
+        totLbs: a.totLbs + r.totLbs, amount: a.amount + r.totLbs * r.rate,
+      }),
+      { than: 0, meters: 0, warpLbs: 0, weftLbs: 0, totLbs: 0, amount: 0 },
+    ),
+  }));
 
   return (
     <Shell active="w-count-report">
@@ -166,30 +193,49 @@ export default async function WeavingCountLedgerPage({
               {lines.length === 0 ? (
                 <tr><td colSpan={13} className="text-center text-[var(--muted)] py-8">No consumption for this party + count in period</td></tr>
               ) : (
-                lines.map((l, i) => (
-                  <tr key={`${l.vNo}-${i}`}>
-                    <td className="mono text-[12px] font-bold">{l.vNo}</td>
-                    <td className="mono text-[12px]">{l.date}</td>
-                    <td className="mono text-[12px]">{l.cont || "—"}</td>
-                    <td className="mono text-[12px]">{l.quality || "—"}</td>
-                    <td className="text-[12px]">{l.descr || "—"}</td>
-                    <td className="text-[12px]">{l.brand || "—"}</td>
-                    <td className="mono text-right">{fmt(l.than)}</td>
-                    <td className="mono text-right">{fmt(l.meters)}</td>
-                    <td className="mono text-right">{fmt2(l.warpLbs)}</td>
-                    <td className="mono text-right">{fmt2(l.weftLbs)}</td>
-                    <td className="mono text-right font-bold">{fmt2(l.totLbs)}</td>
-                    <td className="mono text-right">{fmt2(l.rate)}</td>
-                    <td className="mono text-right">{fmt(l.totLbs * l.rate)}</td>
-                  </tr>
-                ))
+                contGroups.flatMap((g) => [
+                  <tr key={`h-${g.cont}`} style={{ background: "#0f172a", color: "white" }}>
+                    <td colSpan={13} className="mono font-bold text-[12px] px-2 py-1">CONV.C# {g.cont}</td>
+                  </tr>,
+                  ...g.rows.map((l, i) => (
+                    <tr key={`${g.cont}-${l.vNo}-${i}`}>
+                      <td className="mono text-[12px] font-bold">{l.vNo}</td>
+                      <td className="mono text-[12px]">{l.date}</td>
+                      <td className="mono text-[12px]">{l.cont || "—"}</td>
+                      <td className="mono text-[12px]">{l.quality || "—"}</td>
+                      <td className="text-[12px]">{l.descr || "—"}</td>
+                      <td className="text-[12px]">{l.brand || "—"}</td>
+                      <td className="mono text-right">{fmt(l.than)}</td>
+                      <td className="mono text-right">{fmt(l.meters)}</td>
+                      <td className="mono text-right">{fmt2(l.warpLbs)}</td>
+                      <td className="mono text-right">{fmt2(l.weftLbs)}</td>
+                      <td className="mono text-right font-bold">{fmt2(l.totLbs)}</td>
+                      <td className="mono text-right">{fmt2(l.rate)}</td>
+                      <td className="mono text-right">{fmt(l.totLbs * l.rate)}</td>
+                    </tr>
+                  )),
+                  <tr key={`s-${g.cont}`} style={{ background: "#f1f5f9", fontWeight: 700 }}>
+                    <td colSpan={6} className="text-right pr-2">CONV.C# TOTAL</td>
+                    <td className="mono text-right">{fmt(g.sub.than)}</td>
+                    <td className="mono text-right">{fmt(g.sub.meters)}</td>
+                    <td className="mono text-right">{fmt2(g.sub.warpLbs)}</td>
+                    <td className="mono text-right">{fmt2(g.sub.weftLbs)}</td>
+                    <td className="mono text-right">{fmt2(g.sub.totLbs)}</td>
+                    <td></td>
+                    <td className="mono text-right">{fmt(g.sub.amount)}</td>
+                  </tr>,
+                ])
               )}
             </tbody>
             {lines.length > 0 && (
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
-                  <td colSpan={10} className="text-right pr-2">Consumed Total</td>
-                  <td className="mono text-right">{fmt2(consumedLbs)}</td>
+                  <td colSpan={6} className="text-right pr-2">GRAND TOTAL</td>
+                  <td className="mono text-right">{fmt(grand.than)}</td>
+                  <td className="mono text-right">{fmt(grand.meters)}</td>
+                  <td className="mono text-right">{fmt2(grand.warpLbs)}</td>
+                  <td className="mono text-right">{fmt2(grand.weftLbs)}</td>
+                  <td className="mono text-right">{fmt2(grand.totLbs)}</td>
                   <td></td>
                   <td className="mono text-right">{fmt(consumedAmt)}</td>
                 </tr>
