@@ -160,19 +160,24 @@ export default async function PackiParchiPage({
     if (code == null || code === "") return "";
     return countLabelByCode.get(String(code)) || String(code);
   };
-  const richConstruction = (c: (typeof constructions)[number]) => {
-    const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
+  // Count description only (warp × weft, collapsed when identical) — no reed×pick.
+  // Used for the short dropdown labels so the construction isn't shown twice.
+  const wfPart = (c: (typeof constructions)[number]) => {
     const warp = [c.warpCount, c.warp2].map(lblCount).filter(Boolean).join(" / ");
     const weft = [c.weftCount, c.weft2].map(lblCount).filter(Boolean).join(" / ");
-    // Always show BOTH warp and weft (even when identical) so the weft is never hidden.
-    const wf = warp && weft ? `${warp} × ${weft}` : warp || weft;
+    return warp && weft ? (warp === weft ? warp : `${warp} × ${weft}`) : warp || weft;
+  };
+  // Full construction (reed×pick + warp/weft) — used only in the Construction field.
+  const richConstruction = (c: (typeof constructions)[number]) => {
+    const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
+    const wf = wfPart(c);
     return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
   };
   // Quality is keyed by construction CODE (e.g. GC-001) everywhere, so packi and godown
   // stock line up. Label shows code + the rich construction.
   const qualityOpts = constructions.map((c) => ({
     value: c.code,
-    label: `${c.code} — ${richConstruction(c) || c.description}`,
+    label: `${c.code} — ${wfPart(c) || c.description}`,
   }));
   const qualityRichMap: Record<string, Record<string, string>> = Object.fromEntries(
     constructions.map((c) => [c.code, { quality_rich_disp: richConstruction(c), quality_print_rich_disp: richConstruction(c) }])
@@ -369,7 +374,7 @@ export default async function PackiParchiPage({
   // the godown stock (balance > 0), with their stock shown in the label. The record
   // being edited keeps its own quality selectable even if now depleted. (Quality
   // Print stays the full construction list — any random quality is allowed there.)
-  const richByCode = new Map(constructions.map((c) => [c.code, richConstruction(c) || c.description]));
+  const richByCode = new Map(constructions.map((c) => [c.code, wfPart(c) || c.description]));
   const stockQualityOpts = Object.entries(qualityStockMap)
     .filter(([, s]) => Number(s.grey_stock_mtr_disp) > 0 || Number(s.grey_stock_than_disp) > 0)
     .map(([code, s]) => ({
