@@ -277,13 +277,11 @@ export default async function WarpedBeamReceivingPage({
       validLines.push({ ...row, beamStatus: row.beamNo ? "LOADED" : null, receivingId: 0 });
     }
 
-    const totalLoaded = validLines.reduce((s, l) => s + (l.beamLoadedHnk ?? 0), 0);
     const totalLength = validLines.reduce((s, l) => s + (l.beamLength ?? 0), 0);
     const errBase =
       Number.isFinite(id) && id > 0
         ? `/inventory/warped-beam?id=${id}&`
         : `/inventory/warped-beam?adding=1&`;
-    if (totalLoaded <= 0) redirect(errBase + "error=loaded_weight_required");
     if (totalLength <= 0) redirect(errBase + "error=beam_length_required");
 
     header.totalAmount =
@@ -889,6 +887,11 @@ export default async function WarpedBeamReceivingPage({
                   <label className="label block mb-1">Sizing Rate <span className="text-[9px] text-[var(--muted)]">(→ grid)</span></label>
                   <input name="sizingRate" type="number" step="any" className="input-box mono text-right" defaultValue="" />
                 </div>
+                <div className="lg:col-span-12">
+                  <div className="text-[11px] mono text-[var(--muted)] border border-dashed border-[var(--border-light)] px-3 py-1 bg-gray-50">
+                    Sizing formula:&nbsp; <b>Amount = Beam Length × Ends ÷ 1693.20 ÷ Result Count SZG × Rate</b>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-6 border border-black">
@@ -904,7 +907,6 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 80 }}>Beam Set No</th>
                         <th style={{ width: 70 }}>Beam No</th>
                         <th style={{ width: 80 }}>Beam Status</th>
-                        <th style={{ width: 90 }} className="text-right">Beam Loadd (HR)</th>
                         <th style={{ width: 90 }} className="text-right">Beam Length</th>
                         <th style={{ width: 70 }} className="text-right">Width</th>
                         <th style={{ width: 70 }} className="text-right">Ends</th>
@@ -928,7 +930,6 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="beamSetNo" className={gridCellCls} defaultValue={l?.beamSetNo ?? ""} /></td>
                             <td><input name="beamNo" list="iwb-beam-list" className={gridCellCls} defaultValue={l?.beamNo ?? ""} /></td>
                             <td><input className={gridCellCls + " bg-gray-100"} defaultValue={l?.beamNo ? "LOADED" : l?.beamStatus ?? ""} readOnly tabIndex={-1} /></td>
-                            <td><input name="beamLoadedHnk" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLoadedHnk ?? ""} /></td>
                             <td><input name="beamLength" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLength ?? ""} /></td>
                             <td><input name="width" type="number" step="any" className={gridCellNumCls} defaultValue={l?.width ?? ""} /></td>
                             <td><input name="ends" type="number" step="1" className={gridCellNumCls} defaultValue={l?.ends ?? ""} /></td>
@@ -946,6 +947,17 @@ export default async function WarpedBeamReceivingPage({
                 <div className="text-[10px] text-[var(--muted)] mt-2 px-2">
                   Empty rows are ignored on save. On update, lines are replaced with the current grid.
                   Beams named on lines are marked LOADED on save.
+                </div>
+                {/* Grid totals — sum of Beam Length and Amount across the rows. */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 px-2 pb-2">
+                  <div className="md:col-start-3">
+                    <label className="label block mb-1">Total Length</label>
+                    <input name="total_length_disp" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Total Amount</label>
+                    <input name="total_amount_disp" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
+                  </div>
                 </div>
               </div>
 

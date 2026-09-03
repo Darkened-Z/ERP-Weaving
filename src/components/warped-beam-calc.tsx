@@ -22,6 +22,7 @@ export function WarpedBeamCalc() {
       const sizingRate = val(q("sizingRate"));
       const rc = val(q("resultCountSzg")); // Result Count SZG (header)
       let amountSum = 0;
+      let lengthSum = 0;
       form.querySelectorAll("tbody tr").forEach((tr) => {
         const beamNo = tr.querySelector<HTMLInputElement>('[name="beamNo"]');
         const bl = tr.querySelector<HTMLInputElement>('[name="beamLength"]');
@@ -40,8 +41,11 @@ export function WarpedBeamCalc() {
           set(amount, (val(bl) * val(ends)) / 1693.2 / rc * val(rate));
         }
         amountSum += val(amount);
+        lengthSum += val(bl);
       });
       set(q("totalAmount"), amountSum + val(q("freightCharges")));
+      set(q("total_length_disp"), lengthSum);
+      set(q("total_amount_disp"), amountSum);
 
       const bagConeWt = val(q("bagsWeight")) + val(q("conesWeight"));
       const packWt =
