@@ -448,7 +448,17 @@ export default async function GodownStockPage({
     const contNo = txt(formData.get("cont_no"));
     const purContNo = txt(formData.get("pur_cont_no"));
     const contactQuality = txt(formData.get("contact_quality"));
-    const dspQuality = txt(formData.get("dsp_quality"));
+    // Always store dsp_quality as the construction CODE (never the rich string), so
+    // the same quality bought across lots aggregates into one stock entry in packi/reports.
+    const rawDspQuality = txt(formData.get("dsp_quality"));
+    const normalizeQualityCode = (v: string | null): string | null => {
+      if (!v) return v;
+      if (qualityByCode[v] !== undefined) return v;
+      const first = v.split(/\s+/)[0];
+      if (qualityByCode[first] !== undefined) return first;
+      return Object.keys(qualityByCode).find((c) => v.startsWith(c)) ?? v;
+    };
+    const dspQuality = normalizeQualityCode(rawDspQuality);
     const than = intVal(formData.get("than"));
     const meter = num(formData.get("meter"));
     const elCumiNum = intVal(formData.get("el_cumi_num"));
@@ -1078,7 +1088,7 @@ export default async function GodownStockPage({
                     </label>
                     <input name="contact_quality" className="input-box mono w-full" defaultValue={formStock?.contactQuality ?? ""} readOnly tabIndex={-1} style={{ background: "#f3f4f6" }} />
                     {/* Despatch quality mirrors the contract quality; kept as a hidden field so the record still stores it. */}
-                    <input type="hidden" name="dsp_quality" defaultValue={formStock?.dspQuality ?? formStock?.contactQuality ?? ""} />
+                    <input type="hidden" name="dsp_quality" defaultValue={formStock?.dspQuality ?? ""} />
                   </div>
 
                   <div className="col-span-12">

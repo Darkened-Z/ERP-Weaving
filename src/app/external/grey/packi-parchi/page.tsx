@@ -291,6 +291,19 @@ export default async function PackiParchiPage({
   // (ext_godown_stock) minus sold OUT via packi. NET METER / net amount; the average
   // RESETS whenever the meter balance hits 0. Used for the live display when a quality is
   // picked (qualityStockMap) and the current record's boxes.
+  // Normalise any stored quality (a bare code "GC-001" OR a rich string like
+  // "GC-001 71×56×61 [W:2 F:2]") to the construction CODE, so the SAME quality
+  // bought in multiple godown lots aggregates into ONE stock entry (not several).
+  const codeList = constructions.map((c) => c.code).filter((c): c is string => !!c);
+  const normQuality = (q: string | null | undefined): string => {
+    if (!q) return "";
+    const t = q.trim();
+    if (constByCode.has(t)) return t;
+    const first = t.split(/\s+/)[0];
+    if (constByCode.has(first)) return first;
+    return codeList.find((c) => t.startsWith(c)) ?? t;
+  };
+
   const stockParty = formItem?.purchaseParty || godownParty;
   type SMv = { date: string; id: number; kind: "IN" | "OUT"; than: number; mtr: number; rate: number };
   const byQ = new Map<string, SMv[]>();
@@ -303,7 +316,7 @@ export default async function PackiParchiPage({
       .select({ q: schema.extPackiParchi.quality, date: schema.extPackiParchi.vDate, id: schema.extPackiParchi.id, than: schema.extPackiParchi.than, mtr: schema.extPackiParchi.meterNet })
       .from(schema.extPackiParchi)
       .where(eq(schema.extPackiParchi.purchaseParty, stockParty));
-    const add = (q: string | null, mv: SMv) => { const k = (q ?? "").trim(); if (!k) return; const a = byQ.get(k); if (a) a.push(mv); else byQ.set(k, [mv]); };
+    const add = (q: string | null, mv: SMv) => { const k = normQuality(q); if (!k) return; const a = byQ.get(k); if (a) a.push(mv); else byQ.set(k, [mv]); };
     for (const r of insRows) add(r.q, { date: r.date ?? "", id: r.id, kind: "IN", than: r.than ?? 0, mtr: r.mtr ?? 0, rate: r.rate ?? 0 });
     for (const r of outsRows) { if (formItem?.id && r.id === formItem.id) continue; add(r.q, { date: r.date ?? "", id: r.id, kind: "OUT", than: r.than ?? 0, mtr: r.mtr ?? 0, rate: 0 }); }
   }
@@ -362,11 +375,12 @@ export default async function PackiParchiPage({
       value: code,
       label: `${code} — ${richByCode.get(code) ?? code}  [${s.grey_stock_than_disp} than / ${s.grey_stock_mtr_disp} mtr]`,
     }));
-  if (formItem?.quality && !stockQualityOpts.some((o) => o.value === formItem.quality)) {
-    stockQualityOpts.unshift({ value: formItem.quality, label: `${formItem.quality} — ${richByCode.get(formItem.quality) ?? formItem.quality}` });
+  const curQualityCode = normQuality(formItem?.quality);
+  if (curQualityCode && !stockQualityOpts.some((o) => o.value === curQualityCode)) {
+    stockQualityOpts.unshift({ value: curQualityCode, label: `${curQualityCode} — ${richByCode.get(curQualityCode) ?? curQualityCode}` });
   }
 
-  const curStock = formItem?.quality ? qualityStockMap[formItem.quality.trim()] : undefined;
+  const curStock = curQualityCode ? qualityStockMap[curQualityCode] : undefined;
   const ppStockThan = curStock ? Number(curStock.grey_stock_than_disp) : null;
   const ppStockMtr = curStock ? Number(curStock.grey_stock_mtr_disp) : null;
   const ppAvgRate = curStock ? Number(curStock.grey_stock_avg_disp) : null;
