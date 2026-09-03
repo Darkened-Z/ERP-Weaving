@@ -5,6 +5,7 @@ import { Combobox } from "@/components/combobox";
 import { RowAutoFill, AutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
 import { ProductionSetCalc } from "@/components/production-calc";
+import { ThanSerialLive } from "@/components/than-serial-live";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
@@ -350,6 +351,18 @@ export default async function DailyProductionPage({
     .select({ m: sql<number>`COALESCE(MAX(${schema.intDailyProduction.lvNo}),0)` })
     .from(schema.intDailyProduction);
   const maxLvNo = Number(lvRow[0]?.m ?? 0);
+
+  // Next mm/Than serial for the current month — drives the live per-row serials.
+  const nowD = new Date();
+  const thanPrefix = `${MONTH_ABBR[nowD.getMonth()] ?? "JAN"}-`;
+  const thanSuffix = `-${String(nowD.getFullYear()).slice(-2)}`;
+  const [thanMaxRow] = await db
+    .select({
+      m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${thanPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${thanPrefix.length + thanSuffix.length}) AS INTEGER)), 0)`,
+    })
+    .from(schema.intDailyProductionSet)
+    .where(sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${thanPrefix}%${thanSuffix}`}`);
+  const thanBase = Number(thanMaxRow?.m ?? 0) + 1;
 
   const totalRowsList = list.map((r) => ({ id: r.id }));
 
@@ -1061,6 +1074,7 @@ export default async function DailyProductionPage({
             <form id="idp-save-form" action={saveAction}>
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <ProductionSetCalc beamStats={beamStats} />
+              <ThanSerialLive base={thanBase} prefix={thanPrefix} suffix={thanSuffix} />
               <RowAutoFill watch="beamNo" map={beamFillMap} />
               <RowAutoFill watch="loomNo" map={loomFillMap} />
               <AutoFill watch="conv_contract" map={contractFillMap} combos={["productQuality", "convContParty"]} inputs={["productBrand"]} />
@@ -1194,7 +1208,7 @@ export default async function DailyProductionPage({
                         <th className="text-right" style={{ width: 75 }}>Shrinkage</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="idp-set-rows">
                       {Array.from({ length: Math.max(SET_ROWS, setRows.length + 2) }).map((_, i) => {
                         const s = setRows[i];
                         return (

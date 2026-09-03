@@ -102,8 +102,11 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **P** link → `/[cont]` drill-down: chronological production + grey-despatch ledger for one contract (Date · V.No · A/B/C/CP · Production · Despatch · Than Sr# · running Balance).
 - Nav: Weaving reports → Daily Folding Stock (`w-folding-stock`).
 
-## Inventory — Daily Production: party-cross guard
-- On save, every row's beam contract (`set.cont_no` → its party) must share ONE party and match the header Conv Cont Party when set, else `error=party_cross` (prevents a loom whose beam belongs to a different conversion contract/party).
+## Inventory — Daily Production: party-cross guard + than serials + rejection
+- **Party-cross guard:** on save, every row's beam contract (`set.cont_no` → its party) must share ONE party and match the header Conv Cont Party when set, else `error=party_cross` (prevents a loom whose beam belongs to a different conversion contract/party).
+- **Live than serials** (`src/components/than-serial-live.tsx` `ThanSerialLive`): each active SET row (has beam/loom/count) auto-gets the next `MON-NNNN-YY` serial, incrementing per active row, from `thanBase` (server: next number for the current month). Table body id `idp-set-rows`. Only fills blank/auto (data-live) cells; user-typed serials kept; server still regenerates blanks on save.
+- **Rejection:** account **`1.01.25.01.0038`** GODOWN - REJECTION GREY STOCK (WVG) created (godown head 1.01.25.01) — ready for GL. Currently rejection is **tracked in the folding-stock report** (Rejection column = Σ `set.rejCount` per contract); no rejection GL yet (owner to confirm the Dr/Cr before posting).
+- **Godown accounts added under 1.01.25.01:** `.0037` FOLDING GREY STOCK, `.0038` REJECTION GREY STOCK (both created in Turso + local).
 
 ## Contracts (`inventory/contracts/*`, `external/contracts/*`)
 - **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).
