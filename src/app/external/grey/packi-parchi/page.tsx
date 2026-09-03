@@ -160,7 +160,7 @@ export default async function PackiParchiPage({
   // stock line up. Label shows code + the rich construction.
   const qualityOpts = constructions.map((c) => ({
     value: c.code,
-    label: `${c.code} — ${wfPart(c) || c.description}`,
+    label: richConstruction(c) || c.code,
   }));
   const qualityRichMap: Record<string, Record<string, string>> = Object.fromEntries(
     constructions.map((c) => [c.code, { quality_rich_disp: richConstruction(c), quality_print_rich_disp: richConstruction(c) }])
@@ -350,16 +350,19 @@ export default async function PackiParchiPage({
   // the godown stock (balance > 0), with their stock shown in the label. The record
   // being edited keeps its own quality selectable even if now depleted. (Quality
   // Print stays the full construction list — any random quality is allowed there.)
-  const richByCode = new Map(constructions.map((c) => [c.code, wfPart(c) || c.description]));
+  // Quality shown as the FULL construction (reed×pick + warp/weft) — no code, no
+  // doubling. Looked up by the normalized code so even a legacy rich value resolves.
+  const richByCode = new Map(constructions.map((c) => [c.code, richConstruction(c) || c.description]));
+  const richFull = (code: string) => richByCode.get(normQuality(code)) ?? richByCode.get(code) ?? code;
   const stockQualityOpts = Object.entries(qualityStockMap)
     .filter(([, s]) => Number(s.grey_stock_mtr_disp) > 0 || Number(s.grey_stock_than_disp) > 0)
     .map(([code, s]) => ({
-      value: code,
-      label: `${code} — ${richByCode.get(code) ?? code}  [${s.grey_stock_than_disp} than / ${s.grey_stock_mtr_disp} mtr]`,
+      value: normQuality(code) || code,
+      label: `${richFull(code)}  ·  ${s.grey_stock_mtr_disp} mtr`,
     }));
   const curQualityCode = normQuality(formItem?.quality);
   if (curQualityCode && !stockQualityOpts.some((o) => o.value === curQualityCode)) {
-    stockQualityOpts.unshift({ value: curQualityCode, label: `${curQualityCode} — ${richByCode.get(curQualityCode) ?? curQualityCode}` });
+    stockQualityOpts.unshift({ value: curQualityCode, label: richFull(curQualityCode) });
   }
 
   const curStock = curQualityCode ? qualityStockMap[curQualityCode] : undefined;
@@ -1074,34 +1077,24 @@ export default async function PackiParchiPage({
                 />
               </div>
 
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Quality <span className="text-[9px] text-[var(--muted)]">(in-stock only)</span></label>
+              <div className="lg:col-span-6">
+                <label className="label block mb-1">Quality <span className="text-[9px] text-[var(--muted)]">(in-stock · reed×pick warp×weft)</span></label>
                 <Combobox
                   name="quality"
                   options={stockQualityOpts}
-                  defaultValue={formItem?.quality ?? ""}
+                  defaultValue={formItem?.quality ? normQuality(formItem.quality) : ""}
                   placeholder="Quality in stock…"
                 />
               </div>
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Construction <span className="text-[9px] text-[var(--muted)]">(reed×pick  warp×weft)</span></label>
-                <input name="quality_rich_disp" className={roCls} readOnly tabIndex={-1} defaultValue={formItem?.quality ? (qualityRichMap[formItem.quality]?.quality_rich_disp ?? "") : ""} />
-              </div>
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-6">
                 <label className="label block mb-1">Quality Print <span className="text-[9px] text-[var(--muted)]">(for bill)</span></label>
                 <Combobox
                   name="quality_print"
                   options={qualityOpts}
-                  defaultValue={formItem?.qualityPrint ?? ""}
+                  defaultValue={formItem?.qualityPrint ? normQuality(formItem.qualityPrint) : ""}
                   placeholder="Any quality…"
                 />
               </div>
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Print Construction</label>
-                <input name="quality_print_rich_disp" className={roCls} readOnly tabIndex={-1} defaultValue={formItem?.qualityPrint ? (qualityRichMap[formItem.qualityPrint]?.quality_print_rich_disp ?? "") : ""} />
-              </div>
-              <AutoFill watch="quality" map={qualityRichMap} inputs={["quality_rich_disp"]} />
-              <AutoFill watch="quality_print" map={qualityRichMap} inputs={["quality_print_rich_disp"]} />
 
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Meter Re</label>

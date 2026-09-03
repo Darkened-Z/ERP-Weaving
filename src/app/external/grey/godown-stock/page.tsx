@@ -13,7 +13,7 @@ import { eq, sql, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { normQuality as gqNormQuality, countLabelMap } from "@/lib/grey-quality";
+import { normQuality as gqNormQuality, countLabelMap, richConstruction as gqRichConstruction } from "@/lib/grey-quality";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 
@@ -146,11 +146,22 @@ export default async function GodownStockPage({
     .from(schema.extGreyConvContract)
     .orderBy(desc(schema.extGreyConvContract.id));
   const constructions = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width })
+    .select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      width: schema.greyConstruction.width,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+    })
     .from(schema.greyConstruction);
   const qualityByCode: Record<string, string> = Object.fromEntries(
     constructions.map((c) => [c.code, c.description])
   );
+  const constrByCode = new Map(constructions.map((c) => [c.code, c]));
   // The conv-contract table holds BOTH conversion (type CONV) and sale (type SALE)
   // contracts. CONV feeds the Pur Conv Contract picker; SALE joins the grey-sale
   // contracts in the Sal Cont pickers. Only running (status R) contracts are offered.
@@ -592,8 +603,11 @@ export default async function GodownStockPage({
     };
     const supplierCoa = resolveGlCoa(purchaseParty);
     const greyStockCoa = resolveGlCoa(gdnParty);
+    // Narration shows the FULL construction (reed×pick warp×weft), not the code.
+    const dspConstr = dspQuality ? constrByCode.get(dspQuality) : undefined;
+    const narrQuality = dspConstr ? gqRichConstruction(dspConstr, countLabelByCode) : (dspQuality || contactQuality || "");
     const greyNarr =
-      `${than ?? 0} THAN ${netMeter} MTR @ ${rateVal}, ${dspQuality || contactQuality || ""} (GREY PURCHASE)`.trim();
+      `${than ?? 0} THAN ${netMeter} MTR @ ${rateVal}, ${narrQuality} (GREY PURCHASE)`.trim();
     const canPostGrey = !!(glFyCode && supplierCoa && greyStockCoa && total > 0 && type === "STOCK");
     const postGreyGl = async (
       tx: Parameters<Parameters<typeof db.transaction>[0]>[0],

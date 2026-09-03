@@ -44,6 +44,10 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Sale money as value+amount pairs:** Rate (grey sale rate, from contract) → Rate Amount (rate×mtr) · Commission (%±) → Commission Amount · Checkery → Checkery Amount · Net Amount. (`kaat_percent_sale` hidden, still in net math.)
 - **GL (VTYPE `GPV`):** DR saleParty (greyAmtSal) / CR `GREY_COMMISSION_INCOME` (commission) / CR party (clearDiff) — commission-agent model. Broker pair: DR `SALE_BROKERAGE_EXP` / CR broker acct. Narration `<than> THAN <mtr> MTR @ rate, <quality> (PACKI SALE)` on header + lines. Delete-of-old UNCONDITIONAL then re-post.
 - **Do NOT** add naive inventory GL to packi (it's commission-model).
+- **Quality display (owner):** Quality + Quality Print comboboxes show the **full construction** (`richConstruction` = reed×pick + warp/weft) — **no `GC-001` code, no doubling**. `stockQualityOpts` value = `normQuality(code)`, label = `richFull(code) · <mtr> mtr`; `qualityOpts` label = `richConstruction(c)`. The separate readonly **Construction** + **Print Construction** display fields were **removed** (redundant — the combobox shows it). Stored `quality`/`quality_print` stay the CODE.
+
+## Grey — Godown ledger narration
+- The GDN narration shows the **full construction** (`gqRichConstruction` from the dsp_quality code + count labels), not the `GC-001` code. Falls back to the code/contact quality if no construction row. (Existing pre-fix vouchers keep their old narration until re-saved or data-fixed.)
 
 ## Yarn — Receipt (`inventory/yarn-receipt`)
 - **Trn Type** = RCPT/RETN only. **Party (delivered-from)** = conversion heads (`conversionDebtorPrefixes`). **Yarn Party To** = yarn-stock godown `1.01.25.01.0001`, **locked**.
