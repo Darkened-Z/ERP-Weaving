@@ -694,6 +694,29 @@ export default async function GreyDespatchPage({
           if (Math.abs(totalDebit - totalCredit) >= 0.01) throw new Error("Unbalanced voucher");
           await tx.insert(schema.transDetail).values(details);
           }
+
+          // Folding grey stock reversal (separate voucher DPR): grey leaving stock
+          // reverses the daily-production holding — DR party / CR folding stock.
+          // Nets against production's DR folding / CR party. Delete-before-guard.
+          const FOLDING_STOCK_ACC = "1.01.25.01.0037";
+          await tx.delete(schema.transDetail).where(
+            and(eq(schema.transDetail.vtype, "DPR"), eq(schema.transDetail.vno, vno))
+          );
+          await tx.delete(schema.transMain).where(
+            and(eq(schema.transMain.vtype, "DPR"), eq(schema.transMain.vno, vno))
+          );
+          if (partyCoa && fyCode && (data.amnt ?? 0) > 0) {
+            const revAmt = data.amnt ?? 0;
+            const revNarr = `FOLDING GREY STOCK REVERSAL — GP#${data.gpNo ?? ""}`.trim();
+            await tx.insert(schema.transMain).values({
+              fyCode, vtype: "DPR", vno, vdate: data.vDate, accCode: partyCoa,
+              narration: revNarr, vtime: nowTime(), balanceAmount: revAmt,
+            });
+            await tx.insert(schema.transDetail).values([
+              { fyCode, vtype: "DPR", vno, srno: 1, accCode: partyCoa, partyCode: FOLDING_STOCK_ACC, contNo: data.convContNo, narration: revNarr, debit: revAmt, credit: 0 },
+              { fyCode, vtype: "DPR", vno, srno: 2, accCode: FOLDING_STOCK_ACC, partyCode: partyCoa, narration: revNarr, debit: 0, credit: revAmt },
+            ]);
+          }
         }
 
         return did;
@@ -743,6 +766,13 @@ export default async function GreyDespatchPage({
         );
         await tx.delete(schema.transMain).where(
           and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
+        );
+        // Folding grey stock reversal voucher (DPR) — remove on delete too.
+        await tx.delete(schema.transDetail).where(
+          and(eq(schema.transDetail.vtype, "DPR"), eq(schema.transDetail.vno, vno))
+        );
+        await tx.delete(schema.transMain).where(
+          and(eq(schema.transMain.vtype, "DPR"), eq(schema.transMain.vno, vno))
         );
       }
       const oldLines = await tx

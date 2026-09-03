@@ -95,7 +95,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
   - **Cont No** readonly cell (persisted `cont_no`).
 - Beam Status stays a `<select>` from `beam_statuses` (EMPTY/F-ROLL/L-ROLL/LOADED/R-CUT/RE-KNOT/RUNNING); Wast WT KG column for first-roll waste.
 - Existing beam lifecycle on save unchanged (statusWrk apply, last-roll→EMPTY, edit reversal). Folding Stock still computed (produced − despatched).
-- **Folding grey stock GL (VTYPE `DP`, vno = production id):** DR `1.01.01.01.0013` (FOLDING GREY STOCK) / CR conv party, amount = Σ (row totalCount × grey-conversion contract rate: `convRatePerMtr` → `grayRatePerMtr` → `rateMtr`). Credit party = header `convContParty`, else the row-contract's party (so a loom-only pick still posts). Delete-before-guard on edit; delete removes DP rows. (Grey-despatch reversal of folding stock = future item.)
+- **Folding grey stock GL (VTYPE `DP`, vno = production id):** DR `1.01.25.01.0037` (FOLDING GREY STOCK) / CR conv party, amount = Σ (row totalCount × grey-conversion contract rate: `convRatePerMtr` → `grayRatePerMtr` → `rateMtr`). Credit party = header `convContParty`, else the row-contract's party (so a loom-only pick still posts). Delete-before-guard on edit; delete removes DP rows. (Grey-despatch reversal of folding stock = future item.)
 
 ## Contracts (`inventory/contracts/*`, `external/contracts/*`)
 - **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).

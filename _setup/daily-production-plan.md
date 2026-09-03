@@ -74,7 +74,7 @@ entered here:
       Shrinkage) on the loom/beam pick — extend `ProductionSetCalc` +
       `RowAutoFill` to also trigger after the LOV pick.
 - [ ] **8. Folding/holding grey stock.** Confirm whether production must post to
-      the FOLDING GREY STOCK godown `1.01.01.01.0013` (GL), or the current
+      the FOLDING GREY STOCK godown `1.01.25.01.0037` (GL), or the current
       computed Folding Stock number is enough (see open Q3).
 - [ ] **9. Verify end-to-end** on local dev with seeded loom+RUNNING beam+contract
       (knotting mount first), then deploy.
@@ -85,9 +85,9 @@ entered here:
   Least disruptive to the existing per-beam grid. Adds `int_daily_production_set.loom_no`.
 - **Q2 → loom's mounted contract auto-fills** (beam.contractNo → grey conversion
   contract → product quality/brand); header contract pick is the override.
-- **Q3 → GL POST** production into FOLDING GREY STOCK godown `1.01.01.01.0013`
+- **Q3 → GL POST** production into FOLDING GREY STOCK godown `1.01.25.01.0037`
   (owner overrode the default). Proposed entry per production voucher:
-  **DR `1.01.01.01.0013` (Folding Grey Stock)** / **CR Conv Cont Party** for
+  **DR `1.01.25.01.0037` (Folding Grey Stock)** / **CR Conv Cont Party** for
   Σ produced meters × contract conversion rate; reverse on grey despatch.
   NEEDS CONFIRM: (a) credit head — conv party vs a conversion-income/WIP head?
   (b) rate basis — `convRatePerMtr` vs `grayRatePerMtr` vs `rateMtr` from the
@@ -105,7 +105,7 @@ entered here:
   or the header pick? (Proposed: loom's `currentContract` auto-fills, header pick
   is the fallback / override.)
 - **Q3 — Folding grey stock GL.** Does production need a GL posting into
-  `1.01.01.01.0013` (FOLDING GREY STOCK), or is the on-screen Folding Stock
+  `1.01.25.01.0037` (FOLDING GREY STOCK), or is the on-screen Folding Stock
   figure (produced − despatched) sufficient? No GL is posted by this page today.
 
 ## Constraints (do not break)

@@ -581,7 +581,7 @@ export default async function DailyProductionPage({
 
     // ---- Folding grey stock GL inputs (DR 1.01.01.01.0013 / CR conv party) ----
     // amount = Σ produced meters × the row's grey-conversion contract rate.
-    const FOLDING_STOCK_ACC = "1.01.01.01.0013";
+    const FOLDING_STOCK_ACC = "1.01.25.01.0037";
     const [companyFy] = await db
       .select({ currentFy: schema.companyProfile.currentFy })
       .from(schema.companyProfile)
