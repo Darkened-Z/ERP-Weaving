@@ -122,6 +122,28 @@ export default async function WarpedBeamReceivingPage({
   const beamLoadedGodown =
     parties.find((p) => /godown/i.test(p.description) && /(loaded\s*beam|beam\s*(loaded|stock))/i.test(p.description))?.description ?? "";
 
+  // Net Weight Rate (Kg) auto-fill: live avg rate of the yarn-stock godown
+  // (GODOWN - YARN STOCK (WVG) `1.01.25.01.0001`) — Σ amount ÷ Σ lbs of yarn
+  // receipts into it, converted per-Kg (×2.20462). Recomputed on every load, never
+  // a stored constant; the field stays editable and a saved voucher keeps its rate.
+  const yarnStockGodownDesc =
+    parties.find((p) => String(p.code) === "1.01.25.01.0001")?.description ??
+    parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ??
+    "";
+  let godownYarnRateKg: number | null = null;
+  if (yarnStockGodownDesc) {
+    const [agg] = await db
+      .select({
+        lbs: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN 0 ELSE ${schema.intYarnReceipt.qtyLbs} END),0)`,
+        amt: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN 0 ELSE ${schema.intYarnReceipt.amount} END),0)`,
+      })
+      .from(schema.intYarnReceipt)
+      .where(eq(schema.intYarnReceipt.yarnPartyTo, yarnStockGodownDesc));
+    if ((agg?.lbs ?? 0) > 0 && (agg?.amt ?? 0) > 0) {
+      godownYarnRateKg = Math.round(((agg!.amt / agg!.lbs) * 2.20462) * 100) / 100;
+    }
+  }
+
   // Sizing contracts (Beam Contract Ext W/S) — shown under the sizing party, filtered
   // to that party; picking one auto-fills its per-beam sizing rate into the grid.
   const sizingContracts = await db
@@ -1013,7 +1035,7 @@ export default async function WarpedBeamReceivingPage({
                 <div className="lg:col-span-6">
                   <div className="grid grid-cols-2 gap-2">
                     <div><label className="label block mb-1">Net Weight (Kg) <span className="text-[9px] text-[var(--muted)]">(bags+cones − packing)</span></label><input name="netWeightDisp" type="number" step="any" className="input-box mono text-right bg-gray-100" defaultValue="" readOnly tabIndex={-1} /></div>
-                    <div><label className="label block mb-1">Net Weight Rate (Kg)</label><input name="netWeightRate" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.netWeightRate ?? ""} /></div>
+                    <div><label className="label block mb-1">Net Weight Rate (Kg) <span className="text-[9px] text-[var(--muted)]">(auto: godown yarn stock)</span></label><input name="netWeightRate" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.netWeightRate ?? godownYarnRateKg ?? ""} /></div>
                     <div><label className="label block mb-1">Total Amount</label><input name="totalAmountFinal" type="number" step="any" className="input-box mono text-right bg-gray-100" defaultValue={editing?.totalAmountFinal ?? ""} readOnly tabIndex={-1} /></div>
                     <div><label className="label block mb-1">Gst / Ftx</label><input name="gstFtx" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.gstFtx ?? ""} /></div>
                     <div className="col-span-2"><label className="label block mb-1">Amt Tot</label><input name="amtTot" type="number" step="any" className="input-box mono text-right bg-green-50" defaultValue={editing?.amtTot ?? ""} readOnly tabIndex={-1} /></div>
