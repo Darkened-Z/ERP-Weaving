@@ -50,12 +50,12 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - The GDN narration shows the **full construction** (`gqRichConstruction` from the dsp_quality code + count labels), not the `GC-001` code. Falls back to the code/contact quality if no construction row. (Existing pre-fix vouchers keep their old narration until re-saved or data-fixed.)
 
 ## Yarn — Receipt (`inventory/yarn-receipt`)
-- **Trn Type** = RCPT/RETN only. **Party (delivered-from)** = conversion heads (`conversionDebtorPrefixes`). **Yarn Party To** = yarn-stock godown `1.01.25.01.0001`, **locked**.
-- Count-detail: **Warp Bags + Weft Bags = Total Bags** (server recomputes bags = warp+weft), **Qty Lbs** auto ×100 (editable), **Rate/Lbs = party's purchase-contract rate** (fills both Rate/Lbs + Rate/Lbs To). **Brand** comes from the contract, NOT the count description. **Stock Bage/Lbs** = the count's godown stock (RCPT−RETN) before this voucher.
+- **Trn Type** = RCPT/RETN only. **Party (delivered-from)** = conversion heads (`conversionDebtorPrefixes`). **Yarn Party To** DEFAULTS to yarn-stock godown `1.01.25.01.0001` (resolved by CODE — the desc regex alone hits GODOWN - REWINDER first) but is **changeable** (Combobox): options = every godown / sizing account (`1.01.25.01.*` + /godown|sizing/ descs).
+- Count-detail: **Warp Bags + Weft Bags = Total Bags** (server recomputes bags = warp+weft), **Qty Lbs** auto ×100 (editable). **Rate/Lbs auto on Party+Count pick** (`PartyCountRate`): `party_counts` (party, count) rate, else the party's running purchase-contract rate — fills both Rate/Lbs + Rate/Lbs To; picking a purchase contract (F9) also fills them. **Brand** comes from the contract, NOT the count description. **Stock Bage/Lbs** = the count's godown stock (RCPT−RETN) before this voucher.
 
 ## Yarn — Internal Transfer (`inventory/yarn-transfer`)
-- **Location From** default = yarn-stock godown. **Location To** = loom sheds (from `looms.shed`).
-- **Stock Bage/Lbs + Rate/Lbs** auto from the count's godown stock / avg receipt rate. **Qty Lbs** auto = bags×100. **Amount** auto. **Brand** not auto-filled from count description.
+- **Location From** default = yarn-stock godown `1.01.25.01.0001` (resolved by CODE). **Location From + Location To** offer ALL godowns / sizings (plus loom sheds in To, prior free-text locations kept).
+- **Stock Bage/Lbs + Rate/Lbs** auto from the count's godown stock / avg receipt rate; when the godown has no avg for the count, **Rate/Lbs falls back to the `party_counts` (transfer-from party, count) rate** (`PartyCountRate onlyWhenEmpty`). **Qty Lbs** auto = bags×100. **Amount** auto. **Brand** not auto-filled from count description.
 
 ## Inventory — Warped Beam Receiving (`inventory/warped-beam`)
 - **Beam Receiving From** = sizing party (`CREDITOR - SIZING COMMERCIAL 3.03.06.02`). **Bm Sale Party** = converting party (`conversionDebtorPrefixes`). **Beam Stock-Loaded** locked to godown `1.01.25.01.0002`.
