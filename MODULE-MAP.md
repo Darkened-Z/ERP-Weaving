@@ -63,7 +63,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - Grid columns removed: Warping cnt No, Empty (KG), Yarn Bms Net LBS, Wt, Length, **Beam Loadd (HR)**. Remaining: Sr# · R.Date · Yarn Lot No · Yarn Brand · Set No · Beam Set No · Beam No · Beam Status · Beam Length · Width · Ends · Rate · Conv · **Amount** · GP NO · Upd. (Amount is near the END.)
 - **Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × SIZING RATE** (header sizing rate, variable — 50/100/110). Formula note shown under Sizing Rate.
 - **Total Length + Total Amount** at grid end. Top header "Total Amount" **hidden** (was duplicate).
-- **Net Weight** box = (bags Qty×Kgs + cones Qty×Kgs) − packing; × Net Weight Rate = Total → GST = Amt Tot. **GL (VTYPE `EXT`):** DR `WARPING_SIZING_EXP`(+GST) / CR party. Bill No + Bill Date + **Bill Due Date** + Billing Status.
+- **Net Weight** box = (bags Qty×Kgs + cones Qty×Kgs) − packing; × Net Weight Rate = Total → GST = Amt Tot. **Net Weight Rate (Kg) auto** = live avg rate of yarn-stock godown `1.01.25.01.0001` (Σ amount ÷ Σ lbs of RCPT yarn receipts into it, ×2.20462 → per Kg) — recomputed each load, NOT a stored constant; editable, saved vouchers keep their own rate. **GL (VTYPE `EXT`):** DR `WARPING_SIZING_EXP`(+GST) / CR party. Bill No + Bill Date + **Bill Due Date** + Billing Status.
 - Delete-of-old GL rows UNCONDITIONAL on edit (then re-post if qualifies).
 
 ## Finance — Advance Cheque (`finance/advance-cheque`)
