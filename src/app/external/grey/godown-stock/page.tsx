@@ -16,7 +16,7 @@ import { today as pkToday } from "@/lib/time";
 import { normQuality as gqNormQuality, countLabelMap, richConstruction as gqRichConstruction } from "@/lib/grey-quality";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,7 @@ export default async function GodownStockPage({
   const isAdding = params.adding === "1";
 
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
 
   const stocks = findFilter

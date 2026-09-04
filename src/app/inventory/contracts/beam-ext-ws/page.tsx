@@ -15,16 +15,11 @@ import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, escLike, round } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
 const DETAIL_ROWS = 6;
-
-const round = (v: number, d: number) => {
-  const p = 10 ** d;
-  return Math.round(v * p) / p;
-};
 
 const ERROR_MESSAGES: Record<string, string> = {
   code_exists: "Contract number already exists. Try again.",
@@ -46,7 +41,7 @@ export default async function BeamContractExtWsPage({
   const findFilter = params.find?.trim();
   const fParty = (params.fparty ?? "").trim();
   const fGrey = (params.fgrey ?? "").trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
 
   const contractsAll = findFilter

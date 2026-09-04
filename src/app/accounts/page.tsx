@@ -7,6 +7,7 @@ import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function ChartOfAccountPage({
 }) {
   const params = await searchParams;
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = `%${escFind}%`;
   const accounts = findFilter
     ? await db

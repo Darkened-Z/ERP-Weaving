@@ -9,7 +9,7 @@ import { today } from "@/lib/time";
 import { ConfirmButton } from "@/components/confirm-button";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt, nextVNoFromRows } from "@/lib/form";
+import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export default async function GreyDespatchDamiPage({
   const isAdding = params.adding === "1";
 
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
 
   const damis = findFilter

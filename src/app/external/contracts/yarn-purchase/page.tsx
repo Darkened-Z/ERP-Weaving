@@ -13,7 +13,7 @@ import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
-import { num } from "@/lib/form";
+import { num, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,7 @@ export default async function YarnPurchaseContractPage({
   const isAdding = params.adding === "1";
 
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
   const fParty = (params.fparty ?? "").trim();
 

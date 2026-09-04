@@ -10,7 +10,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, escLike, fmtMoney as formatNum } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +25,6 @@ const ADV_PREFIX = "1.01.15.03.";
 const BANK_PREFIX = "1.01.15.02.";
 // Per-party "CHQ FAILLED …" dishonour accounts (Cr on bounce).
 const DISHONOUR_PREFIX = "1.01.15.04.";
-
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
-const formatNum = (n?: number | null) =>
-  n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
 async function currentFy(): Promise<string> {
   const [company] = await db

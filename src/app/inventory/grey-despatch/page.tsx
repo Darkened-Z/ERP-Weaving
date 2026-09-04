@@ -15,7 +15,7 @@ import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt, nextVNoFromRows } from "@/lib/form";
+import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +40,7 @@ export default async function GreyDespatchPage({
   const isAdding = params.adding === "1";
 
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
 
   const despatches = findFilter

@@ -19,7 +19,7 @@ import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
-import { num, txt } from "@/lib/form";
+import { num, txt, round } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +27,6 @@ const int = (v: FormDataEntryValue | null): number | null => {
   if (v === null || v === undefined || v === "") return null;
   const n = parseInt(v as string, 10);
   return Number.isFinite(n) ? n : null;
-};
-
-const round = (v: number, d: number) => {
-  const p = 10 ** d;
-  return Math.round(v * p) / p;
 };
 
 const ERROR_MESSAGES: Record<string, string> = {

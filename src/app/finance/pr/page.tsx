@@ -12,7 +12,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, escLike, fmtMoney as fmt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +22,6 @@ const TITLE = "PETTY\u00A0\u00A0CASH RECEIPTS (WVG)";
 const AMOUNT_LABEL = "Cr";
 const IS_RECEIPT = true;
 const GRID_ROWS = 4;
-
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
-
-const fmt = (n?: number | null) =>
-  n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
 type GridLine = {
   acc: string;
@@ -330,7 +325,7 @@ export default async function PettyCashReceiptPage({
   const voucherCount = agg[0]?.cnt ?? 0;
   const upcomingVno = lastVno + 1;
 
-  const esc = escapeLike(findFilter);
+  const esc = escLike(findFilter);
   const pat = `%${esc}%`;
   const listWhere = and(
     eq(schema.transMain.vtype, VTYPE),

@@ -14,11 +14,9 @@ import { today } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
-
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
 function nextVNoFromRows(rows: { vNo: string }[]): string {
   const nums = rows
@@ -630,11 +628,11 @@ export default async function KnottingPage({
         .from(schema.intKnottingSarning)
         .where(
           sql`${schema.intKnottingSarning.vNo} LIKE ${
-            "%" + escapeLike(findFilter) + "%"
+            "%" + escLike(findFilter) + "%"
           } ESCAPE '\\' OR ${schema.intKnottingSarning.party} LIKE ${
-            "%" + escapeLike(findFilter) + "%"
+            "%" + escLike(findFilter) + "%"
           } ESCAPE '\\' OR ${schema.intKnottingSarning.warpContNoyy} LIKE ${
-            "%" + escapeLike(findFilter) + "%"
+            "%" + escLike(findFilter) + "%"
           } ESCAPE '\\'`,
         )
         .orderBy(desc(schema.intKnottingSarning.id))

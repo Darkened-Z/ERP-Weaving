@@ -19,14 +19,9 @@ import { getSession } from "@/lib/auth";
 import { today as todayFn } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, round } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
-
-const round = (v: number, d: number) => {
-  const p = 10 ** d;
-  return Math.round(v * p) / p;
-};
 
 const ERROR_MESSAGES: Record<string, string> = {
   code_exists: "Contract No already exists. Save again to auto-assign a fresh number.",
