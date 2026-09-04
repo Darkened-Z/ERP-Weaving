@@ -15,6 +15,9 @@ export type ConvContract = {
   convRatePerMtr: number | null;
   grayRatePerMtr: number | null;
   rateMtr: number | null;
+  grayCode: string | null;
+  contDate: string | null;
+  status: string | null;
   brand: string | null;
   source: "INT" | "EXT";
 };
@@ -42,6 +45,9 @@ export async function loadConvContracts(): Promise<ConvContract[]> {
     convRatePerMtr: t.convRatePerMtr,
     grayRatePerMtr: t.grayRatePerMtr,
     rateMtr: t.rateMtr,
+    grayCode: t.grayCode,
+    contDate: t.contDate,
+    status: t.status,
     id: t.id,
   });
 

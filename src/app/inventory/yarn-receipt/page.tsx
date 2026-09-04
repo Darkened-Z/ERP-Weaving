@@ -9,6 +9,7 @@ import { PartyCountRate } from "@/components/party-count-rate";
 import { AutoAmount } from "@/components/auto-amount";
 import { YarnReceiptCounts } from "@/components/yarn-receipt-counts";
 import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
+import { loadConvContracts } from "@/lib/conv-contracts";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
@@ -94,16 +95,22 @@ export default async function YarnReceiptPage({
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
 
-  const purContracts = await db
-    .select()
-    .from(schema.intYarnPurchaseContract)
-    .where(eq(schema.intYarnPurchaseContract.status, "R"))
-    .orderBy(desc(schema.intYarnPurchaseContract.contNo));
+  // Purchase-contract picker + rate fallback — from BOTH internal and external
+  // yarn purchase contracts (the mill's live ones are external), else the picker
+  // (Pur.Cont No is required to save) is empty.
+  const purSel = <T extends typeof schema.intYarnPurchaseContract | typeof schema.extYarnPurContract>(t: T) => ({
+    contNo: t.contNo, countCode: t.countCode, ratio: t.ratio, qtyLbs: t.qtyLbs,
+    ratePerLbs: t.ratePerLbs, contDate: t.contDate, status: t.status, brand: t.brand,
+    remarks: t.remarks, partyCode: t.partyCode,
+  });
+  const [intPur, extPur] = await Promise.all([
+    db.select(purSel(schema.intYarnPurchaseContract)).from(schema.intYarnPurchaseContract).where(eq(schema.intYarnPurchaseContract.status, "R")),
+    db.select(purSel(schema.extYarnPurContract)).from(schema.extYarnPurContract).where(eq(schema.extYarnPurContract.status, "R")),
+  ]);
+  const purContracts = [...intPur, ...extPur];
 
-  const convContracts = await db
-    .select()
-    .from(schema.intGreyConversionContract)
-    .orderBy(desc(schema.intGreyConversionContract.contNo));
+  // Conversion-contract picker (fills yarn party-to) — BOTH int + ext.
+  const convContracts = await loadConvContracts();
 
   const constructions = await db
     .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })

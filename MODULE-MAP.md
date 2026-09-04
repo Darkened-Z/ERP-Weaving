@@ -15,7 +15,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 | File | What it gives |
 |---|---|
 | `src/lib/grey-quality.ts` | `countLabelMap`, `wfPart` (count desc, collapses identical warp/weft), `richConstruction` (reed×pick + warp/weft), `normQuality` (any stored quality → construction code). Used by packi + godown; use in any new grey page/report. |
-| `src/lib/coa-heads.ts` | `conversionDebtorPrefixes()` = DEBTORS conversion heads **WVG `1.01.01.01` + COMMERCIAL `1.01.01.19`**; `underAnyPrefix()`. Any "conversion party" picker filters on these. |
+| `src/lib/coa-heads.ts` | `conversionDebtorPrefixes()` = DEBTORS conversion heads **WVG `1.01.01.01` + COMMERCIAL `1.01.01.19`** (restricted to `1.01.01.*` so the creditor `3.03.20.01` CONVERSION head is excluded); `underAnyPrefix()`. Any "conversion party" picker filters on these — real parties like "Sami sab conv 2026" live under COMMERCIAL. |
 | `src/lib/gl-accounts.ts` | `acc(key)` posting-account resolver + `PostingKey` enum. Keys incl. `GREY_COMMISSION_INCOME`, `SALE_BROKERAGE_EXP` (=`3.03.25.03.0003`), `YARN_PURCHASE_STOCK`, `YARN_SALE_INCOME`, `WARPING_SIZING_EXP`, `GST_OUTPUT`. |
 | `src/lib/db-errors.ts` | `isUniqueViolation(e)` → friendly "already exists" on duplicate keys. |
 | `src/components/finding-picker.tsx` | F9 LOV picker. Now **keyboard-reachable** (Enter/F9 opens it; `data-lov-picker`). |
@@ -54,7 +54,8 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - The GDN narration shows the **full construction** (`gqRichConstruction` from the dsp_quality code + count labels), not the `GC-001` code. Falls back to the code/contact quality if no construction row. (Existing pre-fix vouchers keep their old narration until re-saved or data-fixed.)
 
 ## Yarn — Receipt (`inventory/yarn-receipt`)
-- **Trn Type** = RCPT/RETN only. **Party (delivered-from)** = conversion heads (`conversionDebtorPrefixes`). **Yarn Party To** DEFAULTS to yarn-stock godown `1.01.25.01.0001` (resolved by CODE — the desc regex alone hits GODOWN - REWINDER first) but is **changeable** (Combobox): options = every godown / sizing account (`1.01.25.01.*` + /godown|sizing/ descs).
+- **Pur.Cont No picker + Conv contract picker read from BOTH int + ext** (`extYarnPurContract` union for purchase, `loadConvContracts()` for conversion) — the mill's live yarn purchase contracts are external (`ext_yarn_pur_contract`), so reading only internal left the REQUIRED Pur.Cont No picker empty (no receipt could be saved).
+- **Trn Type** = RCPT/RETN only. **Party (delivered-from)** = conversion heads (`conversionDebtorPrefixes`, now WVG + COMMERCIAL). **Yarn Party To** DEFAULTS to yarn-stock godown `1.01.25.01.0001` (resolved by CODE — the desc regex alone hits GODOWN - REWINDER first) but is **changeable** (Combobox): options = every godown / sizing account (`1.01.25.01.*` + /godown|sizing/ descs).
 - Count-detail: **Warp Bags + Weft Bags = Total Bags** (server recomputes bags = warp+weft), **Qty Lbs** auto ×100 (editable). **Rate/Lbs auto on Party+Count pick** (`PartyCountRate`): `party_counts` (party, count) rate, else the party's running purchase-contract rate — fills both Rate/Lbs + Rate/Lbs To; picking a purchase contract (F9) also fills them. **Brand** comes from the contract, NOT the count description. **Stock Bage/Lbs** = the count's godown stock (RCPT−RETN) before this voucher.
 
 ## Yarn — Internal Transfer (`inventory/yarn-transfer`)
