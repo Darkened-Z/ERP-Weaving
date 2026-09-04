@@ -407,8 +407,8 @@ export default async function BeamsPage({
                       <span
                         className="inline-block px-2 py-0.5 text-[11px] font-bold uppercase"
                         style={{
-                          background: r.statusWrk === "RUNNING" ? "black" : "transparent",
-                          color: r.statusWrk === "RUNNING" ? "white" : "black",
+                          background: ["RUNNING", "KNOTTING", "PRODUCTION"].includes(r.statusWrk ?? "") ? "black" : "transparent",
+                          color: ["RUNNING", "KNOTTING", "PRODUCTION"].includes(r.statusWrk ?? "") ? "white" : "black",
                           border: "1px solid black",
                         }}
                       >

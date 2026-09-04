@@ -148,7 +148,7 @@ export default async function WarpedBeamReceivingPage({
     })
     .from(schema.beams)
     .orderBy(
-      sql`CASE WHEN ${schema.beams.statusWrk} = 'EMPTY' THEN 0 WHEN ${schema.beams.statusWrk} IN ('LOADED', 'RUNNING') THEN 2 ELSE 1 END`,
+      sql`CASE WHEN ${schema.beams.statusWrk} = 'EMPTY' THEN 0 WHEN ${schema.beams.statusWrk} IN ('LOADED', 'RUNNING', 'KNOTTING', 'PRODUCTION') THEN 2 ELSE 1 END`,
       schema.beams.beamNo,
     );
   const beamFillMap = Object.fromEntries(
@@ -265,8 +265,10 @@ export default async function WarpedBeamReceivingPage({
       // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × Sizing Rate.
       const rcNum = parseFloat(header.resultCountSzg ?? "");
       const sizingRateNum = num(formData.get("sizingRate")) ?? 0;
+      // Rate = the row's own Rate when typed, else the header Sizing Rate.
+      const rowRate = (row.rate ?? 0) > 0 ? (row.rate as number) : sizingRateNum;
       if (row.beamLength != null && row.ends != null && Number.isFinite(rcNum) && rcNum > 0) {
-        row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcNum) * sizingRateNum * 100) / 100;
+        row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcNum) * rowRate * 100) / 100;
       } else {
         row.amount = null;
       }

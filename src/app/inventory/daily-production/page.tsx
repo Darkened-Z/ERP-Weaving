@@ -173,13 +173,17 @@ export default async function DailyProductionPage({
       bLength: b.length ?? null,
       beamSetNo: b.beamSetNo ?? null,
       setHash: b.setNo ?? null,
-      beamStatus: b.statusWrk ?? null,
+      // Beam picked into production → its status moves to PRODUCTION on save
+      // (the grid's Beam Status is applied to the beam; operator can override).
+      beamStatus: "PRODUCTION",
       contNo: b.contractNo ?? null,
     };
   }
 
-  // Mounted (RUNNING) beams — the SET NO LIST + loom→beam source.
-  const runningBeams = beamCatalog.filter((b) => (b.statusWrk ?? "").toUpperCase() === "RUNNING");
+  // Mounted beams — KNOTTING after the knotting bill, PRODUCTION once already in
+  // production, RUNNING kept for pre-lifecycle records. The SET NO LIST + loom→beam source.
+  const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
+  const runningBeams = beamCatalog.filter((b) => MOUNTED.has((b.statusWrk ?? "").toUpperCase()));
   const beamPickerRows = runningBeams.map((b) => ({
     value: b.beamNo as string,
     code: b.beamNo as string,
@@ -238,7 +242,7 @@ export default async function DailyProductionPage({
       beamNo: b?.beamNo ?? null,
       beamSetNo: b?.beamSetNo ?? null,
       setHash: b?.setNo ?? null,
-      beamStatus: b ? (b.statusWrk ?? "RUNNING") : null,
+      beamStatus: b ? "PRODUCTION" : null,
       ends: b?.ends ?? null,
       bLength: b?.length ?? null,
       contNo: (lm.currentContract ?? b?.contractNo) ?? null,
@@ -1249,7 +1253,7 @@ export default async function DailyProductionPage({
                                 defaultValue={s?.beamNo ?? ""}
                                 rows={beamPickerRows}
                                 columns={beamCols}
-                                title="SET NO LIST — RUNNING BEAMS"
+                                title="SET NO LIST — MOUNTED BEAMS"
                                 placeholder="F9 beam"
                                 className="input-box mono text-[12px] cursor-pointer"
                               />
