@@ -5,6 +5,7 @@ import { requireSession, getSession } from "@/lib/auth";
 import { and, eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +13,6 @@ const BASE = "/settings/locking";
 const MODULES = ["FINANCE", "INVENTORY", "STORE", "ALL"] as const;
 
 const canManage = (role: string) => role === "ADMIN" || role === "EXECUTIVE";
-
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 
 async function savePeriodLock(formData: FormData) {
   "use server";

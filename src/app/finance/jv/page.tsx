@@ -11,6 +11,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -26,17 +27,6 @@ const TRN_TYPES = [
   "ACCRUAL",
   "TRANSFER",
 ];
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 

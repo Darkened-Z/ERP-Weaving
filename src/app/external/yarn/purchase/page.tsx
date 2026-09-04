@@ -19,19 +19,9 @@ import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { acc } from "@/lib/gl-accounts";
+import { num, txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 
 const today = () => pkToday();
 

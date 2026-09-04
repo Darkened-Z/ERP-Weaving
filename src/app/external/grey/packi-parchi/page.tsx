@@ -15,25 +15,9 @@ import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
+import { num, intVal, txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 
 const today = () => pkToday();
 
@@ -165,7 +149,6 @@ export default async function PackiParchiPage({
   const qualityRichMap: Record<string, Record<string, string>> = Object.fromEntries(
     constructions.map((c) => [c.code, { quality_rich_disp: richConstruction(c), quality_print_rich_disp: richConstruction(c) }])
   );
-
 
   const convContracts = await db
     .select()

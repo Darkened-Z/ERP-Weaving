@@ -13,6 +13,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -21,17 +22,6 @@ const BASE = "/finance/cr";
 const TITLE = "CASH\u00A0\u00A0RECEIPTS (WVG)";
 const LINE_ROWS = 4;
 const TRN_TYPES = ["CASH", "CHEQUE", "ONLINE", "ADJUSTMENT"];
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(String(v));
-  return Number.isFinite(n) ? n : null;
-};
-
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 

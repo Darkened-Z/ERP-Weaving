@@ -22,6 +22,9 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 | `src/components/form-keyboard.tsx` | Global Enter=next / F9=lookup / Ctrl+S=save. Skips readonly inputs EXCEPT `data-lov-picker`. |
 | `src/components/auto-fill.tsx` | `AutoFill` (combobox:change → fill combos/inputs), `RowAutoFill`, `RowCalc`. |
 | `src/components/qty-bags-lbs.tsx` | Qty Lbs = Qty Bags × 100 (editable). |
+| `src/lib/form.ts` | **Shared form parsers** `num` / `intVal` / `txt` + `nextVNoFromRows(rows, prefix)` — ALL pages now import these instead of re-declaring per page (39 pages migrated, byte-identical behavior). New pages: import, don't copy. Page-specific variants (e.g. knotting's IKS-hardcoded vNo helper) stay local on purpose. |
+| `src/lib/godowns.ts` | `yarnStockGodownDesc(parties)` (resolves the yarn-stock godown by CODE `1.01.25.01.0001`), `godownSizingOpts(parties)` (all godown/sizing accounts as Combobox opts), `partyCountRateMap(parties)` ((party desc‖count code) → party_counts rate for `PartyCountRate`). Used by yarn-receipt, yarn-transfer, warped-beam. |
+| `src/components/party-count-rate.tsx` | `PartyCountRate` — watches two Comboboxes (party + count), fills rate inputs from a `"party‖count"`-keyed map; `onlyWhenEmpty` for fallback fills. |
 
 ---
 

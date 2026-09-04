@@ -6,16 +6,11 @@ import { db, schema } from "@/db";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
 const fmt = new Intl.NumberFormat("en-PK");
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
 
 async function savePart(formData: FormData) {
   "use server";

@@ -15,6 +15,7 @@ import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, intVal, txt, nextVNoFromRows } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -23,32 +24,7 @@ const VTYPE = "GDP";
 const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
 const SELV_TYPES = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 const round2 = (v: number) => Math.round(v * 100) / 100;
-
-function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
-  const nums = rows
-    .map((r) => {
-      const m = r.vNo?.match(new RegExp("^" + prefix + "-(\\d+)$"));
-      return m ? parseInt(m[1], 10) : 0;
-    })
-    .filter((n) => Number.isFinite(n));
-  const next = (nums.length ? Math.max(...nums) : 0) + 1;
-  return prefix + "-" + String(next).padStart(4, "0");
-}
 
 const LINE_ROWS = 4;
 const COUNT_ROWS = 5;
@@ -322,7 +298,6 @@ export default async function GreyDespatchPage({
         )
         .orderBy(schema.intDailyProductionSet.mmThanSrNo)
     : [];
-
 
   async function saveDespatch(formData: FormData) {
     "use server";

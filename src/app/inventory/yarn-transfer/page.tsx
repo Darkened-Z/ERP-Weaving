@@ -15,23 +15,11 @@ import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, intVal, txt } from "@/lib/form";
+import { yarnStockGodownDesc, godownSizingOpts, partyCountRateMap } from "@/lib/godowns";
 
 export const dynamic = "force-dynamic";
 
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 const round = (v: number, d: number) => {
   const p = 10 ** d;
   return Math.round(v * p) / p;
@@ -166,16 +154,10 @@ export default async function YarnTransferPage({
     stockLbs = agg[0]?.lbs ?? 0;
   }
 
-  // Location From defaults to the yarn-stock godown — resolved by its COA code
-  // `1.01.25.01.0001` (the description regex alone lands on GODOWN - REWINDER
-  // YARN STOCK first, which sorts before GODOWN - YARN STOCK (WVG)).
-  const yarnGodownDesc =
-    parties.find((p) => String(p.code) === "1.01.25.01.0001")?.description ??
-    parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ?? "";
-  // Every godown / sizing account is selectable in both location pickers.
-  const godownOpts = parties
-    .filter((p) => String(p.code).startsWith("1.01.25.01.") || /godown|sizing/i.test(p.description))
-    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Location From defaults to the yarn-stock godown (shared helper resolves it by
+  // CODE); every godown / sizing account is selectable in both location pickers.
+  const yarnGodownDesc = yarnStockGodownDesc(parties);
+  const godownOpts = godownSizingOpts(parties);
   const shedRows = await db
     .selectDistinct({ shed: schema.looms.shed })
     .from(schema.looms)
@@ -226,21 +208,8 @@ export default async function YarnTransferPage({
   }
 
   // Rate/Lbs fallback when the godown has no receipt avg for the count: the
-  // (party, count) rate from party_counts (count joined via yarn_counts.id).
-  const partyDescByCode = new Map(parties.map((p) => [String(p.code), p.description]));
-  const pcRateRows = await db
-    .select({
-      partyCode: schema.partyCounts.partyCode,
-      countCode: schema.yarnCounts.countCode,
-      rate: schema.partyCounts.ratePerLbs,
-    })
-    .from(schema.partyCounts)
-    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
-  const partyCountRateMap: Record<string, number> = {};
-  for (const r of pcRateRows) {
-    if (!r.countCode || r.rate == null) continue;
-    partyCountRateMap[`${partyDescByCode.get(r.partyCode) ?? r.partyCode}||${r.countCode}`] = r.rate;
-  }
+  // shared party_counts (party, count) rate map.
+  const pcMap = await partyCountRateMap(parties);
 
   async function saveAction(formData: FormData) {
     "use server";
@@ -534,7 +503,7 @@ export default async function YarnTransferPage({
               <PartyCountRate
                 partyField="transferFromParty"
                 countField="countCode"
-                map={partyCountRateMap}
+                map={pcMap}
                 targets={["ratePerLbs"]}
                 onlyWhenEmpty
               />
