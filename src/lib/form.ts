@@ -24,6 +24,19 @@ export const txt = (v: FormDataEntryValue | null): string | null => {
   return s ? s : null;
 };
 
+/** Round to d decimal places. */
+export const round = (v: number, d: number) => {
+  const p = 10 ** d;
+  return Math.round(v * p) / p;
+};
+
+/** Escape %, _ and \ for a SQL LIKE pattern (use with ESCAPE '\\'). */
+export const escLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
+
+/** en-PK money/number display: 2 max decimals, blank for null. */
+export const fmtMoney = (n?: number | null) =>
+  n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
+
 /** Next "<prefix>-NNNN" voucher number from the existing rows' vNo values. */
 export function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
   const nums = rows

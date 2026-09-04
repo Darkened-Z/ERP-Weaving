@@ -13,7 +13,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, escLike, fmtMoney as formatNum } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +33,6 @@ const TRN_TYPES = [
   "CASH DEPOSIT",
   "RTGS",
 ];
-
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
-const formatNum = (n?: number | null) =>
-  n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
 async function saveVoucher(formData: FormData) {
   "use server";
@@ -416,7 +412,7 @@ export default async function BankReceiptPage({
     .from(schema.yarnCounts)
     .orderBy(schema.yarnCounts.countCode);
 
-  const filt = "%" + escapeLike(findFilter) + "%";
+  const filt = "%" + escLike(findFilter) + "%";
   const listConds = [eq(schema.transMain.vtype, VTYPE)];
   if (fyCode) listConds.push(eq(schema.transMain.fyCode, fyCode));
   if (findFilter) {

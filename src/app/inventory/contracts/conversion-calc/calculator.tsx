@@ -1,16 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { round } from "@/lib/form";
 
 const parseNum = (s: string): number => {
   if (!s) return 0;
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
-};
-
-const round = (v: number, d: number) => {
-  const p = 10 ** d;
-  return Math.round(v * p) / p;
 };
 
 const formatNum = (n: number, digits = 4): string => {

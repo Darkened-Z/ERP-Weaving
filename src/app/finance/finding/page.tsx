@@ -3,6 +3,7 @@ import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { and, desc, eq, gte, lte, inArray, sql, type SQL } from "drizzle-orm";
+import { escLike, fmtMoney as formatNum } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,6 @@ const VTYPE_ROUTE: Record<string, string> = {
   PC: "/finance/pc",
 };
 
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 const trim = (s?: string) => (s ?? "").trim();
 const numOrNull = (s?: string) => {
   const t = trim(s);
@@ -34,8 +34,6 @@ const numOrNull = (s?: string) => {
   const n = parseFloat(t);
   return Number.isFinite(n) ? n : null;
 };
-const formatNum = (n?: number | null) =>
-  n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
 export default async function FindingPage({
   searchParams,
@@ -92,8 +90,8 @@ export default async function FindingPage({
   const vtypeList: readonly string[] =
     vtype && VTYPES.includes(vtype as (typeof VTYPES)[number]) ? [vtype] : VTYPES;
 
-  const narrPat = narr ? `%${escapeLike(narr)}%` : "";
-  const chqPat = chq ? `%${escapeLike(chq)}%` : "";
+  const narrPat = narr ? `%${escLike(narr)}%` : "";
+  const chqPat = chq ? `%${escLike(chq)}%` : "";
 
   const detailExists = (extra: SQL) =>
     sql`EXISTS (SELECT 1 FROM ${schema.transDetail} d WHERE d.fy_code = ${schema.transMain.fyCode} AND d.vtype = ${schema.transMain.vtype} AND d.vno = ${schema.transMain.vno} AND ${extra})`;

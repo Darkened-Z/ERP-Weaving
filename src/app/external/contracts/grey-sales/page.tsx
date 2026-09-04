@@ -14,7 +14,7 @@ import { redirect } from "next/navigation";
 import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
-import { num, intVal } from "@/lib/form";
+import { num, intVal, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export default async function GreySalesContractPage({
   const params = await searchParams;
   const isAdding = params.adding === "1";
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = `%${escFind ?? ""}%`;
   const fParty = (params.fparty ?? "").trim();
   const fGrey = (params.fgrey ?? "").trim();

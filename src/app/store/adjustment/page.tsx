@@ -14,14 +14,13 @@ import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, txt } from "@/lib/form";
+import { num, txt, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
 const fmt = new Intl.NumberFormat("en-PK");
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
 const LINE_ROWS = 4;
 const TYPES = new Set(["ADJ", "DAMAGE"]);
@@ -312,7 +311,7 @@ export default async function AdjustmentPage({
   const params = await searchParams;
   const isAdding = params.adding === "1";
   const q = params.q?.trim() ?? "";
-  const escQ = q ? escapeLike(q) : "";
+  const escQ = q ? escLike(q) : "";
   const session = await getSession();
   const role = session?.roleName;
 

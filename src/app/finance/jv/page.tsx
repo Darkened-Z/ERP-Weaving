@@ -11,7 +11,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, txt } from "@/lib/form";
+import { num, txt, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +27,6 @@ const TRN_TYPES = [
   "ACCRUAL",
   "TRANSFER",
 ];
-
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
 type ParsedLine = {
   srno: number;
@@ -404,7 +402,7 @@ export default async function JournalVoucherPage({
   const isEditing = Number.isFinite(idParam) && idParam > 0;
   const isAdding = params.adding === "1";
   const findFilter = params.find?.trim() ?? "";
-  const escFind = findFilter ? escapeLike(findFilter) : "";
+  const escFind = findFilter ? escLike(findFilter) : "";
   const pat = escFind ? `%${escFind}%` : "";
 
   const session = await getSession();

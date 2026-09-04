@@ -15,7 +15,7 @@ import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
-import { num, intVal, txt } from "@/lib/form";
+import { num, intVal, txt, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,7 @@ export default async function PackiParchiPage({
   const isAdding = params.adding === "1";
 
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
 
   const parchis = findFilter

@@ -19,7 +19,7 @@ import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { acc } from "@/lib/gl-accounts";
-import { num, txt } from "@/lib/form";
+import { num, txt, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ export default async function YarnPurchaseVoucherPage({
   const isAdding = params.adding === "1";
 
   const findFilter = params.find?.trim();
-  const escFind = findFilter?.replace(/[\\%_]/g, (m) => "\\" + m);
+  const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
 
   const vouchers = findFilter
