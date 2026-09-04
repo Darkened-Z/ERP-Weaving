@@ -116,7 +116,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Godown accounts added under 1.01.25.01:** `.0037` FOLDING GREY STOCK, `.0038` REJECTION GREY STOCK (both created in Turso + local).
 
 ## Contracts (`inventory/contracts/*`, `external/contracts/*`)
-- **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: IGCC- numbering, inventory-only, separate from external GCC-. **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL).
+- **Grey Conversion (internal, `inventory/contracts/grey-conversion`)**: the EXTERNAL contract form ported verbatim — same fields, calcs (wt/mtr = ends ÷ 731.52 ÷ cal count, conv rate = rate/pick × pick + lakhai, gray rate = cost + conv), pickers (GreyQualityPicker, PartyCountGrid, CountPicker, product fill), print route (`[id]/print`), find filters. Domain bindings only: `int_grey_conversion_*` tables, **IGCC- numbering** (SUBSTR(cont_no, 6)), inventory URLs/nav, **Party** = `conversionDebtorPrefixes` (WVG + COMMERCIAL). Warp/weft grid = 4 rows like external but auto-extends when an older internal contract has rows past srNo 4 (old 9-row grid data preserved).
 - **Beam Ext W/S (`beam-ext-ws`)**: Converter Party = `conversionDebtorPrefixes`. **WT/Mtr = Ends ÷ 731.52 ÷ Cal Count** (no width division; matches grey conversion).
 
 ## GL posting — the delete-before-guard rule (systemic)
