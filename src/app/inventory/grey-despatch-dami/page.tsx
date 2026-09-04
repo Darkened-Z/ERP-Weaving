@@ -9,34 +9,9 @@ import { today } from "@/lib/time";
 import { ConfirmButton } from "@/components/confirm-button";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, intVal, txt, nextVNoFromRows } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
-
-function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
-  const nums = rows
-    .map((r) => {
-      const m = r.vNo?.match(new RegExp("^" + prefix + "-(\\d+)$"));
-      return m ? parseInt(m[1], 10) : 0;
-    })
-    .filter((n) => Number.isFinite(n));
-  const next = (nums.length ? Math.max(...nums) : 0) + 1;
-  return prefix + "-" + String(next).padStart(4, "0");
-}
 
 export default async function GreyDespatchDamiPage({
   searchParams,

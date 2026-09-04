@@ -13,36 +13,12 @@ import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, intVal, txt, nextVNoFromRows } from "@/lib/form";
+import { yarnStockGodownDesc } from "@/lib/godowns";
 
 const VTYPE_GL = "EXT";
 
 export const dynamic = "force-dynamic";
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
-
-function nextVNoFromRows(rows: { vNo: string }[], prefix: string): string {
-  const nums = rows
-    .map((r) => {
-      const m = r.vNo?.match(new RegExp("^" + prefix + "-(\\d+)$"));
-      return m ? parseInt(m[1], 10) : 0;
-    })
-    .filter((n) => Number.isFinite(n));
-  const next = (nums.length ? Math.max(...nums) : 0) + 1;
-  return prefix + "-" + String(next).padStart(4, "0");
-}
 
 export default async function WarpedBeamReceivingPage({
   searchParams,
@@ -123,22 +99,19 @@ export default async function WarpedBeamReceivingPage({
     parties.find((p) => /godown/i.test(p.description) && /(loaded\s*beam|beam\s*(loaded|stock))/i.test(p.description))?.description ?? "";
 
   // Net Weight Rate (Kg) auto-fill: live avg rate of the yarn-stock godown
-  // (GODOWN - YARN STOCK (WVG) `1.01.25.01.0001`) — Σ amount ÷ Σ lbs of yarn
-  // receipts into it, converted per-Kg (×2.20462). Recomputed on every load, never
-  // a stored constant; the field stays editable and a saved voucher keeps its rate.
-  const yarnStockGodownDesc =
-    parties.find((p) => String(p.code) === "1.01.25.01.0001")?.description ??
-    parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ??
-    "";
+  // (shared helper resolves it by CODE) — Σ amount ÷ Σ lbs of yarn receipts into
+  // it, converted per-Kg (×2.20462). Recomputed on every load, never a stored
+  // constant; the field stays editable and a saved voucher keeps its rate.
+  const yarnGodownDesc = yarnStockGodownDesc(parties);
   let godownYarnRateKg: number | null = null;
-  if (yarnStockGodownDesc) {
+  if (yarnGodownDesc) {
     const [agg] = await db
       .select({
         lbs: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN 0 ELSE ${schema.intYarnReceipt.qtyLbs} END),0)`,
         amt: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType}='RETN' THEN 0 ELSE ${schema.intYarnReceipt.amount} END),0)`,
       })
       .from(schema.intYarnReceipt)
-      .where(eq(schema.intYarnReceipt.yarnPartyTo, yarnStockGodownDesc));
+      .where(eq(schema.intYarnReceipt.yarnPartyTo, yarnGodownDesc));
     if ((agg?.lbs ?? 0) > 0 && (agg?.amt ?? 0) > 0) {
       godownYarnRateKg = Math.round(((agg!.amt / agg!.lbs) * 2.20462) * 100) / 100;
     }

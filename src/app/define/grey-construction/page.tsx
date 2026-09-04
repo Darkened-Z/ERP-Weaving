@@ -6,14 +6,9 @@ import { db, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
 
 export default async function GreyConstructionPage({
   searchParams,

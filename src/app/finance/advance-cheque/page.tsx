@@ -10,6 +10,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, intVal, txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -25,20 +26,6 @@ const BANK_PREFIX = "1.01.15.02.";
 // Per-party "CHQ FAILLED …" dishonour accounts (Cr on bounce).
 const DISHONOUR_PREFIX = "1.01.15.04.";
 
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 const formatNum = (n?: number | null) =>
   n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);

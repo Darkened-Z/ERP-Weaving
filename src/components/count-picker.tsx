@@ -49,7 +49,10 @@ export function CountPicker({
     return () => document.removeEventListener("keydown", onKey, true);
   }, [open, countFieldPattern]);
 
-  const partyDesc = () => (document.querySelector<HTMLInputElement>(`input[name="${partyField}"]`)?.value ?? "").trim();
+  const partyDesc = () =>
+    typeof document === "undefined"
+      ? ""
+      : (document.querySelector<HTMLInputElement>(`input[name="${partyField}"]`)?.value ?? "").trim();
   const currentData = () => {
     const code = partyCodeByDesc[partyDesc()];
     return code ? partyCountData[code] : undefined;

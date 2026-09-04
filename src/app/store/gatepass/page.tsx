@@ -16,21 +16,11 @@ import {
 } from "@/lib/approvals";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
 const fmt = new Intl.NumberFormat("en-PK");
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 

@@ -13,14 +13,9 @@ import { redirect } from "next/navigation";
 import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
+import { num } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
-
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
 
 const WEAVE_OPTIONS = ["1/1", "PLAIN", "TWILL", "SATIN", "DRILL"] as const;
 

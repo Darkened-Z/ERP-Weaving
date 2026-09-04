@@ -6,15 +6,11 @@ import { getSession, requireSession } from "@/lib/auth";
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
 const BASE = "/settings/company-profile";
-
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 
 const ERR_MSG: Record<string, string> = {
   admin_only: "Only ADMIN can edit company profile.",

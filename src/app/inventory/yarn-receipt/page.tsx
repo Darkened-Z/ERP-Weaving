@@ -17,23 +17,11 @@ import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { num, intVal, txt } from "@/lib/form";
+import { yarnStockGodownDesc, godownSizingOpts, partyCountRateMap } from "@/lib/godowns";
 
 export const dynamic = "force-dynamic";
 
-const num = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseFloat(v as string);
-  return Number.isFinite(n) ? n : null;
-};
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 const round = (v: number, d: number) => {
   const p = 10 ** d;
   return Math.round(v * p) / p;
@@ -167,16 +155,10 @@ export default async function YarnReceiptPage({
     ? parties.filter((p) => underAnyPrefix(p.code, convPrefixes)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
     : partyOpts;
 
-  // Delivered-TO defaults to the yarn-stock godown — resolved by its COA code
-  // `1.01.25.01.0001` (the description regex alone lands on GODOWN - REWINDER
-  // YARN STOCK first, which sorts before GODOWN - YARN STOCK (WVG)).
-  const yarnGodownDesc =
-    parties.find((p) => String(p.code) === "1.01.25.01.0001")?.description ??
-    parties.find((p) => /godown/i.test(p.description) && /yarn\s*stock/i.test(p.description))?.description ?? "";
-  // The field stays changeable: every godown / sizing account is selectable.
-  const godownOpts = parties
-    .filter((p) => String(p.code).startsWith("1.01.25.01.") || /godown|sizing/i.test(p.description))
-    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Delivered-TO defaults to the yarn-stock godown (shared helper resolves it by
+  // CODE); the field stays changeable — every godown / sizing account is selectable.
+  const yarnGodownDesc = yarnStockGodownDesc(parties);
+  const godownOpts = godownSizingOpts(parties);
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
   const fmtN = (n: number | null | undefined, d = 0) =>
@@ -260,26 +242,13 @@ export default async function YarnReceiptPage({
     };
   }
 
-  // Rate/Lbs auto on Party + Count pick: the (party, count) rate from party_counts
-  // (count joined via yarn_counts.id → its text code), falling back to the party's
-  // running purchase-contract rate for that count. Keyed "<party desc>||<count code>".
-  const pcRateRows = await db
-    .select({
-      partyCode: schema.partyCounts.partyCode,
-      countCode: schema.yarnCounts.countCode,
-      rate: schema.partyCounts.ratePerLbs,
-    })
-    .from(schema.partyCounts)
-    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
-  const partyCountRateMap: Record<string, number> = {};
-  for (const r of pcRateRows) {
-    if (!r.countCode || r.rate == null) continue;
-    partyCountRateMap[`${partyDescByCode[r.partyCode] ?? r.partyCode}||${r.countCode}`] = r.rate;
-  }
+  // Rate/Lbs auto on Party + Count pick: the shared party_counts rate map, with the
+  // party's running purchase-contract rate as fallback for pairs it doesn't cover.
+  const pcMap = await partyCountRateMap(parties);
   for (const c of purContracts) {
     if (!c.partyCode || !c.countCode || c.ratePerLbs == null) continue;
     const key = `${partyDescByCode[c.partyCode] ?? c.partyCode}||${c.countCode}`;
-    if (!(key in partyCountRateMap)) partyCountRateMap[key] = c.ratePerLbs;
+    if (!(key in pcMap)) pcMap[key] = c.ratePerLbs;
   }
 
   // Server-computed stock for the selected voucher's (count, party, location).
@@ -660,7 +629,7 @@ export default async function YarnReceiptPage({
               <PartyCountRate
                 partyField="party"
                 countField="countCode"
-                map={partyCountRateMap}
+                map={pcMap}
                 targets={["ratePerLbs", "ratePerLbsTo"]}
               />
 

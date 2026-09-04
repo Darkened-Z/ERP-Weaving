@@ -9,6 +9,7 @@ import { today } from "@/lib/time";
 import { loadChequeRegister, type ChequeDisplay, type ChequeEntry } from "@/lib/cheque-register";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { intVal, txt } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
@@ -17,15 +18,6 @@ const BANK_PREFIX = "1.01.15.02.";
 const ADV_PREFIX = "1.01.15.03.";
 const MANUAL = new Set(["STOPPED", "CANCELED", "MISSED"]);
 
-const intVal = (v: FormDataEntryValue | null): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = parseInt(v as string, 10);
-  return Number.isFinite(n) ? n : null;
-};
-const txt = (v: FormDataEntryValue | null): string | null => {
-  const s = (v as string)?.trim();
-  return s ? s : null;
-};
 const fmt = (n: number) => new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
 async function saveBook(formData: FormData) {
