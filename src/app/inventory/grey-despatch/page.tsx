@@ -176,12 +176,22 @@ export default async function GreyDespatchPage({
     .from(schema.yarnBrands)
     .orderBy(schema.yarnBrands.name);
 
-  // Running conv contracts + warp/weft rows for count-grid auto-populate.
-  const contracts = await db
+  // Running conv contracts from BOTH internal (IGCC) + external (GCC) tables —
+  // the mill's live contracts are external, so the picker must show both.
+  const intContracts = await db
     .select()
     .from(schema.intGreyConversionContract)
     .where(eq(schema.intGreyConversionContract.status, "R"))
     .orderBy(schema.intGreyConversionContract.contNo);
+  const extContracts = await db
+    .select()
+    .from(schema.extGreyConvContract)
+    .where(eq(schema.extGreyConvContract.status, "R"))
+    .orderBy(schema.extGreyConvContract.contNo);
+  const contracts = [
+    ...intContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, loomType: c.loomType, weaveFrame: c.weaveFrame })),
+    ...extContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, loomType: c.loomType, weaveFrame: c.weaveFrame })),
+  ];
   const contractOpts = contracts.map((c) => ({
     value: c.contNo,
     label: `${c.contNo} — ${c.party ?? ""}`,
@@ -206,20 +216,6 @@ export default async function GreyDespatchPage({
     };
     contractPartyMap[c.contNo] = c.party ?? null;
   }
-  const warpRows = contracts.length
-    ? await db
-        .select()
-        .from(schema.intGreyConversionWarp)
-        .where(inArray(schema.intGreyConversionWarp.contractId, contracts.map((c) => c.id)))
-        .orderBy(schema.intGreyConversionWarp.contractId, schema.intGreyConversionWarp.srNo)
-    : [];
-  const weftRows = contracts.length
-    ? await db
-        .select()
-        .from(schema.intGreyConversionWeft)
-        .where(inArray(schema.intGreyConversionWeft.contractId, contracts.map((c) => c.id)))
-        .orderBy(schema.intGreyConversionWeft.contractId, schema.intGreyConversionWeft.srNo)
-    : [];
   const contractRowsByContNo: Record<string, {
     count?: string | null;
     calCount?: number | null;
@@ -228,21 +224,29 @@ export default async function GreyDespatchPage({
     wtPerMtr?: number | null;
     costPerMtr?: number | null;
   }[]> = {};
-  const idToContNo = new Map(contracts.map((c) => [c.id, c.contNo]));
-  const push = (r: typeof warpRows[number]) => {
-    const cn = idToContNo.get(r.contractId);
-    if (!cn) return;
-    (contractRowsByContNo[cn] ||= []).push({
-      count: r.count ?? null,
-      calCount: r.calCount ?? null,
-      ends: r.ends ?? null,
-      ratePerLbs: r.ratePerLbs ?? null,
-      wtPerMtr: r.wtPerMtr ?? null,
-      costPerMtr: r.costPerMtr ?? null,
-    });
+  type CntRow = { contractId: number; count: string | null; calCount: number | null; ends: number | null; ratePerLbs: number | null; wtPerMtr: number | null; costPerMtr: number | null };
+  const pushRows = async (
+    warpTbl: typeof schema.intGreyConversionWarp | typeof schema.extGreyConvWarp,
+    weftTbl: typeof schema.intGreyConversionWeft | typeof schema.extGreyConvWeft,
+    ids: number[],
+    id2cn: Map<number, string>,
+  ) => {
+    if (!ids.length) return;
+    const rows = [
+      ...(await db.select().from(warpTbl).where(inArray(warpTbl.contractId, ids))),
+      ...(await db.select().from(weftTbl).where(inArray(weftTbl.contractId, ids))),
+    ] as unknown as CntRow[];
+    for (const r of rows) {
+      const cn = id2cn.get(r.contractId);
+      if (!cn) continue;
+      (contractRowsByContNo[cn] ||= []).push({
+        count: r.count ?? null, calCount: r.calCount ?? null, ends: r.ends ?? null,
+        ratePerLbs: r.ratePerLbs ?? null, wtPerMtr: r.wtPerMtr ?? null, costPerMtr: r.costPerMtr ?? null,
+      });
+    }
   };
-  for (const w of warpRows) push(w);
-  for (const w of weftRows) push(w);
+  await pushRows(schema.intGreyConversionWarp, schema.intGreyConversionWeft, intContracts.map((c) => c.id), new Map(intContracts.map((c) => [c.id, c.contNo])));
+  await pushRows(schema.extGreyConvWarp, schema.extGreyConvWeft, extContracts.map((c) => c.id), new Map(extContracts.map((c) => [c.id, c.contNo])));
 
   // Prior distinct values → datalists.
   const priorSup = await db

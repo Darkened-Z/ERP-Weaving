@@ -6,6 +6,7 @@ import { RowAutoFill, AutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
 import { ProductionSetCalc } from "@/components/production-calc";
 import { ThanSerialLive } from "@/components/than-serial-live";
+import { loadConvContracts } from "@/lib/conv-contracts";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
@@ -249,29 +250,9 @@ export default async function DailyProductionPage({
     };
   }
 
-  // Grey conversion contract LOV (header) → product quality / brand / party.
-  const convContracts = await db
-    .select({
-      id: schema.intGreyConversionContract.id,
-      contNo: schema.intGreyConversionContract.contNo,
-      party: schema.intGreyConversionContract.party,
-      designNo: schema.intGreyConversionContract.designNo,
-      productName: schema.intGreyConversionContract.productName,
-      productQuality: schema.intGreyConversionContract.productQuality,
-      grayQltyCode: schema.intGreyConversionContract.grayQltyCode,
-      width: schema.intGreyConversionContract.width,
-      read: schema.intGreyConversionContract.read,
-      pick: schema.intGreyConversionContract.pick,
-      qtyMtr: schema.intGreyConversionContract.qtyMtr,
-    })
-    .from(schema.intGreyConversionContract)
-    .where(eq(schema.intGreyConversionContract.status, "R"))
-    .orderBy(desc(schema.intGreyConversionContract.contDate));
-  const warpBrandRows = await db
-    .select({ contractId: schema.intGreyConversionWarp.contractId, brand: schema.intGreyConversionWarp.brand })
-    .from(schema.intGreyConversionWarp);
-  const brandByContract = new Map<number, string>();
-  for (const w of warpBrandRows) if (w.brand && !brandByContract.has(w.contractId)) brandByContract.set(w.contractId, w.brand);
+  // Grey conversion contract LOV — from BOTH internal (IGCC) and external (GCC)
+  // tables (the mill's live contracts are external), so the picker is never empty.
+  const convContracts = await loadConvContracts();
   const contractPickerRows = convContracts.map((c) => {
     const q = c.productQuality ?? c.productName ?? c.grayQltyCode ?? "";
     return {
@@ -286,7 +267,7 @@ export default async function DailyProductionPage({
         width: c.width ?? "",
         readPick: c.read != null && c.pick != null ? `${c.read}×${c.pick}` : "",
         qty: c.qtyMtr ?? "",
-        brand: brandByContract.get(c.id) ?? "",
+        brand: c.brand ?? "",
       },
     };
   });
@@ -304,7 +285,7 @@ export default async function DailyProductionPage({
   for (const c of convContracts) {
     contractFillMap[c.contNo] = {
       productQuality: c.productQuality ?? c.productName ?? c.grayQltyCode ?? "",
-      productBrand: brandByContract.get(c.id) ?? "",
+      productBrand: c.brand ?? "",
       convContParty: c.party ?? "",
     };
   }
@@ -594,18 +575,10 @@ export default async function DailyProductionPage({
     const convRateByCont = new Map<string, number>();
     const partyByCont = new Map<string, string>();
     if (foldingContNos.length) {
-      const crows = await db
-        .select({
-          contNo: schema.intGreyConversionContract.contNo,
-          conv: schema.intGreyConversionContract.convRatePerMtr,
-          gray: schema.intGreyConversionContract.grayRatePerMtr,
-          rm: schema.intGreyConversionContract.rateMtr,
-          party: schema.intGreyConversionContract.party,
-        })
-        .from(schema.intGreyConversionContract)
-        .where(inArray(schema.intGreyConversionContract.contNo, foldingContNos));
-      for (const r of crows) {
-        convRateByCont.set(r.contNo, r.conv ?? r.gray ?? r.rm ?? 0);
+      const wanted = new Set(foldingContNos);
+      for (const r of await loadConvContracts()) {
+        if (!wanted.has(r.contNo)) continue;
+        convRateByCont.set(r.contNo, r.convRatePerMtr ?? r.grayRatePerMtr ?? r.rateMtr ?? 0);
         if (r.party) partyByCont.set(r.contNo, r.party.trim());
       }
     }
