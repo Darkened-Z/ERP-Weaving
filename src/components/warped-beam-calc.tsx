@@ -36,9 +36,11 @@ export function WarpedBeamCalc() {
           if (rate) rate.value = String(sizingRate);
           if (conv && !conv.value) conv.value = String(sizingRate);
         }
-        // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count × Sizing Rate.
+        // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count × Rate.
+        // Rate = the row's own Rate when typed, else the header Sizing Rate.
         if (amount && bl?.value && ends?.value && rc > 0) {
-          set(amount, (val(bl) * val(ends)) / 1693.2 / rc * sizingRate);
+          const r = val(rate) || sizingRate;
+          set(amount, (val(bl) * val(ends)) / 1693.2 / rc * r);
         }
         amountSum += val(amount);
         lengthSum += val(bl);

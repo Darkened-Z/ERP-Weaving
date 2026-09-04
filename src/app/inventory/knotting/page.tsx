@@ -274,7 +274,7 @@ async function saveKnotting(formData: FormData) {
           .values(lines.map((l) => ({ ...l, knottingId: id })));
       }
 
-      // Mount each picked beam on its loom (LOADED → RUNNING). Old lines were
+      // Mount each picked beam on its loom (LOADED → KNOTTING). Old lines were
       // reversed above, so this re-applies the mount for the current lines.
       const [billRow] = await tx
         .select({ vNo: schema.intKnottingSarning.vNo })
@@ -290,7 +290,7 @@ async function saveKnotting(formData: FormData) {
           await tx
             .update(schema.beams)
             .set({
-              statusWrk: "RUNNING",
+              statusWrk: "KNOTTING",
               loomNo,
               shed: l.shdHash,
               knVno: billRow?.vNo ?? null,
@@ -388,7 +388,7 @@ async function saveKnotting(formData: FormData) {
             .values(lines.map((l) => ({ ...l, knottingId: insertedId })));
         }
 
-        // Mount each picked beam on its loom (LOADED → RUNNING).
+        // Mount each picked beam on its loom (LOADED → KNOTTING).
         for (const l of lines) {
           const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
           if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
@@ -399,7 +399,7 @@ async function saveKnotting(formData: FormData) {
             await tx
               .update(schema.beams)
               .set({
-                statusWrk: "RUNNING",
+                statusWrk: "KNOTTING",
                 loomNo,
                 shed: l.shdHash,
                 knVno: vNo,
@@ -591,7 +591,7 @@ async function mountBeam(formData: FormData) {
     await tx
       .update(schema.beams)
       .set({
-        statusWrk: "RUNNING",
+        statusWrk: "KNOTTING",
         loomNo,
         shed: line.shdHash!,
         knVno: row.vNo,
@@ -1387,7 +1387,7 @@ export default async function KnottingPage({
                   </div>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] mt-2">
-                  Note:- Beam picked from LOADED stock; on Save the beam mounts on its loom (LOADED → RUNNING). Beam Length, K.Date, Loom#, Shr.Age update only via &apos;U&apos;.
+                  Note:- Beam picked from LOADED stock; on Save the beam mounts on its loom (LOADED → KNOTTING). Beam Length, K.Date, Loom#, Shr.Age update only via &apos;U&apos;.
                 </div>
               </div>
 

@@ -37,6 +37,7 @@ export async function loadChequeRegister(
       chqNo: schema.transDetail.chqNo,
       chqDate: schema.transDetail.chqDate,
       vtype: schema.transDetail.vtype,
+      vno: schema.transDetail.vno,
       vdate: schema.transMain.vdate,
       trnType: schema.transMain.trnType,
       accCode: schema.transDetail.accCode,
@@ -54,13 +55,25 @@ export async function loadChequeRegister(
     )
     .where(isNotNull(schema.transDetail.chqNo));
 
+  // Distinct-voucher tallies per cheque no — a bounced cheque can be RE-ISSUED
+  // under the same number, so status compares counts instead of mere existence:
+  // clear present → Cleared; more issues than bounces → Issued (active again);
+  // otherwise a bounce ended it → Returned.
   const advClear = new Set<string>();
   const advBounce = new Set<string>();
+  const issueVnos = new Map<string, Set<number>>();
+  const bounceVnos = new Map<string, Set<number>>();
   for (const l of lines) {
     const chq = (l.chqNo ?? "").trim();
     if (!chq || l.vtype !== "ADV") continue;
     if (l.trnType === "CLEAR") advClear.add(chq);
-    if (l.trnType === "BOUNCE") advBounce.add(chq);
+    if (l.trnType === "BOUNCE") {
+      advBounce.add(chq);
+      (bounceVnos.get(chq) ?? bounceVnos.set(chq, new Set()).get(chq)!).add(l.vno);
+    }
+    if (l.trnType === "ISSUE") {
+      (issueVnos.get(chq) ?? issueVnos.set(chq, new Set()).get(chq)!).add(l.vno);
+    }
   }
 
   const reg = new Map<string, ChequeEntry>();
@@ -71,7 +84,15 @@ export async function loadChequeRegister(
     const amount = (l.debit ?? 0) + (l.credit ?? 0);
     const existing = reg.get(chq);
     if (existing && existing.amount >= amount) continue;
-    const derived: ChequeDerived = advBounce.has(chq) ? "Returned" : advClear.has(chq) ? "Cleared" : "Issued";
+    const issues = issueVnos.get(chq)?.size ?? 0;
+    const bounces = bounceVnos.get(chq)?.size ?? 0;
+    const derived: ChequeDerived = advClear.has(chq)
+      ? "Cleared"
+      : issues > bounces
+        ? "Issued"
+        : advBounce.has(chq)
+          ? "Returned"
+          : "Issued";
     reg.set(chq, {
       chqNo: chq,
       chqDate: (l.chqDate ?? l.vdate ?? "").trim(),

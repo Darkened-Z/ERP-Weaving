@@ -137,7 +137,7 @@ export default async function EmptyBeamStockPage({
           <h1 className="page-title">Empty Beam Stock</h1>
         </div>
 
-        <div className="grid grid-cols-3 gap-px bg-black border-2 border-black mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border-2 border-black mb-8">
           <div className="bg-white p-4">
             <div className="mono text-xl font-bold">{fmt(statMap.get("EMPTY") ?? 0)}</div>
             <div className="stat-label">Empty</div>
@@ -147,8 +147,12 @@ export default async function EmptyBeamStockPage({
             <div className="stat-label">Loaded</div>
           </div>
           <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{fmt(statMap.get("RUNNING") ?? 0)}</div>
-            <div className="stat-label">Running</div>
+            <div className="mono text-xl font-bold">{fmt(statMap.get("KNOTTING") ?? 0)}</div>
+            <div className="stat-label">Knotting</div>
+          </div>
+          <div className="bg-white p-4">
+            <div className="mono text-xl font-bold">{fmt((statMap.get("PRODUCTION") ?? 0) + (statMap.get("RUNNING") ?? 0))}</div>
+            <div className="stat-label">Production</div>
           </div>
         </div>
 
