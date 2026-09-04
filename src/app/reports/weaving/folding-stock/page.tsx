@@ -3,6 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { and, eq, gte, lte, lt, sql } from "drizzle-orm";
 import { fmt, sixMonthsAgo, todayIso } from "../../_shared";
+import { loadConvContracts } from "@/lib/conv-contracts";
 
 export const dynamic = "force-dynamic";
 
@@ -18,16 +19,9 @@ export default async function FoldingStockPage({
   const from = p.from?.trim() || sixMonthsAgo();
   const to = p.to?.trim() || todayIso();
 
-  const contracts = await db
-    .select({
-      contNo: schema.intGreyConversionContract.contNo,
-      party: schema.intGreyConversionContract.party,
-      quality: schema.intGreyConversionContract.productQuality,
-      productName: schema.intGreyConversionContract.productName,
-      designNo: schema.intGreyConversionContract.designNo,
-    })
-    .from(schema.intGreyConversionContract)
-    .orderBy(schema.intGreyConversionContract.party, schema.intGreyConversionContract.contNo);
+  const contracts = (await loadConvContracts())
+    .map((c) => ({ contNo: c.contNo, party: c.party, quality: c.productQuality, productName: c.productName, designNo: c.designNo }))
+    .sort((a, b) => (a.party ?? "").localeCompare(b.party ?? "") || a.contNo.localeCompare(b.contNo));
 
   const prodSum = async (before: boolean) =>
     db
