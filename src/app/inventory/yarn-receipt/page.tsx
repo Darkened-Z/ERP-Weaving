@@ -26,7 +26,6 @@ export const dynamic = "force-dynamic";
 const ERROR_MESSAGES: Record<string, string> = {
   code_exists: "Voucher number already exists. Try again.",
   qty_required: "Enter Bags or Qty (Lbs) greater than zero.",
-  purcont_required: "Pur.Cont No is required.",
   lbs_mismatch: "Header Qty Lbs does not match the carton total. Clear it to auto-fill, or fix the cartons.",
   period_locked: "Period is locked. Cannot save for this date.",
   admin_only: "Only ADMIN can delete vouchers.",
@@ -307,10 +306,8 @@ export default async function YarnReceiptPage({
 
     const vDate = txt(formData.get("vDate")) ?? today();
     await assertPeriodOpen(vDate, "INVENTORY");
+    // Pur.Cont No is OPTIONAL (owner: receipts may come in without a purchase contract)
     const purContNo = txt(formData.get("purContNo"));
-    if (!purContNo) {
-      redirect(`/inventory/yarn-receipt${backQ}&error=purcont_required`);
-    }
 
     // Total Bags is a read-only client total — recompute server-side from Warp+Weft
     // bags so a stale/tampered value can't skew the stock aggregate.
@@ -715,7 +712,7 @@ export default async function YarnReceiptPage({
                         />
                       </div>
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Pur.Cont No (F9) *</label>
+                        <label className="label block mb-1">Pur.Cont No (F9)</label>
                         <FindingPicker
                           name="purContNo"
                           defaultValue={editing?.purContNo ?? ""}
