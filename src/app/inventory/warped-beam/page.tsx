@@ -935,7 +935,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
 
                 <div className="lg:col-span-4">
-                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(Bm Sale Party ke — inventory contracts)</span></label>
+                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(Bm Sale Party's — inventory contracts)</span></label>
                   <Combobox
                     name="sizingContNo"
                     options={sizingContractOpts}
@@ -951,7 +951,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-12">
                   <div className="text-[11px] mono text-[var(--muted)] border border-dashed border-[var(--border-light)] px-3 py-1 bg-gray-50">
-                    Sizing formula:&nbsp; <b>Amount = Beam Length × Ends ÷ 1693.20 ÷ Result Count SZG × Sizing Rate</b> <span className="text-[var(--muted)]">(Result Count SZG khali ho to division skip — amount phir bhi banega)</span>
+                    Sizing formula:&nbsp; <b>Amount = Beam Length × Ends ÷ 1693.20 ÷ Result Count SZG × Sizing Rate</b> <span className="text-[var(--muted)]">(Result Count SZG optional — leave blank to skip the division; amount still computes)</span>
                   </div>
                 </div>
               </div>
