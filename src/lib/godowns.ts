@@ -26,10 +26,16 @@ export function yarnStockGodownDesc(parties: CoaParty[]): string {
   );
 }
 
-/** Every godown / sizing account, as Combobox options (value = description). */
-export function godownSizingOpts(parties: CoaParty[]): { value: string; label: string }[] {
+/**
+ * Every GODOWN account (code under 1.01.25.01), as Combobox options
+ * (value = description). Location pickers on yarn receipt / yarn transfer are
+ * godowns only — sizing and CHQ-FAILED accounts (1.01.15.04, 3.03.06.02, …) are
+ * intentionally excluded, so the filter is by CODE, never by a "godown|sizing"
+ * name match (which used to pull in every "…SIZING" party).
+ */
+export function godownLocationOpts(parties: CoaParty[]): { value: string; label: string }[] {
   return parties
-    .filter((p) => String(p.code).startsWith("1.01.25.01.") || /godown|sizing/i.test(p.description))
+    .filter((p) => String(p.code).startsWith("1.01.25.01."))
     .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
 }
 
