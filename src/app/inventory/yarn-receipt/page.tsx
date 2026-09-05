@@ -8,7 +8,7 @@ import { AutoFill, RowCalc } from "@/components/auto-fill";
 import { PartyCountRate } from "@/components/party-count-rate";
 import { AutoAmount } from "@/components/auto-amount";
 import { YarnReceiptCounts } from "@/components/yarn-receipt-counts";
-import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
+import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -19,7 +19,7 @@ import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike, round } from "@/lib/form";
-import { yarnStockGodownDesc, godownSizingOpts, partyCountRateMap } from "@/lib/godowns";
+import { yarnStockGodownDesc, godownLocationOpts, partyCountRateMap } from "@/lib/godowns";
 
 export const dynamic = "force-dynamic";
 
@@ -144,23 +144,19 @@ export default async function YarnReceiptPage({
     .from(schema.yarnBlends)
     .orderBy(schema.yarnBlends.description);
 
-  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyDescByCode: Record<string, string> = {};
   for (const p of parties) partyDescByCode[p.code] = p.description;
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
-  // Delivered-FROM party is limited to the DEBTORS conversion heads (WVG 1.01.01.01 +
-  // COMMERCIAL 1.01.01.19) via the shared helper — same set as the grey-conversion
-  // contract + beam-ext-ws.
-  const convPrefixes = await conversionDebtorPrefixes();
-  const convPartyOpts = convPrefixes.length
-    ? parties.filter((p) => underAnyPrefix(p.code, convPrefixes)).map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
-    : partyOpts;
+  // Delivered-FROM party: DEBTORS-CONVERSION (WVG) head 1.01.01.01 only.
+  const convPartyOpts = parties
+    .filter((p) => String(p.code).startsWith(WVG_CONVERSION_PREFIX))
+    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
 
-  // Delivered-TO defaults to the yarn-stock godown (shared helper resolves it by
-  // CODE); the field stays changeable — every godown / sizing account is selectable.
+  // Delivered-TO is a GODOWN account only (1.01.25.01); defaults to the yarn-stock
+  // godown (helper resolves it by CODE), field stays changeable.
   const yarnGodownDesc = yarnStockGodownDesc(parties);
-  const godownOpts = godownSizingOpts(parties);
+  const godownOpts = godownLocationOpts(parties);
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
   const fmtN = (n: number | null | undefined, d = 0) =>
@@ -737,7 +733,7 @@ export default async function YarnReceiptPage({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-6">
                         <label className="label block mb-1">Yarn Party To <span className="text-[9px] text-[var(--muted)]">(godown yarn stock — changeable)</span></label>
-                        <Combobox name="yarnPartyTo" options={godownOpts} defaultValue={editing?.yarnPartyTo || yarnGodownDesc} placeholder="Godown / sizing…" />
+                        <Combobox name="yarnPartyTo" options={godownOpts} defaultValue={editing?.yarnPartyTo || yarnGodownDesc} placeholder="Godown…" />
                       </div>
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Time</label>

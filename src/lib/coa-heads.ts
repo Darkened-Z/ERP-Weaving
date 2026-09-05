@@ -22,3 +22,11 @@ export async function conversionDebtorPrefixes(): Promise<string[]> {
 export function underAnyPrefix(code: string, prefixes: string[]): boolean {
   return prefixes.some((p) => code.startsWith(p));
 }
+
+/**
+ * The single DEBTORS-CONVERSION (WVG) head prefix `1.01.01.01.`. The inventory
+ * party pickers (yarn receipt "delivered-from", yarn transfer from/to) list ONLY
+ * parties under this head — narrower than {@link conversionDebtorPrefixes}, which
+ * also includes COMMERCIAL for the conversion-contract pickers.
+ */
+export const WVG_CONVERSION_PREFIX = "1.01.01.01.";

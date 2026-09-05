@@ -16,7 +16,8 @@ import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike, round } from "@/lib/form";
-import { yarnStockGodownDesc, godownSizingOpts, partyCountRateMap } from "@/lib/godowns";
+import { yarnStockGodownDesc, godownLocationOpts, partyCountRateMap } from "@/lib/godowns";
+import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 
 export const dynamic = "force-dynamic";
 
@@ -97,27 +98,15 @@ export default async function YarnTransferPage({
     .where(sql`${schema.intYarnTransfer.yarnLotNo} IS NOT NULL AND ${schema.intYarnTransfer.yarnLotNo} <> ''`);
   const priorLots = priorLotsRows.map((r) => r.v).filter((v): v is string => !!v);
 
-  const priorLocFromRows = await db
-    .selectDistinct({ v: schema.intYarnTransfer.locationFrom })
-    .from(schema.intYarnTransfer)
-    .where(sql`${schema.intYarnTransfer.locationFrom} IS NOT NULL AND ${schema.intYarnTransfer.locationFrom} <> ''`);
-  const priorLocToRows = await db
-    .selectDistinct({ v: schema.intYarnTransfer.locationTo })
-    .from(schema.intYarnTransfer)
-    .where(sql`${schema.intYarnTransfer.locationTo} IS NOT NULL AND ${schema.intYarnTransfer.locationTo} <> ''`);
-  const locSet = new Set<string>();
-  for (const r of priorLocFromRows) if (r.v) locSet.add(r.v);
-  for (const r of priorLocToRows) if (r.v) locSet.add(r.v);
-  const locOpts = Array.from(locSet)
-    .sort()
-    .map((v) => ({ value: v, label: v }));
-
   const brandRows = await db
     .select({ name: schema.yarnBrands.name })
     .from(schema.yarnBrands)
     .orderBy(schema.yarnBrands.name);
 
-  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Transfer From/To party: only DEBTORS-CONVERSION (WVG) head 1.01.01.01 parties.
+  const partyOpts = parties
+    .filter((p) => String(p.code).startsWith(WVG_CONVERSION_PREFIX))
+    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
@@ -149,10 +138,10 @@ export default async function YarnTransferPage({
     stockLbs = agg[0]?.lbs ?? 0;
   }
 
-  // Location From defaults to the yarn-stock godown (shared helper resolves it by
-  // CODE); every godown / sizing account is selectable in both location pickers.
+  // Location pickers are GODOWN accounts only (1.01.25.01); From defaults to the
+  // yarn-stock godown (helper resolves it by CODE).
   const yarnGodownDesc = yarnStockGodownDesc(parties);
-  const godownOpts = godownSizingOpts(parties);
+  const godownOpts = godownLocationOpts(parties);
   const shedRows = await db
     .selectDistinct({ shed: schema.looms.shed })
     .from(schema.looms)
@@ -165,15 +154,8 @@ export default async function YarnTransferPage({
   const locFromOpts = [
     ...(yarnGodownDesc ? [{ value: yarnGodownDesc, label: yarnGodownDesc }] : []),
     ...godownOpts.filter((o) => o.value !== yarnGodownDesc),
-    ...locOpts.filter((o) => o.value !== yarnGodownDesc && !godownOpts.some((g) => g.value === o.value)),
   ];
-  const locToOpts = [
-    ...shedOpts,
-    ...godownOpts,
-    ...locOpts.filter(
-      (o) => !shedOpts.some((s) => s.value === o.value) && !godownOpts.some((g) => g.value === o.value),
-    ),
-  ];
+  const locToOpts = [...shedOpts, ...godownOpts];
 
   // Per-count godown stock (net RCPT−RETN) + avg purchase rate, from yarn receipts
   // INTO the godown — shown/filled when a count is picked.
