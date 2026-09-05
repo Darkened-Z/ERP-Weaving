@@ -93,6 +93,7 @@ export default async function DailyProductionPage({
       statusWrk: schema.beams.statusWrk,
       contractNo: schema.beams.contractNo,
       loomNo: schema.beams.loomNo,
+      shed: schema.beams.shed,
       knVno: schema.beams.knVno,
     })
     .from(schema.beams)
@@ -210,8 +211,18 @@ export default async function DailyProductionPage({
     { key: "beamLength", label: "Length", width: 75, align: "right" as const },
     { key: "contNo", label: "Cont No", width: 100 },
   ];
-  const beamByLoom = new Map<number, (typeof runningBeams)[number]>();
-  for (const b of runningBeams) if (b.loomNo != null && !beamByLoom.has(b.loomNo)) beamByLoom.set(b.loomNo, b);
+  // Loom → mounted beam. Loom numbers REPEAT across sheds (shed 1 loom 1, shed 2
+  // loom 1, …), so the lookup is scoped by "shed|loomNo" first, with a loomNo-only
+  // fallback for legacy beams mounted before the shed was stamped.
+  const beamByLoom = new Map<string, (typeof runningBeams)[number]>();
+  const beamByLoomNo = new Map<number, (typeof runningBeams)[number]>();
+  for (const b of runningBeams) {
+    if (b.loomNo == null) continue;
+    if (b.shed && !beamByLoom.has(`${b.shed}|${b.loomNo}`)) beamByLoom.set(`${b.shed}|${b.loomNo}`, b);
+    if (!beamByLoomNo.has(b.loomNo)) beamByLoomNo.set(b.loomNo, b);
+  }
+  const beamForLoom = (shed: string | null, loomNo: number) =>
+    (shed && beamByLoom.get(`${shed}|${loomNo}`)) || beamByLoomNo.get(loomNo);
 
   // Loom LOV (shed-scoped via filterKey) + fill map from each loom's RUNNING beam.
   const loomRows2 = await db
@@ -219,10 +230,12 @@ export default async function DailyProductionPage({
     .from(schema.looms)
     .orderBy(schema.looms.shed, schema.looms.loomNo);
   const loomPickerRows = loomRows2.map((lm) => {
-    const b = beamByLoom.get(lm.loomNo);
+    const b = beamForLoom(lm.shed, lm.loomNo);
     return {
-      value: String(lm.loomNo),
-      code: String(lm.loomNo),
+      // Composite "shed|loomNo" value (same convention as the knotting loom
+      // picker) — loom numbers repeat across sheds, so a bare loomNo is ambiguous.
+      value: `${lm.shed ?? ""}|${lm.loomNo}`,
+      code: `${lm.shed ?? ""}|${lm.loomNo}`,
       description: `Shed ${lm.shed}`,
       filterKey: lm.shed ?? "",
       cells: { loomNo: lm.loomNo, shed: lm.shed ?? "", rpm: lm.rpm ?? "", status: lm.statusWrk ?? "", beamNo: b?.beamNo ?? "", contNo: (lm.currentContract ?? b?.contractNo) ?? "" },
@@ -238,8 +251,8 @@ export default async function DailyProductionPage({
   ];
   const loomFillMap: Record<string, Record<string, string | number | null>> = {};
   for (const lm of loomRows2) {
-    const b = beamByLoom.get(lm.loomNo);
-    loomFillMap[String(lm.loomNo)] = {
+    const b = beamForLoom(lm.shed, lm.loomNo);
+    loomFillMap[`${lm.shed ?? ""}|${lm.loomNo}`] = {
       beamNo: b?.beamNo ?? null,
       beamSetNo: b?.beamSetNo ?? null,
       setHash: b?.setNo ?? null,
@@ -448,7 +461,10 @@ export default async function DailyProductionPage({
       const bs = (beamStatusArr[i] || "").trim();
       const ww = num(wastWtKgArr[i]);
       const bn = (beamNoArr[i] || "").trim();
-      const ln = intVal(loomNoArr[i]);
+      // Loom cell carries "shed|loomNo" from the picker (loom numbers repeat
+      // across sheds) — store the loom number; the shed is the voucher header's.
+      const lnRaw = (loomNoArr[i] || "").trim();
+      const ln = lnRaw.includes("|") ? intVal(lnRaw.split("|").pop() ?? "") : intVal(lnRaw);
       const cn = (contNoArr[i] || "").trim();
       const en = intVal(endsArr[i]);
       const bl = num(bLengthArr[i]);
@@ -1211,7 +1227,13 @@ export default async function DailyProductionPage({
                             <td>
                               <FindingPicker
                                 name="loomNo"
-                                defaultValue={s?.loomNo != null ? String(s.loomNo) : ""}
+                                defaultValue={
+                                  s?.loomNo != null
+                                    ? editing?.shedNo
+                                      ? `${editing.shedNo}|${s.loomNo}`
+                                      : String(s.loomNo)
+                                    : ""
+                                }
                                 rows={loomPickerRows}
                                 columns={loomCols}
                                 filterByField="shedNo"

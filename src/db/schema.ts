@@ -1848,6 +1848,7 @@ export const intWarpedBeamReceiving = sqliteTable("int_warped_beam_receiving", {
   gpDate: text("gp_date"),
   resultCountSzg: text("result_count_szg"),
   bmSaleParty: text("bm_sale_party"),
+  sizingContNo: text("sizing_cont_no"),
   gulley: real("gulley"),
   emtBag: real("emt_bag"),
   shoper: real("shoper"),

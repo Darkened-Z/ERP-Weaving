@@ -117,12 +117,14 @@ export default async function WarpedBeamReceivingPage({
     }
   }
 
-  // Sizing contracts (Beam Contract Ext W/S) — shown under the sizing party, filtered
-  // to that party; picking one auto-fills its per-beam sizing rate into the grid.
+  // Sizing contracts (Beam Contract Ext W/S) — INVENTORY (int) contracts only,
+  // scoped to the selected Bm Sale Party (the converter, e.g. 786 weaving under
+  // 1.01.01.01.*): picking one auto-fills its per-beam sizing rate into the grid.
   const sizingContracts = await db
     .select({
       contNo: schema.intBeamContractExtWs.contNo,
       sizingParty: schema.intBeamContractExtWs.sizingParty,
+      converterParty: schema.intBeamContractExtWs.converterParty,
       ratePerBeam: schema.intBeamContractExtWs.ratePerBeam,
       status: schema.intBeamContractExtWs.status,
     })
@@ -131,7 +133,13 @@ export default async function WarpedBeamReceivingPage({
   const sizingContractOpts = sizingContracts.map((c) => ({
     value: c.contNo,
     label: `${c.contNo}${c.ratePerBeam != null ? ` — @${c.ratePerBeam}` : ""}${c.status ? ` (${c.status})` : ""}`,
-    filterKey: c.sizingParty ? codeByDesc.get(c.sizingParty) ?? "" : "",
+    // Scoped to the Bm Sale Party (converter) — fall back to the sizing party
+    // when a contract carries no converter, and to always-shown when neither.
+    filterKey: c.converterParty
+      ? codeByDesc.get(c.converterParty) ?? ""
+      : c.sizingParty
+        ? codeByDesc.get(c.sizingParty) ?? ""
+        : "",
   }));
   const sizingContractMap = Object.fromEntries(
     sizingContracts.map((c) => [c.contNo, { sizingRate: c.ratePerBeam ?? "" }]),
@@ -157,6 +165,9 @@ export default async function WarpedBeamReceivingPage({
       { emptyKg: b.weight, setNo: b.setNo, beamSetNo: b.beamSetNo, ends: b.ends },
     ]),
   );
+  // Live beam status per beamNo — the grid's readonly Beam Status cell shows the
+  // beam's CURRENT state (LOADED → KNOTTING → PRODUCTION), not the stale line value.
+  const liveStatusByNo = new Map(beamRows.map((b) => [b.beamNo, b.statusWrk ?? ""]));
 
   const brandRows = await db
     .select({ name: schema.yarnBrands.name })
@@ -190,6 +201,7 @@ export default async function WarpedBeamReceivingPage({
       gpDate: txt(formData.get("gpDate")),
       resultCountSzg: txt(formData.get("resultCountSzg")),
       bmSaleParty: txt(formData.get("bmSaleParty")),
+      sizingContNo: txt(formData.get("sizingContNo")),
       gulley: num(formData.get("gulley")),
       emtBag: num(formData.get("emtBag")),
       shoper: num(formData.get("shoper")),
@@ -263,12 +275,15 @@ export default async function WarpedBeamReceivingPage({
         row.conv == null && row.amount == null && !row.gpNoLine;
       if (isEmpty) continue;
       // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × Sizing Rate.
+      // Result Count SZG is OPTIONAL — when blank the count division is skipped
+      // (owner: the amount must still generate without it).
       const rcNum = parseFloat(header.resultCountSzg ?? "");
+      const rcDiv = Number.isFinite(rcNum) && rcNum > 0 ? rcNum : 1;
       const sizingRateNum = num(formData.get("sizingRate")) ?? 0;
       // Rate = the row's own Rate when typed, else the header Sizing Rate.
       const rowRate = (row.rate ?? 0) > 0 ? (row.rate as number) : sizingRateNum;
-      if (row.beamLength != null && row.ends != null && Number.isFinite(rcNum) && rcNum > 0) {
-        row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcNum) * rowRate * 100) / 100;
+      if (row.beamLength != null && row.ends != null) {
+        row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcDiv) * rowRate * 100) / 100;
       } else {
         row.amount = null;
       }
@@ -369,12 +384,28 @@ export default async function WarpedBeamReceivingPage({
               .insert(schema.intWarpedBeamReceivingLine)
               .values(validLines.map((l) => ({ ...l, receivingId: id })));
           }
+          // Beam-status guard: a beam that has already moved past receiving
+          // (KNOTTING / PRODUCTION / RUNNING via the knotting mount) must NOT be
+          // forced back to LOADED by re-saving this voucher — that used to break
+          // the mount and hide the beam from Daily Production. Only its receiving
+          // stamps and set/ends/length are refreshed.
+          const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
+          const lineBeams = validLines.map((l) => l.beamNo).filter((b): b is string => !!b);
+          const curStatus = new Map<string, string>();
+          if (lineBeams.length) {
+            const rows0 = await tx
+              .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+              .from(schema.beams)
+              .where(sql`${schema.beams.beamNo} IN (${sql.join(lineBeams.map((b) => sql`${b}`), sql`, `)})`);
+            for (const r of rows0) curStatus.set(r.beamNo, (r.statusWrk ?? "").toUpperCase());
+          }
           for (const l of validLines) {
             if (!l.beamNo) continue;
+            const advanced = ADVANCED.has(curStatus.get(l.beamNo) ?? "");
             await tx
               .update(schema.beams)
               .set({
-                statusWrk: "LOADED",
+                ...(advanced ? {} : { statusWrk: "LOADED" }),
                 receivedDate: header.vDate,
                 brVno: vNo,
                 brDate: header.vDate,
@@ -388,6 +419,8 @@ export default async function WarpedBeamReceivingPage({
           const newBeams = new Set(validLines.map((l) => l.beamNo).filter((b): b is string => !!b));
           for (const ob of oldBeams) {
             if (newBeams.has(ob)) continue;
+            // Same guard: only an un-mounted (LOADED) beam reverts to EMPTY.
+            if (ADVANCED.has(curStatus.get(ob) ?? "")) continue;
             await tx
               .update(schema.beams)
               .set({ statusWrk: "EMPTY", receivedDate: null, brVno: null, brDate: null })
@@ -485,12 +518,25 @@ export default async function WarpedBeamReceivingPage({
               .insert(schema.intWarpedBeamReceivingLine)
               .values(validLines.map((l) => ({ ...l, receivingId: insertedId })));
           }
+          // Same beam-status guard as edit: never pull a mounted
+          // (KNOTTING/PRODUCTION/RUNNING) beam back to LOADED.
+          const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
+          const lineBeams = validLines.map((l) => l.beamNo).filter((b): b is string => !!b);
+          const curStatus = new Map<string, string>();
+          if (lineBeams.length) {
+            const rows0 = await tx
+              .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+              .from(schema.beams)
+              .where(sql`${schema.beams.beamNo} IN (${sql.join(lineBeams.map((b) => sql`${b}`), sql`, `)})`);
+            for (const r of rows0) curStatus.set(r.beamNo, (r.statusWrk ?? "").toUpperCase());
+          }
           for (const l of validLines) {
             if (!l.beamNo) continue;
+            const advanced = ADVANCED.has(curStatus.get(l.beamNo) ?? "");
             await tx
               .update(schema.beams)
               .set({
-                statusWrk: "LOADED",
+                ...(advanced ? {} : { statusWrk: "LOADED" }),
                 receivedDate: header.vDate,
                 brVno: vNo,
                 brDate: header.vDate,
@@ -617,8 +663,21 @@ export default async function WarpedBeamReceivingPage({
         .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })
         .from(schema.intWarpedBeamReceivingLine)
         .where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
+      // Only un-mount beams that are still LOADED — a beam already knotted into
+      // production (KNOTTING/PRODUCTION/RUNNING) keeps its lifecycle.
+      const delBeams = oldLines.map((r) => r.beamNo).filter((b): b is string => !!b);
+      const delStatus = new Map<string, string>();
+      if (delBeams.length) {
+        const rows0 = await tx
+          .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+          .from(schema.beams)
+          .where(sql`${schema.beams.beamNo} IN (${sql.join(delBeams.map((b) => sql`${b}`), sql`, `)})`);
+        for (const r of rows0) delStatus.set(r.beamNo, (r.statusWrk ?? "").toUpperCase());
+      }
+      const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
       for (const l of oldLines) {
         if (!l.beamNo) continue;
+        if (ADVANCED.has(delStatus.get(l.beamNo) ?? "")) continue;
         await tx
           .update(schema.beams)
           .set({ statusWrk: "EMPTY", receivedDate: null, brVno: null, brDate: null })
@@ -876,13 +935,13 @@ export default async function WarpedBeamReceivingPage({
                 </div>
 
                 <div className="lg:col-span-4">
-                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(sizing party's)</span></label>
+                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(Bm Sale Party ke — inventory contracts)</span></label>
                   <Combobox
                     name="sizingContNo"
                     options={sizingContractOpts}
-                    defaultValue=""
+                    defaultValue={editing?.sizingContNo ?? ""}
                     placeholder="Sizing contract…"
-                    filterByField="beamReceivingFrom"
+                    filterByField="bmSaleParty"
                   />
                   <AutoFill watch="sizingContNo" map={sizingContractMap} inputs={["sizingRate"]} />
                 </div>
@@ -892,7 +951,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-12">
                   <div className="text-[11px] mono text-[var(--muted)] border border-dashed border-[var(--border-light)] px-3 py-1 bg-gray-50">
-                    Sizing formula:&nbsp; <b>Amount = Beam Length × Ends ÷ 1693.20 ÷ Result Count SZG × Sizing Rate</b>
+                    Sizing formula:&nbsp; <b>Amount = Beam Length × Ends ÷ 1693.20 ÷ Result Count SZG × Sizing Rate</b> <span className="text-[var(--muted)]">(Result Count SZG khali ho to division skip — amount phir bhi banega)</span>
                   </div>
                 </div>
               </div>
@@ -932,7 +991,7 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="setNo" className={gridCellCls} defaultValue={l?.setNo ?? ""} /></td>
                             <td><input name="beamSetNo" className={gridCellCls} defaultValue={l?.beamSetNo ?? ""} /></td>
                             <td><input name="beamNo" list="iwb-beam-list" className={gridCellCls} defaultValue={l?.beamNo ?? ""} /></td>
-                            <td><input className={gridCellCls + " bg-gray-100"} defaultValue={l?.beamNo ? "LOADED" : l?.beamStatus ?? ""} readOnly tabIndex={-1} /></td>
+                            <td><input className={gridCellCls + " bg-gray-100"} defaultValue={l?.beamNo ? (liveStatusByNo.get(l.beamNo) || "LOADED") : l?.beamStatus ?? ""} readOnly tabIndex={-1} title="Live beam status — updates after knotting / production" /></td>
                             <td><input name="beamLength" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLength ?? ""} /></td>
                             <td><input name="width" type="number" step="any" className={gridCellNumCls} defaultValue={l?.width ?? ""} /></td>
                             <td><input name="ends" type="number" step="1" className={gridCellNumCls} defaultValue={l?.ends ?? ""} /></td>
