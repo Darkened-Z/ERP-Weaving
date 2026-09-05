@@ -8,7 +8,8 @@ type Account = typeof schema.chartOfAccounts.$inferSelect;
 
 const PRINT_CSS = `
 @page { size: A4; margin: 14mm; }
-html, body { background: #fff; color: #000; }
+:root { --lv1: #9fb0e8; --lv2: #a3ddd6; --lv3: #cbe9b4; --lv4: #f6dfa6; --lv5: #f3ccd8; }
+html, body { background: #fff; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11px; }
 .coa-toolbar { max-width: 1100px; margin: 12px auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 16px; }
 .coa-page { max-width: 1100px; margin: 0 auto 24px; padding: 12mm 8mm; background: #fff; border: 1px solid #000; }
@@ -25,8 +26,19 @@ table.coa td.status { text-align: center; width: 40px; font-family: 'Helvetica',
 .badge { display: inline-block; padding: 1px 6px; border: 1px solid #000; font-size: 8.5pt; letter-spacing: 0.05em; }
 .badge.a { background: #000; color: #fff; }
 .badge.c { background: #f0f0f0; color: #555; }
-tr.lvl-1 td { background: #d9d9d9; font-weight: 700; }
-tr.lvl-2 td { background: #f2f2f2; font-weight: 600; }
+tr.lvl-1 td { background: var(--lv1); font-weight: 700; }
+tr.lvl-2 td { background: var(--lv2); font-weight: 700; }
+tr.lvl-3 td { background: var(--lv3); font-weight: 600; }
+tr.lvl-4 td { background: var(--lv4); }
+tr.lvl-5 td { background: var(--lv5); }
+.coa-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin: 6px 0 10px; font-family: 'Helvetica', Arial, sans-serif; font-size: 8.5pt; letter-spacing: 0.04em; }
+.coa-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.coa-legend i { width: 12px; height: 12px; border: 1px solid #000; display: inline-block; }
+.coa-legend i.lvl-1 { background: var(--lv1); }
+.coa-legend i.lvl-2 { background: var(--lv2); }
+.coa-legend i.lvl-3 { background: var(--lv3); }
+.coa-legend i.lvl-4 { background: var(--lv4); }
+.coa-legend i.lvl-5 { background: var(--lv5); }
 @media print {
   .no-print { display: none !important; }
   body { font-size: 10px; }
@@ -130,6 +142,13 @@ export default async function ChartOfAccountsPrintPage({
           </div>
         </div>
         <div className="coa-title">CHART OF ACCOUNTS</div>
+        <div className="coa-legend">
+          <span><i className="lvl-1" />Head 1</span>
+          <span><i className="lvl-2" />Head 2</span>
+          <span><i className="lvl-3" />Head 3</span>
+          <span><i className="lvl-4" />Head 4</span>
+          <span><i className="lvl-5" />Head 5</span>
+        </div>
         <table className="coa">
           <thead>
             <tr>
@@ -144,7 +163,7 @@ export default async function ChartOfAccountsPrintPage({
               const level = a.level ?? a.code.split(".").length;
               const indent = (level - 1) * 20;
               return (
-                <tr key={a.code} className={`lvl-${Math.min(level, 3)}`}>
+                <tr key={a.code} className={`lvl-${Math.min(Math.max(level, 1), 5)}`}>
                   <td className="code">{a.code}</td>
                   <td style={{ paddingLeft: 6 + indent }}>{a.description}</td>
                   <td className="short">{a.descShort ?? ""}</td>
