@@ -20,7 +20,8 @@ export function WarpedBeamCalc() {
 
     const recalc = () => {
       const sizingRate = val(q("sizingRate"));
-      const rc = val(q("resultCountSzg")); // Result Count SZG (header)
+      const rc = val(q("resultCountSzg")); // Result Count SZG (header) — OPTIONAL
+      const rcDiv = rc > 0 ? rc : 1; // blank RC = skip the count division
       let amountSum = 0;
       let lengthSum = 0;
       form.querySelectorAll("tbody tr").forEach((tr) => {
@@ -38,9 +39,10 @@ export function WarpedBeamCalc() {
         }
         // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count × Rate.
         // Rate = the row's own Rate when typed, else the header Sizing Rate.
-        if (amount && bl?.value && ends?.value && rc > 0) {
+        // Blank Result Count SZG → the ÷RC step is skipped (divide by 1).
+        if (amount && bl?.value && ends?.value) {
           const r = val(rate) || sizingRate;
-          set(amount, (val(bl) * val(ends)) / 1693.2 / rc * r);
+          set(amount, (val(bl) * val(ends)) / 1693.2 / rcDiv * r);
         }
         amountSum += val(amount);
         lengthSum += val(bl);
