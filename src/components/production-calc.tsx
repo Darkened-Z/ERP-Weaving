@@ -134,14 +134,21 @@ export function LoomBeamsFill({
 }) {
   useEffect(() => {
     const beamRows = () => Array.from(document.querySelectorAll<HTMLTableRowElement>("#idp-beam-rows tr"));
-    const setEl = (tr: HTMLTableRowElement, name: string, v: string | number | null) => {
+    const setEl = (tr: HTMLTableRowElement, name: string, v: string | number | null, display?: string) => {
       const el = tr.querySelector<HTMLInputElement>(`[name="${name}"]`);
       if (!el) return;
       const next = v == null ? "" : String(v);
-      if (el.value === next) return;
-      el.value = next;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
+      if (el.value !== next) {
+        el.value = next;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      // Hidden FindingPicker fields (e.g. beamNo) have a readonly display twin —
+      // keep its visible text in sync.
+      if (el.type === "hidden" && display != null) {
+        const picker = tr.querySelector<HTMLInputElement>('input[data-lov-picker]');
+        if (picker && picker.value !== display) picker.value = display;
+      }
     };
     const onChange = (e: Event) => {
       const d = (e as CustomEvent).detail as { name?: string; value?: string };
@@ -152,16 +159,19 @@ export function LoomBeamsFill({
         const tr = rows[i];
         const fill = beams[i];
         if (fill) {
-          setEl(tr, "beamNo", fill.beamNo);
+          const beamDisplay = fill.beamNo
+            ? `${fill.beamNo}${fill.beamSetNo ? " — " + fill.beamSetNo : ""}`
+            : "";
+          setEl(tr, "beamNo", fill.beamNo, beamDisplay);
           setEl(tr, "beamSetNo", fill.beamSetNo);
           setEl(tr, "kSmType", fill.setHash ? "K" : null); // knotting type hint
-          setEl(tr, "beamStatus", fill.beamStatus ?? "PRODUCTION");
+          setEl(tr, "beamStatus", fill.beamStatus ?? "RUNNING");
           setEl(tr, "ends", fill.ends);
           setEl(tr, "bLength", fill.bLength);
           setEl(tr, "contNo", fill.contNo);
         } else if (beams.length > 0) {
           // Loom picked but fewer beams than rows: clear the leftovers.
-          setEl(tr, "beamNo", null);
+          setEl(tr, "beamNo", null, "");
           setEl(tr, "beamSetNo", null);
           setEl(tr, "beamStatus", null);
           setEl(tr, "contNo", null);

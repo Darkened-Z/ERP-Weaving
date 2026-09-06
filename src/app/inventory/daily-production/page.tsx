@@ -175,7 +175,7 @@ export default async function DailyProductionPage({
       setHash: b.setNo ?? null,
       // Beam picked into production → its status moves to PRODUCTION on save
       // (the grid's Beam Status is applied to the beam; operator can override).
-      beamStatus: "PRODUCTION",
+      beamStatus: "RUNNING",
       contNo: b.contractNo ?? null,
     };
   }
@@ -275,7 +275,7 @@ export default async function DailyProductionPage({
       beamNo: b.beamNo ?? null,
       beamSetNo: b.beamSetNo ?? null,
       setHash: b.setNo ?? null,
-      beamStatus: "PRODUCTION",
+      beamStatus: "RUNNING",
       ends: b.ends ?? null,
       bLength: b.length ?? null,
       contNo: b.contractNo ?? null,
