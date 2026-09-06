@@ -62,6 +62,7 @@ export default async function YarnStockPage({
 
   const joined = await db
     .select({
+      voucherId: schema.extYarnPurVoucher.id,
       id: schema.extYarnPurVoucherLine.id,
       vNo: schema.extYarnPurVoucher.vNo,
       vDate: schema.extYarnPurVoucher.vDate,
@@ -82,21 +83,80 @@ export default async function YarnStockPage({
     .where(and(...conditions))
     .orderBy(sql`v_date DESC, ext_yarn_pur_voucher.id DESC`);
 
-  const rows: StockRow[] = joined.map((r) => ({
-    id: r.id,
-    vNo: r.vNo,
-    vDate: r.vDate,
-    party: r.party,
-    count: r.count,
-    brand: r.brand,
-    bags: r.bags,
-    cons: r.cons,
-    lbs: r.lbs,
-    rate: r.rate,
-    amount: r.rate != null && r.lbs != null ? r.rate * r.lbs : null,
-  }));
+  // ONE row per voucher (owner: the same voucher was repeating once per line, and
+  // empty junk lines made it worse). Lines are aggregated: first non-empty count /
+  // brand, Σ bags / cones / lbs, weighted-average rate, Σ amount.
+  type LineAgg = {
+    id: number;
+    vNo: string;
+    vDate: string;
+    party: string | null;
+    count: string;
+    brand: string;
+    bags: number;
+    con: number;
+    lbs: number;
+    amount: number;
+    hasRate: boolean;
+  };
+  const byVoucher = new Map<number, LineAgg>();
+  for (const r of joined) {
+    let agg = byVoucher.get(r.voucherId);
+    if (!agg) {
+      agg = {
+        id: r.voucherId,
+        vNo: r.vNo,
+        vDate: r.vDate,
+        party: r.party,
+        count: "",
+        brand: "",
+        bags: 0,
+        con: 0,
+        lbs: 0,
+        amount: 0,
+        hasRate: false,
+      };
+      byVoucher.set(r.voucherId, agg);
+    }
+    if (!agg.count && r.count) agg.count = r.count;
+    if (!agg.brand && r.brand) agg.brand = r.brand;
+    agg.bags += r.bags ?? 0;
+    agg.con += r.cons ?? 0;
+    agg.lbs += r.lbs ?? 0;
+    if (r.rate != null && r.lbs != null) {
+      agg.amount += r.rate * r.lbs;
+      agg.hasRate = true;
+    }
+  }
 
-  const uniqueVouchers = new Set(rows.map((r) => r.vNo)).size;
+  const rateOf = (agg: LineAgg) => {
+    const weighted = agg.lbs > 0 && agg.hasRate ? agg.amount / agg.lbs : null;
+    if (weighted != null) return weighted;
+    // Fall back to the first line's own rate when no lbs were priced.
+    const first = joined.find((r) => r.voucherId === agg.id && r.rate != null);
+    return first?.rate ?? null;
+  };
+
+  const rows: StockRow[] = Array.from(byVoucher.values())
+    .sort((a, b) => (a.vDate < b.vDate ? 1 : a.vDate > b.vDate ? -1 : b.id - a.id))
+    .map((agg) => {
+      const rate = rateOf(agg);
+      return {
+        id: agg.id,
+        vNo: agg.vNo,
+        vDate: agg.vDate,
+        party: agg.party,
+        count: agg.count || null,
+        brand: agg.brand || null,
+        bags: agg.bags,
+        cons: agg.con,
+        lbs: agg.lbs,
+        rate,
+        amount: agg.hasRate ? agg.amount : null,
+      };
+    });
+
+  const uniqueVouchers = rows.length;
   const totalBags = rows.reduce((s, r) => s + (r.bags ?? 0), 0);
   const totalLbs = rows.reduce((s, r) => s + (r.lbs ?? 0), 0);
   const totalAmount = rows.reduce((s, r) => s + (r.amount ?? 0), 0);
@@ -115,7 +175,7 @@ export default async function YarnStockPage({
           <div>
             <h1 className="page-title">Yarn Stock</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {rows.length} lines &middot; {from} to {to}
+              {rows.length} voucher{rows.length === 1 ? "" : "s"} &middot; {from} to {to}
             </p>
           </div>
           <div className="flex gap-2">
@@ -233,6 +293,22 @@ export default async function YarnStockPage({
                 ))
               )}
             </tbody>
+            {rows.length > 0 && (
+              <tfoot>
+                <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
+                  <td>Total</td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td className="mono text-right">{fmt(totalBags)}</td>
+                  <td className="mono text-right">{fmt(rows.reduce((s, r) => s + (r.cons ?? 0), 0))}</td>
+                  <td className="mono text-right">{fmt(totalLbs)}</td>
+                  <td className="mono text-right">{totalLbs > 0 && totalAmount > 0 ? fmt(totalAmount / totalLbs) : "-"}</td>
+                  <td className="mono text-right font-bold">Rs {fmt(totalAmount)}</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
