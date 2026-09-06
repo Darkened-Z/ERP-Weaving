@@ -28,6 +28,7 @@ export function GreyQualityPicker({
   countLabels,
   placeholder = "Select construction",
   className = "input-box mono cursor-pointer",
+  displayMode = "full",
 }: {
   name: string;
   defaultValue: string;
@@ -36,6 +37,8 @@ export function GreyQualityPicker({
   countLabels?: Record<string, string>;
   placeholder?: string;
   className?: string;
+  /** "full" (default): code — R{reed} P{pick} · {description}. "warp": code — warp count info only. */
+  displayMode?: "full" | "warp";
 }) {
   const label = (v: string) => {
     const t = (v ?? "").trim();
@@ -93,6 +96,16 @@ export function GreyQualityPicker({
   };
 
   const selected = rows.find((r) => r.code === value);
+  const selectedDisplay = selected
+    ? displayMode === "warp"
+      ? // Owner (IBWS): after the code show ONLY the warp count info, e.g.
+        // "GC-001 — 2. 30/S MVS PV 65:35" (count code. description blend).
+        `${selected.code} — ${
+          selected.warpCounts.filter(Boolean).map((c) => label(c).replace(" — ", ". ")).join(" · ") ||
+          selected.description
+        }`
+      : `${selected.code} — R${selected.reed ?? "-"} P${selected.pick ?? "-"}${selected.width ? ` · ${selected.width}"` : ""} · ${selected.description}`
+    : value;
 
   return (
     <div className="relative" data-quality-picker={name}>
@@ -101,7 +114,7 @@ export function GreyQualityPicker({
         <input
           readOnly
           className={className}
-          value={selected ? `${selected.code} — R${selected.reed ?? "-"} P${selected.pick ?? "-"}${selected.width ? ` · ${selected.width}"` : ""} · ${selected.description}` : value}
+          value={selectedDisplay}
           placeholder={placeholder}
           onClick={() => setOpen(true)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}

@@ -626,7 +626,7 @@ export default async function BeamContractExtWsPage({
 
                 <div className="lg:col-span-4">
                   <label className="label block mb-1">WRP Code (Grey Const)</label>
-                  <GreyQualityPicker name="wrp_code" defaultValue={formContract?.wrpCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
+                  <GreyQualityPicker name="wrp_code" defaultValue={formContract?.wrpCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} displayMode="warp" />
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">No. of Width</label>
