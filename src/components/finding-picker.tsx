@@ -208,7 +208,13 @@ export function FindingPicker({
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={columns ? columns.length : extraLabel ? 3 : 2} className="px-4 py-8 text-center text-[var(--muted)] italic">No matches</td></tr>
+                    <tr>
+                      <td colSpan={columns ? columns.length : extraLabel ? 3 : 2} className="px-4 py-8 text-center text-[var(--muted)] italic">
+                        {filterByField && filterVal && rows.length > 0
+                          ? `No records match the current scope ("${filterVal}") — clear the ${filterByField} field to see all ${rows.length}`
+                          : "No matches"}
+                      </td>
+                    </tr>
                   ) : filtered.map((r) => (
                     <tr
                       key={r.value}
