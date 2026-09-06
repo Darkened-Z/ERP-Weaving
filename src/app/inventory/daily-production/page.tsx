@@ -749,11 +749,24 @@ export default async function DailyProductionPage({
             await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
           }
           const newBeams = new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b));
-          for (const [oldBeam] of oldBeamStatus) {
-            if (newBeams.has(oldBeam)) continue;
+          // Beams the new grid dropped: revert to the knotting mount (KNOTTING)
+          // when the beam still carries its knotting voucher — EMPTY only for
+          // beams that were never knotted. Prevents a deleted production voucher
+          // from un-mounting a beam that knotting mounted.
+          const droppedBeams = [...oldBeamStatus.keys()].filter((b) => !newBeams.has(b));
+          const droppedKnot = new Map<string, boolean>();
+          if (droppedBeams.length) {
+            const rows0 = await tx
+              .select({ beamNo: schema.beams.beamNo, knVno: schema.beams.knVno })
+              .from(schema.beams)
+              .where(sql`${schema.beams.beamNo} IN (${sql.join(droppedBeams.map((b) => sql`${b}`), sql`, `)})`);
+            for (const r of rows0) droppedKnot.set(r.beamNo, !!r.knVno);
+          }
+          for (const oldBeam of droppedBeams) {
+            const knotted = droppedKnot.get(oldBeam) ?? false;
             await tx
               .update(schema.beams)
-              .set({ statusWrk: "EMPTY", loomNo: null })
+              .set(knotted ? { statusWrk: "KNOTTING" } : { statusWrk: "EMPTY", loomNo: null })
               .where(eq(schema.beams.beamNo, oldBeam));
           }
           // Auto "last roll → EMPTY": a beam whose cumulative woven meters reach
@@ -912,11 +925,23 @@ export default async function DailyProductionPage({
         .select({ beamNo: schema.intDailyProductionSet.beamNo })
         .from(schema.intDailyProductionSet)
         .where(eq(schema.intDailyProductionSet.productionId, id));
+      // Deleting the voucher releases its beams, but a beam mounted by a knotting
+      // bill goes back to KNOTTING (not EMPTY) — the mount must survive.
+      const delBeams = oldSets.map((os) => os.beamNo).filter((b): b is string => !!b);
+      const delKnot = new Map<string, boolean>();
+      if (delBeams.length) {
+        const rows0 = await tx
+          .select({ beamNo: schema.beams.beamNo, knVno: schema.beams.knVno })
+          .from(schema.beams)
+          .where(sql`${schema.beams.beamNo} IN (${sql.join(delBeams.map((b) => sql`${b}`), sql`, `)})`);
+        for (const r of rows0) delKnot.set(r.beamNo, !!r.knVno);
+      }
       for (const os of oldSets) {
         if (!os.beamNo) continue;
+        const knotted = delKnot.get(os.beamNo) ?? false;
         await tx
           .update(schema.beams)
-          .set({ statusWrk: "EMPTY", loomNo: null })
+          .set(knotted ? { statusWrk: "KNOTTING" } : { statusWrk: "EMPTY", loomNo: null })
           .where(eq(schema.beams.beamNo, os.beamNo));
       }
       await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "DP"), eq(schema.transDetail.vno, id)));
