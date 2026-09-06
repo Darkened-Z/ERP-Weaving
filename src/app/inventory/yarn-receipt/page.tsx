@@ -12,7 +12,7 @@ import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
@@ -161,27 +161,69 @@ export default async function YarnReceiptPage({
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
 
-  const purContractColumns = [
-    { key: "cont", label: "Cont #", width: 88 },
-    { key: "desc", label: "Prd. Desc" },
-    { key: "qty", label: "Qty Lbs", width: 90, align: "right" as const },
+  // Yarn SALE vouchers (external module) — the "Pur.Cont No" slot attaches one of
+  // these as OPTIONAL info (owner: attach the yarn-sale voucher; save works without
+  // one). Value = the YSV voucher no, stored in the same pur_cont_no column.
+  const saleVoucherRows0 = await db
+    .select({
+      id: schema.extYarnSalVoucher.id,
+      vNo: schema.extYarnSalVoucher.vNo,
+      vDate: schema.extYarnSalVoucher.vDate,
+      party: schema.extYarnSalVoucher.party,
+    })
+    .from(schema.extYarnSalVoucher)
+    .orderBy(desc(schema.extYarnSalVoucher.id))
+    .limit(300);
+  const svLineRows = saleVoucherRows0.length
+    ? await db
+        .select({
+          voucherId: schema.extYarnSalVoucherLine.voucherId,
+          count: schema.extYarnSalVoucherLine.count,
+          brand: schema.extYarnSalVoucherLine.brand,
+          bag: schema.extYarnSalVoucherLine.bag,
+          lbs: schema.extYarnSalVoucherLine.lbs,
+          rate: schema.extYarnSalVoucherLine.rate,
+        })
+        .from(schema.extYarnSalVoucherLine)
+        .where(inArray(schema.extYarnSalVoucherLine.voucherId, saleVoucherRows0.map((v) => v.id)))
+    : [];
+  const saleVoucherInfo = new Map<
+    number,
+    { count: string; brand: string; bags: number; lbs: number; rate: number | null }
+  >();
+  for (const l of svLineRows) {
+    const agg = saleVoucherInfo.get(l.voucherId) ?? { count: "", brand: "", bags: 0, lbs: 0, rate: null };
+    if (!agg.count && l.count) agg.count = l.count;
+    if (!agg.brand && l.brand) agg.brand = l.brand;
+    if (agg.rate == null && l.rate != null) agg.rate = l.rate;
+    agg.bags += l.bag ?? 0;
+    agg.lbs += l.lbs ?? 0;
+    saleVoucherInfo.set(l.voucherId, agg);
+  }
+
+  const saleVoucherColumns = [
+    { key: "vno", label: "V.No", width: 92 },
+    { key: "party", label: "Party" },
+    { key: "count", label: "Count", width: 110 },
+    { key: "bags", label: "Bags", width: 70, align: "right" as const },
+    { key: "lbs", label: "Lbs", width: 90, align: "right" as const },
     { key: "rate", label: "Rate", width: 70, align: "right" as const },
     { key: "date", label: "Date", width: 86 },
-    { key: "status", label: "St", width: 34 },
   ];
-  const purContractRows = purContracts.map((c) => {
-    const desc = [c.countCode, c.ratio].filter(Boolean).join(" ");
+  const saleVoucherRows = saleVoucherRows0.map((v) => {
+    const info = saleVoucherInfo.get(v.id);
     return {
-      value: c.contNo,
-      code: c.contNo,
-      description: desc,
+      value: v.vNo,
+      code: v.vNo,
+      description: v.party ?? "",
       cells: {
-        cont: c.contNo,
-        desc,
-        qty: fmtN(c.qtyLbs),
-        rate: fmtN(c.ratePerLbs, 2),
-        date: c.contDate ?? "",
-        status: c.status ?? "",
+        vno: v.vNo,
+        party: v.party ?? "",
+        count: info?.count ?? "",
+        bags: fmtN(info?.bags ?? null, 2),
+        lbs: fmtN(info?.lbs ?? null),
+        rate: fmtN(info?.rate ?? null, 2),
+        date: v.vDate ?? "",
       },
     };
   });
@@ -218,18 +260,15 @@ export default async function YarnReceiptPage({
     };
   });
 
-  const purMap: Record<string, Record<string, string | number>> = {};
-  for (const c of purContracts) {
-    purMap[c.contNo] = {
-      countCode: c.countCode ?? "",
-      ratioText: c.ratio ?? "",
-      brand: c.brand ?? "",
-      // Rate comes from the PARTY'S COUNT contract (owner's rule) — fills both the
-      // delivered-to rate and the count-detail rate.
-      ratePerLbs: c.ratePerLbs ?? "",
-      ratePerLbsTo: c.ratePerLbs ?? "",
-      remarks: c.remarks ?? "",
-      party: c.partyCode ? partyDescByCode[c.partyCode] ?? c.partyCode : "",
+  // Picking a sale voucher fills only INFO fields (count + brand) — rates and the
+  // party stay untouched (owner: the attachment is for reference).
+  const saleVoucherMap: Record<string, Record<string, string | number>> = {};
+  for (const v of saleVoucherRows0) {
+    const info = saleVoucherInfo.get(v.id);
+    if (!info) continue;
+    saleVoucherMap[v.vNo] = {
+      countCode: info.count ?? "",
+      brand: info.brand ?? "",
     };
   }
   const convMap: Record<string, Record<string, string | number>> = {};
@@ -532,7 +571,7 @@ export default async function YarnReceiptPage({
               { key: "qtyLbs", label: "Qty Lbs" },
               { key: "ratePerLbs", label: "Rate/Lbs" },
               { key: "amount", label: "Amount" },
-              { key: "purContNo", label: "Pur Cont No" },
+              { key: "purContNo", label: "Sale Voucher" },
               { key: "convContNo", label: "Conv Cont No" },
             ]}
             filename="yarn-receipt"
@@ -609,9 +648,9 @@ export default async function YarnReceiptPage({
               <YarnReceiptCounts />
               <AutoFill
                 watch="purContNo"
-                map={purMap}
-                combos={["party", "countCode"]}
-                inputs={["ratioText", "brand", "remarks", "ratePerLbs", "ratePerLbsTo"]}
+                map={saleVoucherMap}
+                combos={["countCode"]}
+                inputs={["brand"]}
               />
               <AutoFill
                 watch="convContNo"
@@ -712,14 +751,14 @@ export default async function YarnReceiptPage({
                         />
                       </div>
                       <div className="md:col-span-6">
-                        <label className="label block mb-1">Pur.Cont No (F9)</label>
+                        <label className="label block mb-1">Sale Voucher (F9) <span className="text-[9px] text-[var(--muted)]">(external yarn sale — optional info)</span></label>
                         <FindingPicker
                           name="purContNo"
                           defaultValue={editing?.purContNo ?? ""}
-                          rows={purContractRows}
-                          columns={purContractColumns}
-                          title="YARN PURCHASE CONTRACT LIST"
-                          placeholder="Select purchase contract"
+                          rows={saleVoucherRows}
+                          columns={saleVoucherColumns}
+                          title="YARN SALE VOUCHER LIST (EXTERNAL)"
+                          placeholder="Attach sale voucher — optional"
                         />
                       </div>
                     </div>
