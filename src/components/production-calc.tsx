@@ -10,13 +10,14 @@ const round = (v: number, d: number) => {
 type BeamStat = { rcvd: number; length: number | null };
 
 /**
- * Daily Production — Set# grid live math:
- *   Total  = A + B + C + CP + PPC
- *   Rcvd/Mtr = serverAccumulated (Σ totalCount+rejCount across ALL saved production
- *              excluding this voucher, keyed by beamNo) + thisRow.total + thisRow.rej
- *   Diff = bLength − rcvdMtr
- *   Shrinkage = diff / bLength × 100
- * The `data-near-empty` span in each row shows "NEAR EMPTY" while diff < 500.
+ * Daily Production — split-grid live math (counts table on top, beam table below,
+ * rows paired by INDEX):
+ *   Counts row i:  Total = A + B + C + CP + PPC
+ *   Beam row i:    Rcvd/Mtr = serverAccumulated (Σ totalCount+rejCount across ALL
+ *                  saved production excluding this voucher, keyed by beamNo)
+ *                  + countsRow[i].total + countsRow[i].rej
+ *                  Diff = bLength − rcvdMtr · Shrinkage = diff / bLength × 100
+ * The `data-near-empty` span in each beam row shows "NEAR EMPTY" while diff < 500.
  * Server-side saveAction recomputes totalCount authoritatively.
  */
 export function ProductionSetCalc({
@@ -25,62 +26,76 @@ export function ProductionSetCalc({
   beamStats: Record<string, BeamStat>;
 }) {
   useEffect(() => {
-    const SOURCES = new Set([
-      "aCount",
-      "bCount",
-      "cCount",
-      "cpCount",
-      "ppcCount",
-      "rejCount",
-      "beamNo",
-      "bLength",
-    ]);
-    const each = (row: HTMLTableRowElement) => {
-      const q = (n: string) => row.querySelector<HTMLInputElement>(`[name="${n}"]`);
-      const num = (n: string) => {
-        const x = parseFloat(q(n)?.value ?? "");
+    const COUNT_SOURCES = new Set(["aCount", "bCount", "cCount", "cpCount", "ppcCount"]);
+    const BEAM_SOURCES = new Set(["rejCount", "beamNo", "bLength"]);
+
+    const countRows = () => Array.from(document.querySelectorAll<HTMLTableRowElement>("#idp-count-rows tr"));
+    const beamRows = () => Array.from(document.querySelectorAll<HTMLTableRowElement>("#idp-beam-rows tr"));
+
+    const eachPair = (ci: number) => {
+      const cRow = countRows()[ci];
+      const bRow = beamRows()[ci];
+      if (!cRow) return;
+      const cq = (n: string) => cRow.querySelector<HTMLInputElement>(`[name="${n}"]`);
+      const cnum = (n: string) => {
+        const x = parseFloat(cq(n)?.value ?? "");
         return Number.isFinite(x) ? x : 0;
       };
-      const totalEl = q("totalCount");
-      if (!totalEl) return;
-      const total = round(
-        num("aCount") + num("bCount") + num("cCount") + num("cpCount") + num("ppcCount"),
-        2
-      );
-      if (String(total) !== totalEl.value) {
-        totalEl.value = total ? String(total) : "";
+      // Total lives in the counts row.
+      const totalEl = cq("totalCount");
+      if (totalEl) {
+        const total = round(
+          cnum("aCount") + cnum("bCount") + cnum("cCount") + cnum("cpCount") + cnum("ppcCount"),
+          2
+        );
+        if (String(total) !== totalEl.value) totalEl.value = total ? String(total) : "";
       }
-      const beamNo = (q("beamNo")?.value ?? "").trim();
+      if (!bRow) return;
+      const bq = (n: string) => bRow.querySelector<HTMLInputElement>(`[name="${n}"]`);
+      const bnum = (n: string) => {
+        const x = parseFloat(bq(n)?.value ?? "");
+        return Number.isFinite(x) ? x : 0;
+      };
+      const beamNo = (bq("beamNo")?.value ?? "").trim();
       const stat: BeamStat | undefined = beamNo ? beamStats[beamNo] : undefined;
-      const bLenEl = q("bLength");
+      const bLenEl = bq("bLength");
       if (bLenEl && !bLenEl.value && stat?.length != null) {
         bLenEl.value = String(stat.length);
       }
-      const bLen = num("bLength");
-      const rej = num("rejCount");
-      const rcvd = beamNo ? round((stat?.rcvd ?? 0) + total + rej, 2) : 0;
+      const bLen = bnum("bLength");
+      // Rejection is a counts-row box ("up to Rejection stays on top").
+      const rej = (() => {
+        const x = parseFloat(cq("rejCount")?.value ?? "");
+        return Number.isFinite(x) ? x : 0;
+      })();
+      const rcvd = beamNo ? round((stat?.rcvd ?? 0) + (cnum("totalCount") || 0) + rej, 2) : 0;
       const diff = bLen > 0 ? round(bLen - rcvd, 2) : 0;
       const shr = bLen > 0 ? round((diff / bLen) * 100, 2) : 0;
-      const rcvdEl = q("rcvdMtr");
-      const diffEl = q("diff");
-      const shrEl = q("shrinkage");
+      const rcvdEl = bq("rcvdMtr");
+      const diffEl = bq("diff");
+      const shrEl = bq("shrinkage");
       if (rcvdEl) rcvdEl.value = beamNo && rcvd ? String(rcvd) : "";
       if (diffEl) diffEl.value = beamNo && bLen > 0 ? String(diff) : "";
       if (shrEl) shrEl.value = beamNo && bLen > 0 ? String(shr) : "";
-      const hint = row.querySelector<HTMLElement>("[data-near-empty]");
+      const hint = bRow.querySelector<HTMLElement>("[data-near-empty]");
       if (hint) {
         hint.textContent = beamNo && bLen > 0 && diff < 500 && diff >= 0 ? "NEAR EMPTY" : "";
       }
     };
+
     const recompute = () => {
-      document.querySelectorAll<HTMLTableRowElement>("tr").forEach(each);
+      const n = Math.max(countRows().length, beamRows().length);
+      for (let i = 0; i < n; i++) eachPair(i);
     };
     const onEvt = (e: Event) => {
       const t = e.target as HTMLInputElement | null;
       if (!t?.name) return;
-      if (!SOURCES.has(t.name)) return;
+      if (!COUNT_SOURCES.has(t.name) && !BEAM_SOURCES.has(t.name) && t.name !== "totalCount") return;
       const tr = t.closest("tr");
-      if (tr) each(tr);
+      if (!tr) return;
+      const inCounts = tr.closest("#idp-count-rows");
+      const idx = Array.from((inCounts ? countRows() : beamRows())).indexOf(tr);
+      if (idx >= 0) eachPair(idx);
     };
     recompute();
     document.addEventListener("input", onEvt, true);
@@ -90,6 +105,71 @@ export function ProductionSetCalc({
       document.removeEventListener("change", onEvt, true);
     };
   }, [beamStats]);
+  return null;
+}
+
+type LoomBeamFill = {
+  beamNo: string | null;
+  beamSetNo: string | null;
+  setHash: string | null;
+  beamStatus: string | null;
+  ends: number | null;
+  bLength: number | null;
+  contNo: string | null;
+};
+
+/**
+ * Header Loom# pick → open that loom's mounted beams in the beam grid. One loom
+ * can carry several knotted beams ("1, 2 — however many there are"): row 1 gets
+ * the first beam, row 2 the second, and so on. Rows beyond the beam list clear.
+ * Fill data comes from the server-mounted-beam map keyed by "shed|loomNo".
+ */
+export function LoomBeamsFill({
+  map,
+  maxRows = 8,
+}: {
+  map: Record<string, LoomBeamFill[]>;
+  maxRows?: number;
+}) {
+  useEffect(() => {
+    const beamRows = () => Array.from(document.querySelectorAll<HTMLTableRowElement>("#idp-beam-rows tr"));
+    const setEl = (tr: HTMLTableRowElement, name: string, v: string | number | null) => {
+      const el = tr.querySelector<HTMLInputElement>(`[name="${name}"]`);
+      if (!el) return;
+      const next = v == null ? "" : String(v);
+      if (el.value === next) return;
+      el.value = next;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const onChange = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string };
+      if (d?.name !== "headerLoom") return;
+      const beams = map[d.value ?? ""] ?? [];
+      const rows = beamRows();
+      for (let i = 0; i < Math.min(rows.length, maxRows); i++) {
+        const tr = rows[i];
+        const fill = beams[i];
+        if (fill) {
+          setEl(tr, "beamNo", fill.beamNo);
+          setEl(tr, "beamSetNo", fill.beamSetNo);
+          setEl(tr, "kSmType", fill.setHash ? "K" : null); // knotting type hint
+          setEl(tr, "beamStatus", fill.beamStatus ?? "PRODUCTION");
+          setEl(tr, "ends", fill.ends);
+          setEl(tr, "bLength", fill.bLength);
+          setEl(tr, "contNo", fill.contNo);
+        } else if (beams.length > 0) {
+          // Loom picked but fewer beams than rows: clear the leftovers.
+          setEl(tr, "beamNo", null);
+          setEl(tr, "beamSetNo", null);
+          setEl(tr, "beamStatus", null);
+          setEl(tr, "contNo", null);
+        }
+      }
+    };
+    document.addEventListener("combobox:change", onChange);
+    return () => document.removeEventListener("combobox:change", onChange);
+  }, [map, maxRows]);
   return null;
 }
 
