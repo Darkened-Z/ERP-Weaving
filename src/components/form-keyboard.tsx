@@ -271,6 +271,7 @@ export function FormKeyboard() {
           <span className="flex items-center gap-1"><Key>↑↓</Key> row</span>
           <span className="flex items-center gap-1"><Key>F9</Key> lookup</span>
           <span className="hidden sm:flex items-center gap-1"><Key>F3</Key> dup</span>
+          <span className="flex items-center gap-1"><Key>F2</Key> beams</span>
           <span className="flex items-center gap-1"><Key>Ctrl</Key><Key>S</Key> save</span>
           <span className="hidden sm:flex items-center gap-1"><Key>Alt</Key><Key>N</Key> new</span>
         </div>
