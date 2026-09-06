@@ -4,7 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, AutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
-import { ProductionSetCalc, LoomBeamsFill } from "@/components/production-calc";
+import { ProductionSetCalc, LoomBeamsFill, HeaderSetFill, RowErase } from "@/components/production-calc";
 import { ThanSerialLive } from "@/components/than-serial-live";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
@@ -73,7 +73,8 @@ export default async function DailyProductionPage({
   const nextNum = (maxRow[0]?.maxNum ?? 0) + 1;
   const upcomingVNo = `IDP-${String(nextNum).padStart(4, "0")}`;
 
-  const beamStatusList = await db.select().from(schema.beamStatuses).orderBy(schema.beamStatuses.status);
+  // Beam Status choices (owner: only these five, Oracle list)
+  const BEAM_STATUS_CHOICES = ["F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT", "RUNNING"];
   const beamCatalog = await db
     .select({
       beamNo: schema.beams.beamNo,
@@ -254,7 +255,8 @@ export default async function DailyProductionPage({
     { key: "contNo", label: "Contract", width: 100 },
   ];
   // Header Loom# (F9) pick → ALL mounted beams of that loom fill the beam grid
-  // (row 1 = first beam, row 2 = second, …).
+  // (row 1 = first beam, row 2 = second, …). The first beam's setNo echoes into
+  // the header Set# field (Oracle parity).
   const loomBeamsMap: Record<
     string,
     {
@@ -265,6 +267,7 @@ export default async function DailyProductionPage({
       ends: number | null;
       bLength: number | null;
       contNo: string | null;
+      setNo?: string | null;
     }[]
   > = {};
   for (const lm of loomRows2) {
@@ -276,8 +279,53 @@ export default async function DailyProductionPage({
       ends: b.ends ?? null,
       bLength: b.length ?? null,
       contNo: b.contractNo ?? null,
+      setNo: b.setNo ?? null,
     }));
   }
+
+  // Beam SET picker (Oracle: "just typed 47445 in No and everything filled"):
+  // one row per mounted beam-set; picking one sets the header Loom#, which fills
+  // beam#, ends, length, rcvd/diff/shrinkage and the whole detail chain.
+  const seenSets = new Set<string>();
+  const setPickerRows: {
+    value: string;
+    code: string;
+    description: string;
+    cells: Record<string, string | number | null>;
+  }[] = [];
+  const headerSetFillMap: Record<string, { headerLoom: string }> = {};
+  for (const lm of loomRows2) {
+    const loomKey = `${lm.shed ?? ""}|${lm.loomNo}`;
+    for (const b of beamsForLoom(lm.shed, lm.loomNo)) {
+      const setNo = (b.setNo ?? "").trim();
+      if (!setNo || seenSets.has(setNo)) continue;
+      seenSets.add(setNo);
+      setPickerRows.push({
+        value: setNo,
+        code: setNo,
+        description: `Loom ${lm.shed ?? "?"}-${lm.loomNo}`,
+        cells: {
+          setNo,
+          loom: loomKey,
+          beamNo: b.beamNo ?? "",
+          beamSetNo: b.beamSetNo ?? "",
+          ends: b.ends ?? "",
+          length: b.length ?? "",
+          contract: b.contractNo ?? "",
+        },
+      });
+      headerSetFillMap[setNo] = { headerLoom: loomKey };
+    }
+  }
+  const setCols = [
+    { key: "setNo", label: "Set No", width: 110 },
+    { key: "loom", label: "Loom", width: 90 },
+    { key: "beamNo", label: "Beam#", width: 100 },
+    { key: "beamSetNo", label: "Beam Set#", width: 100 },
+    { key: "ends", label: "Ends", width: 70, align: "right" as const },
+    { key: "length", label: "Length", width: 80, align: "right" as const },
+    { key: "contract", label: "Contract", width: 110 },
+  ];
   // Folding Stock by conv party — the header's Folding Stock box is readonly and
   // auto-fills when a Conv Cont Party is picked (server recomputes on save too).
   const foldingByParty: Record<string, Record<string, string | number | null>> = {};
@@ -307,8 +355,16 @@ export default async function DailyProductionPage({
   }
 
   // Grey conversion contract LOV — from BOTH internal (IGCC) and external (GCC)
-  // tables (the mill's live contracts are external), so the picker is never empty.
-  const convContracts = await loadConvContracts();
+  // tables, scoped to the mill's OWN conversion parties only (1.01.01.01.*, e.g.
+  // 786 weaving) — other contractors' contracts must not appear (owner).
+  const convPartyCodes = new Set(
+    parties
+      .filter((p) => String(p.code).startsWith(WVG_CONVERSION_PREFIX))
+      .map((p) => p.description)
+  );
+  const convContracts = (await loadConvContracts()).filter(
+    (c) => c.party && convPartyCodes.has(c.party.trim())
+  );
   const contractPickerRows = convContracts.map((c) => {
     const q = c.productQuality ?? c.productName ?? c.grayQltyCode ?? "";
     return {
@@ -691,8 +747,8 @@ export default async function DailyProductionPage({
             .where(eq(schema.intDailyProductionDetail.productionId, id));
 
           // Generate mmThanSrNo inside the tx so the seq lookup and the insert
-          // are atomic. Voucher-matched: ONE serial per voucher — every active
-          // row shares it; 3-digit padding (SEP-001-26).
+          // are atomic. Per-row monthly seq (3-digit) + the row's grade tag —
+          // "SEP-001-26|A", "SEP-002-26|B" … (client-approved format).
           const monthMaxRow = await tx
             .select({
               m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
@@ -701,11 +757,14 @@ export default async function DailyProductionPage({
             .where(
               sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
             );
-          const seq = Number(monthMaxRow[0]?.m ?? 0) + 1;
-          const voucherThan = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}`;
+          let seq = Number(monthMaxRow[0]?.m ?? 0);
           for (const s of validSets) {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              s.mmThanSrNo = voucherThan;
+              seq += 1;
+              const g =
+                (s.aCount ?? 0) > 0 ? "A" : (s.bCount ?? 0) > 0 ? "B" : (s.cCount ?? 0) > 0 ? "C"
+                : (s.cpCount ?? 0) > 0 ? "CP" : (s.ppcCount ?? 0) > 0 ? "PPC" : "";
+              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}${g ? "|" + g : ""}`;
             }
           }
 
@@ -831,11 +890,14 @@ export default async function DailyProductionPage({
             .where(
               sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
             );
-          const seq = Number(monthMaxRow[0]?.m ?? 0) + 1;
-          const voucherThan = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}`;
+          let seq = Number(monthMaxRow[0]?.m ?? 0);
           for (const s of validSets) {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              s.mmThanSrNo = voucherThan;
+              seq += 1;
+              const g =
+                (s.aCount ?? 0) > 0 ? "A" : (s.bCount ?? 0) > 0 ? "B" : (s.cCount ?? 0) > 0 ? "C"
+                : (s.cpCount ?? 0) > 0 ? "CP" : (s.ppcCount ?? 0) > 0 ? "PPC" : "";
+              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}${g ? "|" + g : ""}`;
             }
           }
 
@@ -1092,6 +1154,11 @@ export default async function DailyProductionPage({
               <RowAutoFill watch="beamNo" map={beamFillMap} />
               {/* Header Loom# pick → ALL of that loom's knotted beams open in the beam grid */}
               <LoomBeamsFill map={loomBeamsMap} maxRows={SET_ROWS} />
+              {/* Header Set# pick (Oracle parity) → sets the Loom#, which fills everything */}
+              <HeaderSetFill map={headerSetFillMap} />
+              {/* ✕ buttons erase the whole logical row across both containers */}
+              <RowErase tbodyId="idp-beam-rows" pairTbodyId="idp-count-rows" />
+              <RowErase tbodyId="idp-count-rows" pairTbodyId="idp-beam-rows" />
               {/* Folding Stock auto-fills from the picked conv party — readonly box */}
               <AutoFill watch="convContParty" map={foldingByParty} inputs={["foldingStock"]} />
               <AutoFill watch="conv_contract" map={contractFillMap} combos={["productQuality", "convContParty"]} inputs={["productBrand"]} />
@@ -1141,11 +1208,11 @@ export default async function DailyProductionPage({
                     <input className="input-box mono bg-gray-100 text-[12px]" defaultValue={editing?.modifiedDate?.slice(0, 10) ?? ""} readOnly tabIndex={-1} />
                   </div>
 
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-2">
                     <label className="label block mb-1">Shed No</label>
                     <input name="shedNo" list="dp-sheds" className="input-box mono" defaultValue={editing?.shedNo ?? ""} />
                   </div>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-2">
                     <label className="label block mb-1">Folding Stock</label>
                     <input
                       name="foldingStock"
@@ -1155,6 +1222,18 @@ export default async function DailyProductionPage({
                       defaultValue={foldingStockCalc ?? editing?.foldingStock ?? ""}
                       readOnly
                       tabIndex={-1}
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="label block mb-1">Set# (F9) <span className="text-[9px] text-[var(--muted)]">(Oracle parity — fills loom, beams, everything)</span></label>
+                    <FindingPicker
+                      name="headerSetNo"
+                      defaultValue=""
+                      rows={setPickerRows}
+                      columns={setCols}
+                      title="BEAM SET LIST"
+                      placeholder="F9 beam set — fills loom + beams"
+                      className="input-box mono cursor-pointer"
                     />
                   </div>
                   <div className="md:col-span-3">
@@ -1170,7 +1249,7 @@ export default async function DailyProductionPage({
                       className="input-box mono cursor-pointer"
                     />
                   </div>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-2">
                     <label className="label block mb-1">Design#</label>
                     <input name="designNo" className="input-box mono" defaultValue={editing?.designNo ?? ""} />
                   </div>
@@ -1210,13 +1289,13 @@ export default async function DailyProductionPage({
                     <thead>
                       <tr>
                         <th style={{ width: 34 }}>Sr#</th>
+                        <th style={{ width: 30 }} title="Erase the whole row">✕</th>
+                        <th style={{ width: 170 }}>Beam # (F9)</th>
                         <th style={{ width: 90 }}>Beam Set#</th>
                         <th style={{ width: 60 }}>Type</th>
                         <th style={{ width: 120 }}>K/S/M Date</th>
                         <th style={{ width: 105 }}>Beam Status</th>
                         <th className="text-right" style={{ width: 80 }}>Wast WT KG</th>
-                        <th style={{ width: 170 }}>Beam # (F9)</th>
-                        <th style={{ width: 100 }}>Cont No</th>
                         <th className="text-right" style={{ width: 65 }}>Ends</th>
                         <th className="text-right" style={{ width: 80 }}>B.Length</th>
                         <th className="text-right" style={{ width: 80 }}>Rcvd/Mtr</th>
@@ -1227,9 +1306,34 @@ export default async function DailyProductionPage({
                     <tbody id="idp-beam-rows">
                       {Array.from({ length: Math.max(SET_ROWS, setRows.length + 2) }).map((_, i) => {
                         const s = setRows[i];
+                        
                         return (
                           <tr key={i}>
                             <td className="mono text-[12px] text-center">{i + 1}</td>
+                            <td className="text-center">
+                              <button
+                                type="button"
+                                data-row-erase
+                                title="Erase this whole row (both containers)"
+                                className="mono text-[12px] font-bold cursor-pointer hover:text-white"
+                                style={{ color: "var(--danger)", background: "none", border: "none", padding: "0 4px" }}
+                              >
+                                ✕
+                              </button>
+                            </td>
+                            <td>
+                              <FindingPicker
+                                name="beamNo"
+                                defaultValue={s?.beamNo ?? ""}
+                                rows={beamPickerRows}
+                                columns={beamCols}
+                                title="SET NO LIST — MOUNTED BEAMS"
+                                placeholder="F9 beam"
+                                className="input-box mono text-[12px] cursor-pointer"
+                              />
+                              <span data-near-empty className="mono text-[9px] text-[var(--danger)] font-bold ml-1"></span>
+                              <input type="hidden" name="contNo" defaultValue={s?.contNo ?? ""} />
+                            </td>
                             <td><input name="beamSetNo" className="input-box mono text-[12px]" defaultValue={s?.beamSetNo ?? ""} /></td>
                             <td>
                               <select name="kSmType" className="input-box mono text-[12px]" defaultValue={s?.kSmType ?? ""}>
@@ -1243,30 +1347,15 @@ export default async function DailyProductionPage({
                             <td>
                               <select name="beamStatus" className="input-box mono text-[12px]" defaultValue={s?.beamStatus ?? ""}>
                                 <option value=""></option>
-                                {beamStatusList.map((bs) => (
-                                  <option key={bs.id} value={bs.status}>{bs.status}</option>
+                                {BEAM_STATUS_CHOICES.map((st) => (
+                                  <option key={st} value={st}>{st}</option>
                                 ))}
-                                {s?.beamStatus && !beamStatusList.some((bs) => bs.status === s.beamStatus) && (
+                                {s?.beamStatus && !BEAM_STATUS_CHOICES.includes(s.beamStatus) && (
                                   <option value={s.beamStatus}>{s.beamStatus}</option>
                                 )}
                               </select>
                             </td>
                             <td><input name="wastWtKg" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.wastWtKg ?? ""} /></td>
-                            <td>
-                              <FindingPicker
-                                name="beamNo"
-                                defaultValue={s?.beamNo ?? ""}
-                                rows={beamPickerRows}
-                                columns={beamCols}
-                                title="SET NO LIST — MOUNTED BEAMS"
-                                placeholder="F9 beam"
-                                className="input-box mono text-[12px] cursor-pointer"
-                              />
-                              <span data-near-empty className="mono text-[9px] text-[var(--danger)] font-bold ml-1"></span>
-                            </td>
-                            <td>
-                              <input name="contNo" className="input-box mono text-[12px] bg-gray-50" defaultValue={s?.contNo ?? ""} readOnly tabIndex={-1} />
-                            </td>
                             <td><input name="ends" type="number" step="1" className="input-box mono text-[12px] text-right" defaultValue={s?.ends ?? ""} /></td>
                             <td><input name="bLength" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bLength ?? ""} /></td>
                             <td><input name="rcvdMtr" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.rcvdMtr ?? ""} readOnly tabIndex={-1} title="Auto: total woven on this beam incl. this voucher" /></td>
@@ -1292,6 +1381,7 @@ export default async function DailyProductionPage({
                     <thead>
                       <tr>
                         <th style={{ width: 34 }}>Sr#</th>
+                        <th style={{ width: 30 }} title="Erase the whole row">✕</th>
                         <th style={{ width: 110 }}>mm/Than Sr No</th>
                         <th className="text-right" style={{ width: 70 }}>A</th>
                         <th className="text-right" style={{ width: 70 }}>B</th>
@@ -1308,6 +1398,17 @@ export default async function DailyProductionPage({
                         return (
                           <tr key={i}>
                             <td className="mono text-[12px] text-center">{i + 1}</td>
+                            <td className="text-center">
+                              <button
+                                type="button"
+                                data-row-erase
+                                title="Erase this whole row (both containers)"
+                                className="mono text-[12px] font-bold cursor-pointer hover:text-white"
+                                style={{ color: "var(--danger)", background: "none", border: "none", padding: "0 4px" }}
+                              >
+                                ✕
+                              </button>
+                            </td>
                             <td><input name="mmThanSrNo" className="input-box mono text-[12px]" defaultValue={s?.mmThanSrNo ?? ""} /></td>
                             <td><input name="aCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.aCount ?? ""} /></td>
                             <td><input name="bCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bCount ?? ""} /></td>
@@ -1323,7 +1424,7 @@ export default async function DailyProductionPage({
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
-                  Row 1 here = Row 1 in BEAM DETAILS above. Than serial auto-fills per voucher.
+                  Row 1 here = Row 1 in BEAM DETAILS above. Than serial auto-fills per row with its grade tag (SEP-001-26|A).
                 </div>              </div>
               <div className="space-y-6">
                   <div className="border border-black p-4">
@@ -1356,12 +1457,12 @@ export default async function DailyProductionPage({
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PARTIES</div>
                     <div className="grid grid-cols-1 gap-3 gform">
                       <div>
-                        <label className="label block mb-1">Conv Cont Party</label>
-                        <Combobox name="convContParty" options={convPartyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
+                        <label className="label block mb-1">Beam Cost Party</label>
+                        <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
-                        <label className="label block mb-1">Beam Cont Party</label>
-                        <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
+                        <label className="label block mb-1">Yarn Cost Party</label>
+                        <Combobox name="convContParty" options={convPartyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
                         <label className="label block mb-1">Szg Party</label>

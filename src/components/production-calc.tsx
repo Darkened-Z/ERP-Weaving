@@ -116,6 +116,7 @@ type LoomBeamFill = {
   ends: number | null;
   bLength: number | null;
   contNo: string | null;
+  setNo?: string | null;
 };
 
 /**
@@ -166,10 +167,85 @@ export function LoomBeamsFill({
           setEl(tr, "contNo", null);
         }
       }
+      // Set# echoes back into the header (Oracle: picking the loom fills Set#).
+      const setNo = beams[0]?.setNo ?? null;
+      if (setNo) {
+        document.dispatchEvent(
+          new CustomEvent("combobox:set", { detail: { name: "headerSetNo", value: setNo } })
+        );
+      }
     };
     document.addEventListener("combobox:change", onChange);
     return () => document.removeEventListener("combobox:change", onChange);
   }, [map, maxRows]);
+  return null;
+}
+
+/**
+ * Header Set# (F9) pick (Oracle: type the set no → everything fills): sets the
+ * header Loom# for that beam set, which in turn opens ALL of the loom's knotted
+ * beams in the beam grid via LoomBeamsFill.
+ */
+export function HeaderSetFill({
+  map,
+}: {
+  map: Record<string, { headerLoom: string }>;
+}) {
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string };
+      if (d?.name !== "headerSetNo" || !d.value) return;
+      const fill = map[d.value];
+      if (!fill) return;
+      document.dispatchEvent(
+        new CustomEvent("combobox:set", { detail: { name: "headerLoom", value: fill.headerLoom } })
+      );
+      document.dispatchEvent(
+        new CustomEvent("combobox:change", { detail: { name: "headerLoom", value: fill.headerLoom } })
+      );
+    };
+    document.addEventListener("combobox:change", onChange);
+    return () => document.removeEventListener("combobox:change", onChange);
+  }, [map]);
+  return null;
+}
+
+/**
+ * The ✕ button: erases the WHOLE logical row — its own <tr> in `tbodyId` and the
+ * paired row (same index) in `pairTbodyId`. Clears every input/select, fires
+ * input/change so the live calcs and than serials update, and resets
+ * FindingPicker displays.
+ */
+export function RowErase({ tbodyId, pairTbodyId }: { tbodyId: string; pairTbodyId: string }) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement | null)?.closest?.("button[data-row-erase]");
+      if (!btn) return;
+      e.preventDefault();
+      const tbody = document.getElementById(tbodyId);
+      const tr = btn.closest("tr");
+      if (!tbody || !tr || !tbody.contains(tr)) return;
+      const idx = Array.from(tbody.querySelectorAll("tr")).indexOf(tr);
+      const clear = (row: HTMLTableRowElement | undefined | null) => {
+        if (!row) return;
+        row.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select, textarea").forEach((el) => {
+          el.value = "";
+          delete el.dataset.live;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        // FindingPicker displays keep a friendly "code — description" text; blank it.
+        row.querySelectorAll<HTMLInputElement>("input[data-lov-picker]").forEach((el) => {
+          el.value = "";
+        });
+      };
+      clear(tr as HTMLTableRowElement);
+      const pairRows = document.getElementById(pairTbodyId)?.querySelectorAll("tr");
+      if (pairRows) clear(pairRows[idx] as HTMLTableRowElement);
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [tbodyId, pairTbodyId]);
   return null;
 }
 
