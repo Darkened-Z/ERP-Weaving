@@ -7,6 +7,7 @@ import { FindingPicker } from "@/components/finding-picker";
 import { ProductionSetCalc, LoomBeamsFill } from "@/components/production-calc";
 import { ThanSerialLive } from "@/components/than-serial-live";
 import { loadConvContracts } from "@/lib/conv-contracts";
+import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
@@ -95,7 +96,12 @@ export default async function DailyProductionPage({
     .from(schema.chartOfAccounts)
     .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
-  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // PARTIES section (owner): only the mill's own conversion parties (786 weaving
+  // and friends under DEBTORS-CONVERSION WVG 1.01.01.01.*) — other contractors'
+  // accounts must not appear in these dropdowns.
+  const convPartyOpts = parties
+    .filter((p) => String(p.code).startsWith(WVG_CONVERSION_PREFIX))
+    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
 
   const productList = await db
     .select({ code: schema.products.code, description: schema.products.description })
@@ -1197,49 +1203,6 @@ export default async function DailyProductionPage({
 
               <div className="border border-black mb-3">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
-                  COUNTS GRID — mm/Than Sr No, A / B / C / CP / PPC, Total, Rej
-                </div>
-                <div className="overflow-x-auto">
-                  <table style={{ minWidth: "760px" }}>
-                    <thead>
-                      <tr>
-                        <th style={{ width: 34 }}>Sr#</th>
-                        <th style={{ width: 110 }}>mm/Than Sr No</th>
-                        <th className="text-right" style={{ width: 70 }}>A</th>
-                        <th className="text-right" style={{ width: 70 }}>B</th>
-                        <th className="text-right" style={{ width: 70 }}>C</th>
-                        <th className="text-right" style={{ width: 70 }}>CP</th>
-                        <th className="text-right" style={{ width: 70 }}>PPC</th>
-                        <th className="text-right" style={{ width: 75 }}>Total</th>
-                        <th className="text-right" style={{ width: 70 }}>Rej</th>
-                      </tr>
-                    </thead>
-                    <tbody id="idp-count-rows">
-                      {Array.from({ length: Math.max(SET_ROWS, setRows.length + 2) }).map((_, i) => {
-                        const s = setRows[i];
-                        return (
-                          <tr key={i}>
-                            <td className="mono text-[12px] text-center">{i + 1}</td>
-                            <td><input name="mmThanSrNo" className="input-box mono text-[12px]" defaultValue={s?.mmThanSrNo ?? ""} /></td>
-                            <td><input name="aCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.aCount ?? ""} /></td>
-                            <td><input name="bCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bCount ?? ""} /></td>
-                            <td><input name="cCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cCount ?? ""} /></td>
-                            <td><input name="cpCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cpCount ?? ""} /></td>
-                            <td><input name="ppcCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.ppcCount ?? ""} /></td>
-                            <td><input name="totalCount" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.totalCount ?? ""} readOnly tabIndex={-1} /></td>
-                            <td><input name="rejCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.rejCount ?? ""} /></td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
-                  Row 1 here = Row 1 in BEAM DETAILS below. Than serial auto-fills per voucher.
-                </div>              </div>
-
-              <div className="border border-black mb-3">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
                   BEAM DETAILS — Beam Set# → Shrinkage (auto-fills from header Loom#)
                 </div>
                 <div className="overflow-x-auto">
@@ -1320,6 +1283,48 @@ export default async function DailyProductionPage({
                 </div>
               </div>
 
+<div className="border border-black mb-3">
+                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
+                  COUNTS GRID — mm/Than Sr No, A / B / C / CP / PPC, Total, Rej
+                </div>
+                <div className="overflow-x-auto">
+                  <table style={{ minWidth: "760px" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 34 }}>Sr#</th>
+                        <th style={{ width: 110 }}>mm/Than Sr No</th>
+                        <th className="text-right" style={{ width: 70 }}>A</th>
+                        <th className="text-right" style={{ width: 70 }}>B</th>
+                        <th className="text-right" style={{ width: 70 }}>C</th>
+                        <th className="text-right" style={{ width: 70 }}>CP</th>
+                        <th className="text-right" style={{ width: 70 }}>PPC</th>
+                        <th className="text-right" style={{ width: 75 }}>Total</th>
+                        <th className="text-right" style={{ width: 70 }}>Rej</th>
+                      </tr>
+                    </thead>
+                    <tbody id="idp-count-rows">
+                      {Array.from({ length: Math.max(SET_ROWS, setRows.length + 2) }).map((_, i) => {
+                        const s = setRows[i];
+                        return (
+                          <tr key={i}>
+                            <td className="mono text-[12px] text-center">{i + 1}</td>
+                            <td><input name="mmThanSrNo" className="input-box mono text-[12px]" defaultValue={s?.mmThanSrNo ?? ""} /></td>
+                            <td><input name="aCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.aCount ?? ""} /></td>
+                            <td><input name="bCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bCount ?? ""} /></td>
+                            <td><input name="cCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cCount ?? ""} /></td>
+                            <td><input name="cpCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cpCount ?? ""} /></td>
+                            <td><input name="ppcCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.ppcCount ?? ""} /></td>
+                            <td><input name="totalCount" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.totalCount ?? ""} readOnly tabIndex={-1} /></td>
+                            <td><input name="rejCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.rejCount ?? ""} /></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
+                  Row 1 here = Row 1 in BEAM DETAILS above. Than serial auto-fills per voucher.
+                </div>              </div>
               <div className="space-y-6">
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PRODUCT</div>
@@ -1352,15 +1357,15 @@ export default async function DailyProductionPage({
                     <div className="grid grid-cols-1 gap-3 gform">
                       <div>
                         <label className="label block mb-1">Conv Cont Party</label>
-                        <Combobox name="convContParty" options={partyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
+                        <Combobox name="convContParty" options={convPartyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
                         <label className="label block mb-1">Beam Cont Party</label>
-                        <Combobox name="beamContParty" options={partyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
+                        <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
                         <label className="label block mb-1">Szg Party</label>
-                        <Combobox name="szgParty" options={partyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select party" />
+                        <Combobox name="szgParty" options={convPartyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select party" />
                       </div>
                     </div>
                   </div>
