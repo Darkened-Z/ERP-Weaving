@@ -3,11 +3,11 @@
 import { useEffect } from "react";
 
 /**
- * Live mm/Than serial per production row: each active row (has a beam / loom /
- * count) gets the next serial (e.g. SEP-0133-26, SEP-0134-26…) as you add rows.
- * `base` is the next number for the current month (from the server). Only touches
- * blank / auto-assigned cells (marked data-live) — a user-typed serial is kept,
- * and the server still regenerates any blanks on save as a safety net.
+ * Voucher-matched mm/Than serial: ALL active count rows of one voucher share the
+ * SAME serial (e.g. SEP-001-26 — the voucher's own monthly number), so the A/B/C
+ * than boxes show which voucher each than belongs to. `base` is the next monthly
+ * number from the server. Only fills blank / auto-assigned cells (data-live); a
+ * user-typed serial is kept, and the server regenerates blanks on save.
  */
 export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix: string; suffix: string }) {
   useEffect(() => {
@@ -18,20 +18,18 @@ export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix:
     };
 
     const recompute = () => {
-      const rows = document.querySelectorAll("#idp-set-rows tr");
-      let idx = 0;
+      const rows = document.querySelectorAll("#idp-count-rows tr");
+      const serial = `${prefix}${String(base).padStart(3, "0")}${suffix}`;
       rows.forEach((tr) => {
         const than = tr.querySelector('[name="mmThanSrNo"]') as HTMLInputElement | null;
         if (!than) return;
         const q = (n: string) => (tr.querySelector(`[name="${n}"]`) as HTMLInputElement | null)?.value?.trim();
-        const active = !!(q("beamNo") || q("loomNo") || q("setHash") || q("aCount") || q("bCount") || q("cCount") || q("cpCount") || q("ppcCount") || q("ends"));
-        const autoOwned = than.dataset.live === "1" || !than.value;
+        const active = !!(q("aCount") || q("bCount") || q("cCount") || q("cpCount") || q("ppcCount") || than.value);
         if (active) {
-          if (autoOwned) {
-            than.value = `${prefix}${String(base + idx).padStart(4, "0")}${suffix}`;
+          if (than.dataset.live === "1" || !than.value) {
+            than.value = serial;
             than.dataset.live = "1";
           }
-          idx++;
         } else if (than.dataset.live === "1") {
           than.value = "";
           delete than.dataset.live;

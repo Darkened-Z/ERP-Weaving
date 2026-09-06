@@ -4,7 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, AutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
-import { ProductionSetCalc } from "@/components/production-calc";
+import { ProductionSetCalc, LoomBeamsFill } from "@/components/production-calc";
 import { ThanSerialLive } from "@/components/than-serial-live";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -19,8 +19,7 @@ import { num, intVal, txt, escLike } from "@/lib/form";
 
 export const dynamic = "force-dynamic";
 
-const SET_ROWS = 3;
-const DETAIL_ROWS = 3;
+const SET_ROWS = 8;
 
 const SELV_OPTIONS = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 
@@ -62,14 +61,6 @@ export default async function DailyProductionPage({
         .from(schema.intDailyProductionSet)
         .where(eq(schema.intDailyProductionSet.productionId, editing.id))
         .orderBy(schema.intDailyProductionSet.srNo)
-    : [];
-
-  const detailRows = editing
-    ? await db
-        .select()
-        .from(schema.intDailyProductionDetail)
-        .where(eq(schema.intDailyProductionDetail.productionId, editing.id))
-        .orderBy(schema.intDailyProductionDetail.srNo)
     : [];
 
   const maxRow = await db
@@ -211,18 +202,25 @@ export default async function DailyProductionPage({
     { key: "beamLength", label: "Length", width: 75, align: "right" as const },
     { key: "contNo", label: "Cont No", width: 100 },
   ];
-  // Loom → mounted beam. Loom numbers REPEAT across sheds (shed 1 loom 1, shed 2
-  // loom 1, …), so the lookup is scoped by "shed|loomNo" first, with a loomNo-only
-  // fallback for legacy beams mounted before the shed was stamped.
-  const beamByLoom = new Map<string, (typeof runningBeams)[number]>();
-  const beamByLoomNo = new Map<number, (typeof runningBeams)[number]>();
+  // Loom → mounted beams. Loom numbers REPEAT across sheds (shed 1 loom 1, shed 2
+  // loom 1, …), so lookups are scoped by "shed|loomNo" first, with a loomNo-only
+  // fallback for legacy beams mounted before the shed was stamped. A loom can
+  // carry SEVERAL knotted beams — the header Loom# pick opens all of them.
+  const beamsByLoom = new Map<string, (typeof runningBeams)[number][]>();
+  const beamsByLoomNo = new Map<number, (typeof runningBeams)[number][]>();
   for (const b of runningBeams) {
     if (b.loomNo == null) continue;
-    if (b.shed && !beamByLoom.has(`${b.shed}|${b.loomNo}`)) beamByLoom.set(`${b.shed}|${b.loomNo}`, b);
-    if (!beamByLoomNo.has(b.loomNo)) beamByLoomNo.set(b.loomNo, b);
+    if (b.shed) {
+      const k = `${b.shed}|${b.loomNo}`;
+      (beamsByLoom.get(k) ?? beamsByLoom.set(k, []).get(k)!).push(b);
+    }
+    (beamsByLoomNo.get(b.loomNo) ?? beamsByLoomNo.set(b.loomNo, []).get(b.loomNo)!).push(b);
   }
-  const beamForLoom = (shed: string | null, loomNo: number) =>
-    (shed && beamByLoom.get(`${shed}|${loomNo}`)) || beamByLoomNo.get(loomNo);
+  const beamsForLoom = (shed: string | null, loomNo: number) => {
+    const scoped = shed ? beamsByLoom.get(`${shed}|${loomNo}`) : undefined;
+    return scoped && scoped.length ? scoped : beamsByLoomNo.get(loomNo) ?? [];
+  };
+  const firstBeamForLoom = (shed: string | null, loomNo: number) => beamsForLoom(shed, loomNo)[0];
 
   // Loom LOV (shed-scoped via filterKey) + fill map from each loom's RUNNING beam.
   const loomRows2 = await db
@@ -230,7 +228,7 @@ export default async function DailyProductionPage({
     .from(schema.looms)
     .orderBy(schema.looms.shed, schema.looms.loomNo);
   const loomPickerRows = loomRows2.map((lm) => {
-    const b = beamForLoom(lm.shed, lm.loomNo);
+    const b = firstBeamForLoom(lm.shed, lm.loomNo);
     return {
       // Composite "shed|loomNo" value (same convention as the knotting loom
       // picker) — loom numbers repeat across sheds, so a bare loomNo is ambiguous.
@@ -249,18 +247,57 @@ export default async function DailyProductionPage({
     { key: "beamNo", label: "Beam", width: 85 },
     { key: "contNo", label: "Contract", width: 100 },
   ];
-  const loomFillMap: Record<string, Record<string, string | number | null>> = {};
+  // Header Loom# (F9) pick → ALL mounted beams of that loom fill the beam grid
+  // (row 1 = first beam, row 2 = second, …).
+  const loomBeamsMap: Record<
+    string,
+    {
+      beamNo: string | null;
+      beamSetNo: string | null;
+      setHash: string | null;
+      beamStatus: string | null;
+      ends: number | null;
+      bLength: number | null;
+      contNo: string | null;
+    }[]
+  > = {};
   for (const lm of loomRows2) {
-    const b = beamForLoom(lm.shed, lm.loomNo);
-    loomFillMap[`${lm.shed ?? ""}|${lm.loomNo}`] = {
-      beamNo: b?.beamNo ?? null,
-      beamSetNo: b?.beamSetNo ?? null,
-      setHash: b?.setNo ?? null,
-      beamStatus: b ? "PRODUCTION" : null,
-      ends: b?.ends ?? null,
-      bLength: b?.length ?? null,
-      contNo: (lm.currentContract ?? b?.contractNo) ?? null,
-    };
+    loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = beamsForLoom(lm.shed, lm.loomNo).map((b) => ({
+      beamNo: b.beamNo ?? null,
+      beamSetNo: b.beamSetNo ?? null,
+      setHash: b.setNo ?? null,
+      beamStatus: "PRODUCTION",
+      ends: b.ends ?? null,
+      bLength: b.length ?? null,
+      contNo: b.contractNo ?? null,
+    }));
+  }
+  // Folding Stock by conv party — the header's Folding Stock box is readonly and
+  // auto-fills when a Conv Cont Party is picked (server recomputes on save too).
+  const foldingByParty: Record<string, Record<string, string | number | null>> = {};
+  {
+    const prodByParty = await db
+      .select({
+        party: schema.intDailyProduction.convContParty,
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0)),0)`,
+      })
+      .from(schema.intDailyProductionSet)
+      .innerJoin(schema.intDailyProduction, eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id))
+      .groupBy(schema.intDailyProduction.convContParty);
+    const despByParty = await db
+      .select({
+        party: schema.intGreyDespatch.party,
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.intGreyDespatchLine.lengthMtrs},0)),0)`,
+      })
+      .from(schema.intGreyDespatchLine)
+      .innerJoin(schema.intGreyDespatch, eq(schema.intGreyDespatchLine.despatchId, schema.intGreyDespatch.id))
+      .groupBy(schema.intGreyDespatch.party);
+    const despMap = new Map(despByParty.map((d) => [d.party ?? "", Number(d.s ?? 0)]));
+    for (const p of prodByParty) {
+      if (!p.party) continue;
+      const val = Math.round((Number(p.s ?? 0) - (despMap.get(p.party) ?? 0)) * 100) / 100;
+      foldingByParty[p.party] = { foldingStock: val };
+    }
   }
 
   // Grey conversion contract LOV — from BOTH internal (IGCC) and external (GCC)
@@ -412,7 +449,6 @@ export default async function DailyProductionPage({
     const beamStatusArr = formData.getAll("beamStatus") as string[];
     const wastWtKgArr = formData.getAll("wastWtKg") as string[];
     const beamNoArr = formData.getAll("beamNo") as string[];
-    const loomNoArr = formData.getAll("loomNo") as string[];
     const contNoArr = formData.getAll("contNo") as string[];
     const endsArr = formData.getAll("ends") as string[];
     const bLengthArr = formData.getAll("bLength") as string[];
@@ -445,8 +481,11 @@ export default async function DailyProductionPage({
       diff: number | null;
       shrinkage: number | null;
     }[] = [];
-    for (let i = 0; i < setHashArr.length; i++) {
-      const setHash = (setHashArr[i] || "").trim();
+    // Bound by the mm/Than serial column (always rendered). Set# and Loom# were
+    // removed from the grid (owner) — setHash stays null; the loom lives in the
+    // header and only its mounted beams fill the beam rows.
+    for (let i = 0; i < mmThanSrNoArr.length; i++) {
+      const setHash: string | null = (setHashArr[i] || "").trim() || null;
       const mmThanSrNo = (mmThanSrNoArr[i] || "").trim();
       const aC = num(aCountArr[i]);
       const bC = num(bCountArr[i]);
@@ -461,10 +500,9 @@ export default async function DailyProductionPage({
       const bs = (beamStatusArr[i] || "").trim();
       const ww = num(wastWtKgArr[i]);
       const bn = (beamNoArr[i] || "").trim();
-      // Loom cell carries "shed|loomNo" from the picker (loom numbers repeat
-      // across sheds) — store the loom number; the shed is the voucher header's.
-      const lnRaw = (loomNoArr[i] || "").trim();
-      const ln = lnRaw.includes("|") ? intVal(lnRaw.split("|").pop() ?? "") : intVal(lnRaw);
+      // Loom moved to the header (owner) — rows no longer carry a loom cell; the
+      // beam's loom stays whatever the knotting mount stamped on the beam.
+      const ln: number | null = null;
       const cn = (contNoArr[i] || "").trim();
       const en = intVal(endsArr[i]);
       const bl = num(bLengthArr[i]);
@@ -525,59 +563,13 @@ export default async function DailyProductionPage({
     const monthPrefix = `${monAbbr}-`;
     const monthSuffix = `-${yy}`;
 
-    // Cheap up-front duplicate check within the submitted grid (per row).
-    const submittedSeen = new Set<string>();
-    for (const s of validSets) {
-      if (!s.mmThanSrNo) continue;
-      if (submittedSeen.has(s.mmThanSrNo)) {
-        const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
-        redirect(`/inventory/daily-production${q}`);
-      }
-      submittedSeen.add(s.mmThanSrNo);
-    }
+    // mm/Than serials are VOUCHER-matched now (owner): every active row of one
+    // voucher shares the same serial (the voucher's own monthly number, e.g.
+    // SEP-001-26) — the A/B/C than boxes identify the voucher they belong to.
+    // The old per-row duplicate check is gone accordingly.
 
-    const detailDateArr = formData.getAll("detailDate") as string[];
-    const aProdArr = formData.getAll("aProd") as string[];
-    const bProdArr = formData.getAll("bProd") as string[];
-    const cProdArr = formData.getAll("cProd") as string[];
-    const totalProdArr = formData.getAll("totalProd") as string[];
-    const prodCntArr = formData.getAll("prodCnt") as string[];
-    const prodDiffArr = formData.getAll("prodDiff") as string[];
-    const prodAddFactorArr = formData.getAll("prodAddFactor") as string[];
-
-    const validDetails: {
-      srNo: number;
-      detailDate: string | null;
-      aProd: number | null;
-      bProd: number | null;
-      cProd: number | null;
-      totalProd: number | null;
-      prodCnt: number | null;
-      prodDiff: number | null;
-      prodAddFactor: number | null;
-    }[] = [];
-    for (let i = 0; i < detailDateArr.length; i++) {
-      const dd = (detailDateArr[i] || "").trim();
-      const ap = num(aProdArr[i]);
-      const bp = num(bProdArr[i]);
-      const cp = num(cProdArr[i]);
-      const tp = num(totalProdArr[i]);
-      const pcnt = num(prodCntArr[i]);
-      const pdf = num(prodDiffArr[i]);
-      const paf = num(prodAddFactorArr[i]);
-      if (!dd && ap == null && bp == null && cp == null && tp == null && pcnt == null && pdf == null && paf == null) continue;
-      validDetails.push({
-        srNo: validDetails.length + 1,
-        detailDate: dd || null,
-        aProd: ap,
-        bProd: bp,
-        cProd: cp,
-        totalProd: tp,
-        prodCnt: pcnt,
-        prodDiff: pdf,
-        prodAddFactor: paf,
-      });
-    }
+    // ALT+Z PROD DETAIL grid removed (owner) — the detail table is no longer
+    // written; its columns stay in the schema untouched.
 
     // ---- Folding grey stock GL inputs (DR 1.01.01.01.0013 / CR conv party) ----
     // amount = Σ produced meters × the row's grey-conversion contract rate.
@@ -637,6 +629,23 @@ export default async function DailyProductionPage({
     const canPostFolding = !!fyCode && !!convPartyCode && foldingAmount > 0;
     const foldingNarr = `FOLDING GREY STOCK — ${header.shedNo ?? ""}`.trim();
 
+    // Folding Stock is SERVER-computed (owner: auto, not editable) — production −
+    // despatch for the voucher's conv party, written back into the header row.
+    if (convPartyDesc) {
+      const prodRow = await db
+        .select({ s: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0)),0)` })
+        .from(schema.intDailyProductionSet)
+        .innerJoin(schema.intDailyProduction, eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id))
+        .where(eq(schema.intDailyProduction.convContParty, convPartyDesc));
+      const despRow = await db
+        .select({ s: sql<number>`COALESCE(SUM(COALESCE(${schema.intGreyDespatchLine.lengthMtrs},0)),0)` })
+        .from(schema.intGreyDespatchLine)
+        .innerJoin(schema.intGreyDespatch, eq(schema.intGreyDespatchLine.despatchId, schema.intGreyDespatch.id))
+        .where(eq(schema.intGreyDespatch.party, convPartyDesc));
+      header.foldingStock =
+        Math.round((Number(prodRow[0]?.s ?? 0) - Number(despRow[0]?.s ?? 0)) * 100) / 100;
+    }
+
     const nowIso = new Date().toISOString();
 
     try {
@@ -656,10 +665,12 @@ export default async function DailyProductionPage({
             .from(schema.intDailyProductionSet)
             .where(eq(schema.intDailyProductionSet.productionId, id));
           const oldBeamStatus = new Map<string, string | null>();
+          // Per-ROW delivery memory (serial + beam) — rows of one voucher share a
+          // serial now, so a serial-only key would cross-mark the A/B/C thans.
           const oldDelivered = new Map<string, string | null>();
           for (const os of oldSets) {
             if (os.beamNo) oldBeamStatus.set(os.beamNo, os.beamStatus ?? null);
-            if (os.mmThanSrNo) oldDelivered.set(os.mmThanSrNo, os.dlvStatus ?? null);
+            if (os.mmThanSrNo) oldDelivered.set(`${os.mmThanSrNo}::${os.beamNo ?? ""}`, os.dlvStatus ?? null);
           }
 
           await tx
@@ -674,7 +685,8 @@ export default async function DailyProductionPage({
             .where(eq(schema.intDailyProductionDetail.productionId, id));
 
           // Generate mmThanSrNo inside the tx so the seq lookup and the insert
-          // are atomic; unique collisions bubble out as UNIQUE errors.
+          // are atomic. Voucher-matched: ONE serial per voucher — every active
+          // row shares it; 3-digit padding (SEP-001-26).
           const monthMaxRow = await tx
             .select({
               m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
@@ -683,11 +695,11 @@ export default async function DailyProductionPage({
             .where(
               sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
             );
-          let seq = Number(monthMaxRow[0]?.m ?? 0);
+          const seq = Number(monthMaxRow[0]?.m ?? 0) + 1;
+          const voucherThan = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}`;
           for (const s of validSets) {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              seq += 1;
-              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(4, "0")}-${yy}`;
+              s.mmThanSrNo = voucherThan;
             }
           }
 
@@ -709,24 +721,21 @@ export default async function DailyProductionPage({
               .insert(schema.intDailyProductionSet)
               .values(validSets.map((s) => ({ ...s, productionId: id })));
           }
-          if (validDetails.length) {
-            await tx
-              .insert(schema.intDailyProductionDetail)
-              .values(validDetails.map((d) => ({ ...d, productionId: id })));
-          }
 
-          // Re-stamp dlvStatus='Y' where the old voucher already delivered.
-          const reDeliver = validSets
-            .map((s) => s.mmThanSrNo)
-            .filter((m): m is string => !!m && oldDelivered.get(m) === "Y");
-          if (reDeliver.length) {
+          // Re-stamp dlvStatus='Y' per ROW where the old voucher already delivered.
+          for (const s of validSets) {
+            if (!s.mmThanSrNo) continue;
+            if (oldDelivered.get(`${s.mmThanSrNo}::${s.beamNo ?? ""}`) !== "Y") continue;
             await tx
               .update(schema.intDailyProductionSet)
               .set({ dlvStatus: "Y" })
               .where(
                 and(
                   eq(schema.intDailyProductionSet.productionId, id),
-                  inArray(schema.intDailyProductionSet.mmThanSrNo, reDeliver)
+                  eq(schema.intDailyProductionSet.mmThanSrNo, s.mmThanSrNo),
+                  s.beamNo
+                    ? eq(schema.intDailyProductionSet.beamNo, s.beamNo)
+                    : isNotNull(schema.intDailyProductionSet.beamNo)
                 )
               );
           }
@@ -803,11 +812,11 @@ export default async function DailyProductionPage({
             .where(
               sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
             );
-          let seq = Number(monthMaxRow[0]?.m ?? 0);
+          const seq = Number(monthMaxRow[0]?.m ?? 0) + 1;
+          const voucherThan = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}`;
           for (const s of validSets) {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              seq += 1;
-              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(4, "0")}-${yy}`;
+              s.mmThanSrNo = voucherThan;
             }
           }
 
@@ -829,11 +838,6 @@ export default async function DailyProductionPage({
             await tx
               .insert(schema.intDailyProductionSet)
               .values(validSets.map((s) => ({ ...s, productionId: insertedId })));
-          }
-          if (validDetails.length) {
-            await tx
-              .insert(schema.intDailyProductionDetail)
-              .values(validDetails.map((d) => ({ ...d, productionId: insertedId })));
           }
           for (const s of validSets) {
             if (!s.beamNo || !s.beamStatus) continue;
@@ -999,7 +1003,7 @@ export default async function DailyProductionPage({
         )}
         {params.error === "no_beam" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            At least one Set# row must have a Beam #.
+            At least one row must have a Beam # (fill it in BEAM DETAILS below, or pick a header Loom#).
           </div>
         )}
         {params.error === "party_cross" && (
@@ -1055,7 +1059,10 @@ export default async function DailyProductionPage({
               <ProductionSetCalc beamStats={beamStats} />
               <ThanSerialLive base={thanBase} prefix={thanPrefix} suffix={thanSuffix} />
               <RowAutoFill watch="beamNo" map={beamFillMap} />
-              <RowAutoFill watch="loomNo" map={loomFillMap} />
+              {/* Header Loom# pick → ALL of that loom's knotted beams open in the beam grid */}
+              <LoomBeamsFill map={loomBeamsMap} maxRows={SET_ROWS} />
+              {/* Folding Stock auto-fills from the picked conv party — readonly box */}
+              <AutoFill watch="convContParty" map={foldingByParty} inputs={["foldingStock"]} />
               <AutoFill watch="conv_contract" map={contractFillMap} combos={["productQuality", "convContParty"]} inputs={["productBrand"]} />
               <datalist id="beams-list">
                 {beamCatalog.map((b) => (
@@ -1120,8 +1127,17 @@ export default async function DailyProductionPage({
                     />
                   </div>
                   <div className="md:col-span-3">
-                    <label className="label block mb-1">Set#</label>
-                    <input name="setNo" className="input-box mono" defaultValue={editing?.setNo ?? ""} />
+                    <label className="label block mb-1">Loom# (F9) <span className="text-[9px] text-[var(--muted)]">(mounted beams auto-fill below)</span></label>
+                    <FindingPicker
+                      name="headerLoom"
+                      defaultValue=""
+                      rows={loomPickerRows}
+                      columns={loomCols}
+                      filterByField="shedNo"
+                      title="LOOM LIST"
+                      placeholder="F9 loom — fills its beams below"
+                      className="input-box mono cursor-pointer"
+                    />
                   </div>
                   <div className="md:col-span-3">
                     <label className="label block mb-1">Design#</label>
@@ -1156,44 +1172,29 @@ export default async function DailyProductionPage({
 
               <div className="border border-black mb-3">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
-                  SET# GRID — mm/Than Sr No, Counts, Beam Details
+                  COUNTS GRID — mm/Than Sr No, A / B / C / CP / PPC, Total, Rej
                 </div>
                 <div className="overflow-x-auto">
-                  <table style={{ minWidth: "2200px" }}>
+                  <table style={{ minWidth: "760px" }}>
                     <thead>
                       <tr>
                         <th style={{ width: 34 }}>Sr#</th>
-                        <th style={{ width: 70 }}>Set#</th>
                         <th style={{ width: 110 }}>mm/Than Sr No</th>
-                        <th className="text-right" style={{ width: 55 }}>A</th>
-                        <th className="text-right" style={{ width: 55 }}>B</th>
-                        <th className="text-right" style={{ width: 55 }}>C</th>
-                        <th className="text-right" style={{ width: 55 }}>CP</th>
-                        <th className="text-right" style={{ width: 55 }}>PPC</th>
-                        <th className="text-right" style={{ width: 65 }}>Total</th>
-                        <th className="text-right" style={{ width: 55 }}>Rej</th>
-                        <th style={{ width: 80 }}>Beam Set#</th>
-                        <th style={{ width: 55 }}>Type</th>
-                        <th style={{ width: 115 }}>K/S/M Date</th>
-                        <th style={{ width: 100 }}>Beam Status</th>
-                        <th className="text-right" style={{ width: 75 }}>Wast WT KG</th>
-                        <th style={{ width: 160 }}>Loom# (F9)</th>
-                        <th style={{ width: 160 }}>Beam # (F9)</th>
-                        <th style={{ width: 100 }}>Cont No</th>
-                        <th className="text-right" style={{ width: 60 }}>Ends</th>
-                        <th className="text-right" style={{ width: 75 }}>B.Length</th>
-                        <th className="text-right" style={{ width: 75 }}>Rcvd/Mtr</th>
-                        <th className="text-right" style={{ width: 65 }}>Diff</th>
-                        <th className="text-right" style={{ width: 75 }}>Shrinkage</th>
+                        <th className="text-right" style={{ width: 70 }}>A</th>
+                        <th className="text-right" style={{ width: 70 }}>B</th>
+                        <th className="text-right" style={{ width: 70 }}>C</th>
+                        <th className="text-right" style={{ width: 70 }}>CP</th>
+                        <th className="text-right" style={{ width: 70 }}>PPC</th>
+                        <th className="text-right" style={{ width: 75 }}>Total</th>
+                        <th className="text-right" style={{ width: 70 }}>Rej</th>
                       </tr>
                     </thead>
-                    <tbody id="idp-set-rows">
+                    <tbody id="idp-count-rows">
                       {Array.from({ length: Math.max(SET_ROWS, setRows.length + 2) }).map((_, i) => {
                         const s = setRows[i];
                         return (
                           <tr key={i}>
                             <td className="mono text-[12px] text-center">{i + 1}</td>
-                            <td><input name="setHash" className="input-box mono text-[12px]" defaultValue={s?.setHash ?? ""} /></td>
                             <td><input name="mmThanSrNo" className="input-box mono text-[12px]" defaultValue={s?.mmThanSrNo ?? ""} /></td>
                             <td><input name="aCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.aCount ?? ""} /></td>
                             <td><input name="bCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bCount ?? ""} /></td>
@@ -1202,6 +1203,45 @@ export default async function DailyProductionPage({
                             <td><input name="ppcCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.ppcCount ?? ""} /></td>
                             <td><input name="totalCount" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.totalCount ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="rejCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.rejCount ?? ""} /></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
+                  Row 1 here = Row 1 in BEAM DETAILS below. Than serial auto-fills per voucher.
+                </div>              </div>
+
+              <div className="border border-black mb-3">
+                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
+                  BEAM DETAILS — Beam Set# → Shrinkage (auto-fills from header Loom#)
+                </div>
+                <div className="overflow-x-auto">
+                  <table style={{ minWidth: "1560px" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 34 }}>Sr#</th>
+                        <th style={{ width: 90 }}>Beam Set#</th>
+                        <th style={{ width: 60 }}>Type</th>
+                        <th style={{ width: 120 }}>K/S/M Date</th>
+                        <th style={{ width: 105 }}>Beam Status</th>
+                        <th className="text-right" style={{ width: 80 }}>Wast WT KG</th>
+                        <th style={{ width: 170 }}>Beam # (F9)</th>
+                        <th style={{ width: 100 }}>Cont No</th>
+                        <th className="text-right" style={{ width: 65 }}>Ends</th>
+                        <th className="text-right" style={{ width: 80 }}>B.Length</th>
+                        <th className="text-right" style={{ width: 80 }}>Rcvd/Mtr</th>
+                        <th className="text-right" style={{ width: 70 }}>Diff</th>
+                        <th className="text-right" style={{ width: 80 }}>Shrinkage</th>
+                      </tr>
+                    </thead>
+                    <tbody id="idp-beam-rows">
+                      {Array.from({ length: Math.max(SET_ROWS, setRows.length + 2) }).map((_, i) => {
+                        const s = setRows[i];
+                        return (
+                          <tr key={i}>
+                            <td className="mono text-[12px] text-center">{i + 1}</td>
                             <td><input name="beamSetNo" className="input-box mono text-[12px]" defaultValue={s?.beamSetNo ?? ""} /></td>
                             <td>
                               <select name="kSmType" className="input-box mono text-[12px]" defaultValue={s?.kSmType ?? ""}>
@@ -1226,24 +1266,6 @@ export default async function DailyProductionPage({
                             <td><input name="wastWtKg" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.wastWtKg ?? ""} /></td>
                             <td>
                               <FindingPicker
-                                name="loomNo"
-                                defaultValue={
-                                  s?.loomNo != null
-                                    ? editing?.shedNo
-                                      ? `${editing.shedNo}|${s.loomNo}`
-                                      : String(s.loomNo)
-                                    : ""
-                                }
-                                rows={loomPickerRows}
-                                columns={loomCols}
-                                filterByField="shedNo"
-                                title="LOOM LIST"
-                                placeholder="F9 loom"
-                                className="input-box mono text-[12px] cursor-pointer"
-                              />
-                            </td>
-                            <td>
-                              <FindingPicker
                                 name="beamNo"
                                 defaultValue={s?.beamNo ?? ""}
                                 rows={beamPickerRows}
@@ -1259,7 +1281,7 @@ export default async function DailyProductionPage({
                             </td>
                             <td><input name="ends" type="number" step="1" className="input-box mono text-[12px] text-right" defaultValue={s?.ends ?? ""} /></td>
                             <td><input name="bLength" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bLength ?? ""} /></td>
-                            <td><input name="rcvdMtr" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.rcvdMtr ?? ""} readOnly tabIndex={-1} /></td>
+                            <td><input name="rcvdMtr" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.rcvdMtr ?? ""} readOnly tabIndex={-1} title="Auto: total woven on this beam incl. this voucher" /></td>
                             <td><input name="diff" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.diff ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="shrinkage" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.shrinkage ?? ""} readOnly tabIndex={-1} /></td>
                           </tr>
@@ -1269,58 +1291,11 @@ export default async function DailyProductionPage({
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
-                  Empty rows are ignored on save. Ctrl+Page Down to advance.
+                  Pick the Loom# in the header — all of its knotted beams auto-fill here (1, 2, however many).
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-7">
-                  <div className="border border-black">
-                    <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
-                      ALT+Z — PROD DETAIL
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th style={{ width: "34px" }}>Sr#</th>
-                            <th>Date</th>
-                            <th className="text-right">A Prod</th>
-                            <th className="text-right">B Prod</th>
-                            <th className="text-right">C Prod</th>
-                            <th className="text-right">Total Prod</th>
-                            <th className="text-right">Prod CNT</th>
-                            <th className="text-right">Prod Diff</th>
-                            <th className="text-right">Prod.Add.Factor</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Array.from({ length: Math.max(DETAIL_ROWS, detailRows.length + 2) }).map((_, i) => {
-                            const d = detailRows[i];
-                            return (
-                              <tr key={i}>
-                                <td className="mono text-[12px] text-center">{i + 1}</td>
-                                <td><input name="detailDate" type="date" className="input-box mono text-[12px]" defaultValue={d?.detailDate ?? ""} /></td>
-                                <td><input name="aProd" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={d?.aProd ?? ""} /></td>
-                                <td><input name="bProd" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={d?.bProd ?? ""} /></td>
-                                <td><input name="cProd" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={d?.cProd ?? ""} /></td>
-                                <td><input name="totalProd" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={d?.totalProd ?? ""} /></td>
-                                <td><input name="prodCnt" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={d?.prodCnt ?? ""} /></td>
-                                <td><input name="prodDiff" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={d?.prodDiff ?? ""} /></td>
-                                <td><input name="prodAddFactor" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={d?.prodAddFactor ?? ""} /></td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
-                      Empty rows are ignored on save.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-5 space-y-6">
+              <div className="space-y-6">
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PRODUCT</div>
                     <div className="grid grid-cols-1 gap-3 gform">
@@ -1452,7 +1427,6 @@ export default async function DailyProductionPage({
                     </div>
                   </div>
                 </div>
-              </div>
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
                 <button type="submit" className="btn btn-sm">Save</button>
