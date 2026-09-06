@@ -3,12 +3,30 @@
 import { useEffect } from "react";
 
 /**
- * Voucher-matched mm/Than serial: ALL active count rows of one voucher share the
- * SAME serial (e.g. SEP-001-26 — the voucher's own monthly number), so the A/B/C
- * than boxes show which voucher each than belongs to. `base` is the next monthly
- * number from the server. Only fills blank / auto-assigned cells (data-live); a
+ * mm/Than serial with grade tag, per active count row: each active row gets the
+ * next monthly number (3-digit, e.g. SEP-001-26) PLUS the grade whose meters are
+ * filled in that row — "SEP-001-26|A", "SEP-002-26|B", … so every than shows
+ * which voucher/grade it belongs to (client-approved format). `base` is the next
+ * monthly number from the server. Only fills blank / auto cells (data-live); a
  * user-typed serial is kept, and the server regenerates blanks on save.
  */
+const GRADES: { grade: string; field: string }[] = [
+  { grade: "A", field: "aCount" },
+  { grade: "B", field: "bCount" },
+  { grade: "C", field: "cCount" },
+  { grade: "CP", field: "cpCount" },
+  { grade: "PPC", field: "ppcCount" },
+];
+
+function gradeOf(tr: HTMLTableRowElement): string {
+  for (const g of GRADES) {
+    const el = tr.querySelector<HTMLInputElement>(`[name="${g.field}"]`);
+    const n = parseFloat(el?.value ?? "");
+    if (Number.isFinite(n) && n > 0) return g.grade;
+  }
+  return "";
+}
+
 export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix: string; suffix: string }) {
   useEffect(() => {
     // A direct edit of a than cell releases it from auto-management.
@@ -18,18 +36,20 @@ export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix:
     };
 
     const recompute = () => {
-      const rows = document.querySelectorAll("#idp-count-rows tr");
-      const serial = `${prefix}${String(base).padStart(3, "0")}${suffix}`;
+      const rows = Array.from(document.querySelectorAll("#idp-count-rows tr")) as HTMLTableRowElement[];
+      let idx = 0;
       rows.forEach((tr) => {
         const than = tr.querySelector('[name="mmThanSrNo"]') as HTMLInputElement | null;
         if (!than) return;
-        const q = (n: string) => (tr.querySelector(`[name="${n}"]`) as HTMLInputElement | null)?.value?.trim();
-        const active = !!(q("aCount") || q("bCount") || q("cCount") || q("cpCount") || q("ppcCount") || than.value);
+        const grade = gradeOf(tr);
+        const active = !!grade || !!than.value;
         if (active) {
           if (than.dataset.live === "1" || !than.value) {
-            than.value = serial;
+            const seq = String(base + idx).padStart(3, "0");
+            than.value = grade ? `${prefix}${seq}${suffix}|${grade}` : `${prefix}${seq}${suffix}`;
             than.dataset.live = "1";
           }
+          idx++;
         } else if (than.dataset.live === "1") {
           than.value = "";
           delete than.dataset.live;

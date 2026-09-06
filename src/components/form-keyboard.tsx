@@ -139,6 +139,18 @@ export function FormKeyboard() {
         return;
       }
 
+      // F2 — jump to the first Beam # of the daily-production beam grid
+      if (e.key === "F2") {
+        const first = document.querySelector<HTMLInputElement>(
+          '#idp-beam-rows input[data-lov-picker]'
+        );
+        if (first) {
+          e.preventDefault();
+          focusAndSelect(first);
+        }
+        return;
+      }
+
       const field = target.closest<HTMLElement>("input, select, textarea");
       if (!field) return;
       const form = field.closest("form");
