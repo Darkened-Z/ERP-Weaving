@@ -172,9 +172,11 @@ export default async function WarpedBeamReceivingPage({
     if (reed != null) info.push(`R${reed}`);
     if (first) {
       const countLabel = countDescByCode.get(first.countCode ?? "") ?? "";
-      info.push(
-        [first.countCode, countLabel, first.brand].filter(Boolean).join(". ").replace(". ", ". ")
-      );
+      const brand = (first.brand ?? "").trim();
+      const brandPart = brand && !countLabel.toLowerCase().includes(brand.toLowerCase())
+        ? ` ${brand}`
+        : "";
+      info.push([first.countCode, `${countLabel}${brandPart}`].filter(Boolean).join(". "));
     }
     if (c.ends != null) info.push(`${c.ends} E`);
     return {
