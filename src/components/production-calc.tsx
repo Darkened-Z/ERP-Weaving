@@ -155,6 +155,9 @@ export function LoomBeamsFill({
       if (d?.name !== "headerLoom") return;
       const beams = map[d.value ?? ""] ?? [];
       const rows = beamRows();
+      // Always sweep to maxRows: fill from the loom's knotted beams, CLEAR
+      // everything else — switching looms must never leave the previous loom's
+      // beams behind, and a loom with no knotting clears the grid entirely.
       for (let i = 0; i < Math.min(rows.length, maxRows); i++) {
         const tr = rows[i];
         const fill = beams[i];
@@ -169,25 +172,70 @@ export function LoomBeamsFill({
           setEl(tr, "ends", fill.ends);
           setEl(tr, "bLength", fill.bLength);
           setEl(tr, "contNo", fill.contNo);
-        } else if (beams.length > 0) {
-          // Loom picked but fewer beams than rows: clear the leftovers.
+        } else {
           setEl(tr, "beamNo", null, "");
           setEl(tr, "beamSetNo", null);
+          setEl(tr, "kSmType", null);
           setEl(tr, "beamStatus", null);
+          setEl(tr, "ends", null);
+          setEl(tr, "bLength", null);
           setEl(tr, "contNo", null);
         }
       }
-      // Set# echoes back into the header (Oracle: picking the loom fills Set#).
+      // Set# echoes back into the header (Oracle: picking the loom fills Set#);
+      // a loom without knotting clears it.
       const setNo = beams[0]?.setNo ?? null;
-      if (setNo) {
-        document.dispatchEvent(
-          new CustomEvent("combobox:set", { detail: { name: "headerSetNo", value: setNo } })
-        );
-      }
+      document.dispatchEvent(
+        new CustomEvent("combobox:set", { detail: { name: "headerSetNo", value: setNo ?? "" } })
+      );
     };
     document.addEventListener("combobox:change", onChange);
     return () => document.removeEventListener("combobox:change", onChange);
   }, [map, maxRows]);
+  return null;
+}
+
+/**
+ * Hides trailing EMPTY rows in the paired Daily Production tables so the grids
+ * only show rows actually in use (owner: the fixed blank rows are gone). Keeps
+ * at least one visible row for manual entry, and keeps both tables cut at the
+ * SAME index so row pairing stays intact. Sweeps on every input/change.
+ */
+export function HideEmptyRows({ tbodyIds }: { tbodyIds: string[] }) {
+  useEffect(() => {
+    const sweep = () => {
+      const tbodies = tbodyIds.map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
+      if (!tbodies.length) return;
+      const rowLists = tbodies.map((tb) => Array.from(tb.querySelectorAll("tr")));
+      const hasData = (tr: HTMLTableRowElement) =>
+        Array.from(tr.querySelectorAll("input, select, textarea")).some(
+          (el) => (el as HTMLInputElement).value.trim() !== ""
+        );
+      // Last index (0-based) holding data across ALL paired tables.
+      let lastFilled = -1;
+      rowLists.forEach((rows) =>
+        rows.forEach((r, i) => {
+          if (hasData(r)) lastFilled = Math.max(lastFilled, i);
+        })
+      );
+      const visibleCount = Math.max(lastFilled + 2, 1); // +1 spare blank row for the next entry
+      rowLists.forEach((rows) => {
+        rows.forEach((r, i) => {
+          r.style.display = i < visibleCount ? "" : "none";
+        });
+      });
+    };
+    const onEvt = () => setTimeout(sweep, 0);
+    sweep();
+    document.addEventListener("input", onEvt, true);
+    document.addEventListener("change", onEvt, true);
+    document.addEventListener("combobox:change", onEvt);
+    return () => {
+      document.removeEventListener("input", onEvt, true);
+      document.removeEventListener("change", onEvt, true);
+      document.removeEventListener("combobox:change", onEvt);
+    };
+  }, [tbodyIds]);
   return null;
 }
 

@@ -4,7 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, AutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
-import { ProductionSetCalc, LoomBeamsFill, HeaderSetFill, RowErase } from "@/components/production-calc";
+import { ProductionSetCalc, LoomBeamsFill, HeaderSetFill, RowErase, HideEmptyRows } from "@/components/production-calc";
 import { ThanSerialLive } from "@/components/than-serial-live";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
@@ -271,16 +271,28 @@ export default async function DailyProductionPage({
     }[]
   > = {};
   for (const lm of loomRows2) {
-    loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = beamsForLoom(lm.shed, lm.loomNo).map((b) => ({
-      beamNo: b.beamNo ?? null,
-      beamSetNo: b.beamSetNo ?? null,
-      setHash: b.setNo ?? null,
-      beamStatus: "RUNNING",
-      ends: b.ends ?? null,
-      bLength: b.length ?? null,
-      contNo: b.contractNo ?? null,
-      setNo: b.setNo ?? null,
-    }));
+    // Owner: a loom pick opens ONLY its knotted beams ("no knotting → nothing
+    // comes"). In EDIT mode this voucher's own beams stay included so a re-pick
+    // never wipes saved rows.
+    const voucherBeamNos = new Set(
+      setRows.map((s) => (s.beamNo ?? "").trim()).filter(Boolean)
+    );
+    loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = beamsForLoom(lm.shed, lm.loomNo)
+      .filter((b) => {
+        const st = (b.statusWrk ?? "").toUpperCase();
+        if (st === "KNOTTING") return true;
+        return editing != null && voucherBeamNos.has((b.beamNo ?? "").trim());
+      })
+      .map((b) => ({
+        beamNo: b.beamNo ?? null,
+        beamSetNo: b.beamSetNo ?? null,
+        setHash: b.setNo ?? null,
+        beamStatus: "RUNNING",
+        ends: b.ends ?? null,
+        bLength: b.length ?? null,
+        contNo: b.contractNo ?? null,
+        setNo: b.setNo ?? null,
+      }));
   }
 
   // Beam SET picker (Oracle: "just typed 47445 in No and everything filled"):
@@ -1150,6 +1162,8 @@ export default async function DailyProductionPage({
             <form id="idp-save-form" action={saveAction}>
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <ProductionSetCalc beamStats={beamStats} />
+              {/* Blank rows auto-hide — only rows in use stay visible (min 1) */}
+              <HideEmptyRows tbodyIds={["idp-beam-rows", "idp-count-rows"]} />
               <ThanSerialLive base={thanBase} prefix={thanPrefix} suffix={thanSuffix} />
               <RowAutoFill watch="beamNo" map={beamFillMap} />
               {/* Header Loom# pick → ALL of that loom's knotted beams open in the beam grid */}
