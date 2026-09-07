@@ -271,17 +271,18 @@ export default async function DailyProductionPage({
     }[]
   > = {};
   for (const lm of loomRows2) {
-    // Owner: a loom pick opens ONLY its knotted beams ("no knotting → nothing
-    // comes"). In EDIT mode this voucher's own beams stay included so a re-pick
-    // never wipes saved rows.
+    // Owner: a loom pick opens the beams MOUNTED on that loom (knotted there —
+    // including ones already past knotting into production, since daily
+    // production runs on the same beam daily). A loom with no mounted beams
+    // fills nothing. In EDIT mode this voucher's own beams stay included so a
+    // re-pick never wipes saved rows.
     const voucherBeamNos = new Set(
       setRows.map((s) => (s.beamNo ?? "").trim()).filter(Boolean)
     );
     loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = beamsForLoom(lm.shed, lm.loomNo)
       .filter((b) => {
-        const st = (b.statusWrk ?? "").toUpperCase();
-        if (st === "KNOTTING") return true;
-        return editing != null && voucherBeamNos.has((b.beamNo ?? "").trim());
+        if (editing != null && voucherBeamNos.has((b.beamNo ?? "").trim())) return true;
+        return ["KNOTTING", "PRODUCTION", "RUNNING"].includes((b.statusWrk ?? "").toUpperCase());
       })
       .map((b) => ({
         beamNo: b.beamNo ?? null,
