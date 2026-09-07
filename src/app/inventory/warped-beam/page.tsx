@@ -6,7 +6,7 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, sql, desc, inArray } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
@@ -120,27 +120,75 @@ export default async function WarpedBeamReceivingPage({
   // Sizing contracts (Beam Contract Ext W/S) — INVENTORY (int) contracts only,
   // scoped to the selected Bm Sale Party (the converter, e.g. 786 weaving under
   // 1.01.01.01.*): picking one auto-fills its per-beam sizing rate into the grid.
+  // The label carries the contract's construction info (owner): wrp code, read,
+  // warp count info and total ends — not just the rate.
+  const countDescByCode = new Map(
+    (
+      await db
+        .select({
+          code: schema.yarnCounts.countCode,
+          description: schema.yarnCounts.description,
+          type: schema.yarnCounts.type,
+        })
+        .from(schema.yarnCounts)
+    ).map((y) => [y.code, `${y.description}${y.type ? ` ${y.type}` : ""}`])
+  );
   const sizingContracts = await db
     .select({
+      id: schema.intBeamContractExtWs.id,
       contNo: schema.intBeamContractExtWs.contNo,
       sizingParty: schema.intBeamContractExtWs.sizingParty,
       converterParty: schema.intBeamContractExtWs.converterParty,
       ratePerBeam: schema.intBeamContractExtWs.ratePerBeam,
       status: schema.intBeamContractExtWs.status,
+      wrpCode: schema.intBeamContractExtWs.wrpCode,
+      ends: schema.intBeamContractExtWs.ends,
     })
     .from(schema.intBeamContractExtWs)
     .orderBy(desc(schema.intBeamContractExtWs.contNo));
-  const sizingContractOpts = sizingContracts.map((c) => ({
-    value: c.contNo,
-    label: `${c.contNo}${c.ratePerBeam != null ? ` — @${c.ratePerBeam}` : ""}${c.status ? ` (${c.status})` : ""}`,
-    // Scoped to the Bm Sale Party (converter) — fall back to the sizing party
-    // when a contract carries no converter, and to always-shown when neither.
-    filterKey: c.converterParty
-      ? codeByDesc.get(c.converterParty) ?? ""
-      : c.sizingParty
-        ? codeByDesc.get(c.sizingParty) ?? ""
-        : "",
-  }));
+  const sizingContractIds = sizingContracts.map((c) => c.id);
+  const sizingDetails = sizingContractIds.length
+    ? await db
+        .select({
+          contractId: schema.intBeamContractExtWsDetail.contractId,
+          countCode: schema.intBeamContractExtWsDetail.countCode,
+          brand: schema.intBeamContractExtWsDetail.brand,
+        })
+        .from(schema.intBeamContractExtWsDetail)
+        .where(inArray(schema.intBeamContractExtWsDetail.contractId, sizingContractIds))
+    : [];
+  const reedByCode = new Map(
+    (
+      await db
+        .select({ code: schema.greyConstruction.code, reed: schema.greyConstruction.reed })
+        .from(schema.greyConstruction)
+    ).map((g) => [g.code, g.reed])
+  );
+  const sizingContractOpts = sizingContracts.map((c) => {
+    const first = sizingDetails.find((d) => d.contractId === c.id && (d.countCode || d.brand));
+    const reed = c.wrpCode ? reedByCode.get(c.wrpCode) : null;
+    const info: string[] = [];
+    if (c.wrpCode) info.push(c.wrpCode);
+    if (reed != null) info.push(`R${reed}`);
+    if (first) {
+      const countLabel = countDescByCode.get(first.countCode ?? "") ?? "";
+      info.push(
+        [first.countCode, countLabel, first.brand].filter(Boolean).join(". ").replace(". ", ". ")
+      );
+    }
+    if (c.ends != null) info.push(`${c.ends} E`);
+    return {
+      value: c.contNo,
+      label: `${c.contNo}${info.length ? ` — ${info.join(" — ")}` : ` — @${c.ratePerBeam ?? "?"} (${c.status ?? ""})`}`,
+      // Scoped to the Bm Sale Party (converter) — fall back to the sizing party
+      // when a contract carries no converter, and to always-shown when neither.
+      filterKey: c.converterParty
+        ? codeByDesc.get(c.converterParty) ?? ""
+        : c.sizingParty
+          ? codeByDesc.get(c.sizingParty) ?? ""
+          : "",
+    };
+  });
   const sizingContractMap = Object.fromEntries(
     sizingContracts.map((c) => [c.contNo, { sizingRate: c.ratePerBeam ?? "" }]),
   );
