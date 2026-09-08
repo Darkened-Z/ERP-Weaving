@@ -15,10 +15,13 @@ type CountFill = {
 export function GodownCalc({
   godownParty,
   countMap,
+  wvgCountMap = {},
   countLabel = {},
 }: {
   godownParty: string;
   countMap: Record<string, CountFill[]>;
+  /** Inventory (WVG) conv contracts — picking one distributes ITS warp/weft rows. */
+  wvgCountMap?: Record<string, CountFill[]>;
   countLabel?: Record<string, string>;
 }) {
   useEffect(() => {
@@ -116,7 +119,48 @@ export function GodownCalc({
 
     const onCombo = (e: Event) => {
       const d = (e as CustomEvent).detail as { name?: string; value?: string };
-      // Conv Cont # and Grey Sale Cont are one-at-a-time: picking one clears the other.
+      // The three purchase-side contracts are ONE-AT-A-TIME (owner): picking one
+      // clears the other two. Each has its own color so the active one is obvious.
+      const TRIO = ["conv_cont_wvg", "cont_no", "pur_cont_no"];
+      if (d?.name && TRIO.includes(d.name) && d.value) {
+        for (const other of TRIO) {
+          if (other !== d.name) {
+            document.dispatchEvent(
+              new CustomEvent("combobox:set", { detail: { name: other, value: "" } })
+            );
+          }
+        }
+      }
+      // Conv Contract WVG pick → distribute the INT contract's warp/weft
+      // consumption onto the count grid (same cells as the ext conv contract).
+      if (d?.name === "conv_cont_wvg" && d.value) {
+        const rows = wvgCountMap[d.value ?? ""] ?? [];
+        if (rows.length) {
+          const codes = fields("count_code");
+          const CNT = ["count_code", "count_desc", "count_type", "count_cal_count", "count_ends", "count_rate_per_lbs", "count_wt_per_mtr", "count_cost_per_mtr", "count_tot_lbs"];
+          codes.forEach((codeEl, i) => {
+            const tr = codeEl.closest("tr");
+            if (!tr) return;
+            const cell = (name: string, v: string | number | null) =>
+              setEl(tr.querySelector<HTMLInputElement>(`[name="${name}"]`), v == null ? "" : String(v));
+            const row = rows[i];
+            if (row) {
+              cell("count_code", row.code);
+              cell("count_desc", row.code ? countLabel[String(row.code)] ?? "" : "");
+              cell("count_type", row.type);
+              cell("count_cal_count", row.calCount);
+              cell("count_ends", row.ends);
+              cell("count_rate_per_lbs", row.ratePerLbs);
+              cell("count_wt_per_mtr", row.wtPerMtr);
+              cell("count_cost_per_mtr", row.costPerMtr);
+            } else {
+              for (const n of CNT) cell(n, "");
+            }
+          });
+          recalc(); // TOT Lbs per row + the rate/profit chain
+        }
+      }
+      if (d?.name === "conv_cont_wvg") return;
       if (d?.name === "sal_cont_no" && d.value) {
         document.dispatchEvent(new CustomEvent("combobox:set", { detail: { name: "grey_sale_cont", value: "" } }));
       } else if (d?.name === "grey_sale_cont" && d.value) {
@@ -158,6 +202,6 @@ export function GodownCalc({
       form.removeEventListener("change", onChange);
       document.removeEventListener("combobox:change", onCombo);
     };
-  }, [godownParty, countMap, countLabel]);
+  }, [godownParty, countMap, wvgCountMap, countLabel]);
   return null;
 }

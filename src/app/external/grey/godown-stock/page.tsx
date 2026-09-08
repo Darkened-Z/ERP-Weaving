@@ -9,7 +9,7 @@ import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
 import { db, schema } from "@/db";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
@@ -416,6 +416,76 @@ export default async function GodownStockPage({
     ];
   }
 
+
+  // Conv Contract WVG (owner): the INVENTORY grey-conversion contracts (IGCC —
+  // Inventory > Contracts > Grey Conversion), offered as a third purchase-side
+  // option. Picking one distributes its warp/weft consumption onto the count
+  // grid at the end of the voucher.
+  const intConvContracts = await db
+    .select()
+    .from(schema.intGreyConversionContract)
+    .where(eq(schema.intGreyConversionContract.status, "R"))
+    .orderBy(desc(schema.intGreyConversionContract.id));
+  const intWarpRows = await db.select().from(schema.intGreyConversionWarp);
+  const intWeftRows = await db.select().from(schema.intGreyConversionWeft);
+  const intContNoById = new Map(intConvContracts.map((c) => [c.id, c.contNo]));
+  const wvgCountFillMap: Record<string, CountFill[]> = {};
+  const pushIntCount = (contractId: number, cType: string, r: typeof intWarpRows[number]) => {
+    const key = intContNoById.get(contractId);
+    if (!key) return;
+    (wvgCountFillMap[key] ??= []).push({
+      code: r.count,
+      type: cType,
+      calCount: r.calCount,
+      ends: r.ends,
+      ratePerLbs: r.ratePerLbs,
+      wtPerMtr: r.wtPerMtr,
+      costPerMtr: r.costPerMtr,
+    });
+  };
+  for (const w of intWarpRows) pushIntCount(w.contractId, "WARP", w);
+  for (const w of intWeftRows) pushIntCount(w.contractId, "WEFT", w);
+  const intFindRows = intConvContracts.map((c) => {
+    const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
+    return {
+      value: c.contNo,
+      code: c.contNo,
+      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      filterKey: c.party ?? "",
+      cells: {
+        cont: c.contNo,
+        desc: prd,
+        qty: fmtN(c.qtyMtr),
+        convRate: fmtN(c.convRatePerMtr, 2),
+        grayRate: fmtN(c.grayRatePerMtr, 2),
+        date: c.contDate ?? "",
+        status: c.status ?? "",
+      },
+    };
+  });
+  const intContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    intConvContracts.map((c) => [
+      c.contNo,
+      {
+        purchase_party: c.party ?? "",
+        rate: c.grayRatePerMtr ?? "",
+        contact_quality: c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? "" : "",
+        dsp_quality: c.grayQltyCode ?? "",
+      },
+    ])
+  );
+  for (const c of intConvContracts) {
+    const cnts = wvgCountFillMap[c.contNo] ?? [];
+    const dlbl = (code: string | null) => (code ? countLabelByCode.get(String(code)) || String(code) : "");
+    const warp = cnts.filter((x) => x.type === "WARP").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
+    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
+    const wf = warp || weft ? ` [W:${warp || "-"} F:${weft || "-"}]` : "";
+    const constr = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? c.grayQltyCode : "";
+    if (intContractMap[c.contNo] && (constr || wf)) {
+      intContractMap[c.contNo].contact_quality = `${constr}${wf}`.trim();
+    }
+  }
+
   const nextVNoVal = await db
     .select({
       m: sql<number>`coalesce(max(CAST(SUBSTR(${schema.extGodownStock.vNo}, 5) AS INTEGER)), 0)`,
@@ -442,6 +512,7 @@ export default async function GodownStockPage({
     const gdnParty = txt(formData.get("gdn_party"));
     const contNo = txt(formData.get("cont_no"));
     const purContNo = txt(formData.get("pur_cont_no"));
+    const convContWvg = txt(formData.get("conv_cont_wvg"));
     const contactQuality = txt(formData.get("contact_quality"));
     // Always store dsp_quality as the construction CODE (never the rich string), so
     // the same quality bought across lots aggregates into one stock entry in packi/reports.
@@ -1038,8 +1109,28 @@ export default async function GodownStockPage({
                     <input type="hidden" name="gdn_party" defaultValue={formStock?.gdnParty || godownParty} />
                   </div>
 
-                  <div className="col-span-6">
-                    <label className="label block mb-1">Pur Conv Contract <span className="text-[9px] text-[var(--muted)]">(F9 — all running conv contracts)</span></label>
+                  <div className="col-span-6" style={{ borderLeft: "4px solid #2563eb", background: "#eff6ff", padding: "8px" }}>
+                    <label className="label block mb-1">Conv Contract WVG <span className="text-[9px] text-[var(--muted)]">(F9 — Inventory &gt; Grey Conversion — one at a time)</span></label>
+                    <FindingPicker
+                      name="conv_cont_wvg"
+                      defaultValue={formStock?.convContWvg ?? ""}
+                      rows={intFindRows}
+                      columns={contractColumns}
+                      title="CONV CONTRACT WVG LIST (INVENTORY)"
+                      placeholder="Conv contract #…"
+                      className="input-box mono text-[13px] cursor-pointer"
+                      filterByField="purchase_party"
+                    />
+                    <AutoFill
+                      watch="conv_cont_wvg"
+                      map={intContractMap}
+                      combos={["purchase_party"]}
+                      inputs={["rate", "contact_quality", "dsp_quality"]}
+                    />
+                  </div>
+
+                  <div className="col-span-6" style={{ borderLeft: "4px solid #16a34a", background: "#f0fdf4", padding: "8px" }}>
+                    <label className="label block mb-1">Pur Conv Contract <span className="text-[9px] text-[var(--muted)]">(F9 — External conv contracts)</span></label>
                     <FindingPicker
                       name="cont_no"
                       defaultValue={formStock?.contNo ?? ""}
@@ -1048,6 +1139,7 @@ export default async function GodownStockPage({
                       title="CONVERSION CONTRACT LIST"
                       placeholder="Contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
+                      filterByField="purchase_party"
                     />
                     <AutoFill
                       watch="cont_no"
@@ -1056,8 +1148,8 @@ export default async function GodownStockPage({
                       inputs={["rate", "contact_quality", "dsp_quality"]}
                     />
                   </div>
-                  <div className="col-span-6">
-                    <label className="label block mb-1">Pur Grey Contract <span className="text-[9px] text-[var(--muted)]">(F9 — all running grey contracts)</span></label>
+                  <div className="col-span-6" style={{ borderLeft: "4px solid #ea580c", background: "#fff7ed", padding: "8px" }}>
+                    <label className="label block mb-1">Pur Grey Contract <span className="text-[9px] text-[var(--muted)]">(F9 — External grey purchase contracts)</span></label>
                     <FindingPicker
                       name="pur_cont_no"
                       defaultValue={formStock?.purContNo ?? ""}
@@ -1066,6 +1158,7 @@ export default async function GodownStockPage({
                       title="GREY PURCHASE CONTRACT LIST"
                       placeholder="Pur contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
+                      filterByField="purchase_party"
                     />
                     <AutoFill
                       watch="pur_cont_no"
@@ -1366,7 +1459,7 @@ export default async function GodownStockPage({
                   </div>
                 </div>
 
-                <GodownCalc godownParty={godownParty} countMap={countMap} countLabel={Object.fromEntries(countLabelByCode)} />
+                <GodownCalc godownParty={godownParty} countMap={countMap} wvgCountMap={wvgCountFillMap} countLabel={Object.fromEntries(countLabelByCode)} />
               </form>
             </div>
           </div>
