@@ -1214,6 +1214,7 @@ export const extGodownStock = sqliteTable("ext_godown_stock", {
   gdnParty: text("gdn_party"),
   contNo: text("cont_no"),
   purContNo: text("pur_cont_no"),
+  convContWvg: text("conv_cont_wvg"),
   contactQuality: text("contact_quality"),
   dspQuality: text("dsp_quality"),
   than: integer("than"),
