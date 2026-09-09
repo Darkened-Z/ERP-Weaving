@@ -42,7 +42,7 @@ export function ShellLayout({
       >
         <div className="p-5 border-b border-[var(--sidebar-border)] flex items-center justify-between">
           <div>
-            <img src="/sk-logo.png" alt="SK Textile" className="h-10 object-contain object-left mb-1 brightness-0 invert" />
+            <img src="/sk-logo.png" alt="SK Textile" className="h-16 w-auto object-contain object-left mb-2" />
             <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--sidebar-muted)] mt-1">
               Weaving Management
             </div>
@@ -83,7 +83,7 @@ export function ShellLayout({
               <path d="M3 5h14M3 10h14M3 15h14" />
             </svg>
           </button>
-          <img src="/sk-logo.png" alt="SK Textile" className="h-6 object-contain" />
+          <img src="/sk-logo.png" alt="SK Textile" className="h-10 object-contain" />
           <div className="flex-1" />
           <div className="w-40">
             <CommandPaletteTrigger />
