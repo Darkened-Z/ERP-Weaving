@@ -836,7 +836,7 @@ async function seed() {
   }
 
   // Beams
-  const beamData: [string, string, string | null, string | null, string | null, number, number, number, string, number | null, string][] = [
+  const beamData: [string, string, string, string, string, number, number, number, string, number | null, string][] = [
     ["BM-001", "WARP", "00122", "GC-001", "20/1", 3200, 1200, 380, "RUNNING", 1, "2022-07-20"],
     ["BM-002", "WARP", "00122", "GC-001", "20/1", 3200, 1150, 365, "RUNNING", 2, "2022-07-21"],
     ["BM-003", "WARP", "00222", "GC-003", "40/1", 5200, 800, 185, "RUNNING", 11, "2022-07-22"],
@@ -846,8 +846,8 @@ async function seed() {
     ["BM-007", "SIZED", "00822", "GC-004", "30/1", 3600, 950, 280, "RUNNING", 30, "2022-08-03"],
     ["BM-008", "WARP", "00122", "GC-001", "20/1", 3200, 1200, 380, "RE-KNOT", null, "2022-08-05"],
     ["BM-009", "WARP", "00222", "GC-002", "20/1", 3400, 1300, 420, "F-ROLL", null, "2022-08-06"],
-    ["BM-010", "EMPTY", null, null, null, 0, 0, 45, "EMPTY", null, "2022-08-08"],
-    ["BM-011", "EMPTY", null, null, null, 0, 0, 45, "EMPTY", null, "2022-08-08"],
+    ["BM-010", "EMPTY", "", "", "", 0, 0, 45, "EMPTY", null, "2022-08-08"],
+    ["BM-011", "EMPTY", "", "", "", 0, 0, 45, "EMPTY", null, "2022-08-08"],
     ["BM-012", "SIZED", "00622", "GC-003", "40/1", 5200, 850, 195, "R-CUT", null, "2022-08-02"],
     ["BM-013", "WARP", "00522", "GC-001", "20/1", 3200, 1050, 335, "L-ROLL", 8, "2022-08-04"],
     ["BM-014", "WARP", "00722", "GC-006", "60/1", 4800, 700, 135, "RUNNING", 28, "2022-08-07"],
@@ -1184,19 +1184,19 @@ async function seed() {
   }
 
   // Yarn Transactions
-  const yarnTxns: [string, string, number, string | null, string, number, number, number, number, string | null, string | null, string | null, string | null][] = [
-    ["RECEIPT", "2022-07-18", 1, "Al-Hamd Yarn Traders", "20/1", 50, 5000, 280, 1400000, "LEV-2234", "BL-4421", null, null],
-    ["RECEIPT", "2022-07-25", 2, "Crescent Textile Mills", "30/1", 30, 3000, 320, 960000, "LEW-5567", "BL-4455", null, null],
-    ["RECEIPT", "2022-08-05", 3, "Diamond Fibre Ltd", "40/1", 20, 2000, 410, 820000, "LEX-8890", null, null, null],
-    ["RECEIPT", "2022-08-12", 4, "Fazal Cotton Mills", "20/1-PC", 40, 4000, 295, 1180000, "LEY-1123", "BL-4489", null, null],
-    ["RETURN", "2022-08-20", 1, "Al-Hamd Yarn Traders", "20/1", 5, 500, 280, 140000, null, null, null, "Defective lot"],
-    ["TRANSFER", "2022-07-22", 1, null, "20/1", 10, 1000, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED A"],
-    ["TRANSFER", "2022-07-28", 2, null, "30/1", 8, 800, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED A"],
-    ["TRANSFER", "2022-08-08", 3, null, "40/1", 5, 500, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED B"],
-    ["TRANSFER", "2022-08-15", 4, null, "20/1-PC", 12, 1200, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED A"],
-    ["RECEIPT", "2022-08-22", 5, "Gohar Textiles", "60/1", 15, 1500, 520, 780000, "LEZ-3345", "BL-4501", null, null],
-    ["TRANSFER", "2022-08-25", 5, null, "60/1", 6, 600, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED B"],
-    ["RECEIPT", "2022-09-01", 6, "Crescent Textile Mills", "30/1-CVC", 25, 2500, 340, 850000, "LFA-1122", "BL-4520", null, null],
+  const yarnTxns: [string, string, string, string, string, number, number, number, number, string | null, string | null, string | null, string | null][] = [
+    ["RECEIPT", "2022-07-18", "1", "Al-Hamd Yarn Traders", "20/1", 50, 5000, 280, 1400000, "LEV-2234", "BL-4421", null, null],
+    ["RECEIPT", "2022-07-25", "2", "Crescent Textile Mills", "30/1", 30, 3000, 320, 960000, "LEW-5567", "BL-4455", null, null],
+    ["RECEIPT", "2022-08-05", "3", "Diamond Fibre Ltd", "40/1", 20, 2000, 410, 820000, "LEX-8890", null, null, null],
+    ["RECEIPT", "2022-08-12", "4", "Fazal Cotton Mills", "20/1-PC", 40, 4000, 295, 1180000, "LEY-1123", "BL-4489", null, null],
+    ["RETURN", "2022-08-20", "1", "Al-Hamd Yarn Traders", "20/1", 5, 500, 280, 140000, null, null, null, "Defective lot"],
+    ["TRANSFER", "2022-07-22", "1", "", "20/1", 10, 1000, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED A"],
+    ["TRANSFER", "2022-07-28", "2", "", "30/1", 8, 800, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED A"],
+    ["TRANSFER", "2022-08-08", "3", "", "40/1", 5, 500, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED B"],
+    ["TRANSFER", "2022-08-15", "4", "", "20/1-PC", 12, 1200, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED A"],
+    ["RECEIPT", "2022-08-22", "5", "Gohar Textiles", "60/1", 15, 1500, 520, 780000, "LEZ-3345", "BL-4501", null, null],
+    ["TRANSFER", "2022-08-25", "5", "", "60/1", 6, 600, 0, 0, null, null, "YARN GODAM GHAR", "WEAVING SHED B"],
+    ["RECEIPT", "2022-09-01", "6", "Crescent Textile Mills", "30/1-CVC", 25, 2500, 340, 850000, "LFA-1122", "BL-4520", null, null],
   ];
   for (const [type, date, no, party, yarn, bags, wt, rate, amt, veh, bil, from, to] of yarnTxns) {
     await client.execute({ sql: "INSERT INTO yarn_transactions (trans_type, trans_date, trans_no, fy_code, party, yarn_count, bags, weight_kg, rate, amount, vehicle_no, bilty_no, from_location, to_location) VALUES (?, ?, ?, '2022', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [type, date, no, party, yarn, bags, wt, rate, amt, veh, bil, from, to] });
@@ -1348,17 +1348,17 @@ async function seed() {
   }
 
   // Grey Paki Parchi — delivery receipts
-  const pakiParchis: [number, string, string, string, number, number, number, number, number, number, number, number, string][] = [
-    [1, "2022-08-10", "AL-KARAM TEXTILE", "3.01.01.01.0012", 101, 18, 1250, 1220, 52, 63.5, 78, 85.50, "CNT-001"],
-    [2, "2022-08-15", "NISHAT MILLS", "3.01.01.01.0015", 102, 24, 1680, 1650, 56, 63.0, 92, 88.00, "CNT-002"],
-    [3, "2022-08-22", "GULL AHMED TEXTILE", "3.01.01.01.0018", 103, 12, 840, 825, 48, 44.0, 72, 110.50, "CNT-003"],
-    [4, "2022-09-01", "SAPPHIRE TEXTILE", "3.01.01.01.0020", 101, 30, 2100, 2070, 52, 63.5, 78, 85.50, "CNT-001"],
-    [5, "2022-09-05", "AL-KARAM TEXTILE", "3.01.01.01.0012", 104, 15, 1050, 1035, 60, 63.0, 88, 92.00, "CNT-004"],
-    [6, "2022-09-10", "CHENAB LIMITED", "3.01.01.01.0025", 102, 20, 1400, 1380, 56, 63.0, 92, 88.00, "CNT-002"],
-    [7, "2022-09-18", "NISHAT MILLS", "3.01.01.01.0015", 105, 35, 2450, 2415, 48, 63.5, 75, 82.00, "CNT-005"],
-    [8, "2022-09-25", "KOHINOOR TEXTILE", "3.01.01.01.0030", 101, 22, 1540, 1520, 52, 63.5, 78, 85.50, "CNT-001"],
-    [9, "2022-10-02", "GULL AHMED TEXTILE", "3.01.01.01.0018", 103, 16, 1120, 1105, 48, 44.0, 72, 110.50, "CNT-003"],
-    [10, "2022-10-10", "SAPPHIRE TEXTILE", "3.01.01.01.0020", 106, 28, 1960, 1935, 54, 63.0, 85, 90.00, "CNT-006"],
+  const pakiParchis: [string, string, string, string, string, number, number, number, number, number, number, number, string][] = [
+    ["1", "2022-08-10", "AL-KARAM TEXTILE", "3.01.01.01.0012", "101", 18, 1250, 1220, 52, 63.5, 78, 85.50, "CNT-001"],
+    ["2", "2022-08-15", "NISHAT MILLS", "3.01.01.01.0015", "102", 24, 1680, 1650, 56, 63.0, 92, 88.00, "CNT-002"],
+    ["3", "2022-08-22", "GULL AHMED TEXTILE", "3.01.01.01.0018", "103", 12, 840, 825, 48, 44.0, 72, 110.50, "CNT-003"],
+    ["4", "2022-09-01", "SAPPHIRE TEXTILE", "3.01.01.01.0020", "101", 30, 2100, 2070, 52, 63.5, 78, 85.50, "CNT-001"],
+    ["5", "2022-09-05", "AL-KARAM TEXTILE", "3.01.01.01.0012", "104", 15, 1050, 1035, 60, 63.0, 88, 92.00, "CNT-004"],
+    ["6", "2022-09-10", "CHENAB LIMITED", "3.01.01.01.0025", "102", 20, 1400, 1380, 56, 63.0, 92, 88.00, "CNT-002"],
+    ["7", "2022-09-18", "NISHAT MILLS", "3.01.01.01.0015", "105", 35, 2450, 2415, 48, 63.5, 75, 82.00, "CNT-005"],
+    ["8", "2022-09-25", "KOHINOOR TEXTILE", "3.01.01.01.0030", "101", 22, 1540, 1520, 52, 63.5, 78, 85.50, "CNT-001"],
+    ["9", "2022-10-02", "GULL AHMED TEXTILE", "3.01.01.01.0018", "103", 16, 1120, 1105, 48, 44.0, 72, 110.50, "CNT-003"],
+    ["10", "2022-10-10", "SAPPHIRE TEXTILE", "3.01.01.01.0020", "106", 28, 1960, 1935, 54, 63.0, 85, 90.00, "CNT-006"],
   ];
   for (const [no, date, party, pcode, gcode, than, mtrs, mtrsNet, pick, width, rate, amt, cno] of pakiParchis) {
     await client.execute({ sql: "INSERT INTO grey_paki_parchi (pp_no, fy_code, pp_date, party, party_code, grey_code, loom_type, qty_than, qty_mtrs, qty_mtrs_net, grey_pick, grey_width, rate, amount, contract_no) VALUES (?, '2022', ?, ?, ?, ?, 'SHUTTLE', ?, ?, ?, ?, ?, ?, ?, ?)", args: [no, date, party, pcode, gcode, than, mtrs, mtrsNet, pick, width, rate, amt, cno] });
