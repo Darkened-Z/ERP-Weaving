@@ -13,30 +13,43 @@ export function ContractInfoPanel({
   watch = "cont_no",
   map,
   title = "CONTRACT INFO",
+  watch2,
+  map2,
 }: {
   watch?: string;
   map: Record<string, Info>;
   title?: string;
+  /** Optional second watched field + map (e.g. the WVG inventory contract picker). */
+  watch2?: string;
+  map2?: Record<string, Info>;
 }) {
   const [rows, setRows] = useState<Info | null>(null);
 
   useEffect(() => {
-    const apply = (v: string) => setRows(map[v] ?? null);
+    const apply = (src: "a" | "b", v: string) => {
+      const m = src === "a" ? map : (map2 ?? {});
+      setRows(m[v] ?? null);
+    };
     const onChange = (e: Event) => {
       const d = (e as CustomEvent).detail as { name?: string; value?: string } | undefined;
       const t = e.target as HTMLInputElement | null;
-      if ((d?.name ?? t?.name) === watch) apply((d?.value ?? t?.value ?? "").trim());
+      const name = d?.name ?? t?.name;
+      const val = d?.value ?? t?.value ?? "";
+      if (name === watch) apply("a", val.trim());
+      else if (watch2 && name === watch2) apply("b", val.trim());
     };
     // initial (edit mode: field already has a value)
     const el = document.querySelector<HTMLInputElement>(`[name="${watch}"]`);
-    if (el?.value) apply(el.value.trim());
+    const el2 = watch2 ? document.querySelector<HTMLInputElement>(`[name="${watch2}"]`) : null;
+    if (el?.value) apply("a", el.value.trim());
+    else if (el2?.value) apply("b", el2.value.trim());
     document.addEventListener("combobox:change", onChange, true);
     document.addEventListener("change", onChange, true);
     return () => {
       document.removeEventListener("combobox:change", onChange, true);
       document.removeEventListener("change", onChange, true);
     };
-  }, [watch, map]);
+  }, [watch, map, watch2, map2]);
 
   return (
     <div className="border border-black bg-[var(--surface-2,#eef0f4)] px-3 py-2">

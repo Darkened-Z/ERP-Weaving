@@ -40,14 +40,14 @@ export default async function BranchOpeningPage({
     if (id) {
       await db
         .update(schema.branchOpening)
-        .set({ branchCode, branchName, address, city, phone, fyCode, openingDate, status })
+        .set({ branchCode: branchCode ?? "", branchName: branchName ?? "", address, city, phone, fyCode: fyCode ?? "", openingDate: openingDate ?? "", status })
         .where(eq(schema.branchOpening.id, parseInt(id)));
       revalidatePath("/define/branch-opening");
       redirect(`/define/branch-opening?id=${id}`);
     } else {
       const [row] = await db
         .insert(schema.branchOpening)
-        .values({ branchCode, branchName, address, city, phone, fyCode, openingDate, status })
+        .values({ branchCode: branchCode ?? "", branchName: branchName ?? "", address, city, phone, fyCode: fyCode ?? "", openingDate: openingDate ?? "", status })
         .returning();
       revalidatePath("/define/branch-opening");
       redirect(`/define/branch-opening?id=${row.id}`);

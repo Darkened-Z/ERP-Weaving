@@ -11,6 +11,7 @@ import { FindingPicker } from "@/components/finding-picker";
 import { BrokerRateCalc } from "@/components/broker-rate-calc";
 import { CountPicker } from "@/components/count-picker";
 import { ConfirmButton } from "@/components/confirm-button";
+import { ConversionContractGuard } from "@/components/conversion-contract-guard";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
 import { and, eq, or, sql } from "drizzle-orm";
@@ -587,7 +588,8 @@ export default async function IntGreyConversionContractPage({
               <option key={b.name} value={b.name} />
             ))}
           </datalist>
-          <form action={saveContract}>
+          <form id="igc-save-form" action={saveContract}>
+              <ConversionContractGuard formId="igc-save-form" />
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <GreyConvCalc />
             <BrokerRateCalc />

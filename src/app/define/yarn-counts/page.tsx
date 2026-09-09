@@ -61,7 +61,7 @@ export default async function YarnCountsPage({
     if (id) {
       // code is locked — never changed after creation
       await db.update(schema.yarnCounts).set({
-        description, status, ...(blend != null ? { type: blend } : {}),
+        description: description ?? "", status, ...(blend != null ? { type: blend } : {}),
       }).where(eq(schema.yarnCounts.id, parseInt(id)));
     } else {
       const nextN = existing.reduce((m, r) => {
@@ -69,7 +69,7 @@ export default async function YarnCountsPage({
         return Number.isFinite(n) && n > m ? n : m;
       }, 0) + 1;
       await db.insert(schema.yarnCounts).values({
-        countCode: String(nextN), description, status, type: blend ?? "COTTON",
+        countCode: String(nextN), description: description ?? "", status, type: blend ?? "COTTON",
       });
     }
     revalidatePath("/define/yarn-counts");
