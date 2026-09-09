@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f8fafc;
+  --bg: #f0f4f8;
   --fg: #334155;
   --muted: #64748b;
   --border: #cbd5e1;
@@ -19,6 +19,15 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --info: #0ea5e9;
+
+  /* Sidebar Theme */
+  --sidebar-bg: #1e3a8a;
+  --sidebar-fg: #ffffff;
+  --sidebar-muted: #93c5fd;
+  --sidebar-border: #1d4ed8;
+  --sidebar-active-bg: #3b82f6;
+  --sidebar-active-fg: #ffffff;
+  --sidebar-hover-bg: #1e40af;
 }
 
 /* Remap hard-coded black/white utilities to the softened palette so the whole app lightens consistently. */
