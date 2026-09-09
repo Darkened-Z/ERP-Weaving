@@ -1,25 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #eef3fb;
-  --fg: #273246;
-  --muted: #5f6b81;
-  --border: #a1b1cf;
-  --border-light: #c6d2e6;
-  --surface: #d8e2f2;
-  --accent: #2f4268;
-  --accent-fg: #ffffff;
-  --danger: #bd5252;
-  /* soft module / semantic hues */
-  --h1: #6a5fb0; /* violet  — Define        */
-  --h2: #2f9a91; /* teal    — Inventory     */
-  --h3: #3d82ad; /* blue    — Ext / Supply  */
-  --h4: #4f9d69; /* green   — Finance       */
-  --h5: #c0883c; /* amber   — Store / Ops   */
-  --h6: #b5607a; /* rose    — Admin         */
-  --success: #4f9d69;
-  --warning: #c0883c;
-  --info: #3d82ad;
+  --bg: #f8fafc;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --border: #cbd5e1;
+  --border-light: #e2e8f0;
+  --surface: #f1f5f9;
+  --accent: #f1f5f9;
+  --accent-fg: #0f172a;
+  --danger: #ef4444;
+  --h1: #6a5fb0;
+  --h2: #2f9a91;
+  --h3: #3d82ad;
+  --h4: #4f9d69;
+  --h5: #c0883c;
+  --h6: #b5607a;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --info: #0ea5e9;
 }
 
 /* Remap hard-coded black/white utilities to the softened palette so the whole app lightens consistently. */

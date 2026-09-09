@@ -1,9 +1,12 @@
+import React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
+import { numberToWords } from "@/lib/number-to-words";
+import { QrImage } from "@/app/weaving/beams/qr/qr-image";
 
 export const dynamic = "force-dynamic";
 
@@ -38,18 +41,51 @@ export default async function GreyDespatchChalanPage({
     new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
   const totalMeters = lines.reduce((s, l) => s + (l.lengthMtrs ?? 0), 0);
-  const lineThan = (l: (typeof lines)[number]) =>
-    (l.a ?? 0) + (l.b ?? 0) + (l.c ?? 0) + (l.cp ?? l.cpRej ?? 0) + (l.rej ?? 0);
-  const totalThan =
-    despatch.thanQty ?? (lines.length ? lines.reduce((s, l) => s + lineThan(l), 0) : null);
+  const totalThan = despatch.thanQty ?? lines.length;
 
   const partyName = despatch.party ?? despatch.doParty ?? despatch.despatchTo ?? "—";
-  const blankRows = Math.max(0, 3 - lines.length);
+
+  // Organize lines into 4 columns to perfectly match the requested "Delivery Voucher" image layout.
+  // Calculate exactly 1/4th of the list rounded up for column length.
+  const colLength = Math.max(1, Math.ceil(lines.length / 4));
+  const gridRows = [];
+  for (let r = 0; r < colLength; r++) {
+    const rData = [];
+    for (let c = 0; c < 4; c++) {
+      const idx = c * colLength + r;
+      if (idx < lines.length) {
+        rData.push({ sNo: idx + 1, mtrs: lines[idx].lengthMtrs });
+      } else {
+        rData.push({ sNo: null, mtrs: null });
+      }
+    }
+    gridRows.push(rData);
+  }
+
+  // Column totals
+  const colTotals = [0, 0, 0, 0];
+  for (let c = 0; c < 4; c++) {
+    let sum = 0;
+    for (let r = 0; r < colLength; r++) {
+      const idx = c * colLength + r;
+      if (idx < lines.length && lines[idx].lengthMtrs) {
+        sum += lines[idx].lengthMtrs;
+      }
+    }
+    colTotals[c] = sum;
+  }
+
+  // Create word representation without the "Rupees" prefix
+  let words = numberToWords(totalMeters, "");
+  if (words.startsWith(" ")) words = words.slice(1);
+  if (words) {
+    words = "(" + words.charAt(0).toUpperCase() + words.slice(1) + ")";
+  }
 
   return (
     <>
       <style>{`
-        @page { size: A4; margin: 18mm; }
+        @page { size: A4 portrait; margin: 8mm 12mm; }
         @media print {
           html, body { background: #fff !important; }
           .no-print { display: none !important; }
@@ -63,7 +99,7 @@ export default async function GreyDespatchChalanPage({
           .chalan-wrap { padding: 0 !important; background: #fff !important; }
         }
         .chalan-wrap {
-          background: #f5f5f5;
+          background: var(--bg);
           min-height: 100vh;
           padding: 32px 16px;
         }
@@ -80,208 +116,158 @@ export default async function GreyDespatchChalanPage({
           color: #000;
           max-width: 210mm;
           margin: 0 auto;
-          padding: 22mm 18mm;
-          border: 1px solid #000;
-          font-family: 'Georgia', 'Times New Roman', serif;
-          font-size: 12pt;
-          line-height: 1.45;
-        }
-        .chalan-page .company-name {
-          font-family: 'Georgia', 'Times New Roman', serif;
-          font-size: 26pt;
-          font-weight: 700;
-          letter-spacing: 0.02em;
-          margin: 0;
-          text-align: center;
-        }
-        .chalan-page .company-meta {
-          text-align: center;
+          padding: 12mm 10mm;
+          border: 1px solid var(--border);
+          font-family: 'Arial', sans-serif;
           font-size: 10pt;
-          margin-top: 4px;
-          line-height: 1.4;
+          line-height: 1.35;
         }
-        .chalan-page .company-ids {
-          text-align: center;
-          font-size: 9.5pt;
-          margin-top: 4px;
-          letter-spacing: 0.04em;
-        }
-        .chalan-page .rule {
-          border: 0;
-          border-top: 2px solid #000;
-          margin: 14px 0 10px;
-        }
-        .chalan-page .rule-thin {
-          border: 0;
-          border-top: 1px solid #000;
-          margin: 10px 0;
-        }
-        .chalan-page .doc-title {
-          text-align: center;
-          font-size: 18pt;
-          font-weight: 700;
-          letter-spacing: 0.28em;
-          margin: 6px 0 18px;
-          padding: 6px 0;
-          border-top: 1px solid #000;
-          border-bottom: 1px solid #000;
-          font-family: 'Georgia', 'Times New Roman', serif;
-        }
-        .chalan-page .meta-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 6px 32px;
-          margin-bottom: 16px;
-          font-size: 11pt;
-        }
-        .chalan-page .meta-row {
+        
+        .header-container {
           display: flex;
-          gap: 8px;
-          border-bottom: 1px dotted #000;
-          padding: 3px 0;
+          justify-content: space-between;
+          margin-bottom: 24px;
         }
-        .chalan-page .meta-label {
-          font-family: 'Helvetica', Arial, sans-serif;
-          font-size: 8.5pt;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          min-width: 92px;
-          color: #000;
-        }
-        .chalan-page .meta-value {
+
+        .header-left {
           flex: 1;
-          font-weight: 600;
         }
-        .chalan-page .party-block {
-          border: 1px solid #000;
-          padding: 10px 14px;
-          margin: 14px 0 18px;
+        
+        .header-right {
+          width: 320px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
         }
-        .chalan-page .party-label {
-          font-family: 'Helvetica', Arial, sans-serif;
-          font-size: 8.5pt;
-          font-weight: 700;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-        }
-        .chalan-page .party-name {
-          font-size: 16pt;
-          font-weight: 700;
-          margin-top: 2px;
-        }
-        .chalan-page .party-sub {
-          font-size: 10.5pt;
-          margin-top: 4px;
-        }
-        .chalan-page table.items {
+
+        .meta-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 8px;
+          margin-bottom: 8px;
         }
-        .chalan-page table.items th,
-        .chalan-page table.items td {
-          border: 1px solid #000;
-          padding: 10px 10px;
-          font-size: 11pt;
-          font-family: 'Georgia', 'Times New Roman', serif;
-          text-align: left;
+        
+        .meta-table td {
+          padding: 3px 0;
+          border: none;
           vertical-align: top;
+          font-size: 10pt;
         }
-        .chalan-page table.items th {
-          background: #fff;
-          font-family: 'Helvetica', Arial, sans-serif;
-          font-size: 9pt;
-          font-weight: 700;
-          letter-spacing: 0.1em;
+        
+        .meta-label {
+          width: 110px;
+          color: #555;
+        }
+        
+        .meta-val {
+          font-weight: 600;
           text-transform: uppercase;
-          text-align: left;
         }
-        .chalan-page table.items th.num,
-        .chalan-page table.items td.num {
-          text-align: right;
-          font-variant-numeric: tabular-nums;
-        }
-        .chalan-page table.items td.sr {
+
+        .doc-title {
+          font-size: 22pt;
+          font-weight: 700;
           text-align: center;
-          width: 32px;
+          margin: -10px 0 10px;
+          color: #333;
         }
-        .chalan-page table.items tr.blank td {
-          height: 26px;
-          color: transparent;
-        }
-        .chalan-page .totals {
+        
+        .logo-box {
+          width: 200px;
+          height: 80px;
+          background: transparent;
+          margin-bottom: 12px;
           display: flex;
+          align-items: center;
           justify-content: flex-end;
-          gap: 40px;
-          margin-top: 12px;
-          padding: 8px 10px;
-          border-top: 2px solid #000;
-          border-bottom: 2px solid #000;
+          position: relative;
+        }
+
+        .summary-box {
+          width: 100%;
+        }
+
+        .summary-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 8px;
+          border-bottom: 1px dotted #ccc;
+          padding-bottom: 2px;
+        }
+
+        .summary-val {
+          font-weight: 700;
           font-size: 11pt;
         }
-        .chalan-page .total-item {
-          display: flex;
-          gap: 10px;
-          align-items: baseline;
-        }
-        .chalan-page .total-label {
-          font-family: 'Helvetica', Arial, sans-serif;
+
+        .words-val {
           font-size: 9pt;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
+          font-style: italic;
+          text-align: right;
+          margin-top: -4px;
+          margin-bottom: 12px;
         }
-        .chalan-page .total-value {
-          font-weight: 700;
-          font-size: 13pt;
-          font-variant-numeric: tabular-nums;
+
+        table.grid {
+          width: 100%;
+          border-collapse: collapse;
+          border: 1px solid #ccc;
+          margin-top: 10px;
         }
-        .chalan-page .notes {
-          margin-top: 22px;
+
+        table.grid th, table.grid td {
+          border: 1px solid #ccc;
+          padding: 4px 6px;
           font-size: 9.5pt;
-          border: 1px solid #000;
-          padding: 8px 12px;
-          min-height: 52px;
         }
-        .chalan-page .notes-label {
-          font-family: 'Helvetica', Arial, sans-serif;
-          font-size: 8.5pt;
-          font-weight: 700;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
+
+        table.grid th {
+          background: #f0f0f0;
+          color: #000;
+          font-weight: 600;
+          text-align: right;
+          border-bottom: 1px solid #ccc;
         }
-        .chalan-page .notes-body {
-          margin-top: 4px;
-          font-size: 10.5pt;
+
+        table.grid th:nth-child(odd) {
+          text-align: center;
+          width: 45px;
         }
-        .chalan-page .signatures {
-          margin-top: 42px;
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 24px;
+
+        table.grid td:nth-child(odd) {
+          text-align: center;
+          color: #555;
         }
-        .chalan-page .sig {
+
+        table.grid td:nth-child(even) {
+          text-align: right;
+          font-weight: 600;
+        }
+
+        .grid-totals {
+          background: #e8e8e8;
+          font-weight: bold !important;
+        }
+
+        .signatures {
+          margin-top: 60px;
+          display: flex;
+          justify-content: space-between;
+          padding: 0 20px;
+        }
+
+        .sig-box {
           text-align: center;
         }
-        .chalan-page .sig-line {
+        
+        .sig-line {
+          width: 140px;
           border-top: 1px solid #000;
-          margin-bottom: 6px;
-          height: 32px;
+          margin-bottom: 8px;
         }
-        .chalan-page .sig-label {
-          font-family: 'Helvetica', Arial, sans-serif;
-          font-size: 9pt;
-          font-weight: 700;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-        }
-        .chalan-page .footer {
-          margin-top: 26px;
-          font-size: 8.5pt;
-          text-align: center;
-          color: #333;
-          letter-spacing: 0.05em;
+        
+        .sig-label {
+          font-size: 9.5pt;
+          color: #555;
         }
       `}</style>
 
@@ -293,175 +279,133 @@ export default async function GreyDespatchChalanPage({
           >
             Back
           </Link>
-          <PrintButton label="Print Chalan" />
+          <PrintButton label="Print Delivery Voucher" />
         </div>
 
         <div className="chalan-page">
-          <div className="company-name">
-            {company?.name ?? "Company Name"}
-          </div>
-          <div className="company-meta">
-            {[company?.address, company?.city].filter(Boolean).join(", ") ||
-              "Address"}
-            {company?.phone ? ` — Phone: ${company.phone}` : ""}
+          <div className="doc-title">Delivery Voucher</div>
+          
+          <div className="header-container">
+            <div className="header-left">
+              <table className="meta-table">
+                <tbody>
+                  <tr>
+                    <td className="meta-label">Book.#</td>
+                    <td className="meta-val">{despatch.vNo}</td>
+                  </tr>
+                  <tr>
+                    <td className="meta-label">Date</td>
+                    <td className="meta-val">{despatch.vDate}</td>
+                  </tr>
+                  <tr>
+                    <td className="meta-label">Party</td>
+                    <td className="meta-val">{partyName}</td>
+                  </tr>
+                  <tr>
+                    <td className="meta-label">Contract #</td>
+                    <td className="meta-val">{despatch.convContNo ?? ""}</td>
+                  </tr>
+                  <tr>
+                    <td className="meta-label">Despatch Loc</td>
+                    <td className="meta-val">{despatch.despatchLocation ?? ""}</td>
+                  </tr>
+                  <tr>
+                    <td className="meta-label">Product</td>
+                    <td className="meta-val">{despatch.productBrand ?? ""}</td>
+                  </tr>
+                  <tr>
+                    <td className="meta-label">Grey</td>
+                    <td className="meta-val">{despatch.greyCode ?? ""}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="header-right">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px', justifyContent: 'flex-end', width: '100%' }}>
+                <div style={{ textAlign: 'center', fontSize: '8pt', color: '#555' }}>
+                  <QrImage value="https://wa.me/923232201515" size={65} />
+                  <div style={{ marginTop: '2px', fontWeight: 'bold' }}>WhatsApp Us</div>
+                </div>
+                <div className="logo-box" style={{ marginBottom: 0 }}>
+                  {/* User-requested SK Textile Logo */}
+                  <img src="/sk-logo.png" alt="SK Textile" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'right' }} />
+                </div>
+              </div>
+              <div className="summary-box">
+                <div className="summary-row">
+                  <span className="meta-label">Than</span>
+                  <span className="summary-val">{formatNum(totalThan)}</span>
+                </div>
+                <div className="summary-row">
+                  <span className="meta-label">Meters Tot.</span>
+                  <span className="summary-val">{formatNum(totalMeters)}</span>
+                </div>
+                <div className="words-val">{words}</div>
+              </div>
+            </div>
           </div>
 
-          <div className="doc-title">DELIVERY CHALAN</div>
-
-          <div className="meta-grid">
-            <div className="meta-row">
-              <span className="meta-label">Chalan No</span>
-              <span className="meta-value">{despatch.vNo}</span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">Date</span>
-              <span className="meta-value">{despatch.vDate}</span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">Vehicle No</span>
-              <span className="meta-value">{despatch.vehicleNo ?? "—"}</span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">Gate Pass</span>
-              <span className="meta-value">{despatch.gpNo ?? "—"}</span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">GP Date</span>
-              <span className="meta-value">{despatch.gpDate ?? "—"}</span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">Supervisor</span>
-              <span className="meta-value">{despatch.supervisor ?? "—"}</span>
-            </div>
-          </div>
-
-          <div className="party-block">
-            <div className="party-label">M/s.</div>
-            <div className="party-name">{partyName}</div>
-            {despatch.doParty && despatch.doParty !== partyName ? (
-              <div className="party-sub">DO Party: {despatch.doParty}</div>
-            ) : null}
-          </div>
-
-          <table className="items">
+          <table className="grid">
             <thead>
               <tr>
-                <th style={{ width: "36px" }}>#</th>
-                {lines.length > 0 ? (
-                  <>
-                    <th className="num" style={{ width: "70px" }}>
-                      T.Sr#
-                    </th>
-                    <th className="num">A</th>
-                    <th className="num">B</th>
-                    <th className="num">C</th>
-                    <th className="num">CP</th>
-                    <th className="num">Rej</th>
-                    <th className="num" style={{ width: "120px" }}>
-                      Length (Mtrs)
-                    </th>
-                  </>
-                ) : (
-                  <>
-                    <th>Description</th>
-                    <th className="num" style={{ width: "90px" }}>
-                      Than
-                    </th>
-                    <th className="num" style={{ width: "110px" }}>
-                      Meters
-                    </th>
-                    <th style={{ width: "150px" }}>Remarks</th>
-                  </>
-                )}
+                <th>S#</th>
+                <th>Mtrs</th>
+                <th>S#</th>
+                <th>Mtrs</th>
+                <th>S#</th>
+                <th>Mtrs</th>
+                <th>S#</th>
+                <th>Mtrs</th>
               </tr>
             </thead>
             <tbody>
-              {lines.length > 0 ? (
-                lines.map((l, idx) => (
-                  <tr key={l.id}>
-                    <td className="sr">{idx + 1}</td>
-                    <td className="num">{l.tSrNo ?? "—"}</td>
-                    <td className="num">{l.a != null ? formatNum(l.a) : "—"}</td>
-                    <td className="num">{l.b != null ? formatNum(l.b) : "—"}</td>
-                    <td className="num">{l.c != null ? formatNum(l.c) : "—"}</td>
-                    <td className="num">
-                      {l.cp != null
-                        ? formatNum(l.cp)
-                        : l.cpRej != null && l.rej == null
-                        ? formatNum(l.cpRej)
-                        : "—"}
-                    </td>
-                    <td className="num">
-                      {l.rej != null ? formatNum(l.rej) : "—"}
-                    </td>
-                    <td className="num">
-                      {l.lengthMtrs != null ? formatNum(l.lengthMtrs) : "—"}
-                    </td>
+              {gridRows.length > 0 ? (
+                gridRows.map((row, rIdx) => (
+                  <tr key={rIdx}>
+                    {row.map((cell, cIdx) => (
+                      <React.Fragment key={cIdx}>
+                        <td>{cell.sNo ?? ""}</td>
+                        <td>{cell.mtrs != null ? formatNum(cell.mtrs) : ""}</td>
+                      </React.Fragment>
+                    ))}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td className="sr">1</td>
-                  <td>{despatch.productBrand ?? despatch.greyCode ?? "Grey Cloth"}</td>
-                  <td className="num">
-                    {despatch.thanQty != null ? formatNum(despatch.thanQty) : "—"}
-                  </td>
-                  <td className="num">—</td>
-                  <td></td>
+                  <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>No line items recorded.</td>
                 </tr>
               )}
-              {Array.from({ length: blankRows }).map((_, i) => (
-                <tr className="blank" key={`blank-${i}`}>
-                  {Array.from({ length: lines.length > 0 ? 8 : 5 }).map(
-                    (_, j) => (
-                      <td key={j}>.</td>
-                    )
-                  )}
+              {gridRows.length > 0 && (
+                <tr className="grid-totals">
+                  <td></td>
+                  <td>{colTotals[0] > 0 ? formatNum(colTotals[0]) : ""}</td>
+                  <td></td>
+                  <td>{colTotals[1] > 0 ? formatNum(colTotals[1]) : ""}</td>
+                  <td></td>
+                  <td>{colTotals[2] > 0 ? formatNum(colTotals[2]) : ""}</td>
+                  <td></td>
+                  <td>{colTotals[3] > 0 ? formatNum(colTotals[3]) : ""}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
 
-          <div className="totals">
-            <div className="total-item">
-              <span className="total-label">Total Than</span>
-              <span className="total-value">
-                {totalThan != null ? formatNum(totalThan) : "—"}
-              </span>
-            </div>
-            <div className="total-item">
-              <span className="total-label">Total Meters</span>
-              <span className="total-value">
-                {lines.length > 0 ? formatNum(totalMeters) : "—"}
-              </span>
-            </div>
-          </div>
-
-          <div className="notes">
-            <div className="notes-label">Remarks</div>
-            {despatch.remarks ? (
-              <div className="notes-body">{despatch.remarks}</div>
-            ) : null}
-          </div>
-
           <div className="signatures">
-            <div className="sig">
+            <div className="sig-box">
               <div className="sig-line" />
               <div className="sig-label">Prepared By</div>
             </div>
-            <div className="sig">
+            <div className="sig-box">
               <div className="sig-line" />
               <div className="sig-label">Checked By</div>
             </div>
-            <div className="sig">
+            <div className="sig-box">
               <div className="sig-line" />
-              <div className="sig-label">Received By</div>
+              <div className="sig-label">Approved By</div>
             </div>
           </div>
 
-          <div className="footer">
-            This is a computer generated delivery chalan.
-          </div>
         </div>
       </div>
     </>

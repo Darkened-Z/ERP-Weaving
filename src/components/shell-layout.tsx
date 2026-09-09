@@ -36,20 +36,20 @@ export function ShellLayout({
       )}
 
       <aside
-        className={`w-56 bg-black text-white flex flex-col fixed h-screen overflow-y-auto scrollbar-thin z-50 transition-transform duration-200 ${
+        className={`w-56 bg-[var(--bg)] text-[var(--fg)] border-r border-[var(--border-light)] flex flex-col fixed h-screen overflow-y-auto scrollbar-thin z-50 transition-transform duration-200 ${
           open ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
       >
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+        <div className="p-5 border-b border-[var(--border-light)] flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">SK MILLS</div>
-            <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 mt-1">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-1">
               Weaving Management
             </div>
           </div>
           <button
             onClick={() => setOpen(false)}
-            className="lg:hidden text-white/40 hover:text-white text-xl leading-none cursor-pointer p-1"
+            className="lg:hidden text-[var(--muted)] hover:text-[var(--fg)] text-xl leading-none cursor-pointer p-1"
           >
             &times;
           </button>
@@ -57,15 +57,15 @@ export function ShellLayout({
 
         <SidebarNav sections={sections} active={active} onNavigate={() => setOpen(false)} />
 
-        <div className="p-5 border-t border-white/10">
+        <div className="p-5 border-t border-[var(--border-light)]">
           <div className="text-[12px] font-medium">{sessionName}</div>
-          <div className="text-[9px] uppercase tracking-[0.1em] text-white/30 mt-0.5">
+          <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)] mt-0.5">
             {sessionRole}
           </div>
           <form action={logoutAction}>
             <button
               type="submit"
-              className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/30 hover:text-white transition-colors cursor-pointer"
+              className="mt-2 text-[10px] uppercase tracking-[0.08em] text-[var(--muted)] hover:text-[var(--fg)] transition-colors cursor-pointer"
             >
               Sign out
             </button>
