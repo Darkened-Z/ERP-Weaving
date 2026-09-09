@@ -75,7 +75,6 @@ const SECTIONS = [
           { href: "/inventory/hours-schedule", label: "Production Hours Schedual", key: "hours-schedule" },
           { href: "/inventory/daily-production", label: "Daily Production Entries", key: "production" },
           { href: "/inventory/grey-despatch", label: "Grey Cloth Despatch", key: "grey-despatch" },
-          { href: "/inventory/grey-despatch-dami", label: "Grey Cloth Despatch Dami", key: "grey-despatch-dami" },
           { href: "/inventory/paki-parchi", label: "Grey Paki Parchi", key: "paki-parchi" },
         ],
       },
@@ -147,6 +146,7 @@ const SECTIONS = [
         label: "Grey",
         items: [
           { href: "/external/grey/godown-stock", label: "Grey Purchase In Stock", key: "ext-godown" },
+          { href: "/inventory/grey-despatch-dami", label: "Grey Cloth Despatch Dami", key: "grey-despatch-dami" },
           { href: "/external/grey/transfer", label: "Grey Transfer", key: "ext-gt" },
           { href: "/external/grey/packi-parchi", label: "Packi Parchi", key: "ext-pp" },
         ],
