@@ -42,7 +42,7 @@ export function ShellLayout({
       >
         <div className="p-5 border-b border-[var(--border-light)] flex items-center justify-between">
           <div>
-            <div className="text-lg font-bold tracking-tight">SK MILLS</div>
+            <div className="text-lg font-bold tracking-tight text-[var(--accent)]">SK MILLS</div>
             <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-1">
               Weaving Management
             </div>
@@ -83,7 +83,7 @@ export function ShellLayout({
               <path d="M3 5h14M3 10h14M3 15h14" />
             </svg>
           </button>
-          <span className="text-[13px] font-bold tracking-tight">SK MILLS</span>
+          <span className="text-[13px] font-bold tracking-tight text-[var(--accent)]">SK MILLS</span>
           <div className="flex-1" />
           <div className="w-40">
             <CommandPaletteTrigger />
