@@ -82,8 +82,8 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                   onClick={onNavigate}
                   className={`block px-5 py-2 text-[13px] font-medium transition-colors ${
                     active === item.key
-                      ? "bg-white text-black"
-                      : "text-white/60 hover:text-white hover:bg-white/5"
+                      ? "bg-[var(--fg)] text-[var(--bg)]"
+                      : "text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]"
                   }`}
                 >
                   {item.label}
@@ -99,21 +99,21 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
         const hasSubsections = Boolean(section.subsections?.length);
 
         return (
-          <div key={si} className="border-b border-white/5">
+          <div key={si} className="border-b border-[var(--border-light)]">
             <button
               onClick={() => toggleSection(section.label!)}
               style={{ borderLeft: `4px solid ${SECTION_COLORS[section.label] ?? "transparent"}` }}
               className={`w-full flex items-center justify-between pl-4 pr-5 py-3 text-left transition-colors cursor-pointer ${
                 hasActive
-                  ? "text-white"
-                  : "text-white/50 hover:text-white hover:bg-white/5"
+                  ? "text-[var(--fg)]"
+                  : "text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]"
               }`}
             >
               <span className="text-[11px] uppercase tracking-[0.15em] font-semibold">
                 {section.label}
               </span>
               <span className="flex items-center gap-2">
-                <span className="text-[10px] font-mono" style={{ color: SECTION_COLORS[section.label] ?? "rgba(255,255,255,0.25)" }}>{count}</span>
+                <span className="text-[10px] font-mono" style={{ color: SECTION_COLORS[section.label] ?? "var(--muted)" }}>{count}</span>
                 <svg
                   width="10"
                   height="10"
@@ -139,20 +139,20 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                   const isSubOpen = open.includes(subId);
                   const subHasActive = findActiveInSub(sub, active);
                   return (
-                    <div key={sub_i} className="border-t border-white/5">
+                    <div key={sub_i} className="border-t border-[var(--border-light)]">
                       <button
                         onClick={() => toggleSub(subId)}
                         className={`w-full flex items-center justify-between pl-8 pr-5 py-2 text-left transition-colors cursor-pointer ${
                           subHasActive
-                            ? "text-white"
-                            : "text-white/45 hover:text-white hover:bg-white/5"
+                            ? "text-[var(--fg)]"
+                            : "text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]"
                         }`}
                       >
                         <span className="text-[10px] uppercase tracking-[0.12em] font-semibold">
                           {sub.label}
                         </span>
                         <span className="flex items-center gap-2">
-                          <span className="text-[10px] text-white/20 font-mono">{sub.items.length}</span>
+                          <span className="text-[10px] text-[var(--muted)] font-mono">{sub.items.length}</span>
                           <svg
                             width="9"
                             height="9"
@@ -180,13 +180,13 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                               onClick={onNavigate}
                               className={`flex items-center gap-3 pl-11 pr-5 py-1.5 text-[12px] transition-colors ${
                                 isActive
-                                  ? "bg-white text-black font-semibold"
-                                  : "text-white/40 hover:text-white hover:bg-white/5"
+                                  ? "bg-[var(--fg)] text-[var(--bg)] font-semibold"
+                                  : "text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]"
                               }`}
                             >
                               <span
                                 className={`w-4 text-right font-mono text-[10px] shrink-0 ${
-                                  isActive ? "text-black/40" : "text-white/20"
+                                  isActive ? "text-[var(--bg)]" : "text-[var(--muted)]"
                                 }`}
                               >
                                 {idx + 1}
@@ -209,13 +209,13 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                       onClick={onNavigate}
                       className={`flex items-center gap-3 px-5 py-1.5 text-[12px] transition-colors ${
                         isActive
-                          ? "bg-white text-black font-semibold"
-                          : "text-white/40 hover:text-white hover:bg-white/5"
+                          ? "bg-[var(--fg)] text-[var(--bg)] font-semibold"
+                          : "text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]"
                       }`}
                     >
                       <span
                         className={`w-5 text-right font-mono text-[10px] shrink-0 ${
-                          isActive ? "text-black/40" : "text-white/20"
+                          isActive ? "text-[var(--bg)]" : "text-[var(--muted)]"
                         }`}
                       >
                         {idx + 1}
