@@ -2,20 +2,20 @@
 
 :root {
   --bg: #f8fafc;
-  --fg: #0f172a;
+  --fg: #334155;
   --muted: #64748b;
   --border: #cbd5e1;
   --border-light: #e2e8f0;
-  --surface: #f1f5f9;
-  --accent: #f1f5f9;
-  --accent-fg: #0f172a;
+  --surface: #ffffff;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
   --danger: #ef4444;
-  --h1: #6a5fb0;
-  --h2: #2f9a91;
-  --h3: #3d82ad;
-  --h4: #4f9d69;
-  --h5: #c0883c;
-  --h6: #b5607a;
+  --h1: #8b5cf6;
+  --h2: #0d9488;
+  --h3: #2563eb;
+  --h4: #10b981;
+  --h5: #d97706;
+  --h6: #e11d48;
   --success: #22c55e;
   --warning: #f59e0b;
   --info: #0ea5e9;
@@ -58,8 +58,8 @@ input, select, textarea {
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: var(--fg) !important;
-  box-shadow: 0 0 0 2px var(--fg);
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
   position: relative;
   z-index: 2;
 }
@@ -114,25 +114,26 @@ tr:hover td {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border: 2px solid var(--fg);
-  background: var(--fg);
+  border: 2px solid var(--accent);
+  background: var(--accent);
   color: var(--accent-fg);
   cursor: pointer;
   transition: all 0.1s;
 }
 
 .btn:hover {
-  background: var(--bg);
-  color: var(--fg);
+  background: transparent;
+  color: var(--accent);
 }
 
 .btn-outline {
   background: transparent;
-  color: var(--fg);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .btn-outline:hover {
-  background: var(--fg);
+  background: var(--accent);
   color: var(--accent-fg);
 }
 
@@ -163,7 +164,7 @@ tr:hover td {
 }
 
 .input:focus {
-  border-bottom-color: var(--fg) !important;
+  border-bottom-color: var(--accent) !important;
 }
 
 .input-box {
@@ -177,8 +178,8 @@ tr:hover td {
 }
 
 .input-box:focus {
-  border-color: var(--fg) !important;
-  box-shadow: 0 0 0 2px var(--fg);
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
   position: relative;
   z-index: 2;
 }
@@ -189,7 +190,7 @@ tr:hover td {
 }
 
 .card:hover {
-  border-color: var(--fg);
+  border-color: var(--accent);
 }
 
 .page-title {
