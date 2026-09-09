@@ -1474,7 +1474,7 @@ export default async function GreyDespatchPage({
                   <th className="text-right">Amt Tot</th>
                   <th>GP No</th>
                   <th>Vehicle</th>
-                  <th className="text-right">Chalan</th>
+                  <th className="text-right">Voucher</th>
                   <th className="text-right">Notify</th>
                 </tr>
               </thead>
