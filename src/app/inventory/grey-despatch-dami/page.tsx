@@ -66,6 +66,20 @@ export default async function GreyDespatchDamiPage({
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
 
+  // Pakki Parchi list for linking
+  const pakkiParchis = await db
+    .select({
+      id: schema.greyPakiParchi.id,
+      ppNo: schema.greyPakiParchi.ppNo,
+      ppDate: schema.greyPakiParchi.ppDate,
+      party: schema.greyPakiParchi.party,
+      qtyThan: schema.greyPakiParchi.qtyThan,
+      qtyMtrs: schema.greyPakiParchi.qtyMtrs,
+      contractNo: schema.greyPakiParchi.contractNo,
+    })
+    .from(schema.greyPakiParchi)
+    .orderBy(sql`pp_date DESC`);
+
   async function saveDami(formData: FormData) {
     "use server";
     try {
@@ -80,6 +94,7 @@ export default async function GreyDespatchDamiPage({
       const data = {
         vDate,
         lvNo: intVal(formData.get("lv_no")),
+        pakki_parchi_id: intVal(formData.get("pakki_parchi_id")) ?? null,
         purchaseParty: txt(formData.get("purchase_party")),
         saleParty: txt(formData.get("sale_party")),
         subParty: txt(formData.get("sub_party")),
@@ -295,6 +310,24 @@ export default async function GreyDespatchDamiPage({
             <form id="dami-save-form" action={saveDami}>
               {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
+              {/* ── Pakki Parchi Link ── */}
+              <div className="mb-3 p-3 border border-[var(--accent)] bg-[#eff6ff] rounded">
+                <label className="label block mb-1 text-[var(--accent)] font-semibold">🔗 Link to Pakki Parchi</label>
+                <select
+                  name="pakki_parchi_id"
+                  className="input-box mono text-[11px] w-full"
+                  defaultValue={formItem?.pakki_parchi_id ?? ""}
+                >
+                  <option value="">— No link (standalone Dami) —</option>
+                  {pakkiParchis.map((pp) => (
+                    <option key={pp.id} value={pp.id}>
+                      PP#{pp.ppNo} | {pp.ppDate} | {pp.party} | Than:{pp.qtyThan ?? 0} | Mtr:{pp.qtyMtrs ?? 0}{pp.contractNo ? ` | Cont:${pp.contractNo}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <div className="text-[10px] text-[var(--muted)] mt-1">Select the Pakki Parchi (purchase record) this Dami Voucher was issued against.</div>
+              </div>
+
               {/* Row 1: Date, V.No, LvNo, Find */}
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
                 <div className="col-span-2">
@@ -460,6 +493,24 @@ export default async function GreyDespatchDamiPage({
                     {formItem.postedBy && <div className="text-[var(--muted)] mt-1">Posted by: <b>{formItem.postedBy}</b></div>}
                   </div>
                 </div>
+
+                {/* Pakki Parchi link badge */}
+                {formItem.pakki_parchi_id ? (() => {
+                  const pp = pakkiParchis.find(p => p.id === formItem.pakki_parchi_id);
+                  return pp ? (
+                    <div className="mb-3 p-2 bg-green-50 border border-green-300 rounded text-[12px] flex items-center gap-3">
+                      <span className="text-green-700 font-bold text-[11px] uppercase tracking-wide">✅ Linked to Pakki Parchi</span>
+                      <span className="mono font-bold">PP#{pp.ppNo}</span>
+                      <span>{pp.ppDate}</span>
+                      <span className="text-[var(--muted)]">{pp.party}</span>
+                      <span className="ml-auto text-[var(--muted)]">Than: <b>{pp.qtyThan}</b> | Mtr: <b>{pp.qtyMtrs}</b></span>
+                    </div>
+                  ) : null;
+                })() : (
+                  <div className="mb-3 p-2 bg-amber-50 border border-amber-300 rounded text-[11px] text-amber-700">
+                    ⚠️ Not linked to any Pakki Parchi — edit and select one above.
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[12px] mb-3">
                   <div><span className="text-[var(--muted)]">Purchase Party: </span><b>{formItem.purchaseParty ?? "—"}</b></div>
