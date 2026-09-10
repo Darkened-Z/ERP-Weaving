@@ -21,13 +21,13 @@
   --info: #0ea5e9;
 
   /* Sidebar Theme */
-  --sidebar-bg: #1e3a8a;
-  --sidebar-fg: #ffffff;
-  --sidebar-muted: #93c5fd;
-  --sidebar-border: #1d4ed8;
-  --sidebar-active-bg: #3b82f6;
+  --sidebar-bg: #2c3e6b;
+  --sidebar-fg: #f0f4ff;
+  --sidebar-muted: #a0b4d6;
+  --sidebar-border: #3a4f82;
+  --sidebar-active-bg: #4a6fa5;
   --sidebar-active-fg: #ffffff;
-  --sidebar-hover-bg: #1e40af;
+  --sidebar-hover-bg: #374d7a;
 }
 
 /* Remap hard-coded black/white utilities to the softened palette so the whole app lightens consistently. */
