@@ -41,8 +41,8 @@ export function ShellLayout({
         } lg:translate-x-0`}
       >
         <div className="p-5 border-b border-[var(--sidebar-border)] flex items-center justify-between">
-          <div>
-            <img src="/sk-logo.png" alt="SK Textile" className="w-full h-auto object-contain object-left mb-1" style={{ maxHeight: '52px', mixBlendMode: 'screen', filter: 'brightness(1.8) contrast(0.9)' }} />
+          <div className="-mx-5 -mt-5 mb-2">
+            <img src="/sk-logo.png" alt="SK Textile" style={{ width: '100%', height: '110px', objectFit: 'cover', objectPosition: 'center', mixBlendMode: 'screen', filter: 'brightness(1.5)' }} />
             <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--sidebar-muted)] mt-1">
               Weaving Management
             </div>
