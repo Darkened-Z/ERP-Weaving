@@ -10,6 +10,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
+import Link from "next/link";
+import { DamiLineGrid } from "./dami-line-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,7 @@ export default async function GreyDespatchDamiPage({
         .where(sql`
           ${schema.intGreyDespatchDami.vNo} LIKE ${pat} ESCAPE '\\' OR
           ${schema.intGreyDespatchDami.party} LIKE ${pat} ESCAPE '\\' OR
-          ${schema.intGreyDespatchDami.doParty} LIKE ${pat} ESCAPE '\\' OR
+          ${schema.intGreyDespatchDami.subParty} LIKE ${pat} ESCAPE '\\' OR
           ${schema.intGreyDespatchDami.remarks} LIKE ${pat} ESCAPE '\\'
         `)
         .orderBy(desc(schema.intGreyDespatchDami.id))
@@ -43,127 +45,136 @@ export default async function GreyDespatchDamiPage({
         .from(schema.intGreyDespatchDami)
         .orderBy(desc(schema.intGreyDespatchDami.id));
 
-  const originals = await db
-    .select({
-      id: schema.intGreyDespatch.id,
-      vNo: schema.intGreyDespatch.vNo,
-      vDate: schema.intGreyDespatch.vDate,
-      party: schema.intGreyDespatch.party,
-      doParty: schema.intGreyDespatch.doParty,
-    })
-    .from(schema.intGreyDespatch)
-    .orderBy(desc(schema.intGreyDespatch.id));
-
   const selected = isEditing ? damis.find((d) => d.id === idParam) ?? null : null;
   const formItem = isAdding ? null : selected;
 
-  const selectedOriginal = formItem?.originalDespatchId
-    ? originals.find((o) => o.id === formItem.originalDespatchId) ?? null
-    : null;
+  // Load lines if editing
+  const existingLines = formItem
+    ? await db
+        .select()
+        .from(schema.intGreyDespatchDamiLine)
+        .where(eq(schema.intGreyDespatchDamiLine.damiId, formItem.id))
+        .orderBy(schema.intGreyDespatchDamiLine.srNo)
+    : [];
 
   const upcomingVNo = nextVNoFromRows(damis, "IGDD");
   const upcomingLvNo = damis.length + 1;
 
-  const parties = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
-    .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} >= 5`);
-  const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  // Grey constructions for DSP quality LOV
+  const greyConstructions = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction)
+    .orderBy(schema.greyConstruction.code);
 
   async function saveDami(formData: FormData) {
     "use server";
     try {
-    const idRaw = formData.get("id") as string | null;
-    const id = idRaw ? parseInt(idRaw, 10) : NaN;
-    const isUpdate = Number.isFinite(id) && id > 0;
-    const vDate = txt(formData.get("v_date")) ?? today();
-    await assertPeriodOpen(vDate, "INVENTORY");
+      const idRaw = formData.get("id") as string | null;
+      const id = idRaw ? parseInt(idRaw, 10) : NaN;
+      const isUpdate = Number.isFinite(id) && id > 0;
+      const vDate = txt(formData.get("v_date")) ?? today();
+      await assertPeriodOpen(vDate, "INVENTORY");
 
-    const originalDespatchId = intVal(formData.get("original_despatch_id"));
-    let party: string | null = txt(formData.get("party"));
-    let doParty: string | null = txt(formData.get("do_party"));
+      const session = await getSession();
 
-    if (originalDespatchId) {
-      const [orig] = await db
-        .select({
-          party: schema.intGreyDespatch.party,
-          doParty: schema.intGreyDespatch.doParty,
-        })
-        .from(schema.intGreyDespatch)
-        .where(eq(schema.intGreyDespatch.id, originalDespatchId))
-        .limit(1);
-      if (orig) {
-        party = orig.party;
-        doParty = orig.doParty;
-      }
-    }
+      const data = {
+        vDate,
+        lvNo: intVal(formData.get("lv_no")),
+        purchaseParty: txt(formData.get("purchase_party")),
+        saleParty: txt(formData.get("sale_party")),
+        subParty: txt(formData.get("sub_party")),
+        party: txt(formData.get("sub_party")), // keep party synced with subParty for backwards compat
+        contNo: txt(formData.get("cont_no")),
+        salDate: txt(formData.get("sal_date")),
+        dspQuality: txt(formData.get("dsp_quality")),
+        dspQualityDesc: txt(formData.get("dsp_quality_desc")),
+        width: num(formData.get("width")),
+        product: txt(formData.get("product")),
+        productDesc: txt(formData.get("product_desc")),
+        than: intVal(formData.get("than")),
+        mtrs: num(formData.get("mtrs")),
+        rate: num(formData.get("rate")),
+        ratePer: num(formData.get("rate_per")),
+        rateSal: num(formData.get("rate_sal")),
+        printingName: txt(formData.get("printing_name")),
+        printingLocation: txt(formData.get("printing_location")),
+        brokerName: txt(formData.get("broker_name")),
+        term: txt(formData.get("term")),
+        remarks: txt(formData.get("remarks")),
+        printedAt: new Date().toISOString(),
+        postedBy: session?.login ?? null,
+        modifiedDate: new Date().toISOString(),
+      };
 
-    const data = {
-      vDate,
-      lvNo: intVal(formData.get("lv_no")),
-      originalDespatchId,
-      party,
-      doParty,
-      than: intVal(formData.get("than")),
-      mtrs: num(formData.get("mtrs")),
-      remarks: txt(formData.get("remarks")),
-      printedAt: new Date().toISOString(),
-      modifiedDate: new Date().toISOString(),
-    };
-
-    let uniqueError = false;
-    let savedId: number | null = null;
-
-    try {
-      savedId = await db.transaction(async (tx) => {
-        let did: number;
-        if (isUpdate) {
-          await tx.update(schema.intGreyDespatchDami).set(data).where(eq(schema.intGreyDespatchDami.id, id));
-          did = id;
-        } else {
-          const existing = await tx.select({ vNo: schema.intGreyDespatchDami.vNo }).from(schema.intGreyDespatchDami);
-          const [lvRowIn] = await tx
-            .select({ m: sql<number>`COALESCE(MAX(${schema.intGreyDespatchDami.lvNo}),0)` })
-            .from(schema.intGreyDespatchDami);
-          const nextLvNo = Number(lvRowIn?.m ?? 0) + 1;
-          const providedVNo = txt(formData.get("v_no"));
-          const vNo = providedVNo ?? nextVNoFromRows(existing, "IGDD");
-          const [ins] = await tx
-            .insert(schema.intGreyDespatchDami)
-            .values({
-              ...data,
-              vNo,
-              lvNo: data.lvNo ?? nextLvNo,
-              postedDate: new Date().toISOString(),
-            })
-            .returning({ id: schema.intGreyDespatchDami.id });
-          did = ins.id;
+      // Parse line rows from form
+      const lineCount = intVal(formData.get("line_count")) ?? 0;
+      const lineRows: { srNo: number; than: number; mtrs: number | null }[] = [];
+      for (let i = 0; i < lineCount; i++) {
+        const than = intVal(formData.get(`line_than_${i}`)) ?? 1;
+        const mtrsRaw = num(formData.get(`line_mtrs_${i}`));
+        const srNo = intVal(formData.get(`line_sr_${i}`)) ?? i + 1;
+        if (mtrsRaw != null) {
+          lineRows.push({ srNo, than, mtrs: mtrsRaw });
         }
-
-        // Dami posts NO GL of its own. It must not delete under the shared "GDP"
-        // vtype keyed by its own lvNo — that collides with grey-despatch's lNo
-        // sequence and would wipe real despatch postings. (No GL touch here.)
-
-        return did;
-      });
-    } catch (e: unknown) {
-      const msg = String((e as { message?: string })?.message ?? "");
-      const errCode = String((e as { code?: string })?.code ?? "");
-      if (msg.includes("UNIQUE") || errCode === "SQLITE_CONSTRAINT_UNIQUE") {
-        uniqueError = true;
-      } else {
-        throw e;
       }
-    }
 
-    if (uniqueError) {
-      const q = isUpdate ? `?id=${id}&error=code_exists` : `?adding=1&error=code_exists`;
-      redirect("/inventory/grey-despatch-dami" + q);
-    }
-    if (savedId === null) return;
+      let uniqueError = false;
+      let savedId: number | null = null;
 
-    revalidatePath("/inventory/grey-despatch-dami");
-    redirect(`/inventory/grey-despatch-dami?id=${savedId}`);
+      try {
+        savedId = await db.transaction(async (tx) => {
+          let did: number;
+          if (isUpdate) {
+            await tx.update(schema.intGreyDespatchDami).set(data).where(eq(schema.intGreyDespatchDami.id, id));
+            did = id;
+          } else {
+            const existing = await tx.select({ vNo: schema.intGreyDespatchDami.vNo }).from(schema.intGreyDespatchDami);
+            const [lvRowIn] = await tx
+              .select({ m: sql<number>`COALESCE(MAX(${schema.intGreyDespatchDami.lvNo}),0)` })
+              .from(schema.intGreyDespatchDami);
+            const nextLvNo = Number(lvRowIn?.m ?? 0) + 1;
+            const providedVNo = txt(formData.get("v_no"));
+            const vNo = providedVNo ?? nextVNoFromRows(existing, "IGDD");
+            const [ins] = await tx
+              .insert(schema.intGreyDespatchDami)
+              .values({
+                ...data,
+                vNo,
+                lvNo: data.lvNo ?? nextLvNo,
+                postedDate: new Date().toISOString(),
+              })
+              .returning({ id: schema.intGreyDespatchDami.id });
+            did = ins.id;
+          }
+
+          // Save line rows
+          if (lineRows.length > 0) {
+            await tx.delete(schema.intGreyDespatchDamiLine).where(eq(schema.intGreyDespatchDamiLine.damiId, did));
+            await tx.insert(schema.intGreyDespatchDamiLine).values(
+              lineRows.map((r) => ({ damiId: did, srNo: r.srNo, than: r.than, mtrs: r.mtrs }))
+            );
+          }
+
+          return did;
+        });
+      } catch (e: unknown) {
+        const msg = String((e as { message?: string })?.message ?? "");
+        const errCode = String((e as { code?: string })?.code ?? "");
+        if (msg.includes("UNIQUE") || errCode === "SQLITE_CONSTRAINT_UNIQUE") {
+          uniqueError = true;
+        } else {
+          throw e;
+        }
+      }
+
+      if (uniqueError) {
+        const q = isUpdate ? `?id=${id}&error=code_exists` : `?adding=1&error=code_exists`;
+        redirect("/inventory/grey-despatch-dami" + q);
+      }
+      if (savedId === null) return;
+
+      revalidatePath("/inventory/grey-despatch-dami");
+      redirect(`/inventory/grey-despatch-dami?id=${savedId}`);
     } catch (e) {
       const err = e as { message?: string; digest?: string };
       if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
@@ -179,15 +190,8 @@ export default async function GreyDespatchDamiPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/grey-despatch-dami?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
-    const [existing] = await db
-      .select({ lvNo: schema.intGreyDespatchDami.lvNo })
-      .from(schema.intGreyDespatchDami)
-      .where(eq(schema.intGreyDespatchDami.id, id))
-      .limit(1);
-    void existing;
     await db.transaction(async (tx) => {
-      // Dami has no GL of its own — must not delete shared "GDP" rows (that vno
-      // belongs to grey-despatch's lNo sequence). Only remove the dami row.
+      await tx.delete(schema.intGreyDespatchDamiLine).where(eq(schema.intGreyDespatchDamiLine.damiId, id));
       await tx.delete(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, id));
     });
     revalidatePath("/inventory/grey-despatch-dami");
@@ -206,268 +210,365 @@ export default async function GreyDespatchDamiPage({
     { than: 0, mtrs: 0 }
   );
 
+  const initialLineRows = existingLines.map((l) => ({
+    srNo: l.srNo,
+    than: l.than,
+    mtrs: l.mtrs != null ? String(l.mtrs) : "",
+  }));
+
   return (
     <Shell active="grey-despatch-dami">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: absolute; top: 0; left: 0; width: 100%; }
+        }
+        .print-only { display: none; }
+      `}</style>
+
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+        {/* ── Top bar ── */}
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-4 gap-4 no-print">
           <div>
-            <h1 className="page-title">GREY CLOTH DESPATCH DAMI</h1>
-            <p className="text-[13px] text-[var(--muted)] mt-2">
-              {damis.length} dami slip{damis.length === 1 ? "" : "s"}
+            <h1 className="page-title">GREY DESPATCH DAMI</h1>
+            <p className="text-[13px] text-[var(--muted)] mt-1">
+              {damis.length} slip{damis.length === 1 ? "" : "s"}
               {findFilter ? ` matching "${findFilter}"` : ""}
             </p>
           </div>
           <ExcelExportButton
             rows={damis.map((d) => ({
-              vNo: d.vNo,
-              vDate: d.vDate,
-              party: d.party,
-              doParty: d.doParty,
-              than: d.than,
-              mtrs: d.mtrs,
-              remarks: d.remarks,
+              vNo: d.vNo, vDate: d.vDate, subParty: d.subParty,
+              printingLocation: d.printingLocation, productDesc: d.productDesc,
+              than: d.than, mtrs: d.mtrs,
             }))}
             columns={[
-              { key: "vNo", label: "V.No" },
-              { key: "vDate", label: "Date" },
-              { key: "party", label: "Party" },
-              { key: "doParty", label: "Do Party" },
-              { key: "than", label: "Than" },
-              { key: "mtrs", label: "Mtrs" },
-              { key: "remarks", label: "Remarks" },
+              { key: "vNo", label: "V.No" }, { key: "vDate", label: "Date" },
+              { key: "subParty", label: "Party" }, { key: "printingLocation", label: "Despatch Loc" },
+              { key: "productDesc", label: "Product" }, { key: "than", label: "Than" }, { key: "mtrs", label: "Mtrs" },
             ]}
             filename="grey-despatch-dami"
             sheetName="DespatchDami"
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-6">
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{damis.length}</div>
-            <div className="stat-label">Total Slips</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{formatNum(totals.than)}</div>
-            <div className="stat-label">Total Than</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{formatNum(totals.mtrs)}</div>
-            <div className="stat-label">Total Mtrs</div>
-          </div>
+        {/* ── Stats ── */}
+        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-4 no-print">
+          <div className="bg-white p-3"><div className="mono text-xl font-bold">{damis.length}</div><div className="stat-label">Total Slips</div></div>
+          <div className="bg-white p-3"><div className="mono text-xl font-bold">{formatNum(totals.than)}</div><div className="stat-label">Total Than</div></div>
+          <div className="bg-white p-3"><div className="mono text-xl font-bold">{formatNum(totals.mtrs)}</div><div className="stat-label">Total Mtrs</div></div>
         </div>
 
-        {params.error === "code_exists" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            V.No already exists. Try again.
-          </div>
-        )}
-        {params.error === "period_locked" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Period is locked. Cannot save for this date
-            {params.thru && (
-              <> — locked through <span className="mono">{params.thru}</span></>
-            )}
-            .
-          </div>
-        )}
-        {params.error === "admin_only" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Only ADMIN can delete vouchers.
-          </div>
-        )}
+        {/* ── Errors ── */}
+        {params.error === "code_exists" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">V.No already exists.</div>}
+        {params.error === "period_locked" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Period is locked{params.thru && <> — through <span className="mono">{params.thru}</span></>}.</div>}
+        {params.error === "admin_only" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Only ADMIN can delete.</div>}
 
         <form id="dami-find-form" method="GET" action="/inventory/grey-despatch-dami" className="hidden"></form>
 
-        <div className="border border-black p-5 mb-6">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
-              {isAdding
-                ? "New — GREY CLOTH DESPATCH DAMI"
-                : formItem
-                ? `Edit — ${formItem.vNo}`
-                : "GREY CLOTH DESPATCH DAMI"}
-            </div>
-            <div className="flex gap-2 no-print flex-wrap">
-              <a href="/inventory/grey-despatch-dami?adding=1" className="btn btn-outline btn-sm">New</a>
-              <button type="submit" form="dami-save-form" className="btn btn-sm">Save</button>
-              <PrintButton label="Print" />
-              <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
-              {formItem ? (
-                <form action={deleteDami} className="inline">
-                  <input type="hidden" name="id" value={formItem.id} />
-                  <ConfirmButton message={`Delete dami slip ${formItem.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  disabled
-                  title="Save the slip first to enable delete"
-                  style={{ opacity: 0.5, cursor: "not-allowed" }}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          </div>
+        {/* ── MAIN LAYOUT: Form (left 2/3) + Line Grid (right 1/3) ── */}
+        <div className="flex gap-4 items-start">
 
-          <form id="dami-save-form" action={saveDami}>
-            {formItem && <input type="hidden" name="id" value={formItem.id} />}
+          {/* ─── LEFT: Form ─── */}
+          <div className="flex-1 border border-black p-4 mb-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2 no-print">
+              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
+                {isAdding ? "New Slip" : formItem ? `Edit — ${formItem.vNo}` : "Grey Despatch Dami"}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <a href="/inventory/grey-despatch-dami?adding=1" className="btn btn-outline btn-sm">New</a>
+                <button type="submit" form="dami-save-form" className="btn btn-sm">Save</button>
+                <PrintButton label="Print" />
+                <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
+                {formItem ? (
+                  <form action={deleteDami} className="inline">
+                    <input type="hidden" name="id" value={formItem.id} />
+                    <ConfirmButton message={`Delete ${formItem.vNo}? Cannot be undone.`}>Delete</ConfirmButton>
+                  </form>
+                ) : null}
+              </div>
+            </div>
 
-            <div className="grid grid-cols-12 gap-3 mb-4 gform">
-              <div className="col-span-2">
-                <label className="label block mb-1">Date</label>
-                <input name="v_date" type="date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">V.No</label>
-                <input name="v_no" className="input-box mono bg-gray-100" defaultValue={formItem?.vNo ?? upcomingVNo} readOnly />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">LvNo</label>
-                <input name="lv_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lvNo ?? upcomingLvNo} readOnly />
-              </div>
-              <div className="col-span-3">
-                <label className="label block mb-1">Printed At</label>
-                <input className="input-box mono bg-gray-100 text-[11px]" defaultValue={formItem?.printedAt?.slice(0, 16).replace("T", " ") ?? ""} readOnly tabIndex={-1} />
-              </div>
-              <div className="col-span-3">
-                <label className="label block mb-1">Find</label>
-                <div className="flex gap-2">
-                  <input form="dami-find-form" name="find" className="input-box mono flex-1" defaultValue={params.find ?? ""} placeholder="V.No / party" />
-                  <button form="dami-find-form" type="submit" className="btn btn-outline btn-sm">Find</button>
+            <form id="dami-save-form" action={saveDami}>
+              {formItem && <input type="hidden" name="id" value={formItem.id} />}
+
+              {/* Row 1: Date, V.No, LvNo, Find */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-2">
+                  <label className="label block mb-1">V.Date</label>
+                  <input name="v_date" type="date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
+                </div>
+                <div className="col-span-2">
+                  <label className="label block mb-1">V.No</label>
+                  <input name="v_no" className="input-box mono bg-gray-100" defaultValue={formItem?.vNo ?? upcomingVNo} readOnly />
+                </div>
+                <div className="col-span-2">
+                  <label className="label block mb-1">Lv No</label>
+                  <input name="lv_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lvNo ?? upcomingLvNo} readOnly />
+                </div>
+                <div className="col-span-3">
+                  <label className="label block mb-1">Sal Date</label>
+                  <input name="sal_date" type="date" className="input-box mono" defaultValue={formItem?.salDate ?? ""} />
+                </div>
+                <div className="col-span-3">
+                  <label className="label block mb-1">Find</label>
+                  <div className="flex gap-1">
+                    <input form="dami-find-form" name="find" className="input-box mono flex-1" defaultValue={params.find ?? ""} placeholder="V.No / party" />
+                    <button form="dami-find-form" type="submit" className="btn btn-outline btn-sm">Go</button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-12 gap-3 mb-4 gform">
-              <div className="col-span-6">
-                <label className="label block mb-1">Original Despatch</label>
-                <select name="original_despatch_id" className="input-box mono text-[12px]" defaultValue={formItem?.originalDespatchId ?? ""}>
-                  <option value="">— select despatch —</option>
-                  {originals.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.vNo} — {o.party ?? "-"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-3">
-                <label className="label block mb-1">Party (auto)</label>
-                <input name="party" className="input-box mono bg-gray-100 text-[12px]" defaultValue={formItem?.party ?? selectedOriginal?.party ?? ""} readOnly />
-              </div>
-              <div className="col-span-3">
-                <label className="label block mb-1">Do Party (auto)</label>
-                <input name="do_party" className="input-box mono bg-gray-100 text-[12px]" defaultValue={formItem?.doParty ?? selectedOriginal?.doParty ?? ""} readOnly />
+              {/* Row 2: Purchase Party, Cont No */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-6">
+                  <label className="label block mb-1">Purchase Party</label>
+                  <input name="purchase_party" className="input-box" defaultValue={formItem?.purchaseParty ?? ""} placeholder="Type party name..." />
+                </div>
+                <div className="col-span-3">
+                  <label className="label block mb-1">Cont #</label>
+                  <input name="cont_no" className="input-box mono" defaultValue={formItem?.contNo ?? ""} />
+                </div>
+                <div className="col-span-3">
+                  <label className="label block mb-1">Term</label>
+                  <input name="term" className="input-box" defaultValue={formItem?.term ?? ""} placeholder="CASH / CREDIT" />
+                </div>
               </div>
 
-              <div className="col-span-3">
-                <label className="label block mb-1">Than</label>
-                <input name="than" type="number" step="1" className="input-box mono text-right" defaultValue={formItem?.than ?? ""} />
-              </div>
-              <div className="col-span-3">
-                <label className="label block mb-1">Mtrs</label>
-                <input name="mtrs" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.mtrs ?? ""} />
+              {/* Row 3: Sale Party, Sub Party */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-6">
+                  <label className="label block mb-1">Sale Party</label>
+                  <input name="sale_party" className="input-box" defaultValue={formItem?.saleParty ?? ""} placeholder="Sale party name..." />
+                </div>
+                <div className="col-span-6">
+                  <label className="label block mb-1">Sub Party</label>
+                  <input name="sub_party" className="input-box" defaultValue={formItem?.subParty ?? ""} placeholder="Sub party / buyer name..." />
+                </div>
               </div>
 
-              <div className="col-span-12">
-                <label className="label block mb-1">Remarks</label>
-                <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
+              {/* Row 4: DSP Quality (Grey Construction) */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-3">
+                  <label className="label block mb-1">Dsp. Quality Code</label>
+                  <select name="dsp_quality" className="input-box mono text-[11px]" defaultValue={formItem?.dspQuality ?? ""}>
+                    <option value="">— select —</option>
+                    {greyConstructions.map((g) => (
+                      <option key={g.code} value={g.code}>{g.code}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-9">
+                  <label className="label block mb-1">Grey Construction</label>
+                  <input name="dsp_quality_desc" className="input-box mono text-[11px]" defaultValue={formItem?.dspQualityDesc ?? ""} placeholder="71 X 56  30/S MVS  PV 65;35 X 20/S PVT  PV 80;20" />
+                </div>
               </div>
-            </div>
 
+              {/* Row 5: Width, Product */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-2">
+                  <label className="label block mb-1">Width</label>
+                  <input name="width" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.width ?? ""} placeholder='61"' />
+                </div>
+                <div className="col-span-2">
+                  <label className="label block mb-1">Product Code</label>
+                  <input name="product" className="input-box mono" defaultValue={formItem?.product ?? ""} />
+                </div>
+                <div className="col-span-8">
+                  <label className="label block mb-1">Product Name</label>
+                  <input name="product_desc" className="input-box" defaultValue={formItem?.productDesc ?? ""} placeholder="OUDH SUTTING / SAMI SAB..." />
+                </div>
+              </div>
+
+              {/* Row 6: Than, Mtrs (auto-calculated), Rate */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-2">
+                  <label className="label block mb-1">Than (auto)</label>
+                  <input id="dami-than" name="than" type="number" className="input-box mono text-right bg-blue-50" defaultValue={formItem?.than ?? ""} readOnly />
+                </div>
+                <div className="col-span-2">
+                  <label className="label block mb-1">Meter (auto)</label>
+                  <input id="dami-mtrs" name="mtrs" type="number" step="any" className="input-box mono text-right bg-blue-50" defaultValue={formItem?.mtrs ?? ""} readOnly />
+                </div>
+                <div className="col-span-2">
+                  <label className="label block mb-1">Rate</label>
+                  <input name="rate" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.rate ?? ""} />
+                </div>
+                <div className="col-span-2">
+                  <label className="label block mb-1">Rate Per</label>
+                  <input name="rate_per" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePer ?? ""} />
+                </div>
+                <div className="col-span-2">
+                  <label className="label block mb-1">Rate Sal</label>
+                  <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.rateSal ?? ""} />
+                </div>
+              </div>
+
+              {/* Row 7: Printing Name / Location */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-3">
+                  <label className="label block mb-1">Printing Name</label>
+                  <input name="printing_name" className="input-box" defaultValue={formItem?.printingName ?? ""} placeholder="GHIDY" />
+                </div>
+                <div className="col-span-5">
+                  <label className="label block mb-1">Printing Location</label>
+                  <input name="printing_location" className="input-box" defaultValue={formItem?.printingLocation ?? ""} placeholder="GHOSIA DYING LAHORE" />
+                </div>
+                <div className="col-span-4">
+                  <label className="label block mb-1">Broker Name</label>
+                  <input name="broker_name" className="input-box" defaultValue={formItem?.brokerName ?? ""} />
+                </div>
+              </div>
+
+              {/* Row 8: Remarks */}
+              <div className="grid grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-12">
+                  <label className="label block mb-1">Remarks</label>
+                  <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
+                </div>
+              </div>
+
+              {/* Save buttons */}
+              <div className="flex items-end gap-2 mt-4 flex-wrap no-print">
+                <button type="submit" className="btn btn-sm">Save</button>
+                <a href="/inventory/grey-despatch-dami?adding=1" className="btn btn-outline btn-sm">New</a>
+                <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
+                {formItem ? (
+                  <form action={deleteDami} className="inline">
+                    <input type="hidden" name="id" value={formItem.id} />
+                    <ConfirmButton message={`Delete ${formItem.vNo}?`}>Delete</ConfirmButton>
+                  </form>
+                ) : null}
+              </div>
+
+            </form>
+
+            {/* ── Saved Slip Preview (Image 3 style) ── */}
             {formItem && (
-              <div className="border border-black p-4 bg-gray-50 mb-4 print:bg-white">
-                <div className="text-[11px] uppercase tracking-[0.1em] font-bold mb-2">
-                  Duplicate Slip Preview
+              <div className="border border-[var(--border)] mt-5 p-4 bg-[var(--surface)] print-area">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] mb-1">Saved Voucher</div>
+                    <div className="font-bold text-lg mono">V.No: {formItem.vNo}</div>
+                  </div>
+                  <div className="text-right text-[11px]">
+                    <div className="text-[var(--muted)]">Date</div>
+                    <div className="font-bold mono">{formItem.vDate}</div>
+                    {formItem.postedBy && <div className="text-[var(--muted)] mt-1">Posted by: <b>{formItem.postedBy}</b></div>}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-[12px] mono">
-                  <div><span className="text-[var(--muted)]">V.No:</span> <b>{formItem.vNo}</b></div>
-                  <div><span className="text-[var(--muted)]">Date:</span> {formItem.vDate}</div>
-                  <div><span className="text-[var(--muted)]">Party:</span> {formItem.party ?? "-"}</div>
-                  <div><span className="text-[var(--muted)]">Do Party:</span> {formItem.doParty ?? "-"}</div>
-                  <div><span className="text-[var(--muted)]">Than:</span> {formatNum(formItem.than)}</div>
-                  <div><span className="text-[var(--muted)]">Mtrs:</span> {formatNum(formItem.mtrs)}</div>
-                  {formItem.remarks && <div className="col-span-2"><span className="text-[var(--muted)]">Remarks:</span> {formItem.remarks}</div>}
+
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[12px] mb-3">
+                  <div><span className="text-[var(--muted)]">Purchase Party: </span><b>{formItem.purchaseParty ?? "—"}</b></div>
+                  <div><span className="text-[var(--muted)]">Cont #: </span><b>{formItem.contNo ?? "—"}</b></div>
+                  <div><span className="text-[var(--muted)]">Sale Party: </span><b>{formItem.saleParty ?? "—"}</b></div>
+                  <div><span className="text-[var(--muted)]">Sal Date: </span><b>{formItem.salDate ?? "—"}</b></div>
+                  <div className="col-span-2"><span className="text-[var(--muted)]">Sub Party (Buyer): </span><b>{formItem.subParty ?? "—"}</b></div>
+                  <div className="col-span-2"><span className="text-[var(--muted)]">Dsp. Quality: </span><b>{formItem.dspQuality}{formItem.dspQualityDesc ? ` | ${formItem.dspQualityDesc}` : ""}</b></div>
+                  <div><span className="text-[var(--muted)]">Product: </span><b>{formItem.product}{formItem.productDesc ? ` | ${formItem.productDesc}` : ""}</b></div>
+                  <div><span className="text-[var(--muted)]">Width: </span><b>{formItem.width ? `${formItem.width}"` : "—"}</b></div>
+                  <div><span className="text-[var(--muted)]">Than: </span><b className="text-[var(--accent)]">{formatNum(formItem.than)}</b></div>
+                  <div><span className="text-[var(--muted)]">Meter: </span><b className="text-[var(--accent)]">{formatNum(formItem.mtrs)}</b></div>
+                  <div><span className="text-[var(--muted)]">Rate Per: </span><b>{formatNum(formItem.ratePer)}</b></div>
+                  <div><span className="text-[var(--muted)]">Rate Sal: </span><b>{formatNum(formItem.rateSal)}</b></div>
+                  <div><span className="text-[var(--muted)]">Printing Name: </span><b>{formItem.printingName ?? "—"}</b></div>
+                  <div><span className="text-[var(--muted)]">Printing Location: </span><b>{formItem.printingLocation ?? "—"}</b></div>
+                  <div><span className="text-[var(--muted)]">Term: </span><b>{formItem.term ?? "—"}</b></div>
+                  <div><span className="text-[var(--muted)]">Broker: </span><b>{formItem.brokerName ?? "—"}</b></div>
+                  {formItem.remarks && <div className="col-span-2"><span className="text-[var(--muted)]">Remarks: </span><b>{formItem.remarks}</b></div>}
+                </div>
+
+                {/* Link to print/voucher page */}
+                <div className="mt-3 no-print">
+                  <Link
+                    href={`/inventory/grey-despatch-dami/${formItem.id}/voucher`}
+                    target="_blank"
+                    className="btn btn-sm"
+                  >
+                    Print Delivery Voucher
+                  </Link>
                 </div>
               </div>
             )}
+          </div>
 
-            <div className="flex items-end gap-2 mt-5 flex-wrap">
-              <button type="submit" className="btn btn-sm">Save</button>
-              <a href="/inventory/grey-despatch-dami?adding=1" className="btn btn-outline btn-sm">New</a>
-              <PrintButton label="Print Slip" />
-              <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
-              {formItem ? (
-                <form action={deleteDami} className="inline">
-                  <input type="hidden" name="id" value={formItem.id} />
-                  <ConfirmButton message={`Delete dami slip ${formItem.vNo}? This cannot be undone.`}>Delete</ConfirmButton>
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  disabled
-                  title="Save the slip first to enable delete"
-                  style={{ opacity: 0.5, cursor: "not-allowed" }}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          </form>
+          {/* ─── RIGHT: Piece Line Grid ─── */}
+          <div className="w-56 shrink-0 border border-black p-3">
+            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">Pieces (Than / Mtr)</div>
+            <div className="text-[10px] text-[var(--muted)] mb-2">Press Enter to add next row</div>
+            <DamiLineGrid
+              initialLines={initialLineRows}
+              onTotalsChange={undefined as never}
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
+                  // Sync grid totals to main form fields
+                  (function() {
+                    function syncTotals() {
+                      var rows = document.querySelectorAll('[name^="line_than_"]');
+                      var mrows = document.querySelectorAll('[name^="line_mtrs_"]');
+                      var than = 0, mtrs = 0;
+                      rows.forEach(function(r) { than += parseInt(r.value) || 0; });
+                      mrows.forEach(function(r) { mtrs += parseFloat(r.value) || 0; });
+                      var thanEl = document.getElementById('dami-than');
+                      var mtrsEl = document.getElementById('dami-mtrs');
+                      if (thanEl) thanEl.value = than;
+                      if (mtrsEl) mtrsEl.value = mtrs.toFixed(2);
+                    }
+                    document.addEventListener('change', syncTotals);
+                    document.addEventListener('input', syncTotals);
+                    document.addEventListener('keyup', syncTotals);
+                    syncTotals();
+                  })();
+                `,
+              }}
+            />
+          </div>
         </div>
 
-        <div className="border border-black">
-          <div className="px-4 py-3 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold">
-            Dami Slips
-          </div>
-          <div className="overflow-x-auto" style={{ maxHeight: "60vh", overflowY: "auto" }}>
+        {/* ── Slips List ── */}
+        <div className="border border-black no-print">
+          <div className="px-4 py-2 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold">Dami Slips</div>
+          <div className="overflow-x-auto" style={{ maxHeight: "55vh", overflowY: "auto" }}>
             <table>
               <thead>
                 <tr>
                   <th>V.No</th>
                   <th>Date</th>
-                  <th>Party</th>
-                  <th>Do Party</th>
+                  <th>Sub Party</th>
+                  <th>Despatch Loc</th>
+                  <th>Product</th>
                   <th className="text-right">Than</th>
                   <th className="text-right">Mtrs</th>
-                  <th>Remarks</th>
+                  <th>Voucher</th>
                 </tr>
               </thead>
               <tbody>
                 {damis.map((d) => {
                   const isSel = d.id === selected?.id;
                   const href = `/inventory/grey-despatch-dami?id=${d.id}`;
-                  const linkStyle = { color: isSel ? "white" : "inherit" } as const;
+                  const st = { color: isSel ? "white" : "inherit" } as const;
                   return (
                     <tr key={d.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                      <td className="mono font-bold text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{d.vNo}</a></td>
-                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.vDate}</a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
-                        <div>{d.party ?? "-"}</div>
-                        {d.party && partyCodeByDesc.get(d.party) && (
-                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(d.party)}</div>
-                        )}
-                      </a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
-                        <div>{d.doParty ?? "-"}</div>
-                        {d.doParty && partyCodeByDesc.get(d.doParty) && (
-                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(d.doParty)}</div>
-                        )}
-                      </a></td>
-                      <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(d.than)}</a></td>
-                      <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(d.mtrs)}</a></td>
-                      <td className="text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.remarks ?? "-"}</a></td>
+                      <td className="mono font-bold text-[13px]"><a href={href} className="no-underline block" style={st}>{d.vNo}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={st}>{d.vDate}</a></td>
+                      <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.subParty ?? d.party ?? "—"}</a></td>
+                      <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.printingLocation ?? "—"}</a></td>
+                      <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.productDesc ?? "—"}</a></td>
+                      <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={st}>{formatNum(d.than)}</a></td>
+                      <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={st}>{formatNum(d.mtrs)}</a></td>
+                      <td>
+                        <a href={`/inventory/grey-despatch-dami/${d.id}/voucher`} target="_blank" className="btn btn-outline btn-sm" style={isSel ? { color: "white", borderColor: "white" } : {}}>Voucher</a>
+                      </td>
                     </tr>
                   );
                 })}
                 {damis.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="text-center text-[13px] text-[var(--muted)] py-6">
-                      No dami slips. Click <b>New</b> to create one.
-                    </td>
-                  </tr>
+                  <tr><td colSpan={8} className="text-center text-[13px] text-[var(--muted)] py-6">No slips. Click <b>New</b> to create one.</td></tr>
                 )}
               </tbody>
             </table>

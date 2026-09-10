@@ -2059,15 +2059,45 @@ export const intGreyDespatchDami = sqliteTable("int_grey_despatch_dami", {
   originalDespatchId: integer("original_despatch_id").references(() => intGreyDespatch.id, { onDelete: "cascade" }),
   party: text("party"),
   doParty: text("do_party"),
+  // Extended fields matching image 1 form
+  purchaseParty: text("purchase_party"),
+  saleParty: text("sale_party"),
+  subParty: text("sub_party"),
+  contNo: text("cont_no"),
+  salDate: text("sal_date"),
+  dspQuality: text("dsp_quality"),        // grey construction code
+  dspQualityDesc: text("dsp_quality_desc"), // grey construction description
+  width: real("width"),
+  product: text("product"),              // product code
+  productDesc: text("product_desc"),     // product name
   than: integer("than"),
   mtrs: real("mtrs"),
+  rate: real("rate"),
+  ratePer: real("rate_per"),
+  rateSal: real("rate_sal"),
+  printingName: text("printing_name"),
+  printingLocation: text("printing_location"),
+  brokerName: text("broker_name"),
+  term: text("term"),
   remarks: text("remarks"),
   printedAt: text("printed_at"),
+  postedBy: text("posted_by"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({
   ixDate: index("ix_int_gdd_date").on(t.vDate),
   ixOriginal: index("ix_int_gdd_original").on(t.originalDespatchId),
+}));
+
+// Piece-level entries for Dami: each row = one than with its meters
+export const intGreyDespatchDamiLine = sqliteTable("int_grey_despatch_dami_line", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  damiId: integer("dami_id").notNull().references(() => intGreyDespatchDami.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  than: integer("than").notNull().default(1),
+  mtrs: real("mtrs"),
+}, (t) => ({
+  ixDami: index("ix_int_gddl_dami").on(t.damiId),
 }));
 
 // --- DAILY PRODUCTION (WVG) ---
