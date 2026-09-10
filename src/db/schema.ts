@@ -2057,6 +2057,7 @@ export const intGreyDespatchDami = sqliteTable("int_grey_despatch_dami", {
   vNo: text("v_no").notNull().unique(),
   lvNo: integer("lv_no"),
   originalDespatchId: integer("original_despatch_id").references(() => intGreyDespatch.id, { onDelete: "cascade" }),
+  pakki_parchi_id: integer("pakki_parchi_id").references(() => greyPakiParchi.id, { onDelete: "set null" }),
   party: text("party"),
   doParty: text("do_party"),
   // Extended fields matching image 1 form
