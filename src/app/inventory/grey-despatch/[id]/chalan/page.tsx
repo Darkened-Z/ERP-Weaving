@@ -35,26 +35,47 @@ export default async function GreyDespatchChalanPage({
     .where(eq(schema.intGreyDespatchLine.despatchId, despatchId))
     .orderBy(schema.intGreyDespatchLine.srNo);
 
-  const [company] = await db.select().from(schema.companyProfile).limit(1);
+  // Fetch full grey construction details if available
+  let greyConst: typeof schema.greyConstruction.$inferSelect | null = null;
+  if (despatch.greyCode) {
+    const [gc] = await db
+      .select()
+      .from(schema.greyConstruction)
+      .where(eq(schema.greyConstruction.code, despatch.greyCode))
+      .limit(1);
+    greyConst = gc ?? null;
+  }
 
   const formatNum = (n: number) =>
     new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
   const totalMeters = lines.reduce((s, l) => s + (l.lengthMtrs ?? 0), 0);
-  const totalThan = despatch.thanQty ?? lines.length;
+  const totalThan = lines.length;
 
-  const partyName = despatch.party ?? despatch.doParty ?? despatch.despatchTo ?? "—";
+  const partyName = despatch.party ?? despatch.doParty ?? despatch.despatchTo ?? "";
 
-  // Organize lines into 4 columns to perfectly match the requested "Delivery Voucher" image layout.
-  // Calculate exactly 1/4th of the list rounded up for column length.
+  // Build grey construction label: "Width x Pick  Count/Type  Blend x Count/Type Blend"
+  // Use greyConst if available, else fall back to despatch.greyCode
+  let greyLabel = despatch.greyCode ?? "";
+  if (greyConst) {
+    const parts: string[] = [];
+    if (greyConst.description) parts.push(greyConst.description);
+    greyLabel = parts.join("  ") || greyLabel;
+  }
+
+  // Width — prefer greyConst.width, fall back to despatch.width
+  const widthVal = (greyConst?.width ?? (despatch as { width?: number | null }).width) ?? null;
+  const widthLabel = widthVal != null ? `${formatNum(widthVal)}"` : "";
+
+  // Organize lines into 4 columns
   const colLength = Math.max(1, Math.ceil(lines.length / 4));
-  const gridRows = [];
+  const gridRows: { sNo: number | null; mtrs: number | null }[][] = [];
   for (let r = 0; r < colLength; r++) {
-    const rData = [];
+    const rData: { sNo: number | null; mtrs: number | null }[] = [];
     for (let c = 0; c < 4; c++) {
       const idx = c * colLength + r;
       if (idx < lines.length) {
-        rData.push({ sNo: idx + 1, mtrs: lines[idx].lengthMtrs });
+        rData.push({ sNo: idx + 1, mtrs: lines[idx].lengthMtrs ?? null });
       } else {
         rData.push({ sNo: null, mtrs: null });
       }
@@ -69,17 +90,17 @@ export default async function GreyDespatchChalanPage({
     for (let r = 0; r < colLength; r++) {
       const idx = c * colLength + r;
       if (idx < lines.length && lines[idx].lengthMtrs) {
-        sum += lines[idx].lengthMtrs;
+        sum += lines[idx].lengthMtrs!;
       }
     }
     colTotals[c] = sum;
   }
 
-  // Create word representation without the "Rupees" prefix
+  // Total in words
   let words = numberToWords(totalMeters, "");
   if (words.startsWith(" ")) words = words.slice(1);
   if (words) {
-    words = "(" + words.charAt(0).toUpperCase() + words.slice(1) + ")";
+    words = "(" + words.charAt(0).toUpperCase() + words.slice(1) + " Meters)";
   }
 
   return (
@@ -116,247 +137,261 @@ export default async function GreyDespatchChalanPage({
           color: #000;
           max-width: 210mm;
           margin: 0 auto;
-          padding: 12mm 10mm;
+          padding: 10mm 10mm;
           border: 1px solid var(--border);
           font-family: 'Arial', sans-serif;
           font-size: 10pt;
-          line-height: 1.35;
+          line-height: 1.4;
         }
-        
-        .header-container {
+
+        /* Title row */
+        .title-row {
           display: flex;
           justify-content: space-between;
-          margin-bottom: 24px;
+          align-items: flex-start;
+          margin-bottom: 10px;
         }
-
-        .header-left {
-          flex: 1;
+        .doc-title {
+          font-size: 20pt;
+          font-weight: 700;
+          color: #222;
+          line-height: 1;
         }
-        
-        .header-right {
-          width: 320px;
+        .logo-qr-block {
           display: flex;
-          flex-direction: column;
-          align-items: flex-end;
+          align-items: center;
+          gap: 12px;
+        }
+        .logo-img {
+          height: 64px;
+          width: auto;
+          object-fit: contain;
         }
 
-        .meta-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 8px;
+        /* Meta info grid */
+        .meta-section {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0 24px;
+          margin-bottom: 12px;
         }
-        
-        .meta-table td {
+        .meta-row {
+          display: flex;
+          align-items: baseline;
+          border-bottom: 1px solid #ddd;
           padding: 3px 0;
-          border: none;
-          vertical-align: top;
-          font-size: 10pt;
+          margin-bottom: 2px;
         }
-        
         .meta-label {
-          width: 110px;
+          font-size: 9pt;
           color: #555;
+          width: 105px;
+          flex-shrink: 0;
         }
-        
         .meta-val {
-          font-weight: 600;
+          font-weight: 700;
+          font-size: 10pt;
+          text-transform: uppercase;
+          flex: 1;
+          /* handwritten-feel: allow long values to wrap */
+          word-break: break-word;
+        }
+        /* handwritten-style underline input — shows blank line when no value */
+        .meta-handwrite {
+          font-weight: 700;
+          font-size: 10pt;
+          flex: 1;
+          border-bottom: 1px solid #000;
+          min-width: 120px;
+          padding-bottom: 1px;
           text-transform: uppercase;
         }
 
-        .doc-title {
-          font-size: 22pt;
-          font-weight: 700;
-          text-align: center;
-          margin: -10px 0 10px;
-          color: #333;
-        }
-        
-        .logo-box {
-          width: 200px;
-          height: 80px;
-          background: transparent;
-          margin-bottom: 12px;
+        /* Summary strip */
+        .summary-strip {
           display: flex;
-          align-items: center;
+          gap: 24px;
           justify-content: flex-end;
-          position: relative;
+          margin-bottom: 10px;
+          font-size: 10pt;
         }
-
-        .summary-box {
-          width: 100%;
-        }
-
-        .summary-row {
+        .summary-item {
           display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
-          border-bottom: 1px dotted #ccc;
-          padding-bottom: 2px;
+          gap: 6px;
+          align-items: baseline;
         }
-
-        .summary-val {
-          font-weight: 700;
-          font-size: 11pt;
-        }
+        .summary-label { color: #555; }
+        .summary-val { font-weight: 700; font-size: 12pt; }
 
         .words-val {
-          font-size: 9pt;
+          font-size: 8.5pt;
           font-style: italic;
           text-align: right;
-          margin-top: -4px;
-          margin-bottom: 12px;
+          margin-bottom: 8px;
+          color: #444;
         }
 
+        /* Grid of piece lengths */
         table.grid {
           width: 100%;
           border-collapse: collapse;
-          border: 1px solid #ccc;
-          margin-top: 10px;
+          border: 1px solid #aaa;
+          margin-top: 6px;
         }
-
         table.grid th, table.grid td {
-          border: 1px solid #ccc;
-          padding: 4px 6px;
+          border: 1px solid #bbb;
+          padding: 3px 6px;
           font-size: 9.5pt;
         }
-
         table.grid th {
-          background: #f0f0f0;
-          color: #000;
-          font-weight: 600;
-          text-align: right;
-          border-bottom: 1px solid #ccc;
-        }
-
-        table.grid th:nth-child(odd) {
+          background: #e8eef6;
+          color: #1e3a8a;
+          font-weight: 700;
           text-align: center;
-          width: 45px;
         }
-
+        table.grid th:nth-child(even) {
+          text-align: right;
+        }
         table.grid td:nth-child(odd) {
           text-align: center;
           color: #555;
+          width: 40px;
         }
-
         table.grid td:nth-child(even) {
           text-align: right;
           font-weight: 600;
         }
-
-        .grid-totals {
-          background: #e8e8e8;
-          font-weight: bold !important;
+        .grid-totals td {
+          background: #dce8f8;
+          font-weight: 700 !important;
+          border-top: 2px solid #aaa;
         }
 
+        .grand-total-row {
+          margin-top: 8px;
+          display: flex;
+          justify-content: flex-end;
+          gap: 32px;
+          font-size: 11pt;
+          font-weight: 700;
+          border-top: 2px solid #333;
+          padding-top: 6px;
+        }
+        .grand-total-row span { color: #1e3a8a; }
+
+        /* Signatures */
         .signatures {
-          margin-top: 60px;
+          margin-top: 48px;
           display: flex;
           justify-content: space-between;
           padding: 0 20px;
         }
-
-        .sig-box {
-          text-align: center;
-        }
-        
-        .sig-line {
-          width: 140px;
-          border-top: 1px solid #000;
-          margin-bottom: 8px;
-        }
-        
-        .sig-label {
-          font-size: 9.5pt;
-          color: #555;
-        }
+        .sig-box { text-align: center; }
+        .sig-line { width: 130px; border-top: 1px solid #000; margin-bottom: 6px; }
+        .sig-label { font-size: 9pt; color: #555; }
       `}</style>
 
       <div className="chalan-wrap">
         <div className="chalan-toolbar no-print">
-          <Link
-            href="/inventory/grey-despatch"
-            className="btn btn-outline btn-sm no-print"
-          >
+          <Link href="/inventory/grey-despatch" className="btn btn-outline btn-sm no-print">
             Back
           </Link>
           <PrintButton label="Print Delivery Voucher" />
         </div>
 
         <div className="chalan-page">
-          <div className="doc-title">Delivery Voucher</div>
-          
-          <div className="header-container">
-            <div className="header-left">
-              <table className="meta-table">
-                <tbody>
-                  <tr>
-                    <td className="meta-label">Book.#</td>
-                    <td className="meta-val">{despatch.vNo}</td>
-                  </tr>
-                  <tr>
-                    <td className="meta-label">Date</td>
-                    <td className="meta-val">{despatch.vDate}</td>
-                  </tr>
-                  <tr>
-                    <td className="meta-label">Party</td>
-                    <td className="meta-val">{partyName}</td>
-                  </tr>
-                  <tr>
-                    <td className="meta-label">Contract #</td>
-                    <td className="meta-val">{despatch.convContNo ?? ""}</td>
-                  </tr>
-                  <tr>
-                    <td className="meta-label">Despatch Loc</td>
-                    <td className="meta-val">{despatch.despatchLocation ?? ""}</td>
-                  </tr>
-                  <tr>
-                    <td className="meta-label">Product</td>
-                    <td className="meta-val">{despatch.productBrand ?? ""}</td>
-                  </tr>
-                  <tr>
-                    <td className="meta-label">Grey</td>
-                    <td className="meta-val">{despatch.greyCode ?? ""}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
 
-            <div className="header-right">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px', justifyContent: 'flex-end', width: '100%' }}>
-                <div style={{ textAlign: 'center', fontSize: '8pt', color: '#555' }}>
-                  <QrImage value="https://wa.me/923232201515" size={65} />
-                  <div style={{ marginTop: '2px', fontWeight: 'bold' }}>WhatsApp Us</div>
-                </div>
-                <div className="logo-box" style={{ marginBottom: 0 }}>
-                  {/* User-requested SK Textile Logo */}
-                  <img src="/sk-logo.png" alt="SK Textile" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'right' }} />
-                </div>
+          {/* ── Title + Logo/QR ── */}
+          <div className="title-row">
+            <div className="doc-title">Delivery Voucher</div>
+            <div className="logo-qr-block">
+              <div style={{ textAlign: 'center', fontSize: '7.5pt', color: '#555' }}>
+                <QrImage value="https://wa.me/923232201515" size={56} />
+                <div style={{ marginTop: '2px', fontWeight: 'bold' }}>WhatsApp Us</div>
               </div>
-              <div className="summary-box">
-                <div className="summary-row">
-                  <span className="meta-label">Than</span>
-                  <span className="summary-val">{formatNum(totalThan)}</span>
-                </div>
-                <div className="summary-row">
-                  <span className="meta-label">Meters Tot.</span>
-                  <span className="summary-val">{formatNum(totalMeters)}</span>
-                </div>
-                <div className="words-val">{words}</div>
-              </div>
+              <img src="/sk-logo.png" alt="SK Textile" className="logo-img" />
             </div>
           </div>
 
+          {/* ── Meta fields in two columns ── */}
+          <div className="meta-section">
+
+            {/* LEFT COLUMN */}
+            <div>
+              <div className="meta-row">
+                <span className="meta-label">Book #</span>
+                <span className="meta-val">{despatch.vNo}</span>
+              </div>
+              <div className="meta-row">
+                <span className="meta-label">Date</span>
+                <span className="meta-val">{despatch.vDate}</span>
+              </div>
+              {/* Party — handwritten style underline, user fills in manually */}
+              <div className="meta-row">
+                <span className="meta-label">Party</span>
+                <span className="meta-handwrite">{partyName}</span>
+              </div>
+              <div className="meta-row">
+                <span className="meta-label">Contract #</span>
+                <span className="meta-val">{despatch.convContNo ?? ""}</span>
+              </div>
+              {/* Despatch Location — handwritten style */}
+              <div className="meta-row">
+                <span className="meta-label">Despatch Loc</span>
+                <span className="meta-handwrite">{despatch.despatchLocation ?? ""}</span>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN */}
+            <div>
+              {/* Product — handwritten style */}
+              <div className="meta-row">
+                <span className="meta-label">Product</span>
+                <span className="meta-handwrite">{despatch.productBrand ?? ""}</span>
+              </div>
+              {/* Grey Construction — full description from greyConstruction table */}
+              <div className="meta-row">
+                <span className="meta-label">Grey</span>
+                <span className="meta-val" style={{ fontSize: '9pt' }}>{greyLabel}</span>
+              </div>
+              {/* Width — handwritten style (e.g. 61", 62", 65") */}
+              <div className="meta-row">
+                <span className="meta-label">Width</span>
+                <span className="meta-handwrite">{widthLabel}</span>
+              </div>
+              <div className="meta-row">
+                <span className="meta-label">Vehicle</span>
+                <span className="meta-val">{despatch.vehicleNo ?? ""}</span>
+              </div>
+              <div className="meta-row">
+                <span className="meta-label">GP No</span>
+                <span className="meta-val">{despatch.gpNo ?? ""}</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── Summary strip ── */}
+          <div className="summary-strip">
+            <div className="summary-item">
+              <span className="summary-label">Than:</span>
+              <span className="summary-val">{formatNum(totalThan)}</span>
+            </div>
+            <div className="summary-item">
+              <span className="summary-label">Total Meters:</span>
+              <span className="summary-val">{formatNum(totalMeters)}</span>
+            </div>
+          </div>
+          <div className="words-val">{words}</div>
+
+          {/* ── 4-column grid of piece lengths ── */}
           <table className="grid">
             <thead>
               <tr>
-                <th>S#</th>
-                <th>Mtrs</th>
-                <th>S#</th>
-                <th>Mtrs</th>
-                <th>S#</th>
-                <th>Mtrs</th>
-                <th>S#</th>
-                <th>Mtrs</th>
+                <th>S#</th><th>Mtrs</th>
+                <th>S#</th><th>Mtrs</th>
+                <th>S#</th><th>Mtrs</th>
+                <th>S#</th><th>Mtrs</th>
               </tr>
             </thead>
             <tbody>
@@ -376,21 +411,26 @@ export default async function GreyDespatchChalanPage({
                   <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>No line items recorded.</td>
                 </tr>
               )}
+
+              {/* Column sub-totals row */}
               {gridRows.length > 0 && (
                 <tr className="grid-totals">
-                  <td></td>
-                  <td>{colTotals[0] > 0 ? formatNum(colTotals[0]) : ""}</td>
-                  <td></td>
-                  <td>{colTotals[1] > 0 ? formatNum(colTotals[1]) : ""}</td>
-                  <td></td>
-                  <td>{colTotals[2] > 0 ? formatNum(colTotals[2]) : ""}</td>
-                  <td></td>
-                  <td>{colTotals[3] > 0 ? formatNum(colTotals[3]) : ""}</td>
+                  <td></td><td>{colTotals[0] > 0 ? formatNum(colTotals[0]) : ""}</td>
+                  <td></td><td>{colTotals[1] > 0 ? formatNum(colTotals[1]) : ""}</td>
+                  <td></td><td>{colTotals[2] > 0 ? formatNum(colTotals[2]) : ""}</td>
+                  <td></td><td>{colTotals[3] > 0 ? formatNum(colTotals[3]) : ""}</td>
                 </tr>
               )}
             </tbody>
           </table>
 
+          {/* ── Grand Total row below table ── */}
+          <div className="grand-total-row">
+            <span>Than &nbsp;<span style={{ color: '#000' }}>{formatNum(totalThan)}</span></span>
+            <span>Meters &nbsp;<span style={{ color: '#000' }}>{formatNum(totalMeters)}</span></span>
+          </div>
+
+          {/* ── Signatures ── */}
           <div className="signatures">
             <div className="sig-box">
               <div className="sig-line" />
