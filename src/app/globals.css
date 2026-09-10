@@ -20,12 +20,12 @@
   --warning: #f59e0b;
   --info: #0ea5e9;
 
-  /* Sidebar Theme (Lighter Blue) */
-  --sidebar-bg: #2563eb;
+  /* Sidebar Theme */
+  --sidebar-bg: #1e3a8a;
   --sidebar-fg: #ffffff;
-  --sidebar-muted: #bfdbfe;
-  --sidebar-border: #3b82f6;
-  --sidebar-active-bg: #1d4ed8;
+  --sidebar-muted: #93c5fd;
+  --sidebar-border: #1d4ed8;
+  --sidebar-active-bg: #3b82f6;
   --sidebar-active-fg: #ffffff;
   --sidebar-hover-bg: #1e40af;
 }
