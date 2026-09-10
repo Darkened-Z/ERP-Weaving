@@ -42,7 +42,7 @@ export function ShellLayout({
       >
         <div className="p-5 border-b border-[var(--sidebar-border)] flex items-center justify-between">
           <div>
-            <img src="/sk-logo.png" alt="SK Textile" className="h-16 w-auto object-contain object-left mb-2" />
+            <img src="/sk-logo.png" alt="SK Textile" className="w-full h-auto object-contain object-left mb-1" style={{ maxHeight: '52px', mixBlendMode: 'screen', filter: 'brightness(1.8) contrast(0.9)' }} />
             <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--sidebar-muted)] mt-1">
               Weaving Management
             </div>
