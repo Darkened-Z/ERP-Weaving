@@ -269,6 +269,13 @@ export default async function GreyDespatchPage({
     .from(schema.looms)
     .orderBy(schema.looms.shed);
 
+  const godownAccounts = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.code} LIKE '1.01.25.01.%'`)
+    .orderBy(schema.chartOfAccounts.description);
+  const godownOpts = godownAccounts.map((g) => ({ value: g.code ?? "", label: `${g.code} — ${g.description}` }));
+
   // Pending thans panel: show for the selected contract on a saved voucher, or via ?pending=1&contract=.
   const pendingContract =
     (formItem?.convContNo && formItem.convContNo.trim()) ||
@@ -1158,7 +1165,7 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch From</label>
-                    <input name="despatch_from" className="input-box mono text-[12px]" defaultValue={formItem?.despatchFrom ?? ""} />
+                    <Combobox name="despatch_from" options={godownOpts} defaultValue={formItem?.despatchFrom ?? ""} placeholder="Select godown" className="input-box mono text-[12px]" />
                   </div>
                   <div>
                     <label className="label block mb-1">
