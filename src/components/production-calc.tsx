@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 const round = (v: number, d: number) => {
   const p = 10 ** d;
@@ -434,6 +434,146 @@ type CountRow = {
  * contNo). Only fills empty cells so a manually edited grid is not clobbered.
  * Triggered by a combobox:change on `conv_cont_no`.
  */
+type ThanRow = {
+  mm: string | null;
+  totalCount: number | null;
+  aCount: number | null;
+  bCount: number | null;
+  cCount: number | null;
+  cpCount: number | null;
+  rejCount: number | null;
+  beamNo: string | null;
+  vNo: string | null;
+  vDate: string | null;
+};
+
+function fillLineGrid(selected: ThanRow[], maxRows: number) {
+  for (let i = 1; i <= maxRows; i++) {
+    const r = selected[i - 1] ?? null;
+    const setField = (name: string, val: string) => {
+      const el = document.querySelector<HTMLInputElement>(`[name="${name}"]`);
+      if (!el) return;
+      el.value = val;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    setField(`line_t_sr_${i}`, r?.mm ?? "");
+    setField(`line_len_${i}`, r?.totalCount != null ? String(r.totalCount) : "");
+    setField(`line_a_${i}`, r?.aCount != null ? String(r.aCount) : "");
+    setField(`line_b_${i}`, r?.bCount != null ? String(r.bCount) : "");
+    setField(`line_c_${i}`, r?.cCount != null ? String(r.cCount) : "");
+    setField(`line_cp_${i}`, r?.cpCount != null ? String(r.cpCount) : "");
+    setField(`line_rej_${i}`, r?.rejCount != null ? String(r.rejCount) : "");
+  }
+}
+
+export function DesignThansFill({ lineRows }: { lineRows: number }) {
+  const [thans, setThans] = useState<ThanRow[]>([]);
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [lastDesign, setLastDesign] = useState("");
+
+  const selected = thans.filter((t) => t.mm && !removed.has(t.mm));
+
+  const fetchThans = useCallback(async (designNo: string) => {
+    if (!designNo.trim()) { setThans([]); setRemoved(new Set()); setLastDesign(""); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`/inventory/grey-despatch/thans?designNo=${encodeURIComponent(designNo)}`);
+      const data: ThanRow[] = await res.json();
+      setThans(data);
+      setRemoved(new Set());
+      setLastDesign(designNo);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const onInput = (e: Event) => {
+      const t = e.target as HTMLInputElement | null;
+      if (t?.name !== "design_no") return;
+      clearTimeout(timer);
+      timer = setTimeout(() => fetchThans(t.value), 600);
+    };
+    document.addEventListener("input", onInput, true);
+    return () => { document.removeEventListener("input", onInput, true); clearTimeout(timer); };
+  }, [fetchThans]);
+
+  useEffect(() => {
+    if (lastDesign) fillLineGrid(selected, lineRows);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [removed, thans, lineRows]);
+
+  if (!thans.length && !loading) return null;
+
+  return (
+    <div style={{ border: "2px solid #000", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 10px", background: "#0f172a", color: "#fff" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Production Thaans — {lastDesign} &nbsp;·&nbsp; {selected.length} selected / {thans.length} total
+        </span>
+        {loading && <span style={{ fontSize: 11 }}>Loading…</span>}
+      </div>
+      <div style={{ overflowX: "auto", maxHeight: "28vh", overflowY: "auto" }}>
+        <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#fefce8" }}>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}></th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>MM/Than Sr#</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>Total</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>A</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>B</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>C</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>CP</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>Rej</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>Beam#</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>Prod V.No</th>
+            </tr>
+          </thead>
+          <tbody>
+            {thans.map((t) => {
+              const isRemoved = t.mm ? removed.has(t.mm) : false;
+              return (
+                <tr key={t.mm ?? ""} style={{ opacity: isRemoved ? 0.35 : 1, background: isRemoved ? "#fee2e2" : undefined }}>
+                  <td style={{ padding: "1px 4px" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!t.mm) return;
+                        setRemoved((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(t.mm!)) next.delete(t.mm!); else next.add(t.mm!);
+                          return next;
+                        });
+                      }}
+                      style={{ color: isRemoved ? "#16a34a" : "#dc2626", fontWeight: 700, background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "0 2px" }}
+                    >
+                      {isRemoved ? "+" : "✕"}
+                    </button>
+                  </td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace", fontWeight: 700 }}>{t.mm}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.totalCount ?? "-"}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.aCount || ""}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.bCount || ""}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.cCount || ""}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.cpCount || ""}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.rejCount || ""}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.beamNo ?? "-"}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.vNo}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {thans.length > lineRows && (
+        <div style={{ padding: "3px 10px", fontSize: 10, color: "#b91c1c", background: "#fef2f2", borderTop: "1px solid #fca5a5" }}>
+          {thans.length} thaans found but only {lineRows} line grid rows available — increase LINE_ROWS or remove some thaans.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CountGridFiller({
   contractRows,
   rows = 5,
