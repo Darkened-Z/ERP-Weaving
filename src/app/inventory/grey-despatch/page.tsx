@@ -978,7 +978,7 @@ export default async function GreyDespatchPage({
             <AutoFill
               watch="conv_cont_no"
               map={contractFillMap}
-              combos={["party", "do_party"]}
+              combos={["party"]}
               inputs={["conv_rate", "design_no", "grey_code", "width", "product_brand", "loom_type", "ft_weave", "gst_rate", "ftx_rate"]}
             />
             <input type="hidden" name="qty_mtrs_calc" defaultValue="" />
@@ -1148,11 +1148,11 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch To</label>
-                    <Combobox name="despatch_to" options={partyOpts} defaultValue={formItem?.despatchTo ?? ""} placeholder="Select despatch to party" className="input-box mono text-[12px]" />
+                    <input name="despatch_to" className="input-box mono text-[12px]" defaultValue={formItem?.despatchTo ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">Despatch Location</label>
-                    <Combobox name="despatch_location" options={partyOpts} defaultValue={formItem?.despatchLocation ?? ""} placeholder="Select despatch location" className="input-box mono text-[12px]" />
+                    <input name="despatch_location" className="input-box mono text-[12px]" defaultValue={formItem?.despatchLocation ?? ""} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 gform">
