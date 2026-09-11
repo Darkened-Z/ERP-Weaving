@@ -552,7 +552,6 @@ export default async function GreyDespatchDamiPage({
             <div className="text-[10px] text-[var(--muted)] mb-2">Press Enter to add next row</div>
             <DamiLineGrid
               initialLines={initialLineRows}
-              onTotalsChange={undefined as never}
             />
             <script
               dangerouslySetInnerHTML={{

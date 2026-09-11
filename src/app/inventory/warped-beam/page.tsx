@@ -963,7 +963,7 @@ export default async function WarpedBeamReceivingPage({
                   <input name="billDueDate" type="date" className="input-box mono" defaultValue={editing?.billDueDate ?? ""} />
                 </div>
                 <div className="lg:col-span-1">
-                  <label className="label block mb-1">BILLING STAUTS</label>
+                  <label className="label block mb-1">Billing Status</label>
                   <input name="billingStatus" className="input-box mono" defaultValue={editing?.billingStatus ?? ""} />
                 </div>
 
@@ -1178,6 +1178,7 @@ export default async function WarpedBeamReceivingPage({
                   <th>GP.No</th>
                   <th>Beam Receiving From</th>
                   <th>Bill No</th>
+                  <th>Bill Status</th>
                   <th className="text-right">Total Amount</th>
                 </tr>
               </thead>
@@ -1199,12 +1200,13 @@ export default async function WarpedBeamReceivingPage({
                         )}
                       </a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.billNo ?? "-"}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.billingStatus ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.totalAmount ?? "-"}</a></td>
                     </tr>
                   );
                 })}
                 {list.length === 0 && (
-                  <tr><td colSpan={7} className="text-center text-[13px] text-[var(--muted)] py-6">No vouchers. Click <b>New</b> above to create one.</td></tr>
+                  <tr><td colSpan={8} className="text-center text-[13px] text-[var(--muted)] py-6">No vouchers. Click <b>New</b> above to create one.</td></tr>
                 )}
               </tbody>
             </table>

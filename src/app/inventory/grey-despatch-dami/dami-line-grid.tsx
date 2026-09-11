@@ -6,7 +6,7 @@ interface LineRow { srNo: number; than: number; mtrs: string; }
 
 interface Props {
   initialLines: LineRow[];
-  onTotalsChange: (than: number, mtrs: number) => void;
+  onTotalsChange?: (than: number, mtrs: number) => void;
 }
 
 export function DamiLineGrid({ initialLines, onTotalsChange }: Props) {
@@ -21,7 +21,7 @@ export function DamiLineGrid({ initialLines, onTotalsChange }: Props) {
   useEffect(() => {
     const totalThan = rows.reduce((s, r) => s + (r.than || 0), 0);
     const totalMtrs = rows.reduce((s, r) => s + (parseFloat(r.mtrs) || 0), 0);
-    onTotalsChange(totalThan, totalMtrs);
+    onTotalsChange?.(totalThan, totalMtrs);
   }, [rows, onTotalsChange]);
 
   function updateRow(idx: number, field: "than" | "mtrs", val: string) {

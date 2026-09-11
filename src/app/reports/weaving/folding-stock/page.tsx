@@ -1,7 +1,7 @@
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { and, eq, gte, lte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, lt, sql } from "drizzle-orm";
 import { fmt, sixMonthsAgo, todayIso } from "../../_shared";
 import { loadConvContracts } from "@/lib/conv-contracts";
 
@@ -56,6 +56,27 @@ export default async function FoldingStockPage({
       .where(and(gte(schema.intDailyProduction.vDate, from), lte(schema.intDailyProduction.vDate, to)))
       .groupBy(schema.intDailyProductionSet.contNo);
 
+  const allContNos = (await loadConvContracts()).map((c) => c.contNo);
+  const activeLooms = allContNos.length
+    ? await db
+        .select({ contractNo: schema.beams.contractNo, loomNo: schema.beams.loomNo, shed: schema.beams.shed })
+        .from(schema.beams)
+        .where(
+          and(
+            inArray(schema.beams.statusWrk, ["RUNNING", "PRODUCTION", "KNOTTING"]),
+            inArray(schema.beams.contractNo, allContNos)
+          )
+        )
+    : [];
+  const loomsByContract = new Map<string, string[]>();
+  for (const b of activeLooms) {
+    if (!b.contractNo || b.loomNo == null) continue;
+    const label = b.shed ? `${b.shed}-${b.loomNo}` : String(b.loomNo);
+    const arr = loomsByContract.get(b.contractNo) ?? [];
+    if (!arr.includes(label)) arr.push(label);
+    loomsByContract.set(b.contractNo, arr);
+  }
+
   const [prodOpen, prodPer, despOpen, despPer, rejPer] = await Promise.all([prodSum(true), prodSum(false), despSum(true), despSum(false), rejSum()]);
   const toMap = (rows: { cont: string | null; s: number }[]) => {
     const m = new Map<string, number>();
@@ -64,7 +85,7 @@ export default async function FoldingStockPage({
   };
   const prodOpenM = toMap(prodOpen), prodPerM = toMap(prodPer), despOpenM = toMap(despOpen), despPerM = toMap(despPer), rejPerM = toMap(rejPer);
 
-  type Row = { contNo: string; party: string; quality: string; designNo: string; opening: number; production: number; rejection: number; despatch: number; total: number; balance: number };
+  type Row = { contNo: string; party: string; quality: string; designNo: string; opening: number; production: number; rejection: number; despatch: number; total: number; balance: number; looms: string[] };
   const rows: Row[] = contracts
     .map((c) => {
       const opening = (prodOpenM.get(c.contNo) ?? 0) - (despOpenM.get(c.contNo) ?? 0);
@@ -77,6 +98,7 @@ export default async function FoldingStockPage({
         party: c.party ?? "—",
         quality: c.quality ?? c.productName ?? "—",
         designNo: c.designNo ?? "—",
+        looms: loomsByContract.get(c.contNo) ?? [],
         opening, production, rejection, despatch, total, balance: total - despatch,
       };
     })
@@ -131,12 +153,13 @@ export default async function FoldingStockPage({
                 <th className="text-right">Total</th>
                 <th className="text-right">Despatch</th>
                 <th className="text-right">Balance</th>
+                <th>Loom#</th>
                 <th className="no-print"></th>
               </tr>
             </thead>
             <tbody>
               {groups.length === 0 ? (
-                <tr><td colSpan={10} className="text-center text-[var(--muted)] py-8">No folding stock movement in this period.</td></tr>
+                <tr><td colSpan={11} className="text-center text-[var(--muted)] py-8">No folding stock movement in this period.</td></tr>
               ) : (
                 groups.flatMap(([party, prs]) => {
                   const sub = prs.reduce(
@@ -145,7 +168,7 @@ export default async function FoldingStockPage({
                   );
                   return [
                     <tr key={`h-${party}`} style={{ background: "#0f172a", color: "white" }}>
-                      <td colSpan={10} className="mono font-bold text-[12px] px-2 py-1">{party}</td>
+                      <td colSpan={11} className="mono font-bold text-[12px] px-2 py-1">{party}</td>
                     </tr>,
                     ...prs.map((r) => (
                       <tr key={`${party}-${r.contNo}`}>
@@ -158,6 +181,11 @@ export default async function FoldingStockPage({
                         <td className="mono text-right">{fmt(r.total)}</td>
                         <td className="mono text-right">{fmt(r.despatch)}</td>
                         <td className="mono text-right font-bold">{fmt(r.balance)}</td>
+                        <td className="text-[10px] mono">
+                          {r.looms.map((l) => (
+                            <span key={l} style={{ display: "inline-block", border: "1px solid #aaa", borderRadius: 2, padding: "0 3px", margin: "1px", background: "#f8fafc" }}>{l}</span>
+                          ))}
+                        </td>
                         <td className="no-print text-center">
                           <a href={`/reports/weaving/folding-stock/${encodeURIComponent(r.contNo)}?from=${from}&to=${to}`} className="btn btn-outline btn-sm" title="Production detail">P</a>
                         </td>
@@ -171,6 +199,7 @@ export default async function FoldingStockPage({
                       <td className="mono text-right">{fmt(sub.total)}</td>
                       <td className="mono text-right">{fmt(sub.despatch)}</td>
                       <td className="mono text-right">{fmt(sub.balance)}</td>
+                      <td></td>
                       <td className="no-print"></td>
                     </tr>,
                   ];
@@ -187,6 +216,7 @@ export default async function FoldingStockPage({
                   <td className="mono text-right">{fmt(grand.opening + grand.production)}</td>
                   <td className="mono text-right">{fmt(grand.despatch)}</td>
                   <td className="mono text-right">{fmt(grand.balance)}</td>
+                  <td></td>
                   <td className="no-print"></td>
                 </tr>
               </tfoot>

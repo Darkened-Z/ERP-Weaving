@@ -2010,6 +2010,9 @@ export const intGreyDespatch = sqliteTable("int_grey_despatch", {
   type: text("type").notNull().default("FRS"),
   remarks: text("remarks"),
   updateCountBlock: text("update_count_block"),
+  billNo: text("bill_no"),
+  billDate: text("bill_date"),
+  billingStatus: text("billing_status"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({
@@ -2130,6 +2133,9 @@ export const intDailyProduction = sqliteTable("int_daily_production", {
   shiftInchargeA: text("shift_incharge_a"),
   shiftInchargeB: text("shift_incharge_b"),
   shiftInchargeC: text("shift_incharge_c"),
+  billNo: text("bill_no"),
+  billDate: text("bill_date"),
+  billingStatus: text("billing_status"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({

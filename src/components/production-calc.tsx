@@ -117,6 +117,7 @@ type LoomBeamFill = {
   bLength: number | null;
   contNo: string | null;
   setNo?: string | null;
+  partyTrade?: string | null;
 };
 
 /**
@@ -182,11 +183,20 @@ export function LoomBeamsFill({
           setEl(tr, "contNo", null);
         }
       }
-      // Set# echoes back into the header (Oracle: picking the loom fills Set#);
-      // a loom without knotting clears it.
-      const setNo = beams[0]?.setNo ?? null;
+      // First beam's contract → fill header conv_contract so AutoFill picks up party/quality/brand.
+      const contNo = beams[0]?.contNo ?? null;
       document.dispatchEvent(
-        new CustomEvent("combobox:set", { detail: { name: "headerSetNo", value: setNo ?? "" } })
+        new CustomEvent("combobox:set", { detail: { name: "conv_contract", value: contNo ?? "" } })
+      );
+      if (contNo) {
+        document.dispatchEvent(
+          new CustomEvent("combobox:change", { detail: { name: "conv_contract", value: contNo } })
+        );
+      }
+      // First beam's party → fill header Beam Cost Party.
+      const beamParty = beams[0]?.partyTrade ?? null;
+      document.dispatchEvent(
+        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: beamParty ?? "" } })
       );
     };
     document.addEventListener("combobox:change", onChange);
@@ -236,6 +246,26 @@ export function HideEmptyRows({ tbodyIds }: { tbodyIds: string[] }) {
       document.removeEventListener("combobox:change", onEvt);
     };
   }, [tbodyIds]);
+  return null;
+}
+
+/**
+ * When a beam is manually picked in a beam row (FindingPicker fires combobox:change
+ * with name "beamNo"), fill the header Beam Cost Party from the beam's partyTrade.
+ */
+export function BeamPartyFill({ map }: { map: Record<string, string | null> }) {
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string };
+      if (d?.name !== "beamNo" || !d.value) return;
+      const party = map[d.value] ?? null;
+      document.dispatchEvent(
+        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: party ?? "" } })
+      );
+    };
+    document.addEventListener("combobox:change", onChange);
+    return () => document.removeEventListener("combobox:change", onChange);
+  }, [map]);
   return null;
 }
 
