@@ -203,7 +203,6 @@ export default async function GreyDespatchPage({
   for (const c of contracts) {
     contractFillMap[c.contNo] = {
       party: c.party ?? "",
-      do_party: c.party ?? "",
       conv_rate: c.convRatePerMtr ?? 1, // Default conv rate = 1 when contract chosen.
       design_no: c.designNo ?? "",
       grey_code: c.grayCode ?? "",
@@ -820,7 +819,6 @@ export default async function GreyDespatchPage({
               { key: "vNo", label: "V.No" },
               { key: "vDate", label: "Date" },
               { key: "party", label: "Party" },
-              { key: "doParty", label: "Do Party" },
               { key: "despatchTo", label: "Despatch To" },
               { key: "thanQty", label: "Than" },
               { key: "convRate", label: "Conv Rate" },
@@ -1150,11 +1148,11 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch To</label>
-                    <input name="despatch_to" className="input-box mono text-[12px]" defaultValue={formItem?.despatchTo ?? ""} />
+                    <Combobox name="despatch_to" options={partyOpts} defaultValue={formItem?.despatchTo ?? ""} placeholder="Select despatch to party" className="input-box mono text-[12px]" />
                   </div>
                   <div>
                     <label className="label block mb-1">Despatch Location</label>
-                    <input name="despatch_location" className="input-box mono text-[12px]" defaultValue={formItem?.despatchLocation ?? ""} />
+                    <Combobox name="despatch_location" options={partyOpts} defaultValue={formItem?.despatchLocation ?? ""} placeholder="Select despatch location" className="input-box mono text-[12px]" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 gform">
@@ -1193,14 +1191,10 @@ export default async function GreyDespatchPage({
                     <input name="shed_no" list="sheds-list" className="input-box mono text-[12px]" defaultValue={formItem?.shedNo ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 gform">
+                <div className="gform">
                   <div>
                     <label className="label block mb-1">Party</label>
                     <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Do Party</label>
-                    <Combobox name="do_party" options={partyOpts} defaultValue={formItem?.doParty ?? ""} placeholder="Select do party" className="input-box mono text-[12px]" />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2 gform">
@@ -1482,7 +1476,6 @@ export default async function GreyDespatchPage({
                   <th>V.No</th>
                   <th>Date</th>
                   <th>Party</th>
-                  <th>Do Party</th>
                   <th>Despatch To</th>
                   <th className="text-right">Than</th>
                   <th className="text-right">Conv Rate</th>
@@ -1507,12 +1500,6 @@ export default async function GreyDespatchPage({
                         <div>{d.party ?? "-"}</div>
                         {d.party && partyCodeByDesc.get(d.party) && (
                           <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(d.party)}</div>
-                        )}
-                      </a></td>
-                      <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>
-                        <div>{d.doParty ?? "-"}</div>
-                        {d.doParty && partyCodeByDesc.get(d.doParty) && (
-                          <div className="text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(d.doParty)}</div>
                         )}
                       </a></td>
                       <td className="text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{d.despatchTo ?? "-"}</a></td>
