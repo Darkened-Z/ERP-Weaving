@@ -4,7 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, AutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
-import { ProductionSetCalc, LoomBeamsFill, HeaderSetFill, RowErase, HideEmptyRows } from "@/components/production-calc";
+import { ProductionSetCalc, LoomBeamsFill, BeamPartyFill, RowErase, HideEmptyRows } from "@/components/production-calc";
 import { ThanSerialLive } from "@/components/than-serial-live";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
@@ -24,7 +24,6 @@ const SET_ROWS = 8;
 
 const SELV_OPTIONS = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 
-const MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 export default async function DailyProductionPage({
   searchParams,
@@ -88,6 +87,7 @@ export default async function DailyProductionPage({
       loomNo: schema.beams.loomNo,
       shed: schema.beams.shed,
       knVno: schema.beams.knVno,
+      partyTrade: schema.beams.partyTrade,
     })
     .from(schema.beams)
     .orderBy(schema.beams.beamNo);
@@ -166,8 +166,10 @@ export default async function DailyProductionPage({
   }
 
   const beamFillMap: Record<string, Record<string, string | number | null>> = {};
+  const beamByNo = new Map<string, (typeof beamCatalog)[0]>();
   for (const b of beamCatalog) {
     if (!b.beamNo) continue;
+    beamByNo.set(b.beamNo, b);
     beamFillMap[b.beamNo] = {
       ends: b.ends ?? null,
       bLength: b.length ?? null,
@@ -178,6 +180,11 @@ export default async function DailyProductionPage({
       beamStatus: "RUNNING",
       contNo: b.contractNo ?? null,
     };
+  }
+  // Map beamNo → partyTrade for BeamPartyFill (header Beam Cost Party auto-fill).
+  const beamPartyMap: Record<string, string | null> = {};
+  for (const b of beamCatalog) {
+    if (b.beamNo) beamPartyMap[b.beamNo] = b.partyTrade ?? null;
   }
 
   // Mounted beams — KNOTTING after the knotting bill, PRODUCTION once already in
@@ -231,11 +238,12 @@ export default async function DailyProductionPage({
 
   // Loom LOV (shed-scoped via filterKey) + fill map from each loom's RUNNING beam.
   const loomRows2 = await db
-    .select({ loomNo: schema.looms.loomNo, shed: schema.looms.shed, rpm: schema.looms.rpm, statusWrk: schema.looms.statusWrk, currentContract: schema.looms.currentContract })
+    .select({ loomNo: schema.looms.loomNo, shed: schema.looms.shed, rpm: schema.looms.rpm, statusWrk: schema.looms.statusWrk, currentContract: schema.looms.currentContract, currentBeam: schema.looms.currentBeam })
     .from(schema.looms)
     .orderBy(schema.looms.shed, schema.looms.loomNo);
   const loomPickerRows = loomRows2.map((lm) => {
-    const b = firstBeamForLoom(lm.shed, lm.loomNo);
+    // Use looms.currentBeam (authoritative — set by knotting) over beams.loomNo lookup.
+    const b = (lm.currentBeam ? beamByNo.get(lm.currentBeam) : undefined) ?? firstBeamForLoom(lm.shed, lm.loomNo);
     return {
       // Composite "shed|loomNo" value (same convention as the knotting loom
       // picker) — loom numbers repeat across sheds, so a bare loomNo is ambiguous.
@@ -279,7 +287,14 @@ export default async function DailyProductionPage({
     const voucherBeamNos = new Set(
       setRows.map((s) => (s.beamNo ?? "").trim()).filter(Boolean)
     );
-    loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = beamsForLoom(lm.shed, lm.loomNo)
+    // looms.currentBeam is the authoritative beam for this loom (set by knotting).
+    // Use it as primary; supplement with beams.loomNo lookup for additional knotted beams.
+    const primaryBeam = lm.currentBeam ? beamByNo.get(lm.currentBeam) : undefined;
+    const byLoomNo = beamsForLoom(lm.shed, lm.loomNo);
+    const allForLoom = primaryBeam
+      ? [primaryBeam, ...byLoomNo.filter((b) => b.beamNo !== primaryBeam.beamNo)]
+      : byLoomNo;
+    loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = allForLoom
       .filter((b) => {
         if (editing != null && voucherBeamNos.has((b.beamNo ?? "").trim())) return true;
         return ["KNOTTING", "PRODUCTION", "RUNNING"].includes((b.statusWrk ?? "").toUpperCase());
@@ -293,52 +308,10 @@ export default async function DailyProductionPage({
         bLength: b.length ?? null,
         contNo: b.contractNo ?? null,
         setNo: b.setNo ?? null,
+        partyTrade: b.partyTrade ?? null,
       }));
   }
 
-  // Beam SET picker (Oracle: "just typed 47445 in No and everything filled"):
-  // one row per mounted beam-set; picking one sets the header Loom#, which fills
-  // beam#, ends, length, rcvd/diff/shrinkage and the whole detail chain.
-  const seenSets = new Set<string>();
-  const setPickerRows: {
-    value: string;
-    code: string;
-    description: string;
-    cells: Record<string, string | number | null>;
-  }[] = [];
-  const headerSetFillMap: Record<string, { headerLoom: string }> = {};
-  for (const lm of loomRows2) {
-    const loomKey = `${lm.shed ?? ""}|${lm.loomNo}`;
-    for (const b of beamsForLoom(lm.shed, lm.loomNo)) {
-      const setNo = (b.setNo ?? "").trim();
-      if (!setNo || seenSets.has(setNo)) continue;
-      seenSets.add(setNo);
-      setPickerRows.push({
-        value: setNo,
-        code: setNo,
-        description: `Loom ${lm.shed ?? "?"}-${lm.loomNo}`,
-        cells: {
-          setNo,
-          loom: loomKey,
-          beamNo: b.beamNo ?? "",
-          beamSetNo: b.beamSetNo ?? "",
-          ends: b.ends ?? "",
-          length: b.length ?? "",
-          contract: b.contractNo ?? "",
-        },
-      });
-      headerSetFillMap[setNo] = { headerLoom: loomKey };
-    }
-  }
-  const setCols = [
-    { key: "setNo", label: "Set No", width: 110 },
-    { key: "loom", label: "Loom", width: 90 },
-    { key: "beamNo", label: "Beam#", width: 100 },
-    { key: "beamSetNo", label: "Beam Set#", width: 100 },
-    { key: "ends", label: "Ends", width: 70, align: "right" as const },
-    { key: "length", label: "Length", width: 80, align: "right" as const },
-    { key: "contract", label: "Contract", width: 110 },
-  ];
   // Folding Stock by conv party — the header's Folding Stock box is readonly and
   // auto-fills when a Conv Cont Party is picked (server recomputes on save too).
   const foldingByParty: Record<string, Record<string, string | number | null>> = {};
@@ -448,17 +421,6 @@ export default async function DailyProductionPage({
     .from(schema.intDailyProduction);
   const maxLvNo = Number(lvRow[0]?.m ?? 0);
 
-  // Next mm/Than serial for the current month — drives the live per-row serials.
-  const nowD = new Date();
-  const thanPrefix = `${MONTH_ABBR[nowD.getMonth()] ?? "JAN"}-`;
-  const thanSuffix = `-${String(nowD.getFullYear()).slice(-2)}`;
-  const [thanMaxRow] = await db
-    .select({
-      m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${thanPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${thanPrefix.length + thanSuffix.length}) AS INTEGER)), 0)`,
-    })
-    .from(schema.intDailyProductionSet)
-    .where(sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${thanPrefix}%${thanSuffix}`}`);
-  const thanBase = Number(thanMaxRow?.m ?? 0) + 1;
 
   const totalRowsList = list.map((r) => ({ id: r.id }));
 
@@ -506,6 +468,9 @@ export default async function DailyProductionPage({
       shiftInchargeA: txt(formData.get("shiftInchargeA")),
       shiftInchargeB: txt(formData.get("shiftInchargeB")),
       shiftInchargeC: txt(formData.get("shiftInchargeC")),
+      billNo: txt(formData.get("billNo")),
+      billDate: txt(formData.get("billDate")),
+      billingStatus: txt(formData.get("billingStatus")),
     };
     await assertPeriodOpen(header.vDate, "INVENTORY");
 
@@ -630,18 +595,7 @@ export default async function DailyProductionPage({
       redirect(`/inventory/daily-production${q}`);
     }
 
-    const vDateStr = header.vDate || today();
-    const dParts = vDateStr.split("-");
-    const yy = dParts[0] ? dParts[0].slice(-2) : "00";
-    const monIdx = dParts[1] ? parseInt(dParts[1], 10) - 1 : 0;
-    const monAbbr = MONTH_ABBR[monIdx] ?? "JAN";
-    const monthPrefix = `${monAbbr}-`;
-    const monthSuffix = `-${yy}`;
-
-    // mm/Than serials are VOUCHER-matched now (owner): every active row of one
-    // voucher shares the same serial (the voucher's own monthly number, e.g.
-    // SEP-001-26) — the A/B/C than boxes identify the voucher they belong to.
-    // The old per-row duplicate check is gone accordingly.
+    const formVNo = ((formData.get("vNo") as string) || "").trim();
 
     // ALT+Z PROD DETAIL grid removed (owner) — the detail table is no longer
     // written; its columns stay in the schema untouched.
@@ -671,6 +625,12 @@ export default async function DailyProductionPage({
     const headerConvParty = (header.convContParty ?? "").trim();
     if (rowParties.size > 1 || (headerConvParty && [...rowParties].some((p) => p !== headerConvParty))) {
       const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=party_cross` : `?adding=1&error=party_cross`;
+      redirect(`/inventory/daily-production${q}`);
+    }
+    // Beam party must match conv party when both are set.
+    const beamPartyHeader = (header.beamContParty ?? "").trim();
+    if (headerConvParty && beamPartyHeader && headerConvParty !== beamPartyHeader) {
+      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=party_mismatch` : `?adding=1&error=party_mismatch`;
       redirect(`/inventory/daily-production${q}`);
     }
     const foldingAmount =
@@ -759,25 +719,12 @@ export default async function DailyProductionPage({
             .delete(schema.intDailyProductionDetail)
             .where(eq(schema.intDailyProductionDetail.productionId, id));
 
-          // Generate mmThanSrNo inside the tx so the seq lookup and the insert
-          // are atomic. Per-row monthly seq (3-digit) + the row's grade tag —
-          // "SEP-001-26|A", "SEP-002-26|B" … (client-approved format).
-          const monthMaxRow = await tx
-            .select({
-              m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
-            })
-            .from(schema.intDailyProductionSet)
-            .where(
-              sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
-            );
-          let seq = Number(monthMaxRow[0]?.m ?? 0);
           for (const s of validSets) {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              seq += 1;
               const g =
                 (s.aCount ?? 0) > 0 ? "A" : (s.bCount ?? 0) > 0 ? "B" : (s.cCount ?? 0) > 0 ? "C"
                 : (s.cpCount ?? 0) > 0 ? "CP" : (s.ppcCount ?? 0) > 0 ? "PPC" : "";
-              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}${g ? "|" + g : ""}`;
+              s.mmThanSrNo = `${formVNo}${g ? "/" + g : ""}`;
             }
           }
 
@@ -881,9 +828,8 @@ export default async function DailyProductionPage({
         revalidatePath("/inventory/daily-production");
         redirect(`/inventory/daily-production?id=${id}`);
       } else {
-        const providedVNo = ((formData.get("vNo") as string) || "").trim();
         const newId = await db.transaction(async (tx) => {
-          let vNo = providedVNo;
+          let vNo = formVNo;
           if (!vNo) {
             const maxRes = await tx
               .select({
@@ -895,22 +841,12 @@ export default async function DailyProductionPage({
             vNo = `IDP-${String(n).padStart(4, "0")}`;
           }
 
-          const monthMaxRow = await tx
-            .select({
-              m: sql<number>`COALESCE(MAX(CAST(SUBSTR(${schema.intDailyProductionSet.mmThanSrNo}, ${monthPrefix.length + 1}, LENGTH(${schema.intDailyProductionSet.mmThanSrNo}) - ${monthPrefix.length + monthSuffix.length}) AS INTEGER)),0)`,
-            })
-            .from(schema.intDailyProductionSet)
-            .where(
-              sql`${schema.intDailyProductionSet.mmThanSrNo} LIKE ${`${monthPrefix}%${monthSuffix}`}`
-            );
-          let seq = Number(monthMaxRow[0]?.m ?? 0);
           for (const s of validSets) {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              seq += 1;
               const g =
                 (s.aCount ?? 0) > 0 ? "A" : (s.bCount ?? 0) > 0 ? "B" : (s.cCount ?? 0) > 0 ? "C"
                 : (s.cpCount ?? 0) > 0 ? "CP" : (s.ppcCount ?? 0) > 0 ? "PPC" : "";
-              s.mmThanSrNo = `${monAbbr}-${String(seq).padStart(3, "0")}-${yy}${g ? "|" + g : ""}`;
+              s.mmThanSrNo = `${vNo}${g ? "/" + g : ""}`;
             }
           }
 
@@ -1117,6 +1053,11 @@ export default async function DailyProductionPage({
             Party cross — every beam&apos;s contract must belong to the same conversion party. Fix the loom/contract selection.
           </div>
         )}
+        {params.error === "party_mismatch" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Party mismatch — Conv Contract Party and Beam Cost Party must be the same. Check the Parties section before saving.
+          </div>
+        )}
         {params.error === "no_grade" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Total grade production must be greater than 0.
@@ -1165,12 +1106,12 @@ export default async function DailyProductionPage({
               <ProductionSetCalc beamStats={beamStats} />
               {/* Blank rows auto-hide — only rows in use stay visible (min 1) */}
               <HideEmptyRows tbodyIds={["idp-beam-rows", "idp-count-rows"]} />
-              <ThanSerialLive base={thanBase} prefix={thanPrefix} suffix={thanSuffix} />
+              <ThanSerialLive vNo={editing?.vNo ?? upcomingVNo} />
               <RowAutoFill watch="beamNo" map={beamFillMap} />
+              {/* Beam pick (manual or via loom) → fills header Beam Cost Party */}
+              <BeamPartyFill map={beamPartyMap} />
               {/* Header Loom# pick → ALL of that loom's knotted beams open in the beam grid */}
               <LoomBeamsFill map={loomBeamsMap} maxRows={SET_ROWS} />
-              {/* Header Set# pick (Oracle parity) → sets the Loom#, which fills everything */}
-              <HeaderSetFill map={headerSetFillMap} />
               {/* ✕ buttons erase the whole logical row across both containers */}
               <RowErase tbodyId="idp-beam-rows" pairTbodyId="idp-count-rows" />
               <RowErase tbodyId="idp-count-rows" pairTbodyId="idp-beam-rows" />
@@ -1239,19 +1180,7 @@ export default async function DailyProductionPage({
                       tabIndex={-1}
                     />
                   </div>
-                  <div className="md:col-span-3">
-                    <label className="label block mb-1">Set# (F9) <span className="text-[9px] text-[var(--muted)]">(Oracle parity — fills loom, beams, everything)</span></label>
-                    <FindingPicker
-                      name="headerSetNo"
-                      defaultValue=""
-                      rows={setPickerRows}
-                      columns={setCols}
-                      title="BEAM SET LIST"
-                      placeholder="F9 beam set — fills loom + beams"
-                      className="input-box mono cursor-pointer"
-                    />
-                  </div>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-4">
                     <label className="label block mb-1">Loom# (F9) <span className="text-[9px] text-[var(--muted)]">(mounted beams auto-fill below)</span></label>
                     <FindingPicker
                       name="headerLoom"
@@ -1289,9 +1218,21 @@ export default async function DailyProductionPage({
                     <label className="label block mb-1">Remarks</label>
                     <input name="remarks" className="input-box" defaultValue={editing?.remarks ?? ""} />
                   </div>
+                  <div className="md:col-span-3">
+                    <label className="label block mb-1">Bill No</label>
+                    <input name="billNo" className="input-box mono" defaultValue={editing?.billNo ?? ""} />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="label block mb-1">Bill Date</label>
+                    <input name="billDate" type="date" className="input-box mono" defaultValue={editing?.billDate ?? ""} />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="label block mb-1">Billing Status</label>
+                    <input name="billingStatus" className="input-box mono" defaultValue={editing?.billingStatus ?? ""} />
+                  </div>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] mt-3 mono">
-                  ALT-E to edit next section. F9 opens LOV on Set# / Design#.
+                  ALT-E to edit next section. F9 opens LOV on Loom# / Design#.
                 </div>
               </div>
 
@@ -1609,6 +1550,7 @@ export default async function DailyProductionPage({
                   <th>Grade</th>
                   <th>Product Quality</th>
                   <th>Product (Brand)</th>
+                  <th>Bill Status</th>
                   <th className="text-right">Total</th>
                 </tr>
               </thead>
@@ -1628,12 +1570,13 @@ export default async function DailyProductionPage({
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.grade ?? "-"}</a></td>
                       <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>{r.productQuality ?? "-"}</a></td>
                       <td className="text-[13px]"><a href={href} className="no-underline block" style={style}>{r.productBrand ?? "-"}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.billingStatus ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{total || "-"}</a></td>
                     </tr>
                   );
                 })}
                 {list.length === 0 && (
-                  <tr><td colSpan={9} className="text-center text-[13px] text-[var(--muted)] py-6">No entries. Click <b>New</b> above to create one.</td></tr>
+                  <tr><td colSpan={10} className="text-center text-[13px] text-[var(--muted)] py-6">No entries. Click <b>New</b> above to create one.</td></tr>
                 )}
               </tbody>
             </table>

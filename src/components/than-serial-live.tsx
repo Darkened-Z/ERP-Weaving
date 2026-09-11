@@ -2,14 +2,6 @@
 
 import { useEffect } from "react";
 
-/**
- * mm/Than serial with grade tag, per active count row: each active row gets the
- * next monthly number (3-digit, e.g. SEP-001-26) PLUS the grade whose meters are
- * filled in that row — "SEP-001-26|A", "SEP-002-26|B", … so every than shows
- * which voucher/grade it belongs to (client-approved format). `base` is the next
- * monthly number from the server. Only fills blank / auto cells (data-live); a
- * user-typed serial is kept, and the server regenerates blanks on save.
- */
 const GRADES: { grade: string; field: string }[] = [
   { grade: "A", field: "aCount" },
   { grade: "B", field: "bCount" },
@@ -24,12 +16,15 @@ function gradeOf(tr: HTMLTableRowElement): string {
     const n = parseFloat(el?.value ?? "");
     if (Number.isFinite(n) && n > 0) return g.grade;
   }
+  // Rejection alone → grade B (rejected cloth counted as B quality for serial)
+  const rej = tr.querySelector<HTMLInputElement>('[name="rejCount"]');
+  const rejVal = parseFloat(rej?.value ?? "");
+  if (Number.isFinite(rejVal) && rejVal > 0) return "B";
   return "";
 }
 
-export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix: string; suffix: string }) {
+export function ThanSerialLive({ vNo }: { vNo: string }) {
   useEffect(() => {
-    // A direct edit of a than cell releases it from auto-management.
     const onEdit = (e: Event) => {
       const t = e.target as HTMLInputElement | null;
       if (t && t.name === "mmThanSrNo") delete t.dataset.live;
@@ -37,7 +32,6 @@ export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix:
 
     const recompute = () => {
       const rows = Array.from(document.querySelectorAll("#idp-count-rows tr")) as HTMLTableRowElement[];
-      let idx = 0;
       rows.forEach((tr) => {
         const than = tr.querySelector('[name="mmThanSrNo"]') as HTMLInputElement | null;
         if (!than) return;
@@ -45,11 +39,9 @@ export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix:
         const active = !!grade || !!than.value;
         if (active) {
           if (than.dataset.live === "1" || !than.value) {
-            const seq = String(base + idx).padStart(3, "0");
-            than.value = grade ? `${prefix}${seq}${suffix}|${grade}` : `${prefix}${seq}${suffix}`;
+            than.value = grade ? `${vNo}/${grade}` : vNo;
             than.dataset.live = "1";
           }
-          idx++;
         } else if (than.dataset.live === "1") {
           than.value = "";
           delete than.dataset.live;
@@ -68,6 +60,6 @@ export function ThanSerialLive({ base, prefix, suffix }: { base: number; prefix:
       document.removeEventListener("change", onEvt, true);
       clearTimeout(t);
     };
-  }, [base, prefix, suffix]);
+  }, [vNo]);
   return null;
 }

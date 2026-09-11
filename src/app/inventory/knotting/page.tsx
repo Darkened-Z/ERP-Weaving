@@ -708,6 +708,7 @@ export default async function KnottingPage({
       beamLength: schema.beams.length,
       ends: schema.beams.ends,
       brVno: schema.beams.brVno,
+      shed: schema.beams.shed,
     })
     .from(schema.beams)
     .where(eq(schema.beams.statusWrk, "LOADED"))
@@ -721,6 +722,7 @@ export default async function KnottingPage({
         beam_length: b.beamLength,
         ends: b.ends,
         beam_status: b.statusWrk,
+        shd_hash: b.shed ?? null,
       },
     ]),
   );

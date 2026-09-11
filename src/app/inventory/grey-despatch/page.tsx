@@ -357,6 +357,9 @@ export default async function GreyDespatchPage({
       type: txt(formData.get("type")) ?? "FRS",
       remarks: txt(formData.get("remarks")),
       updateCountBlock: txt(formData.get("update_count_block")),
+      billNo: txt(formData.get("bill_no")),
+      billDate: txt(formData.get("bill_date")),
+      billingStatus: txt(formData.get("billing_status")),
       modifiedDate: new Date().toISOString(),
     };
 
@@ -1352,6 +1355,18 @@ export default async function GreyDespatchPage({
                 <label className="label block mb-1">Remarks</label>
                 <input name="remarks" className="input-box text-[12px]" defaultValue={formItem?.remarks ?? ""} />
               </div>
+              <div className="col-span-4">
+                <label className="label block mb-1">Bill No</label>
+                <input name="bill_no" className="input-box mono text-[12px]" defaultValue={formItem?.billNo ?? ""} />
+              </div>
+              <div className="col-span-4">
+                <label className="label block mb-1">Bill Date</label>
+                <input name="bill_date" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.billDate ?? ""} />
+              </div>
+              <div className="col-span-4">
+                <label className="label block mb-1">Billing Status</label>
+                <input name="billing_status" className="input-box mono text-[12px]" defaultValue={formItem?.billingStatus ?? ""} />
+              </div>
             </div>
 
             <div className="border border-black">
@@ -1473,6 +1488,7 @@ export default async function GreyDespatchPage({
                   <th className="text-right">Conv Rate</th>
                   <th className="text-right">Amt Tot</th>
                   <th>GP No</th>
+                  <th>Bill Status</th>
                   <th>Vehicle</th>
                   <th className="text-right">Voucher</th>
                   <th className="text-right">Notify</th>
@@ -1504,6 +1520,7 @@ export default async function GreyDespatchPage({
                       <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(d.convRate)}</a></td>
                       <td className="text-right mono text-[13px] font-bold"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(d.amtTot)}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.gpNo ?? "-"}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.billingStatus ?? "-"}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{d.vehicleNo ?? "-"}</a></td>
                       <td className="text-right">
                         <a
@@ -1529,7 +1546,7 @@ export default async function GreyDespatchPage({
                 })}
                 {despatches.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="text-center text-[13px] text-[var(--muted)] py-6">
+                    <td colSpan={13} className="text-center text-[13px] text-[var(--muted)] py-6">
                       No despatches. Click <b>New</b> to create one.
                     </td>
                   </tr>
