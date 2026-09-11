@@ -6,7 +6,7 @@ import { Combobox } from "@/components/combobox";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
-import { DespatchAmountCalc, CountGridFiller } from "@/components/production-calc";
+import { DespatchAmountCalc, CountGridFiller, DesignThansFill } from "@/components/production-calc";
 import { db, schema } from "@/db";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
@@ -26,7 +26,7 @@ const SELV_TYPES = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-const LINE_ROWS = 4;
+const LINE_ROWS = 20;
 const COUNT_ROWS = 5;
 
 export default async function GreyDespatchPage({
@@ -1094,6 +1094,8 @@ export default async function GreyDespatchPage({
                 </div>
               </div>
             </div>
+
+            <DesignThansFill lineRows={LINE_ROWS} />
 
             <div className="grid grid-cols-12 gap-4 mb-2">
               <div className="col-span-7">
