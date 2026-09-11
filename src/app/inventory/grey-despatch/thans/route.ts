@@ -3,8 +3,28 @@ import { db, schema } from "@/db";
 import { and, eq, isNotNull, ne, or, sql } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
-  const designNo = req.nextUrl.searchParams.get("designNo")?.trim();
-  if (!designNo) return NextResponse.json([]);
+  const contNo = req.nextUrl.searchParams.get("contNo")?.trim();
+  if (!contNo) return NextResponse.json([]);
+
+  // Resolve party from either contract table
+  const intRow = await db
+    .select({ party: schema.intGreyConversionContract.party })
+    .from(schema.intGreyConversionContract)
+    .where(eq(schema.intGreyConversionContract.contNo, contNo))
+    .limit(1);
+
+  let party = intRow[0]?.party ?? null;
+
+  if (!party) {
+    const extRow = await db
+      .select({ party: schema.extGreyConvContract.party })
+      .from(schema.extGreyConvContract)
+      .where(eq(schema.extGreyConvContract.contNo, contNo))
+      .limit(1);
+    party = extRow[0]?.party ?? null;
+  }
+
+  if (!party) return NextResponse.json([]);
 
   const rows = await db
     .select({
@@ -23,14 +43,15 @@ export async function GET(req: NextRequest) {
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id))
     .where(
       and(
-        eq(schema.intDailyProduction.designNo, designNo),
+        eq(schema.intDailyProduction.convContParty, party),
         isNotNull(schema.intDailyProductionSet.mmThanSrNo),
         or(
           sql`${schema.intDailyProductionSet.dlvStatus} IS NULL`,
           ne(schema.intDailyProductionSet.dlvStatus, "Y")
         )
       )
-    );
+    )
+    .orderBy(schema.intDailyProductionSet.mmThanSrNo);
 
   return NextResponse.json(rows);
 }
