@@ -474,28 +474,26 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
 
   const selected = thans.filter((t) => t.mm && !removed.has(t.mm));
 
-  const fetchThans = useCallback(async (designNo: string) => {
-    if (!designNo.trim()) { setThans([]); setRemoved(new Set()); setLastDesign(""); return; }
+  const fetchThans = useCallback(async (contNo: string) => {
+    if (!contNo.trim()) { setThans([]); setRemoved(new Set()); setLastDesign(""); return; }
     setLoading(true);
     try {
-      const res = await fetch(`/inventory/grey-despatch/thans?designNo=${encodeURIComponent(designNo)}`);
+      const res = await fetch(`/inventory/grey-despatch/thans?contNo=${encodeURIComponent(contNo)}`);
       const data: ThanRow[] = await res.json();
       setThans(data);
       setRemoved(new Set());
-      setLastDesign(designNo);
+      setLastDesign(contNo);
     } catch { /* ignore */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const onInput = (e: Event) => {
-      const t = e.target as HTMLInputElement | null;
-      if (t?.name !== "design_no") return;
-      clearTimeout(timer);
-      timer = setTimeout(() => fetchThans(t.value), 600);
+    const onCombo = (e: Event) => {
+      const d = (e as CustomEvent).detail as { name?: string; value?: string } | undefined;
+      if (d?.name !== "conv_cont_no") return;
+      fetchThans(d.value ?? "");
     };
-    document.addEventListener("input", onInput, true);
-    return () => { document.removeEventListener("input", onInput, true); clearTimeout(timer); };
+    document.addEventListener("combobox:change", onCombo);
+    return () => document.removeEventListener("combobox:change", onCombo);
   }, [fetchThans]);
 
   useEffect(() => {

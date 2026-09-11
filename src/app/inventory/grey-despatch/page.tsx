@@ -276,6 +276,13 @@ export default async function GreyDespatchPage({
     .orderBy(schema.chartOfAccounts.description);
   const godownOpts = godownAccounts.map((g) => ({ value: g.code ?? "", label: `${g.code} — ${g.description}` }));
 
+  const printingAccounts = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.code} LIKE '3.03.31.%'`)
+    .orderBy(schema.chartOfAccounts.description);
+  const printingOpts = printingAccounts.map((p) => ({ value: p.description ?? "", label: `${p.code} — ${p.description}` }));
+
   // Pending thans panel: show for the selected contract on a saved voucher, or via ?pending=1&contract=.
   const pendingContract =
     (formItem?.convContNo && formItem.convContNo.trim()) ||
@@ -986,7 +993,7 @@ export default async function GreyDespatchPage({
               watch="conv_cont_no"
               map={contractFillMap}
               combos={["party"]}
-              inputs={["conv_rate", "design_no", "grey_code", "width", "product_brand", "loom_type", "ft_weave", "gst_rate", "ftx_rate"]}
+              inputs={["conv_rate", "grey_code", "width", "product_brand", "loom_type", "ft_weave", "gst_rate", "ftx_rate", "design_no"]}
             />
             <input type="hidden" name="qty_mtrs_calc" defaultValue="" />
             <input type="hidden" name="than_qty_calc" defaultValue="" />
@@ -1074,27 +1081,6 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <div className="border border-black p-3 mb-2 bg-gray-50">
-              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">DO-DETAIL</div>
-              <div className="grid grid-cols-12 gap-3 gform">
-                <div className="col-span-2">
-                  <label className="label block mb-1">V.No From</label>
-                  <input name="do_v_no_from" className="input-box mono" defaultValue={formItem?.doVNoFrom ?? ""} />
-                </div>
-                <div className="col-span-2">
-                  <label className="label block mb-1">V.No To</label>
-                  <input name="do_v_no_to" className="input-box mono" defaultValue={formItem?.doVNoTo ?? ""} />
-                </div>
-                <div className="col-span-6">
-                  <label className="label block mb-1">Set All Than / Prd# / Set#</label>
-                  <input name="set_hash_all_than_prd_hash_set_hash" className="input-box mono" defaultValue={formItem?.setHashAllThanPrdHashSetHash ?? ""} />
-                </div>
-                <div className="col-span-2 flex items-end">
-                  <button type="button" className="btn btn-outline btn-sm w-full">DO-DETAIL</button>
-                </div>
-              </div>
-            </div>
-
             <DesignThansFill lineRows={LINE_ROWS} />
 
             <div className="grid grid-cols-12 gap-4 mb-2">
@@ -1161,13 +1147,13 @@ export default async function GreyDespatchPage({
                   </div>
                   <div>
                     <label className="label block mb-1">Despatch Location</label>
-                    <input name="despatch_location" className="input-box mono text-[12px]" defaultValue={formItem?.despatchLocation ?? ""} />
+                    <Combobox name="despatch_location" options={printingOpts} defaultValue={formItem?.despatchLocation ?? ""} placeholder="Select printing party" className="input-box mono text-[12px]" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch From</label>
-                    <Combobox name="despatch_from" options={godownOpts} defaultValue={formItem?.despatchFrom ?? ""} placeholder="Select godown" className="input-box mono text-[12px]" />
+                    <Combobox name="despatch_from" options={godownOpts} defaultValue={formItem?.despatchFrom ?? "1.01.25.01.0037"} placeholder="Select godown" className="input-box mono text-[12px]" />
                   </div>
                   <div>
                     <label className="label block mb-1">
@@ -1242,14 +1228,10 @@ export default async function GreyDespatchPage({
                     <input name="amt_tot" type="number" step="any" className="input-box mono text-right text-[12px] bg-red-50" defaultValue={formItem?.amtTot ?? ""} readOnly tabIndex={-1} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 gform">
+                <div className="gform">
                   <div>
                     <label className="label block mb-1">GP No</label>
                     <input name="gp_no" list="gp-list" className="input-box mono text-[12px]" defaultValue={formItem?.gpNo ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">GP Date</label>
-                    <input name="gp_date" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.gpDate ?? ""} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 gform">
@@ -1273,10 +1255,7 @@ export default async function GreyDespatchPage({
                 <label className="label block mb-1">F.T Weave</label>
                 <input name="ft_weave" className="input-box mono text-[12px]" defaultValue={formItem?.ftWeave ?? ""} />
               </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">Design No</label>
-                <input name="design_no" className="input-box mono text-[12px]" defaultValue={formItem?.designNo ?? ""} />
-              </div>
+              <input type="hidden" name="design_no" defaultValue={formItem?.designNo ?? ""} />
               <div className="col-span-2">
                 <label className="label block mb-1">L.B/Mtr</label>
                 <input name="lb_mtr" type="number" step="any" className="input-box mono text-[12px] text-right" defaultValue={formItem?.lbMtr ?? ""} />
@@ -1290,29 +1269,6 @@ export default async function GreyDespatchPage({
               <div className="col-span-2">
                 <label className="label block mb-1">Supervisor</label>
                 <input name="supervisor" list="supervisors-list" className="input-box mono text-[12px]" defaultValue={formItem?.supervisor ?? ""} />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">Vehicle No</label>
-                <input name="vehicle_no" list="vehicles-list" className="input-box mono text-[12px]" defaultValue={formItem?.vehicleNo ?? ""} />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">Driver</label>
-                <input name="driver" list="drivers-list" className="input-box mono text-[12px]" defaultValue={formItem?.driver ?? ""} />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">Trans Adda</label>
-                <input name="trans_adda" className="input-box mono text-[12px]" defaultValue={formItem?.transAdda ?? ""} />
-              </div>
-
-              <div className="col-span-3">
-                <label className="label block mb-1">Silvag Quality</label>
-                <select name="silvag_quality" className="input-box mono text-[12px]" defaultValue={formItem?.silvagQuality ?? ""}>
-                  <option value="">—</option>
-                  {SELV_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  {formItem?.silvagQuality && !SELV_TYPES.includes(formItem.silvagQuality) && (
-                    <option value={formItem.silvagQuality}>{formItem.silvagQuality}</option>
-                  )}
-                </select>
               </div>
               <div className="col-span-2">
                 <label className="label block mb-1">Brkg Per Mtr</label>
