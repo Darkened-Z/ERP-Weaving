@@ -239,6 +239,18 @@ export function LoomBeamsFill({
         document.dispatchEvent(
           new CustomEvent("combobox:change", { detail: { name: "beamContParty", value: beamParty } })
         );
+        // With no contract on the beam nothing reaches Yarn Cost Party, and the
+        // save guard only accepts it equal to Beam Cost Party. When the beam DOES
+        // carry a contract, the conv_contract fill above already set it from that
+        // contract's own party, so don't overwrite it here.
+        if (!contNo) {
+          document.dispatchEvent(
+            new CustomEvent("combobox:set", { detail: { name: "convContParty", value: beamParty } })
+          );
+          document.dispatchEvent(
+            new CustomEvent("combobox:change", { detail: { name: "convContParty", value: beamParty } })
+          );
+        }
       }
       const szg = beams[0]?.szgParty ?? null;
       if (szg) {
