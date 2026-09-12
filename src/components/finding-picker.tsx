@@ -92,6 +92,22 @@ export function FindingPicker({
     };
   }, [filterByField]);
 
+  // The hidden input is controlled by `value`, so a programmatic write to it — a
+  // loom pick clearing a beam row, a row erase — only moves the DOM and snaps back
+  // on the next render. Follow those writes into state. Scoped to THIS instance's
+  // own input, so one row's fill never touches another row's picker.
+  useEffect(() => {
+    const el = hiddenRef.current;
+    if (!el) return;
+    const sync = () => setValue(el.value ?? "");
+    el.addEventListener("input", sync);
+    el.addEventListener("change", sync);
+    return () => {
+      el.removeEventListener("input", sync);
+      el.removeEventListener("change", sync);
+    };
+  }, []);
+
   // Accept a value pushed in by an AutoFill (combobox:set), so a FindingPicker can
   // be an auto-fill target just like a Combobox (e.g. Sal Cont # echoing into Grey Sale Cont).
   useEffect(() => {
