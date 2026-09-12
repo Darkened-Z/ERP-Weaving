@@ -272,6 +272,10 @@ export default async function DailyProductionPage({
     value: b.beamNo as string,
     code: b.beamNo as string,
     description: b.setNo ?? b.beamSetNo ?? "",
+    // Scoped to the header Loom# — the list must offer only the beams mounted on
+    // THAT loom. A beam missing its shed/loom stamp carries no key and stays
+    // visible, so a half-recorded beam is never silently unpickable.
+    filterKey: b.shed && b.loomNo != null ? `${b.shed}|${b.loomNo}` : "",
     cells: {
       beamSetNo: b.beamSetNo ?? "",
       setNo: b.setNo ?? "",
@@ -1417,6 +1421,7 @@ export default async function DailyProductionPage({
                                 defaultValue={s?.beamNo ?? ""}
                                 rows={beamPickerRows}
                                 columns={beamCols}
+                                filterByField="headerLoom"
                                 title="SET NO LIST — MOUNTED BEAMS"
                                 placeholder="F9 beam"
                                 className="input-box mono text-[12px] cursor-pointer"
