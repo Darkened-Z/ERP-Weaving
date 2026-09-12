@@ -6,7 +6,7 @@ import { Combobox } from "@/components/combobox";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
-import { DespatchAmountCalc, CountGridFiller, DesignThansFill } from "@/components/production-calc";
+import { DespatchAmountCalc, CountGridFiller, DesignThansFill, HideEmptyRows } from "@/components/production-calc";
 import { db, schema } from "@/db";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
@@ -22,7 +22,6 @@ export const dynamic = "force-dynamic";
 const VTYPE = "GDP";
 
 const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
-const SELV_TYPES = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -80,6 +79,9 @@ export default async function GreyDespatchPage({
     : [];
 
   const lineGrid = Array.from({ length: Math.max(LINE_ROWS, lineRows.length) }, (_, i) => lineRows[i] ?? null);
+  // Qty Mtrs has no column of its own — it is Σ line length, same number the save
+  // guards check the grid against.
+  const savedQtyMtrs = lineRows.length ? round2(lineRows.reduce((s, l) => s + (l.lengthMtrs ?? 0), 0)) : "";
   const countGrid = Array.from({ length: Math.max(COUNT_ROWS, countRows.length) }, (_, i) => countRows[i] ?? null);
 
   const meterSums = await db
@@ -988,6 +990,8 @@ export default async function GreyDespatchPage({
           <form id="gd-save-form" action={saveDespatch}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <DespatchAmountCalc countRows={COUNT_ROWS} lineRows={LINE_ROWS} />
+            {/* Only the thaans picked in the panel stay open (+1 blank for a manual entry) */}
+            <HideEmptyRows tbodyIds={["gd-line-rows"]} />
             <CountGridFiller contractRows={contractRowsByContNo} rows={COUNT_ROWS} />
             <AutoFill
               watch="conv_cont_no"
@@ -1099,7 +1103,7 @@ export default async function GreyDespatchPage({
                         <th className="px-1 py-1 border-b border-black text-right">Length (Mtrs)</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="gd-line-rows">
                       {lineGrid.map((r, idx) => {
                         const i = idx + 1;
                         const cpDefault = r?.cp ?? (r?.cpRej != null && r?.rej == null ? r.cpRej : "");
@@ -1132,10 +1136,22 @@ export default async function GreyDespatchPage({
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr className="bg-black text-white font-bold">
+                        <td className="px-1 py-1 mono text-center" id="gd-tot-cnt"></td>
+                        <td className="px-1 py-1 mono">TOTAL</td>
+                        <td className="px-1 py-1 mono text-right" id="gd-tot-a"></td>
+                        <td className="px-1 py-1 mono text-right" id="gd-tot-b"></td>
+                        <td className="px-1 py-1 mono text-right" id="gd-tot-c"></td>
+                        <td className="px-1 py-1 mono text-right" id="gd-tot-cp"></td>
+                        <td className="px-1 py-1 mono text-right" id="gd-tot-rej"></td>
+                        <td className="px-1 py-1 mono text-right" id="gd-tot-len"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] mt-1">
-                  {LINE_ROWS} rows. Empty rows are ignored on save.
+                  Only the thaans picked above stay open — one blank row is kept for a manual entry.
                 </div>
               </div>
 
@@ -1195,7 +1211,11 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Than / Qty</label>
-                    <input name="than_qty" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.thanQty ?? ""} />
+                    <input name="than_qty" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.thanQty ?? ""} readOnly tabIndex={-1} title="Auto: number of filled than rows in the grid" />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Qty Mtrs</label>
+                    <input name="qty_mtrs" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={savedQtyMtrs} readOnly tabIndex={-1} title="Auto: Σ length of the than rows in the grid" />
                   </div>
                   <div>
                     <label className="label block mb-1">Conv Rate</label>
@@ -1205,12 +1225,12 @@ export default async function GreyDespatchPage({
                     <label className="label block mb-1">Amnt</label>
                     <input name="amnt" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.amnt ?? ""} readOnly tabIndex={-1} />
                   </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">GST %</label>
                     <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
                   </div>
-                </div>
-                <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Ftx %</label>
                     <input name="ftx_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
@@ -1223,6 +1243,8 @@ export default async function GreyDespatchPage({
                     <label className="label block mb-1">Further</label>
                     <input name="further" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.further ?? ""} readOnly tabIndex={-1} />
                   </div>
+                </div>
+                <div className="gform">
                   <div>
                     <label className="label block mb-1">Amt Tot</label>
                     <input name="amt_tot" type="number" step="any" className="input-box mono text-right text-[12px] bg-red-50" defaultValue={formItem?.amtTot ?? ""} readOnly tabIndex={-1} />

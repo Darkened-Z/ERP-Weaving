@@ -27,7 +27,10 @@ export function ThanSerialLive({ vNo }: { vNo: string }) {
   useEffect(() => {
     const onEdit = (e: Event) => {
       const t = e.target as HTMLInputElement | null;
-      if (t && t.name === "mmThanSrNo") delete t.dataset.live;
+      if (t && t.name === "mmThanSrNo") {
+        delete t.dataset.live;
+        t.dataset.manual = "1";
+      }
     };
 
     const recompute = () => {
@@ -38,8 +41,16 @@ export function ThanSerialLive({ vNo }: { vNo: string }) {
         const grade = gradeOf(tr);
         const active = !!grade || !!than.value;
         if (active) {
-          if (than.dataset.live === "1" || !than.value) {
-            than.value = grade ? `${vNo}/${grade}` : vNo;
+          const want = grade ? `${vNo}/${grade}` : vNo;
+          // A serial already in this voucher's own shape is machine-owned even when
+          // it came back from the database — re-tag it so the grade suffix always
+          // matches the column the row's meters actually sit in.
+          const owned =
+            than.dataset.live === "1" ||
+            !than.value ||
+            (!than.dataset.manual && (than.value === vNo || than.value.startsWith(`${vNo}/`)));
+          if (owned && than.value !== want) {
+            than.value = want;
             than.dataset.live = "1";
           }
         } else if (than.dataset.live === "1") {
