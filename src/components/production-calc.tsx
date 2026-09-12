@@ -232,9 +232,14 @@ export function HideEmptyRows({ tbodyIds }: { tbodyIds: string[] }) {
       if (!tbodies.length) return;
       const rowLists = tbodies.map((tb) => Array.from(tb.querySelectorAll("tr")));
       const hasData = (tr: HTMLTableRowElement) =>
-        Array.from(tr.querySelectorAll("input, select, textarea")).some(
-          (el) => (el as HTMLInputElement).value.trim() !== ""
-        );
+        Array.from(tr.querySelectorAll("input, select, textarea")).some((el) => {
+          const i = el as HTMLInputElement;
+          // A machine-filled placeholder doesn't put a row in use — row 1's than
+          // serial is there before anything is typed, and counting it would leave
+          // the blank form permanently showing a spare second row.
+          if (i.dataset.live === "1") return false;
+          return i.value.trim() !== "";
+        });
       // Last index (0-based) holding data across ALL paired tables.
       let lastFilled = -1;
       rowLists.forEach((rows) =>
