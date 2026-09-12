@@ -1549,6 +1549,20 @@ export default async function DailyProductionPage({
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr className="bg-black text-white font-bold">
+                        <td className="mono text-[12px] text-center" id="idp-tot-cnt"></td>
+                        <td></td>
+                        <td className="mono text-[12px] px-1">TOTAL THAN</td>
+                        <td className="mono text-[12px] text-right px-1" id="idp-tot-a"></td>
+                        <td className="mono text-[12px] text-right px-1" id="idp-tot-b"></td>
+                        <td className="mono text-[12px] text-right px-1" id="idp-tot-c"></td>
+                        <td className="mono text-[12px] text-right px-1" id="idp-tot-cp"></td>
+                        <td className="mono text-[12px] text-right px-1" id="idp-tot-ppc"></td>
+                        <td className="mono text-[12px] text-right px-1" id="idp-tot-total"></td>
+                        <td className="mono text-[12px] text-right px-1" id="idp-tot-rej"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
