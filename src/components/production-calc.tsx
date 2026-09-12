@@ -83,9 +83,42 @@ export function ProductionSetCalc({
       }
     };
 
+    const setText = (id: string, v: number) => {
+      const el = document.getElementById(id);
+      const next = v ? String(round(v, 2)) : "";
+      if (el && el.textContent !== next) el.textContent = next;
+    };
+
+    // Grand total under the counts grid: every grade column summed, plus how many
+    // thans actually carry meters (row 1's serial is pre-filled, so a serial alone
+    // is not a than).
+    const grandTotal = () => {
+      const cols = { a: 0, b: 0, c: 0, cp: 0, ppc: 0, total: 0, rej: 0 };
+      let thans = 0;
+      for (const tr of countRows()) {
+        const v = (name: string) => {
+          const x = parseFloat(tr.querySelector<HTMLInputElement>(`[name="${name}"]`)?.value ?? "");
+          return Number.isFinite(x) ? x : 0;
+        };
+        cols.a += v("aCount");
+        cols.b += v("bCount");
+        cols.c += v("cCount");
+        cols.cp += v("cpCount");
+        cols.ppc += v("ppcCount");
+        cols.total += v("totalCount");
+        cols.rej += v("rejCount");
+        if (v("totalCount") > 0 || v("rejCount") > 0) thans++;
+      }
+      const cnt = document.getElementById("idp-tot-cnt");
+      const cntText = thans ? String(thans) : "";
+      if (cnt && cnt.textContent !== cntText) cnt.textContent = cntText;
+      for (const [k, val] of Object.entries(cols)) setText(`idp-tot-${k}`, val);
+    };
+
     const recompute = () => {
       const n = Math.max(countRows().length, beamRows().length);
       for (let i = 0; i < n; i++) eachPair(i);
+      grandTotal();
     };
     const onEvt = (e: Event) => {
       const t = e.target as HTMLInputElement | null;
@@ -96,6 +129,7 @@ export function ProductionSetCalc({
       const inCounts = tr.closest("#idp-count-rows");
       const idx = Array.from((inCounts ? countRows() : beamRows())).indexOf(tr);
       if (idx >= 0) eachPair(idx);
+      grandTotal();
     };
     recompute();
     document.addEventListener("input", onEvt, true);
