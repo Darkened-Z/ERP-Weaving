@@ -194,10 +194,18 @@ export function LoomBeamsFill({
           new CustomEvent("combobox:change", { detail: { name: "conv_contract", value: contNo } })
         );
       }
-      // First beam's parties → fill header Beam Cost Party + Szg Party.
+      // First beam's parties → fill header Beam Cost Party + Szg Party. The
+      // change event follows the set so the yarn-spec auto-fill sees the party
+      // (combobox:set alone is silent).
+      const beamParty = beams[0]?.partyTrade ?? "";
       document.dispatchEvent(
-        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: beams[0]?.partyTrade ?? "" } })
+        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: beamParty } })
       );
+      if (beamParty) {
+        document.dispatchEvent(
+          new CustomEvent("combobox:change", { detail: { name: "beamContParty", value: beamParty } })
+        );
+      }
       const szg = beams[0]?.szgParty ?? null;
       if (szg) {
         document.dispatchEvent(
@@ -275,6 +283,11 @@ export function BeamPartyFill({
       document.dispatchEvent(
         new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: fill.beamContParty ?? "" } })
       );
+      if (fill.beamContParty) {
+        document.dispatchEvent(
+          new CustomEvent("combobox:change", { detail: { name: "beamContParty", value: fill.beamContParty } })
+        );
+      }
       if (fill.szgParty) {
         document.dispatchEvent(
           new CustomEvent("combobox:set", { detail: { name: "szgParty", value: fill.szgParty } })
@@ -286,6 +299,15 @@ export function BeamPartyFill({
         );
         document.dispatchEvent(
           new CustomEvent("combobox:change", { detail: { name: "conv_contract", value: fill.contNo } })
+        );
+      } else if (fill.beamContParty) {
+        // No contract on the beam, so nothing fills Yarn Cost Party — and the save
+        // guard only accepts it equal to Beam Cost Party. Mirror it.
+        document.dispatchEvent(
+          new CustomEvent("combobox:set", { detail: { name: "convContParty", value: fill.beamContParty } })
+        );
+        document.dispatchEvent(
+          new CustomEvent("combobox:change", { detail: { name: "convContParty", value: fill.beamContParty } })
         );
       }
     };
