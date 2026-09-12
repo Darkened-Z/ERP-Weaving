@@ -330,8 +330,9 @@ export default async function DailyProductionPage({
       // Composite "shed|loomNo" value (same convention as the knotting loom
       // picker) — loom numbers repeat across sheds, so a bare loomNo is ambiguous.
       value: `${lm.shed ?? ""}|${lm.loomNo}`,
-      code: `${lm.shed ?? ""}|${lm.loomNo}`,
-      description: `Shed ${lm.shed}`,
+      // Reads "Shed 1 — Loom 24"; the value still carries the composite.
+      code: `Shed ${lm.shed ?? ""}`,
+      description: `Loom ${lm.loomNo}`,
       filterKey: lm.shed ?? "",
       cells: { loomNo: lm.loomNo, shed: lm.shed ?? "", rpm: lm.rpm ?? "", status: lm.statusWrk ?? "", beamNo: b?.beamNo ?? "", contNo: (lm.currentContract ?? b?.contractNo) ?? "" },
     };
@@ -505,6 +506,17 @@ export default async function DailyProductionPage({
   // Edit mode: the voucher stores its contract per beam row, so the spec boxes can
   // be rendered server-side from the first row that carries one.
   const editingContNo = setRows.find((s) => (s.contNo ?? "").trim())?.contNo?.trim() ?? "";
+  // Neither the header Loom# nor the Conv Contract has a column of its own, so on
+  // edit they came back blank. Recover both from what the rows DO store: the
+  // contract off the first row that carries one, the loom off the first beam that
+  // is actually mounted (a beam never knotted onto a loom still yields nothing).
+  const editingLoom = (() => {
+    for (const r of setRows) {
+      const b = r.beamNo ? beamByNo.get(r.beamNo) : undefined;
+      if (b?.shed && b.loomNo != null) return `${b.shed}|${b.loomNo}`;
+    }
+    return "";
+  })();
   const editingSpec = yarnSpecByCont[editingContNo] ?? { yarnReadPick: "", yarnWarpInfo: "", yarnWeftInfo: "", beamWeftInfo: "" };
   const contractPickerRows = convContracts.map((c) => {
     const q = c.productQuality ?? c.productName ?? c.grayQltyCode ?? "";
@@ -1360,7 +1372,7 @@ export default async function DailyProductionPage({
                     <label className="label block mb-1">Loom# (F9) <span className="text-[9px] text-[var(--muted)]">(mounted beams auto-fill below)</span></label>
                     <FindingPicker
                       name="headerLoom"
-                      defaultValue=""
+                      defaultValue={editingLoom}
                       rows={loomPickerRows}
                       columns={loomCols}
                       filterByField="shedNo"
@@ -1378,7 +1390,7 @@ export default async function DailyProductionPage({
                     <label className="label block mb-1">Conv Contract (F9) — fills quality / brand / party</label>
                     <FindingPicker
                       name="conv_contract"
-                      defaultValue=""
+                      defaultValue={editingContNo}
                       rows={contractPickerRows}
                       columns={contractCols}
                       title="CONTRACT LIST — GREY CONVERSION"
