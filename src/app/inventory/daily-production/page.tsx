@@ -1566,7 +1566,7 @@ export default async function DailyProductionPage({
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
-                  Row 1 here = Row 1 in BEAM DETAILS above. Than serial auto-fills per row with its grade tag (SEP-001-26|A).
+                  Row 1 here = Row 1 in BEAM DETAILS above. Than serial auto-fills per row — /A, /B, /C by row, one beam can weave many thans.
                 </div>              </div>
               <div className="space-y-6">
                   <div className="border border-black p-4">

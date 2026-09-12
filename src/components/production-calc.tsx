@@ -266,10 +266,11 @@ export function LoomBeamsFill({
 }
 
 /**
- * Hides trailing EMPTY rows in the paired Daily Production tables so the grids
- * only show rows actually in use (owner: the fixed blank rows are gone). Keeps
- * at least one visible row for manual entry, and keeps both tables cut at the
- * SAME index so row pairing stays intact. Sweeps on every input/change.
+ * Hides trailing EMPTY rows in the Daily Production tables so the grids only show
+ * rows actually in use (owner: the fixed blank rows are gone). Keeps at least one
+ * visible row for manual entry. Each table is cut to its own content — one beam
+ * weaves many thans, so the counts grid grows without opening blank beam rows.
+ * Sweeps on every input/change.
  */
 export function HideEmptyRows({ tbodyIds }: { tbodyIds: string[] }) {
   useEffect(() => {
@@ -286,15 +287,16 @@ export function HideEmptyRows({ tbodyIds }: { tbodyIds: string[] }) {
           if (i.dataset.live === "1") return false;
           return i.value.trim() !== "";
         });
-      // Last index (0-based) holding data across ALL paired tables.
-      let lastFilled = -1;
-      rowLists.forEach((rows) =>
-        rows.forEach((r, i) => {
-          if (hasData(r)) lastFilled = Math.max(lastFilled, i);
-        })
-      );
-      const visibleCount = Math.max(lastFilled + 2, 1); // +1 spare blank row for the next entry
+      // Each table sizes to ITS OWN content: one beam yields many thans, so
+      // growing the counts grid must not open an empty beam row per than. Hiding
+      // is cosmetic — every row still submits, and the index pairing that the
+      // Rcvd/Mtr math and saveAction rely on reads all rows, hidden included.
       rowLists.forEach((rows) => {
+        let lastFilled = -1;
+        rows.forEach((r, i) => {
+          if (hasData(r)) lastFilled = i;
+        });
+        const visibleCount = Math.max(lastFilled + 2, 1); // +1 spare blank row for the next entry
         rows.forEach((r, i) => {
           r.style.display = i < visibleCount ? "" : "none";
         });
