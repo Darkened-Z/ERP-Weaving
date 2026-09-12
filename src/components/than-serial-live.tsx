@@ -1,26 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { thanLetter } from "@/lib/than-serial";
 
-const GRADES: { grade: string; field: string }[] = [
-  { grade: "A", field: "aCount" },
-  { grade: "B", field: "bCount" },
-  { grade: "C", field: "cCount" },
-  { grade: "CP", field: "cpCount" },
-  { grade: "PPC", field: "ppcCount" },
-];
+const COUNT_FIELDS = ["aCount", "bCount", "cCount", "cpCount", "ppcCount", "rejCount"];
 
-function gradeOf(tr: HTMLTableRowElement): string {
-  for (const g of GRADES) {
-    const el = tr.querySelector<HTMLInputElement>(`[name="${g.field}"]`);
-    const n = parseFloat(el?.value ?? "");
-    if (Number.isFinite(n) && n > 0) return g.grade;
-  }
-  // Rejection alone → grade B (rejected cloth counted as B quality for serial)
-  const rej = tr.querySelector<HTMLInputElement>('[name="rejCount"]');
-  const rejVal = parseFloat(rej?.value ?? "");
-  if (Number.isFinite(rejVal) && rejVal > 0) return "B";
-  return "";
+function hasMeters(tr: HTMLTableRowElement): boolean {
+  return COUNT_FIELDS.some((f) => {
+    const n = parseFloat(tr.querySelector<HTMLInputElement>(`[name="${f}"]`)?.value ?? "");
+    return Number.isFinite(n) && n > 0;
+  });
 }
 
 export function ThanSerialLive({ vNo }: { vNo: string }) {
@@ -35,20 +24,21 @@ export function ThanSerialLive({ vNo }: { vNo: string }) {
 
     const recompute = () => {
       const rows = Array.from(document.querySelectorAll("#idp-count-rows tr")) as HTMLTableRowElement[];
-      rows.forEach((tr) => {
+      rows.forEach((tr, i) => {
         const than = tr.querySelector('[name="mmThanSrNo"]') as HTMLInputElement | null;
         if (!than) return;
-        const grade = gradeOf(tr);
-        const active = !!grade || !!than.value;
+        // Row 1 carries the voucher's own than, so it shows from the moment the
+        // form opens. Later rows appear once they have meters of their own.
+        const active = hasMeters(tr) || !!than.value || i === 0;
         if (active) {
-          const want = grade ? `${vNo}/${grade}` : vNo;
-          // A serial already in this voucher's own shape is machine-owned even when
-          // it came back from the database — re-tag it so the grade suffix always
-          // matches the column the row's meters actually sit in.
+          const want = `${vNo}/${thanLetter(i)}`;
+          // A serial already in this voucher's own shape is machine-owned even
+          // when it came back from the database, so a row that moved keeps a
+          // serial matching its position. A hand-typed one is left alone.
           const owned =
             than.dataset.live === "1" ||
             !than.value ||
-            (!than.dataset.manual && (than.value === vNo || than.value.startsWith(`${vNo}/`)));
+            (!than.dataset.manual && than.value.startsWith(`${vNo}/`));
           if (owned && than.value !== want) {
             than.value = want;
             than.dataset.live = "1";
