@@ -646,6 +646,11 @@ export default async function DailyProductionPage({
     const wastWtKgArr = formData.getAll("wastWtKg") as string[];
     const beamNoArr = formData.getAll("beamNo") as string[];
     const contNoArr = formData.getAll("contNo") as string[];
+    // The row's contract comes off its beam, but beams carry no contract in
+    // practice — so the header's picked contract stands in. Without it every set
+    // row saves with cont_no NULL, which leaves grey despatch unable to scope
+    // thans by contract and the folding-stock rate lookup with nothing to find.
+    const headerContract = txt(formData.get("conv_contract")) ?? "";
     const endsArr = formData.getAll("ends") as string[];
     const bLengthArr = formData.getAll("bLength") as string[];
     const rcvdMtrArr = formData.getAll("rcvdMtr") as string[];
@@ -703,7 +708,7 @@ export default async function DailyProductionPage({
       // Loom moved to the header (owner) — rows no longer carry a loom cell; the
       // beam's loom stays whatever the knotting mount stamped on the beam.
       const ln: number | null = null;
-      const cn = (contNoArr[i] || "").trim();
+      const cn = (contNoArr[i] || "").trim() || headerContract;
       const en = intVal(endsArr[i]);
       const bl = num(bLengthArr[i]);
       const rm = num(rcvdMtrArr[i]);

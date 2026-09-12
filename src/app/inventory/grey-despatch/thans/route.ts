@@ -6,26 +6,9 @@ export async function GET(req: NextRequest) {
   const contNo = req.nextUrl.searchParams.get("contNo")?.trim();
   if (!contNo) return NextResponse.json([]);
 
-  // Resolve party from either contract table
-  const intRow = await db
-    .select({ party: schema.intGreyConversionContract.party })
-    .from(schema.intGreyConversionContract)
-    .where(eq(schema.intGreyConversionContract.contNo, contNo))
-    .limit(1);
-
-  let party = intRow[0]?.party ?? null;
-
-  if (!party) {
-    const extRow = await db
-      .select({ party: schema.extGreyConvContract.party })
-      .from(schema.extGreyConvContract)
-      .where(eq(schema.extGreyConvContract.contNo, contNo))
-      .limit(1);
-    party = extRow[0]?.party ?? null;
-  }
-
-  if (!party) return NextResponse.json([]);
-
+  // Scoped to the CONTRACT, not its party (owner): a party can run several
+  // contracts and a than's quality follows its contract, so a party-wide list
+  // mixes qualities with no way to tell them apart.
   const rows = await db
     .select({
       id: schema.intDailyProductionSet.id,
@@ -46,7 +29,7 @@ export async function GET(req: NextRequest) {
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id))
     .where(
       and(
-        eq(schema.intDailyProduction.convContParty, party),
+        eq(schema.intDailyProductionSet.contNo, contNo),
         isNotNull(schema.intDailyProductionSet.mmThanSrNo),
         or(
           sql`${schema.intDailyProductionSet.dlvStatus} IS NULL`,
