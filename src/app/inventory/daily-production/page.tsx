@@ -7,6 +7,7 @@ import { FindingPicker } from "@/components/finding-picker";
 import { ProductionSetCalc, LoomBeamsFill, BeamPartyFill, RowErase, HideEmptyRows } from "@/components/production-calc";
 import { ThanSerialLive } from "@/components/than-serial-live";
 import { loadConvContracts } from "@/lib/conv-contracts";
+import { thanLetter } from "@/lib/than-serial";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -654,6 +655,10 @@ export default async function DailyProductionPage({
       diff: number | null;
       shrinkage: number | null;
     }[] = [];
+    // Grid row index per saved set — blank rows are skipped, so a set's position
+    // in validSets is not its row. The than letter must follow the ROW the
+    // operator typed into, exactly as ThanSerialLive numbered it on screen.
+    const gridRowOf: number[] = [];
     // Bound by the mm/Than serial column (always rendered). Set# and Loom# were
     // removed from the grid (owner) — setHash stays null; the loom lives in the
     // header and only its mounted beams fill the beam rows.
@@ -682,13 +687,21 @@ export default async function DailyProductionPage({
       const rm = num(rcvdMtrArr[i]);
       const df = num(diffArr[i]);
       const sh = num(shrinkageArr[i]);
-      if (!setHash && !mmThanSrNo && aC == null && bC == null && cC == null && cpC == null && ppc == null && tc == null && rc == null && !bsn && !kt && !kd && !bs && ww == null && !bn && ln == null && !cn && en == null && bl == null && rm == null && df == null && sh == null) continue;
+      // A row counts only when it carries something beyond its serial: row 1's
+      // serial is pre-filled before anything is typed, so a serial alone must not
+      // write a blank production row.
+      const hasSubstance =
+        !!setHash || aC != null || bC != null || cC != null || cpC != null || ppc != null ||
+        tc != null || rc != null || !!bsn || !!kt || !!kd || !!bs || ww != null || !!bn ||
+        !!cn || en != null || bl != null || rm != null || df != null || sh != null;
+      if (!hasSubstance) continue;
       // Server-authoritative total: Total = A + B + C + CP + PPC. Any manually
       // typed totalCount is discarded — the client shows it as a readonly cell.
       const anyCount = aC != null || bC != null || cC != null || cpC != null || ppc != null;
       const authoritativeTotal = anyCount
         ? (aC ?? 0) + (bC ?? 0) + (cC ?? 0) + (cpC ?? 0) + (ppc ?? 0)
         : tc;
+      gridRowOf.push(i);
       validSets.push({
         srNo: validSets.length + 1,
         setHash: setHash || null,
@@ -852,14 +865,11 @@ export default async function DailyProductionPage({
             .delete(schema.intDailyProductionDetail)
             .where(eq(schema.intDailyProductionDetail.productionId, id));
 
-          for (const s of validSets) {
+          validSets.forEach((s, k) => {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              const g =
-                (s.aCount ?? 0) > 0 ? "A" : (s.bCount ?? 0) > 0 ? "B" : (s.cCount ?? 0) > 0 ? "C"
-                : (s.cpCount ?? 0) > 0 ? "CP" : (s.ppcCount ?? 0) > 0 ? "PPC" : "";
-              s.mmThanSrNo = `${formVNo}${g ? "/" + g : ""}`;
+              s.mmThanSrNo = `${formVNo}/${thanLetter(gridRowOf[k])}`;
             }
-          }
+          });
 
           const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
           if (inputSerials.length) {
@@ -974,14 +984,11 @@ export default async function DailyProductionPage({
             vNo = `IDP-${String(n).padStart(4, "0")}`;
           }
 
-          for (const s of validSets) {
+          validSets.forEach((s, k) => {
             if (!s.mmThanSrNo && (s.beamNo || s.setHash || (s.totalCount ?? 0) > 0)) {
-              const g =
-                (s.aCount ?? 0) > 0 ? "A" : (s.bCount ?? 0) > 0 ? "B" : (s.cCount ?? 0) > 0 ? "C"
-                : (s.cpCount ?? 0) > 0 ? "CP" : (s.ppcCount ?? 0) > 0 ? "PPC" : "";
-              s.mmThanSrNo = `${vNo}${g ? "/" + g : ""}`;
+              s.mmThanSrNo = `${vNo}/${thanLetter(gridRowOf[k])}`;
             }
-          }
+          });
 
           const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
           if (inputSerials.length) {
