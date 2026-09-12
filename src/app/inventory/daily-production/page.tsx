@@ -440,7 +440,7 @@ export default async function DailyProductionPage({
   // Yarn spec per contract — READ × PICK off the contract head, warp/weft yarn
   // descriptions off its count grids. Shown under the PARTIES boxes (owner) so the
   // operator can see what the beam on the loom is actually weaving.
-  const yarnSpecByCont: Record<string, { yarnReadPick: string; yarnWarpInfo: string; yarnWeftInfo: string; beamWarpInfo: string }> = {};
+  const yarnSpecByCont: Record<string, { yarnReadPick: string; yarnWarpInfo: string; yarnWeftInfo: string }> = {};
   {
     type YarnRow = { contractId: number; count: string | null; descr: string | null; brand: string | null; ends: number | null };
     const yarnCols = <T extends typeof schema.intGreyConversionWarp | typeof schema.intGreyConversionWeft | typeof schema.extGreyConvWarp | typeof schema.extGreyConvWeft>(t: T) => ({
@@ -467,16 +467,16 @@ export default async function DailyProductionPage({
     };
     const intMap = new Map(intIds.map((c) => [c.id, c.contNo]));
     const extMap = new Map(extIds.map((c) => [c.id, c.contNo]));
+    // Ends on BOTH sides: a contract often carries the same yarn on warp and weft,
+    // so without them the two lines read as duplicates when they are not (warp
+    // ends vs weft pick × width).
     const warpByCont = new Map([...collect(intWarp, intMap, true), ...collect(extWarp, extMap, true)]);
-    const weftByCont = new Map([...collect(intWeft, intMap, false), ...collect(extWeft, extMap, false)]);
+    const weftByCont = new Map([...collect(intWeft, intMap, true), ...collect(extWeft, extMap, true)]);
     for (const c of convContracts) {
-      const warp = (warpByCont.get(c.contNo) ?? []).join("  +  ");
-      const weft = (weftByCont.get(c.contNo) ?? []).join("  +  ");
       yarnSpecByCont[c.contNo] = {
         yarnReadPick: c.read != null && c.pick != null ? `${c.read} × ${c.pick}` : "",
-        yarnWarpInfo: warp,
-        yarnWeftInfo: weft,
-        beamWarpInfo: warp,
+        yarnWarpInfo: (warpByCont.get(c.contNo) ?? []).join("  +  "),
+        yarnWeftInfo: (weftByCont.get(c.contNo) ?? []).join("  +  "),
       };
     }
   }
@@ -498,12 +498,12 @@ export default async function DailyProductionPage({
       if (spec) partySpecMap[party] = { ...spec };
     }
   }
-  const SPEC_INPUTS = ["beamWarpInfo", "yarnReadPick", "yarnWarpInfo", "yarnWeftInfo"];
+  const SPEC_INPUTS = ["yarnWarpInfo", "yarnReadPick", "yarnWeftInfo"];
 
   // Edit mode: the voucher stores its contract per beam row, so the spec boxes can
   // be rendered server-side from the first row that carries one.
   const editingContNo = setRows.find((s) => (s.contNo ?? "").trim())?.contNo?.trim() ?? "";
-  const editingSpec = yarnSpecByCont[editingContNo] ?? { yarnReadPick: "", yarnWarpInfo: "", yarnWeftInfo: "", beamWarpInfo: "" };
+  const editingSpec = yarnSpecByCont[editingContNo] ?? { yarnReadPick: "", yarnWarpInfo: "", yarnWeftInfo: "" };
   const contractPickerRows = convContracts.map((c) => {
     const q = c.productQuality ?? c.productName ?? c.grayQltyCode ?? "";
     return {
@@ -1581,36 +1581,35 @@ export default async function DailyProductionPage({
 
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PARTIES</div>
-                    <div className="grid grid-cols-1 gap-3 gform">
-                      {/* gform is a hard 2-column grid; gform-full keeps each spec
-                          box directly under the party it describes. */}
-                      <div className="gform-full">
+                    {/* The three parties across one row (labels above), NOT in a
+                        gform — gform would force them label-left, 2 per row. */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-2 mb-3">
+                      <div>
                         <label className="label block mb-1">Beam Cost Party</label>
                         <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
                       </div>
-                      <div className="gform-full">
-                        <label className="label block mb-1">Warp</label>
-                        <input name="beamWarpInfo" className={infoCls} defaultValue={editingSpec.beamWarpInfo} readOnly tabIndex={-1} />
-                      </div>
-                      <div className="gform-full">
+                      <div>
                         <label className="label block mb-1">Yarn Cost Party</label>
                         <Combobox name="convContParty" options={convPartyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
+                      </div>
+                      <div>
+                        <label className="label block mb-1">Szg Party</label>
+                        <Combobox name="szgParty" options={szgPartyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select sizing party" />
+                      </div>
+                    </div>
+                    {/* Yarn spec below, full width, one per row. */}
+                    <div className="gform">
+                      <div className="gform-full">
+                        <label className="label block mb-1">Warp</label>
+                        <input name="yarnWarpInfo" className={infoCls} defaultValue={editingSpec.yarnWarpInfo} readOnly tabIndex={-1} />
                       </div>
                       <div className="gform-full">
                         <label className="label block mb-1">Read × Pick</label>
                         <input name="yarnReadPick" className={infoCls} defaultValue={editingSpec.yarnReadPick} readOnly tabIndex={-1} />
                       </div>
                       <div className="gform-full">
-                        <label className="label block mb-1">Warp</label>
-                        <input name="yarnWarpInfo" className={infoCls} defaultValue={editingSpec.yarnWarpInfo} readOnly tabIndex={-1} />
-                      </div>
-                      <div className="gform-full">
                         <label className="label block mb-1">Weft</label>
                         <input name="yarnWeftInfo" className={infoCls} defaultValue={editingSpec.yarnWeftInfo} readOnly tabIndex={-1} />
-                      </div>
-                      <div className="gform-full">
-                        <label className="label block mb-1">Szg Party</label>
-                        <Combobox name="szgParty" options={szgPartyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select sizing party" />
                       </div>
                     </div>
                   </div>
