@@ -13,8 +13,8 @@ type BeamStat = { rcvd: number; length: number | null };
  * Daily Production — split-grid live math (counts table on top, beam table below,
  * rows paired by INDEX):
  *   Counts row i:  Total = A + B + C + CP + PPC
- *   Beam row i:    Rcvd/Mtr = serverAccumulated (Σ totalCount+rejCount across ALL
- *                  saved production excluding this voucher, keyed by beamNo)
+ *   Beam row i:    Rcvd/Mtr = beamStats[beamNo].rcvd (the Rcvd/Mtr the last saved
+ *                  voucher stamped on that beam, excluding this voucher)
  *                  + countsRow[i].total + countsRow[i].rej
  *                  Diff = bLength − rcvdMtr · Shrinkage = diff / bLength × 100
  * The `data-near-empty` span in each beam row shows "NEAR EMPTY" while diff < 500.
@@ -118,6 +118,7 @@ type LoomBeamFill = {
   contNo: string | null;
   setNo?: string | null;
   partyTrade?: string | null;
+  szgParty?: string | null;
 };
 
 /**
@@ -193,11 +194,16 @@ export function LoomBeamsFill({
           new CustomEvent("combobox:change", { detail: { name: "conv_contract", value: contNo } })
         );
       }
-      // First beam's party → fill header Beam Cost Party.
-      const beamParty = beams[0]?.partyTrade ?? null;
+      // First beam's parties → fill header Beam Cost Party + Szg Party.
       document.dispatchEvent(
-        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: beamParty ?? "" } })
+        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: beams[0]?.partyTrade ?? "" } })
       );
+      const szg = beams[0]?.szgParty ?? null;
+      if (szg) {
+        document.dispatchEvent(
+          new CustomEvent("combobox:set", { detail: { name: "szgParty", value: szg } })
+        );
+      }
     };
     document.addEventListener("combobox:change", onChange);
     return () => document.removeEventListener("combobox:change", onChange);
@@ -251,17 +257,37 @@ export function HideEmptyRows({ tbodyIds }: { tbodyIds: string[] }) {
 
 /**
  * When a beam is manually picked in a beam row (FindingPicker fires combobox:change
- * with name "beamNo"), fill the header Beam Cost Party from the beam's partyTrade.
+ * with name "beamNo"), fill the header PARTIES from everything the beam knows —
+ * Beam Cost Party and Szg Party directly, and the rest (Yarn Cost Party, quality,
+ * brand, yarn spec) by pushing the beam's contract through the contract auto-fill.
  */
-export function BeamPartyFill({ map }: { map: Record<string, string | null> }) {
+export function BeamPartyFill({
+  map,
+}: {
+  map: Record<string, { beamContParty: string | null; szgParty: string | null; contNo: string | null }>;
+}) {
   useEffect(() => {
     const onChange = (e: Event) => {
       const d = (e as CustomEvent).detail as { name?: string; value?: string };
       if (d?.name !== "beamNo" || !d.value) return;
-      const party = map[d.value] ?? null;
+      const fill = map[d.value];
+      if (!fill) return;
       document.dispatchEvent(
-        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: party ?? "" } })
+        new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: fill.beamContParty ?? "" } })
       );
+      if (fill.szgParty) {
+        document.dispatchEvent(
+          new CustomEvent("combobox:set", { detail: { name: "szgParty", value: fill.szgParty } })
+        );
+      }
+      if (fill.contNo) {
+        document.dispatchEvent(
+          new CustomEvent("combobox:set", { detail: { name: "conv_contract", value: fill.contNo } })
+        );
+        document.dispatchEvent(
+          new CustomEvent("combobox:change", { detail: { name: "conv_contract", value: fill.contNo } })
+        );
+      }
     };
     document.addEventListener("combobox:change", onChange);
     return () => document.removeEventListener("combobox:change", onChange);
@@ -366,16 +392,38 @@ export function DespatchAmountCalc({
       if (!el || el.value === val) return;
       el.value = val;
     };
+    const setText = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el && el.textContent !== val) el.textContent = val;
+    };
     const recompute = () => {
       let qtyMtrs = 0;
       let thanCount = 0;
-      for (let i = 1; i <= lineRows; i++) {
+      const cols = { a: 0, b: 0, c: 0, cp: 0, rej: 0 };
+      // A saved despatch can render MORE rows than lineRows, and the save-time
+      // guards sum every row that exists — so follow the DOM, not the prop.
+      let n = lineRows;
+      while (q(`line_t_sr_${n + 1}`)) n++;
+      for (let i = 1; i <= n; i++) {
         const l = num(`line_len_${i}`);
         qtyMtrs += l;
         const tv = (q(`line_t_sr_${i}`)?.value ?? "").trim();
         if (tv || l > 0) thanCount++;
+        cols.a += num(`line_a_${i}`);
+        cols.b += num(`line_b_${i}`);
+        cols.c += num(`line_c_${i}`);
+        cols.cp += num(`line_cp_${i}`);
+        cols.rej += num(`line_rej_${i}`);
       }
       qtyMtrs = round(qtyMtrs, 2);
+      // Oracle's closing grid row: per-grade totals + total meters + than count.
+      setText("gd-tot-cnt", thanCount ? String(thanCount) : "");
+      for (const [k, v] of Object.entries(cols)) setText(`gd-tot-${k}`, v ? String(round(v, 2)) : "");
+      setText("gd-tot-len", qtyMtrs ? String(qtyMtrs) : "");
+      // Than/Qty and Qty Mtrs are the same two numbers the save-time guards check
+      // against the grid, so they are filled from it rather than typed.
+      set("than_qty", thanCount ? String(thanCount) : "");
+      set("qty_mtrs", qtyMtrs ? String(qtyMtrs) : "");
       const convRate = num("conv_rate");
       const amnt = round(qtyMtrs * convRate, 2);
       const gstRate = num("gst_rate");
@@ -398,8 +446,7 @@ export function DespatchAmountCalc({
       const t = e.target as HTMLInputElement | null;
       if (!t?.name) return;
       if (
-        t.name.startsWith("line_len_") ||
-        t.name.startsWith("line_t_sr_") ||
+        t.name.startsWith("line_") ||
         t.name.startsWith("uc_wt_") ||
         t.name === "conv_rate" ||
         t.name === "gst_rate" ||
@@ -435,6 +482,8 @@ type CountRow = {
  * Triggered by a combobox:change on `conv_cont_no`.
  */
 type ThanRow = {
+  /** int_daily_production_set.id — the only unique key: one voucher's thans share a serial. */
+  id: number;
   mm: string | null;
   totalCount: number | null;
   aCount: number | null;
@@ -443,6 +492,7 @@ type ThanRow = {
   cpCount: number | null;
   rejCount: number | null;
   beamNo: string | null;
+  beamSetNo: string | null;
   vNo: string | null;
   vDate: string | null;
 };
@@ -468,11 +518,13 @@ function fillLineGrid(selected: ThanRow[], maxRows: number) {
 
 export function DesignThansFill({ lineRows }: { lineRows: number }) {
   const [thans, setThans] = useState<ThanRow[]>([]);
-  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [removed, setRemoved] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [lastDesign, setLastDesign] = useState("");
 
-  const selected = thans.filter((t) => t.mm && !removed.has(t.mm));
+  const selected = thans.filter((t) => t.mm && !removed.has(t.id));
+  const selectedMtrs =
+    Math.round(selected.reduce((sum, t) => sum + (t.totalCount ?? 0), 0) * 100) / 100;
 
   const fetchThans = useCallback(async (contNo: string) => {
     if (!contNo.trim()) { setThans([]); setRemoved(new Set()); setLastDesign(""); return; }
@@ -508,6 +560,7 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 10px", background: "#0f172a", color: "#fff" }}>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Production Thaans — {lastDesign} &nbsp;·&nbsp; {selected.length} selected / {thans.length} total
+          &nbsp;·&nbsp; {selectedMtrs} mtrs
         </span>
         {loading && <span style={{ fontSize: 11 }}>Loading…</span>}
       </div>
@@ -524,22 +577,22 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
               <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>CP</th>
               <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>Rej</th>
               <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>Beam#</th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>Set#</th>
               <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>Prod V.No</th>
             </tr>
           </thead>
           <tbody>
             {thans.map((t) => {
-              const isRemoved = t.mm ? removed.has(t.mm) : false;
+              const isRemoved = removed.has(t.id);
               return (
-                <tr key={t.mm ?? ""} style={{ opacity: isRemoved ? 0.35 : 1, background: isRemoved ? "#fee2e2" : undefined }}>
+                <tr key={t.id} style={{ opacity: isRemoved ? 0.35 : 1, background: isRemoved ? "#fee2e2" : undefined }}>
                   <td style={{ padding: "1px 4px" }}>
                     <button
                       type="button"
                       onClick={() => {
-                        if (!t.mm) return;
                         setRemoved((prev) => {
                           const next = new Set(prev);
-                          if (next.has(t.mm!)) next.delete(t.mm!); else next.add(t.mm!);
+                          if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
                           return next;
                         });
                       }}
@@ -556,11 +609,20 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
                   <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.cpCount || ""}</td>
                   <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.rejCount || ""}</td>
                   <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.beamNo ?? "-"}</td>
+                  <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.beamSetNo ?? "-"}</td>
                   <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.vNo}</td>
                 </tr>
               );
             })}
           </tbody>
+          <tfoot>
+            <tr style={{ background: "#0f172a", color: "#fff", fontWeight: 700 }}>
+              <td style={{ padding: "2px 4px" }}></td>
+              <td style={{ padding: "2px 6px", fontFamily: "monospace" }}>TOTAL — {selected.length} THAN</td>
+              <td style={{ padding: "2px 6px", fontFamily: "monospace", textAlign: "right" }}>{selectedMtrs || ""}</td>
+              <td colSpan={7}></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       {thans.length > lineRows && (

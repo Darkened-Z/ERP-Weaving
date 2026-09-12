@@ -24,6 +24,8 @@ const SET_ROWS = 8;
 
 const SELV_OPTIONS = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 
+const infoCls = "input-box mono text-[12px] bg-gray-100";
+
 
 export default async function DailyProductionPage({
   searchParams,
@@ -88,6 +90,8 @@ export default async function DailyProductionPage({
       shed: schema.beams.shed,
       knVno: schema.beams.knVno,
       partyTrade: schema.beams.partyTrade,
+      szgParty: schema.beams.szgParty,
+      brVno: schema.beams.brVno,
     })
     .from(schema.beams)
     .orderBy(schema.beams.beamNo);
@@ -103,6 +107,42 @@ export default async function DailyProductionPage({
   const convPartyOpts = parties
     .filter((p) => String(p.code).startsWith(WVG_CONVERSION_PREFIX))
     .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Szg Party is a SIZING creditor (CREDITOR - SIZING COMMERCIAL), not a
+  // conversion debtor — same head the Warped Beam Receiving "Beam Receiving From"
+  // picker uses, so a beam's sizing party can round-trip into this form.
+  const [sizingHead] = await db
+    .select({ code: schema.chartOfAccounts.code })
+    .from(schema.chartOfAccounts)
+    .where(
+      sql`${schema.chartOfAccounts.level} = 4 AND upper(${schema.chartOfAccounts.description}) LIKE '%SIZING%COMMERCIAL%'`
+    )
+    .limit(1);
+  const sizingPrefix = sizingHead?.code ? `${sizingHead.code}.` : null;
+  const szgPartyOpts = sizingPrefix
+    ? parties
+        .filter((p) => String(p.code).startsWith(sizingPrefix))
+        .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
+    : convPartyOpts;
+  const descByCode = new Map(parties.map((p) => [String(p.code), p.description]));
+  // Beams carry no party of their own yet — the warped-beam receiving bill that
+  // brought the beam in holds both (sizing party = who sized it, bm sale party =
+  // the conversion party it was bought for), keyed by the beam's brVno.
+  const receivingParties = new Map<string, { szg: string | null; sale: string | null }>();
+  {
+    const recv = await db
+      .select({
+        vNo: schema.intWarpedBeamReceiving.vNo,
+        from: schema.intWarpedBeamReceiving.beamReceivingFrom,
+        sale: schema.intWarpedBeamReceiving.bmSaleParty,
+      })
+      .from(schema.intWarpedBeamReceiving);
+    for (const r of recv) {
+      receivingParties.set(r.vNo, {
+        szg: r.from ? descByCode.get(r.from) ?? r.from : null,
+        sale: r.sale ? descByCode.get(r.sale) ?? r.sale : null,
+      });
+    }
+  }
 
   const productList = await db
     .select({ code: schema.products.code, description: schema.products.description })
@@ -155,6 +195,30 @@ export default async function DailyProductionPage({
         .where(isNotNull(schema.intDailyProductionSet.beamNo))
         .groupBy(schema.intDailyProductionSet.beamNo);
 
+  // Rcvd/Mtr opening balance = the Rcvd/Mtr the LAST saved voucher stamped on that
+  // beam (owner), which the new voucher's own meters then build on. Rows come back
+  // oldest-first so the last write per beam wins. Falls back to the accumulated sum
+  // for beams whose earlier vouchers predate the stored rcvdMtr.
+  const lastRcvdRows = await db
+    .select({
+      beamNo: schema.intDailyProductionSet.beamNo,
+      rcvdMtr: schema.intDailyProductionSet.rcvdMtr,
+    })
+    .from(schema.intDailyProductionSet)
+    .where(
+      editing
+        ? and(
+            isNotNull(schema.intDailyProductionSet.beamNo),
+            isNotNull(schema.intDailyProductionSet.rcvdMtr),
+            ne(schema.intDailyProductionSet.productionId, editing.id)
+          )
+        : and(
+            isNotNull(schema.intDailyProductionSet.beamNo),
+            isNotNull(schema.intDailyProductionSet.rcvdMtr)
+          )
+    )
+    .orderBy(schema.intDailyProductionSet.id);
+
   const beamStats: Record<string, { rcvd: number; length: number | null }> = {};
   for (const b of beamCatalog) {
     if (b.beamNo) beamStats[b.beamNo] = { rcvd: 0, length: b.length ?? null };
@@ -163,6 +227,11 @@ export default async function DailyProductionPage({
     if (!r.beamNo) continue;
     if (!beamStats[r.beamNo]) beamStats[r.beamNo] = { rcvd: 0, length: null };
     beamStats[r.beamNo].rcvd = Number(r.total ?? 0);
+  }
+  for (const r of lastRcvdRows) {
+    if (!r.beamNo) continue;
+    if (!beamStats[r.beamNo]) beamStats[r.beamNo] = { rcvd: 0, length: null };
+    beamStats[r.beamNo].rcvd = Number(r.rcvdMtr ?? 0);
   }
 
   const beamFillMap: Record<string, Record<string, string | number | null>> = {};
@@ -181,10 +250,18 @@ export default async function DailyProductionPage({
       contNo: b.contractNo ?? null,
     };
   }
-  // Map beamNo → partyTrade for BeamPartyFill (header Beam Cost Party auto-fill).
-  const beamPartyMap: Record<string, string | null> = {};
+  // Map beamNo → every party the beam knows, for BeamPartyFill (header PARTIES
+  // auto-fill). The beam's own columns win; its receiving bill fills the gaps.
+  const partiesOfBeam = (b: (typeof beamCatalog)[number]) => {
+    const recv = b.brVno ? receivingParties.get(b.brVno) : undefined;
+    return {
+      beamContParty: b.partyTrade ?? recv?.sale ?? null,
+      szgParty: b.szgParty ?? recv?.szg ?? null,
+    };
+  };
+  const beamPartyMap: Record<string, { beamContParty: string | null; szgParty: string | null; contNo: string | null }> = {};
   for (const b of beamCatalog) {
-    if (b.beamNo) beamPartyMap[b.beamNo] = b.partyTrade ?? null;
+    if (b.beamNo) beamPartyMap[b.beamNo] = { ...partiesOfBeam(b), contNo: b.contractNo ?? null };
   }
 
   // Mounted beams — KNOTTING after the knotting bill, PRODUCTION once already in
@@ -276,6 +353,8 @@ export default async function DailyProductionPage({
       bLength: number | null;
       contNo: string | null;
       setNo?: string | null;
+      partyTrade?: string | null;
+      szgParty?: string | null;
     }[]
   > = {};
   for (const lm of loomRows2) {
@@ -308,7 +387,8 @@ export default async function DailyProductionPage({
         bLength: b.length ?? null,
         contNo: b.contractNo ?? null,
         setNo: b.setNo ?? null,
-        partyTrade: b.partyTrade ?? null,
+        partyTrade: partiesOfBeam(b).beamContParty,
+        szgParty: partiesOfBeam(b).szgParty,
       }));
   }
 
@@ -351,6 +431,54 @@ export default async function DailyProductionPage({
   const convContracts = (await loadConvContracts()).filter(
     (c) => c.party && convPartyCodes.has(c.party.trim())
   );
+
+  // Yarn spec per contract — READ × PICK off the contract head, warp/weft yarn
+  // descriptions off its count grids. Shown under the PARTIES boxes (owner) so the
+  // operator can see what the beam on the loom is actually weaving.
+  const yarnSpecByCont: Record<string, { yarnReadPick: string; yarnWarpInfo: string; yarnWeftInfo: string; beamWarpInfo: string }> = {};
+  {
+    type YarnRow = { contractId: number; count: string | null; descr: string | null; brand: string | null; ends: number | null };
+    const yarnCols = <T extends typeof schema.intGreyConversionWarp | typeof schema.intGreyConversionWeft | typeof schema.extGreyConvWarp | typeof schema.extGreyConvWeft>(t: T) => ({
+      contractId: t.contractId, count: t.count, descr: t.descr, brand: t.brand, ends: t.ends,
+    });
+    const [intIds, extIds, intWarp, intWeft, extWarp, extWeft] = await Promise.all([
+      db.select({ id: schema.intGreyConversionContract.id, contNo: schema.intGreyConversionContract.contNo }).from(schema.intGreyConversionContract),
+      db.select({ id: schema.extGreyConvContract.id, contNo: schema.extGreyConvContract.contNo }).from(schema.extGreyConvContract),
+      db.select(yarnCols(schema.intGreyConversionWarp)).from(schema.intGreyConversionWarp).orderBy(schema.intGreyConversionWarp.srNo),
+      db.select(yarnCols(schema.intGreyConversionWeft)).from(schema.intGreyConversionWeft).orderBy(schema.intGreyConversionWeft.srNo),
+      db.select(yarnCols(schema.extGreyConvWarp)).from(schema.extGreyConvWarp).orderBy(schema.extGreyConvWarp.srNo),
+      db.select(yarnCols(schema.extGreyConvWeft)).from(schema.extGreyConvWeft).orderBy(schema.extGreyConvWeft.srNo),
+    ]);
+    const collect = (rows: YarnRow[], idToCont: Map<number, string>, withEnds: boolean) => {
+      const out = new Map<string, string[]>();
+      for (const r of rows) {
+        const cn = idToCont.get(r.contractId);
+        if (!cn) continue;
+        const head = [r.count ? `${r.count}.` : "", r.descr ?? "", r.brand ?? ""].filter(Boolean).join(" ").trim();
+        const text = withEnds && r.ends != null ? `${head} — ${r.ends} E` : head;
+        if (text) (out.get(cn) ?? out.set(cn, []).get(cn)!).push(text);
+      }
+      return out;
+    };
+    const intMap = new Map(intIds.map((c) => [c.id, c.contNo]));
+    const extMap = new Map(extIds.map((c) => [c.id, c.contNo]));
+    const warpByCont = new Map([...collect(intWarp, intMap, true), ...collect(extWarp, extMap, true)]);
+    const weftByCont = new Map([...collect(intWeft, intMap, false), ...collect(extWeft, extMap, false)]);
+    for (const c of convContracts) {
+      const warp = (warpByCont.get(c.contNo) ?? []).join("  +  ");
+      const weft = (weftByCont.get(c.contNo) ?? []).join("  +  ");
+      yarnSpecByCont[c.contNo] = {
+        yarnReadPick: c.read != null && c.pick != null ? `${c.read} × ${c.pick}` : "",
+        yarnWarpInfo: warp,
+        yarnWeftInfo: weft,
+        beamWarpInfo: warp,
+      };
+    }
+  }
+  // Edit mode: the voucher stores its contract per beam row, so the spec boxes can
+  // be rendered server-side from the first row that carries one.
+  const editingContNo = setRows.find((s) => (s.contNo ?? "").trim())?.contNo?.trim() ?? "";
+  const editingSpec = yarnSpecByCont[editingContNo] ?? { yarnReadPick: "", yarnWarpInfo: "", yarnWeftInfo: "", beamWarpInfo: "" };
   const contractPickerRows = convContracts.map((c) => {
     const q = c.productQuality ?? c.productName ?? c.grayQltyCode ?? "";
     return {
@@ -385,6 +513,7 @@ export default async function DailyProductionPage({
       productQuality: c.productQuality ?? c.productName ?? c.grayQltyCode ?? "",
       productBrand: c.brand ?? "",
       convContParty: c.party ?? "",
+      ...yarnSpecByCont[c.contNo],
     };
   }
 
@@ -1117,7 +1246,12 @@ export default async function DailyProductionPage({
               <RowErase tbodyId="idp-count-rows" pairTbodyId="idp-beam-rows" />
               {/* Folding Stock auto-fills from the picked conv party — readonly box */}
               <AutoFill watch="convContParty" map={foldingByParty} inputs={["foldingStock"]} />
-              <AutoFill watch="conv_contract" map={contractFillMap} combos={["productQuality", "convContParty"]} inputs={["productBrand"]} />
+              <AutoFill
+                watch="conv_contract"
+                map={contractFillMap}
+                combos={["productQuality", "convContParty"]}
+                inputs={["productBrand", "beamWarpInfo", "yarnReadPick", "yarnWarpInfo", "yarnWeftInfo"]}
+              />
               <datalist id="beams-list">
                 {beamCatalog.map((b) => (
                   <option key={b.beamNo ?? ""} value={b.beamNo ?? ""}>
@@ -1417,12 +1551,28 @@ export default async function DailyProductionPage({
                         <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
+                        <label className="label block mb-1">Warp</label>
+                        <input name="beamWarpInfo" className={infoCls} defaultValue={editingSpec.beamWarpInfo} readOnly tabIndex={-1} />
+                      </div>
+                      <div>
                         <label className="label block mb-1">Yarn Cost Party</label>
                         <Combobox name="convContParty" options={convPartyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
                       </div>
                       <div>
+                        <label className="label block mb-1">Read × Pick</label>
+                        <input name="yarnReadPick" className={infoCls} defaultValue={editingSpec.yarnReadPick} readOnly tabIndex={-1} />
+                      </div>
+                      <div>
+                        <label className="label block mb-1">Warp</label>
+                        <input name="yarnWarpInfo" className={infoCls} defaultValue={editingSpec.yarnWarpInfo} readOnly tabIndex={-1} />
+                      </div>
+                      <div>
+                        <label className="label block mb-1">Weft</label>
+                        <input name="yarnWeftInfo" className={infoCls} defaultValue={editingSpec.yarnWeftInfo} readOnly tabIndex={-1} />
+                      </div>
+                      <div>
                         <label className="label block mb-1">Szg Party</label>
-                        <Combobox name="szgParty" options={convPartyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select party" />
+                        <Combobox name="szgParty" options={szgPartyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select sizing party" />
                       </div>
                     </div>
                   </div>
