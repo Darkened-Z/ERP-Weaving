@@ -602,8 +602,12 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
 
   if (!thans.length && !loading) return null;
 
+  const allOn = thans.length > 0 && removed.size === 0;
+  const toggleAll = () =>
+    setRemoved(allOn ? new Set(thans.map((t) => t.id)) : new Set());
+
   return (
-    <div style={{ border: "2px solid #000", marginBottom: 8 }}>
+    <div style={{ border: "2px solid #000", marginBottom: 8, flex: "1 1 auto", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 10px", background: "#0f172a", color: "#fff" }}>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Production Thaans — {lastDesign} &nbsp;·&nbsp; {selected.length} selected / {thans.length} total
@@ -611,11 +615,19 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
         </span>
         {loading && <span style={{ fontSize: 11 }}>Loading…</span>}
       </div>
-      <div style={{ overflowX: "auto", maxHeight: "28vh", overflowY: "auto" }}>
+      <div style={{ overflowX: "auto", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
         <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#fefce8" }}>
-              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}></th>
+              <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>
+                <input
+                  type="checkbox"
+                  checked={allOn}
+                  onChange={toggleAll}
+                  title={allOn ? "Clear all" : "Select all"}
+                  style={{ cursor: "pointer", width: 13, height: 13 }}
+                />
+              </th>
               <th style={{ padding: "2px 6px", borderBottom: "1px solid #000" }}>MM/Than Sr#</th>
               <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>Total</th>
               <th style={{ padding: "2px 6px", borderBottom: "1px solid #000", textAlign: "right" }}>A</th>
@@ -633,20 +645,20 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
               const isRemoved = removed.has(t.id);
               return (
                 <tr key={t.id} style={{ opacity: isRemoved ? 0.35 : 1, background: isRemoved ? "#fee2e2" : undefined }}>
-                  <td style={{ padding: "1px 4px" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
+                  <td style={{ padding: "1px 6px" }}>
+                    <input
+                      type="checkbox"
+                      checked={!isRemoved}
+                      onChange={() => {
                         setRemoved((prev) => {
                           const next = new Set(prev);
                           if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
                           return next;
                         });
                       }}
-                      style={{ color: isRemoved ? "#16a34a" : "#dc2626", fontWeight: 700, background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "0 2px" }}
-                    >
-                      {isRemoved ? "+" : "✕"}
-                    </button>
+                      title={isRemoved ? "Include this than" : "Leave this than out"}
+                      style={{ cursor: "pointer", width: 13, height: 13 }}
+                    />
                   </td>
                   <td style={{ padding: "1px 6px", fontFamily: "monospace", fontWeight: 700 }}>{t.mm}</td>
                   <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.totalCount ?? "-"}</td>

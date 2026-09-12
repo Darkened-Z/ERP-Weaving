@@ -1089,8 +1089,10 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-12 gap-4 mb-2">
-              <div className="col-span-7">
+            <div className="grid grid-cols-12 gap-4 mb-2 items-stretch">
+              {/* flex column so the panel grows into the space the taller right
+                  column leaves under it instead of stranding a blank gap */}
+              <div className="col-span-7 flex flex-col min-h-0">
                 {/* The thaans panel IS the line list (owner) — the separate editable
                     grid repeated the same rows, so it is gone. Its inputs stay as
                     hidden fields: DesignThansFill writes the picked thaans into them
