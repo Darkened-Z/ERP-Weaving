@@ -612,7 +612,23 @@ export function DesignThansFill({ lineRows }: { lineRows: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [removed, thans, lineRows]);
 
-  if (!thans.length && !loading) return null;
+  // Empty state rather than nothing: this panel is the whole left column now, so
+  // returning null left a tall blank gap beside the despatch fields — and the
+  // operator had no cue that the thaans come from the Party + Conv.Cont No pair.
+  if (!thans.length && !loading) {
+    return (
+      <div style={{ border: "2px solid #000", marginBottom: 8, flex: "1 1 auto", display: "flex", flexDirection: "column", minHeight: 140 }}>
+        <div style={{ padding: "4px 10px", background: "#0f172a", color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Production Thaans
+        </div>
+        <div style={{ flex: "1 1 auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, textAlign: "center", fontSize: 11, color: "#64748b", lineHeight: 1.6 }}>
+          {lastDesign
+            ? `No undelivered thaans left for ${lastDesign}.`
+            : "Pick the Party, then the Conv.Cont No — that party's undelivered thaans open here."}
+        </div>
+      </div>
+    );
+  }
 
   const allOn = thans.length > 0 && removed.size === 0;
   const toggleAll = () =>
