@@ -480,6 +480,26 @@ export default async function DailyProductionPage({
       };
     }
   }
+  // Beams carry no contract in practice, so a beam pick alone can't reach the
+  // spec. When a party runs exactly ONE conversion contract the spec is still
+  // unambiguous — fill it from the party. Parties with several contracts wait for
+  // the contract pick rather than showing one of them at random.
+  const partySpecMap: Record<string, Record<string, string>> = {};
+  {
+    const byParty = new Map<string, string[]>();
+    for (const c of convContracts) {
+      const p = c.party?.trim();
+      if (!p) continue;
+      (byParty.get(p) ?? byParty.set(p, []).get(p)!).push(c.contNo);
+    }
+    for (const [party, contNos] of byParty) {
+      if (contNos.length !== 1) continue;
+      const spec = yarnSpecByCont[contNos[0]];
+      if (spec) partySpecMap[party] = { ...spec };
+    }
+  }
+  const SPEC_INPUTS = ["beamWarpInfo", "yarnReadPick", "yarnWarpInfo", "yarnWeftInfo"];
+
   // Edit mode: the voucher stores its contract per beam row, so the spec boxes can
   // be rendered server-side from the first row that carries one.
   const editingContNo = setRows.find((s) => (s.contNo ?? "").trim())?.contNo?.trim() ?? "";
@@ -1261,8 +1281,12 @@ export default async function DailyProductionPage({
                 watch="conv_contract"
                 map={contractFillMap}
                 combos={["productQuality", "convContParty"]}
-                inputs={["productBrand", "beamWarpInfo", "yarnReadPick", "yarnWarpInfo", "yarnWeftInfo"]}
+                inputs={["productBrand", ...SPEC_INPUTS]}
               />
+              {/* A beam pick reaches only the parties, so the spec follows the party
+                  too whenever that party runs a single conversion contract. */}
+              <AutoFill watch="beamContParty" map={partySpecMap} inputs={SPEC_INPUTS} />
+              <AutoFill watch="convContParty" map={partySpecMap} inputs={SPEC_INPUTS} />
               <datalist id="beams-list">
                 {beamCatalog.map((b) => (
                   <option key={b.beamNo ?? ""} value={b.beamNo ?? ""}>
@@ -1558,31 +1582,33 @@ export default async function DailyProductionPage({
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PARTIES</div>
                     <div className="grid grid-cols-1 gap-3 gform">
-                      <div>
+                      {/* gform is a hard 2-column grid; gform-full keeps each spec
+                          box directly under the party it describes. */}
+                      <div className="gform-full">
                         <label className="label block mb-1">Beam Cost Party</label>
                         <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
                       </div>
-                      <div>
+                      <div className="gform-full">
                         <label className="label block mb-1">Warp</label>
                         <input name="beamWarpInfo" className={infoCls} defaultValue={editingSpec.beamWarpInfo} readOnly tabIndex={-1} />
                       </div>
-                      <div>
+                      <div className="gform-full">
                         <label className="label block mb-1">Yarn Cost Party</label>
                         <Combobox name="convContParty" options={convPartyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
                       </div>
-                      <div>
+                      <div className="gform-full">
                         <label className="label block mb-1">Read × Pick</label>
                         <input name="yarnReadPick" className={infoCls} defaultValue={editingSpec.yarnReadPick} readOnly tabIndex={-1} />
                       </div>
-                      <div>
+                      <div className="gform-full">
                         <label className="label block mb-1">Warp</label>
                         <input name="yarnWarpInfo" className={infoCls} defaultValue={editingSpec.yarnWarpInfo} readOnly tabIndex={-1} />
                       </div>
-                      <div>
+                      <div className="gform-full">
                         <label className="label block mb-1">Weft</label>
                         <input name="yarnWeftInfo" className={infoCls} defaultValue={editingSpec.yarnWeftInfo} readOnly tabIndex={-1} />
                       </div>
-                      <div>
+                      <div className="gform-full">
                         <label className="label block mb-1">Szg Party</label>
                         <Combobox name="szgParty" options={szgPartyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select sizing party" />
                       </div>
