@@ -453,14 +453,9 @@ export function DespatchAmountCalc({
       if (!el || el.value === val) return;
       el.value = val;
     };
-    const setText = (id: string, val: string) => {
-      const el = document.getElementById(id);
-      if (el && el.textContent !== val) el.textContent = val;
-    };
     const recompute = () => {
       let qtyMtrs = 0;
       let thanCount = 0;
-      const cols = { a: 0, b: 0, c: 0, cp: 0, rej: 0 };
       // A saved despatch can render MORE rows than lineRows, and the save-time
       // guards sum every row that exists — so follow the DOM, not the prop.
       let n = lineRows;
@@ -470,19 +465,10 @@ export function DespatchAmountCalc({
         qtyMtrs += l;
         const tv = (q(`line_t_sr_${i}`)?.value ?? "").trim();
         if (tv || l > 0) thanCount++;
-        cols.a += num(`line_a_${i}`);
-        cols.b += num(`line_b_${i}`);
-        cols.c += num(`line_c_${i}`);
-        cols.cp += num(`line_cp_${i}`);
-        cols.rej += num(`line_rej_${i}`);
       }
       qtyMtrs = round(qtyMtrs, 2);
-      // Oracle's closing grid row: per-grade totals + total meters + than count.
-      setText("gd-tot-cnt", thanCount ? String(thanCount) : "");
-      for (const [k, v] of Object.entries(cols)) setText(`gd-tot-${k}`, v ? String(round(v, 2)) : "");
-      setText("gd-tot-len", qtyMtrs ? String(qtyMtrs) : "");
       // Than/Qty and Qty Mtrs are the same two numbers the save-time guards check
-      // against the grid, so they are filled from it rather than typed.
+      // against the lines, so they are filled from them rather than typed.
       set("than_qty", thanCount ? String(thanCount) : "");
       set("qty_mtrs", qtyMtrs ? String(qtyMtrs) : "");
       const convRate = num("conv_rate");

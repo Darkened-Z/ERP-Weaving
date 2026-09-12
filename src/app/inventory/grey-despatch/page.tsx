@@ -6,13 +6,14 @@ import { Combobox } from "@/components/combobox";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
-import { DespatchAmountCalc, CountGridFiller, DesignThansFill, HideEmptyRows } from "@/components/production-calc";
+import { DespatchAmountCalc, CountGridFiller, DesignThansFill } from "@/components/production-calc";
 import { db, schema } from "@/db";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
+import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
@@ -107,7 +108,12 @@ export default async function GreyDespatchPage({
     .from(schema.chartOfAccounts)
     .where(sql`${schema.chartOfAccounts.level} >= 5`)
     .orderBy(schema.chartOfAccounts.description);
-  const partyOpts = parties.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+  // Party = the conversion party the cloth was woven for, i.e. the daily
+  // production voucher's Yarn Cost Party. Same head daily production uses
+  // (WVG 1.01.01.01.*) — the unfiltered level-5 list offered 400+ accounts.
+  const partyOpts = parties
+    .filter((p) => String(p.code).startsWith(WVG_CONVERSION_PREFIX))
+    .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
   const yarnCountList = await db
@@ -990,8 +996,6 @@ export default async function GreyDespatchPage({
           <form id="gd-save-form" action={saveDespatch}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <DespatchAmountCalc countRows={COUNT_ROWS} lineRows={LINE_ROWS} />
-            {/* Only the thaans picked in the panel stay open (+1 blank for a manual entry) */}
-            <HideEmptyRows tbodyIds={["gd-line-rows"]} />
             <CountGridFiller contractRows={contractRowsByContNo} rows={COUNT_ROWS} />
             <AutoFill
               watch="conv_cont_no"
@@ -1085,74 +1089,28 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <DesignThansFill lineRows={LINE_ROWS} />
-
             <div className="grid grid-cols-12 gap-4 mb-2">
               <div className="col-span-7">
-                <div className="border border-black">
-                  <table className="w-full text-[11px]">
-                    <thead>
-                      <tr className="bg-yellow-50">
-                        <th className="px-1 py-1 border-b border-black" style={{ width: 32 }}>Sr#</th>
-                        <th className="px-1 py-1 border-b border-black">T.Sr#</th>
-                        <th className="px-1 py-1 border-b border-black text-right">A</th>
-                        <th className="px-1 py-1 border-b border-black text-right">B</th>
-                        <th className="px-1 py-1 border-b border-black text-right">C</th>
-                        <th className="px-1 py-1 border-b border-black text-right">CP</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Rej</th>
-                        <th className="px-1 py-1 border-b border-black text-right">Length (Mtrs)</th>
-                      </tr>
-                    </thead>
-                    <tbody id="gd-line-rows">
-                      {lineGrid.map((r, idx) => {
-                        const i = idx + 1;
-                        const cpDefault = r?.cp ?? (r?.cpRej != null && r?.rej == null ? r.cpRej : "");
-                        const rejDefault = r?.rej ?? "";
-                        return (
-                          <tr key={i}>
-                            <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-center">{i}</td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_t_sr_${i}`} type="text" list="thans-list" className={gCls} defaultValue={(r?.tSrNo as unknown as string) ?? ""} />
-                            </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_a_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.a ?? ""} />
-                            </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_b_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.b ?? ""} />
-                            </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_c_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.c ?? ""} />
-                            </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_cp_${i}`} type="number" step="any" className={gCellNum} defaultValue={cpDefault} />
-                            </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_rej_${i}`} type="number" step="any" className={gCellNum} defaultValue={rejDefault} />
-                            </td>
-                            <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name={`line_len_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.lengthMtrs ?? ""} />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-black text-white font-bold">
-                        <td className="px-1 py-1 mono text-center" id="gd-tot-cnt"></td>
-                        <td className="px-1 py-1 mono">TOTAL</td>
-                        <td className="px-1 py-1 mono text-right" id="gd-tot-a"></td>
-                        <td className="px-1 py-1 mono text-right" id="gd-tot-b"></td>
-                        <td className="px-1 py-1 mono text-right" id="gd-tot-c"></td>
-                        <td className="px-1 py-1 mono text-right" id="gd-tot-cp"></td>
-                        <td className="px-1 py-1 mono text-right" id="gd-tot-rej"></td>
-                        <td className="px-1 py-1 mono text-right" id="gd-tot-len"></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-                <div className="text-[10px] text-[var(--muted)] mt-1">
-                  Only the thaans picked above stay open — one blank row is kept for a manual entry.
-                </div>
+                {/* The thaans panel IS the line list (owner) — the separate editable
+                    grid repeated the same rows, so it is gone. Its inputs stay as
+                    hidden fields: DesignThansFill writes the picked thaans into them
+                    and saveAction still reads them to build the despatch lines. */}
+                <DesignThansFill lineRows={LINE_ROWS} />
+                {lineGrid.map((r, idx) => {
+                  const i = idx + 1;
+                  const cpDefault = r?.cp ?? (r?.cpRej != null && r?.rej == null ? r.cpRej : "");
+                  return (
+                    <div key={i}>
+                      <input type="hidden" name={`line_t_sr_${i}`} defaultValue={(r?.tSrNo as unknown as string) ?? ""} />
+                      <input type="hidden" name={`line_a_${i}`} defaultValue={r?.a ?? ""} />
+                      <input type="hidden" name={`line_b_${i}`} defaultValue={r?.b ?? ""} />
+                      <input type="hidden" name={`line_c_${i}`} defaultValue={r?.c ?? ""} />
+                      <input type="hidden" name={`line_cp_${i}`} defaultValue={cpDefault} />
+                      <input type="hidden" name={`line_rej_${i}`} defaultValue={r?.rej ?? ""} />
+                      <input type="hidden" name={`line_len_${i}`} defaultValue={r?.lengthMtrs ?? ""} />
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="col-span-5 space-y-2">
