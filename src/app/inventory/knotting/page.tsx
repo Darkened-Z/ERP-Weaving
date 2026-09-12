@@ -722,7 +722,6 @@ export default async function KnottingPage({
         beam_length: b.beamLength,
         ends: b.ends,
         beam_status: b.statusWrk,
-        shd_hash: b.shed ?? null,
       },
     ]),
   );
@@ -771,8 +770,9 @@ export default async function KnottingPage({
     );
   const loomPickerRows = loomRows.map((lm) => ({
     value: `${lm.shed}|${lm.loomNo}`,
-    code: String(lm.loomNo),
-    description: `Shed ${lm.shed}`,
+    // Reads "Shed 1 — Loom 24" once picked; the value still carries both.
+    code: `Shed ${lm.shed}`,
+    description: `Loom ${lm.loomNo}`,
     filterKey: lm.shed,
     cells: {
       shed: lm.shed,
@@ -1148,8 +1148,7 @@ export default async function KnottingPage({
                         <th style={{ width: 90 }}>Beam Length</th>
                         <th style={{ width: 130 }}>Issue Date</th>
                         <th style={{ width: 130 }}>K-Date</th>
-                        <th style={{ width: 70 }}>Shd#</th>
-                        <th style={{ width: 180 }}>Lm# (F9)</th>
+                        <th style={{ width: 230 }}>Lm# (F9)</th>
                         <th style={{ width: 90 }}>Ext Shr.Age</th>
                         <th style={{ width: 90 }}>Dsg Type</th>
                         <th style={{ width: 110 }}>Kn.Cont.No</th>
@@ -1243,15 +1242,11 @@ export default async function KnottingPage({
                               />
                             </td>
                             <td>
-                              <input
-                                name="shd_hash"
-                                className="input-box mono text-[12px] bg-gray-50"
-                                defaultValue={l?.shdHash ?? ""}
-                                readOnly
-                                tabIndex={-1}
-                              />
-                            </td>
-                            <td>
+                              {/* Shd# column removed (owner): the beam pick used to
+                                  stamp a shed here with no loom, which is how beams
+                                  ended up sitting on "Shed 1" unmounted. The loom
+                                  value carries shed AND loom, so it alone sets both. */}
+                              <input type="hidden" name="shd_hash" defaultValue={l?.shdHash ?? ""} />
                               <FindingPicker
                                 name="lm_hash"
                                 defaultValue={l?.lmHash ? `${l?.shdHash ?? ""}|${l?.lmHash}` : ""}
@@ -1259,7 +1254,7 @@ export default async function KnottingPage({
                                 columns={loomCols}
                                 title="LOOM LIST"
                                 placeholder="F9 loom"
-                                className="input-box mono text-[12px] cursor-pointer"
+                                className="input-box mono text-[12px] cursor-pointer min-w-[150px]"
                               />
                             </td>
                             <td>
