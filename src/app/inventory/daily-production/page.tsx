@@ -267,7 +267,12 @@ export default async function DailyProductionPage({
 
   // Mounted beams — KNOTTING after the knotting bill, PRODUCTION once already in
   // production, RUNNING kept for pre-lifecycle records. The SET NO LIST + loom→beam source.
-  const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
+  // A beam is ON a loom from the moment knotting mounts it until production
+  // empties it. That includes every status daily production itself assigns
+  // (BEAM_STATUS_CHOICES) — a beam at L-ROLL is still on the loom being woven, so
+  // leaving those out made it vanish from the picker mid-run. Only EMPTY (freed)
+  // and LOADED (received, never knotted) are not mounted.
+  const MOUNTED = new Set(["KNOTTING", "PRODUCTION", ...BEAM_STATUS_CHOICES]);
   const runningBeams = beamCatalog.filter((b) => MOUNTED.has((b.statusWrk ?? "").toUpperCase()));
   const beamPickerRows = runningBeams.map((b) => ({
     value: b.beamNo as string,
@@ -382,7 +387,7 @@ export default async function DailyProductionPage({
     loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = allForLoom
       .filter((b) => {
         if (editing != null && voucherBeamNos.has((b.beamNo ?? "").trim())) return true;
-        return ["KNOTTING", "PRODUCTION", "RUNNING"].includes((b.statusWrk ?? "").toUpperCase());
+        return MOUNTED.has((b.statusWrk ?? "").toUpperCase());
       })
       .map((b) => ({
         beamNo: b.beamNo ?? null,
@@ -994,7 +999,21 @@ export default async function DailyProductionPage({
               .from(schema.intDailyProductionSet)
               .where(eq(schema.intDailyProductionSet.beamNo, beamNo));
             if ((agg?.woven ?? 0) >= b.length) {
+              // Last roll: the beam is spent, so free the LOOM too — otherwise it
+              // keeps pointing at an exhausted beam and never reads as available
+              // for the next knotting.
+              const [spent] = await tx
+                .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+                .from(schema.beams)
+                .where(eq(schema.beams.beamNo, beamNo))
+                .limit(1);
               await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
+              if (spent?.shed && spent.loomNo != null) {
+                await tx
+                  .update(schema.looms)
+                  .set({ statusWrk: "S", currentBeam: null, currentContract: null })
+                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed)));
+              }
             }
           }
 
@@ -1071,7 +1090,21 @@ export default async function DailyProductionPage({
               .from(schema.intDailyProductionSet)
               .where(eq(schema.intDailyProductionSet.beamNo, beamNo));
             if ((agg?.woven ?? 0) >= b.length) {
+              // Last roll: the beam is spent, so free the LOOM too — otherwise it
+              // keeps pointing at an exhausted beam and never reads as available
+              // for the next knotting.
+              const [spent] = await tx
+                .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+                .from(schema.beams)
+                .where(eq(schema.beams.beamNo, beamNo))
+                .limit(1);
               await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
+              if (spent?.shed && spent.loomNo != null) {
+                await tx
+                  .update(schema.looms)
+                  .set({ statusWrk: "S", currentBeam: null, currentContract: null })
+                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed)));
+              }
             }
           }
 
