@@ -9,6 +9,7 @@ import { db, schema } from "@/db";
 import { and, eq, sql, desc, inArray } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
+import { RowErase } from "@/components/production-calc";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
@@ -1029,12 +1030,25 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 40 }}>Upd</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="iwb-lines">
                       {Array.from({ length: ROWS }).map((_, i) => {
                         const l = lines[i];
                         return (
                           <tr key={i}>
-                            <td className="mono text-[11px] text-center">{i + 1}</td>
+                            <td className="mono text-[11px] text-center whitespace-nowrap">
+                              {/* Cancel-line cross: clears this row's inputs so save
+                                  drops it. Empty-row guard on save skips blank lines. */}
+                              <button
+                                type="button"
+                                data-row-erase
+                                title="Cancel line"
+                                className="text-red-600 hover:text-red-800 font-bold mr-1"
+                                style={{ fontSize: 12, lineHeight: 1 }}
+                              >
+                                ✕
+                              </button>
+                              {i + 1}
+                            </td>
                             <td><input name="rDate" type="date" className={gridCellCls} defaultValue={l?.rDate ?? ""} /></td>
                             <td><input name="yarnLotNo" className={gridCellCls} defaultValue={l?.yarnLotNo ?? ""} /></td>
                             <td><input name="yarnBrand" list="iwb-brands" className={gridCellCls} defaultValue={l?.yarnBrand ?? ""} /></td>
@@ -1049,13 +1063,20 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="conv" type="number" step="any" className={gridCellNumCls} defaultValue={l?.conv ?? ""} /></td>
                             <td><input name="amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.amount ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="gpNoLine" className={gridCellCls} defaultValue={l?.gpNoLine ?? ""} /></td>
-                            <td className="mono text-[10px] text-center text-[var(--muted)]">X</td>
+                            <td className="mono text-[10px] text-center text-[var(--muted)]">
+                              {/* UPD: X once the beam has been uploaded (LOADED and
+                                  beyond — knotting/production see it). Blank until
+                                  then, so the operator can see at a glance which
+                                  lines have propagated. */}
+                              {l?.beamNo && (liveStatusByNo.get(l.beamNo) || "LOADED") !== "EMPTY" ? "X" : ""}
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+                <RowErase tbodyId="iwb-lines" />
                 <div className="text-[10px] text-[var(--muted)] mt-2 px-2">
                   Empty rows are ignored on save. On update, lines are replaced with the current grid.
                   Beams named on lines are marked LOADED on save.

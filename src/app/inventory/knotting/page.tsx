@@ -5,6 +5,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
 import { KnottingCalc } from "@/components/knotting-calc";
+import { RowErase } from "@/components/production-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc, and } from "drizzle-orm";
@@ -1258,13 +1259,24 @@ export default async function KnottingPage({
                         <th style={{ width: 50 }}>Upd</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="ks-lines-body">
                       {Array.from({ length: rowsToShow }).map((_, i) => {
                         const l = lines[i];
                         const headerVDate = formBill?.vDate ?? today();
                         return (
                           <tr key={i}>
-                            <td className="text-[var(--muted)] text-center">
+                            <td className="text-[var(--muted)] text-center whitespace-nowrap">
+                              {/* Cancel-line cross: clears this row's inputs so save
+                                  drops it. The empty-row guard on save skips blanks. */}
+                              <button
+                                type="button"
+                                data-row-erase
+                                title="Cancel line"
+                                className="text-red-600 hover:text-red-800 font-bold mr-1"
+                                style={{ fontSize: 12, lineHeight: 1 }}
+                              >
+                                ✕
+                              </button>
                               {i + 1}
                             </td>
                             <td>
@@ -1471,6 +1483,7 @@ export default async function KnottingPage({
                     </tbody>
                   </table>
                 </div>
+                <RowErase tbodyId="ks-lines-body" />
                 <div className="flex justify-end mt-2">
                   <div className="border border-black px-4 py-2 flex items-center gap-3">
                     <span className="text-[11px] uppercase tracking-[0.1em] font-semibold">Total Amount</span>
