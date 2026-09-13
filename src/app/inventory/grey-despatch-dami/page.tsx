@@ -355,17 +355,12 @@ export default async function GreyDespatchDamiPage({
                 </div>
               </div>
 
-              {/* Row 2: Purchase Party, Cont No */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-12">
-                  <label className="label block mb-1">Purchase Party</label>
-                  <input name="purchase_party" className="input-box" defaultValue={formItem?.purchaseParty ?? ""} placeholder="Type party name..." />
-                </div>
-                {/* Cont # + Term removed from the form; kept as hidden inputs so an
-                    old voucher does not lose those values on edit. */}
-                <input type="hidden" name="cont_no" defaultValue={formItem?.contNo ?? ""} />
-                <input type="hidden" name="term" defaultValue={formItem?.term ?? ""} />
-              </div>
+              {/* Row 2 gone: Purchase Party + Cont # + Term all removed. Each is
+                  kept as a hidden input so an existing voucher does not lose those
+                  values on edit; the DB columns are untouched. */}
+              <input type="hidden" name="purchase_party" defaultValue={formItem?.purchaseParty ?? ""} />
+              <input type="hidden" name="cont_no" defaultValue={formItem?.contNo ?? ""} />
+              <input type="hidden" name="term" defaultValue={formItem?.term ?? ""} />
 
               {/* Row 3: Sale Party only. Sub Party removed. */}
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
@@ -496,7 +491,6 @@ export default async function GreyDespatchDamiPage({
                 )}
 
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[12px] mb-3">
-                  <div><span className="text-[var(--muted)]">Purchase Party: </span><b>{formItem.purchaseParty ?? "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Sale Party: </span><b>{formItem.saleParty ?? "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Sal Date: </span><b>{formItem.salDate ?? "—"}</b></div>
                   <div className="col-span-2"><span className="text-[var(--muted)]">Dsp. Quality: </span><b>{formItem.dspQuality}{formItem.dspQualityDesc ? ` | ${formItem.dspQualityDesc}` : ""}</b></div>
