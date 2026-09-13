@@ -3,6 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { WhatsAppModal } from "@/components/whatsapp-modal";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -197,17 +198,35 @@ export default async function GreyDespatchPage({
     .where(eq(schema.extGreyConvContract.status, "R"))
     .orderBy(schema.extGreyConvContract.contNo);
   const contracts = [
-    ...intContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, loomType: c.loomType, weaveFrame: c.weaveFrame })),
-    ...extContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, loomType: c.loomType, weaveFrame: c.weaveFrame })),
+    ...intContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, grayRatePerMtr: c.grayRatePerMtr, contDate: c.contDate, loomType: c.loomType, weaveFrame: c.weaveFrame })),
+    ...extContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, grayRatePerMtr: c.grayRatePerMtr, contDate: c.contDate, loomType: c.loomType, weaveFrame: c.weaveFrame })),
   ];
   // Owner: contract number first, then what it weaves, party last — a than is
   // picked by quality, so the product has to be readable without opening it.
-  const contractOpts = contracts.map((c) => ({
+  // Oracle CONV. CONT LIST: contract, what it is, what it is made of, and both
+  // rates. A than is picked by quality, so the list has to say so on its face.
+  const contractPickerRows = contracts.map((c) => ({
     value: c.contNo,
-    label: [c.contNo, c.productQuality ?? c.productName ?? "", c.party ?? ""].filter(Boolean).join(" — "),
-    desc: c.party ?? "",
+    code: c.contNo,
+    description: c.productName ?? c.productQuality ?? "",
     filterKey: c.party ?? "",
+    cells: {
+      contNo: c.contNo,
+      prdName: c.productName ?? "",
+      prdQlty: c.productQuality ?? "",
+      convRate: c.convRatePerMtr ?? "",
+      greyRate: c.grayRatePerMtr ?? "",
+      contDate: c.contDate ?? "",
+    },
   }));
+  const contractCols = [
+    { key: "contNo", label: "Cont No", width: 90 },
+    { key: "prdName", label: "Product Name", width: 150 },
+    { key: "prdQlty", label: "Product Coding", width: 210 },
+    { key: "convRate", label: "Conv Rate", width: 80, align: "right" as const },
+    { key: "greyRate", label: "Grey Rate", width: 80, align: "right" as const },
+    { key: "contDate", label: "Cont Date", width: 95 },
+  ];
   const contractFillMap: Record<string, Record<string, string | number | null>> = {};
   const contractPartyMap: Record<string, string | null> = {};
   for (const c of contracts) {
@@ -1118,6 +1137,15 @@ export default async function GreyDespatchPage({
               </div>
 
               <div className="col-span-5 space-y-2">
+                {/* Party FIRST (owner): it scopes the contract list under it. Post
+                    Lot No and Shed No are off the form; kept as hidden fields so a
+                    saved voucher does not lose them on an edit. */}
+                <div className="gform">
+                  <div>
+                    <label className="label block mb-1">Party</label>
+                    <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch To</label>
@@ -1128,29 +1156,27 @@ export default async function GreyDespatchPage({
                     <Combobox name="despatch_location" options={printingOpts} defaultValue={formItem?.despatchLocation ?? ""} placeholder="Select printing party" className="input-box mono text-[12px]" />
                   </div>
                 </div>
+                <div className="gform">
+                  <div>
+                    <label className="label block mb-1">
+                      Conv.Cont No <span className="text-[9px] text-[var(--muted)]">F9 — running contracts of the picked party</span>
+                    </label>
+                    <FindingPicker
+                      name="conv_cont_no"
+                      defaultValue={formItem?.convContNo ?? ""}
+                      rows={contractPickerRows}
+                      columns={contractCols}
+                      filterByField="party"
+                      title="CONV. CONT LIST"
+                      placeholder="F9 grey conversion contract"
+                      className="input-box mono text-[12px] cursor-pointer"
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch From</label>
                     <Combobox name="despatch_from" options={godownOpts} defaultValue={formItem?.despatchFrom ?? "1.01.25.01.0037"} placeholder="Select godown" className="input-box mono text-[12px]" />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">
-                      Conv.Cont No <span className="text-[9px] text-[var(--muted)]">F9</span>
-                    </label>
-                    <Combobox
-                      name="conv_cont_no"
-                      options={contractOpts}
-                      defaultValue={formItem?.convContNo ?? ""}
-                      placeholder="Select conv contract"
-                      className="input-box mono text-[12px]"
-                      filterByField="party"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 gform">
-                  <div>
-                    <label className="label block mb-1">Post Lot No</label>
-                    <input name="post_lot_no" className="input-box mono text-[12px]" defaultValue={formItem?.postLotNo ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">Type</label>
@@ -1159,17 +1185,9 @@ export default async function GreyDespatchPage({
                       <option value="REJ">REJ</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="label block mb-1">Shed No</label>
-                    <input name="shed_no" list="sheds-list" className="input-box mono text-[12px]" defaultValue={formItem?.shedNo ?? ""} />
-                  </div>
                 </div>
-                <div className="gform">
-                  <div>
-                    <label className="label block mb-1">Party</label>
-                    <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
-                  </div>
-                </div>
+                <input type="hidden" name="post_lot_no" defaultValue={formItem?.postLotNo ?? ""} />
+                <input type="hidden" name="shed_no" defaultValue={formItem?.shedNo ?? ""} />
                 <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Than / Qty</label>
