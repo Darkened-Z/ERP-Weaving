@@ -187,6 +187,36 @@ async function saveKnotting(formData: FormData) {
     );
   }
 
+  // A loom carries ONE beam. Without this, knotting a second beam onto an
+  // occupied loom silently overwrote the first mount: the loom pointed at the
+  // newer beam while the older one was still sitting on it.
+  const bail = (err: string) =>
+    redirect(
+      Number.isFinite(id) && id > 0
+        ? `/inventory/knotting?id=${id}&error=${err}`
+        : `/inventory/knotting?adding=1&error=${err}`,
+    );
+  const loomKeyOf = (l: { shdHash?: string | null; lmHash?: string | null }) =>
+    l.shdHash && l.lmHash ? `${l.shdHash}|${l.lmHash}` : "";
+  const wantedLooms = new Set<string>();
+  for (const l of lines) {
+    const k = loomKeyOf(l);
+    if (!k) continue;
+    if (wantedLooms.has(k)) bail("loom_dup");
+    wantedLooms.add(k);
+  }
+  if (wantedLooms.size) {
+    const ownBeams = new Set(lines.map((l) => l.beamNo).filter(Boolean) as string[]);
+    const onLooms = await db
+      .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+      .from(schema.beams)
+      .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) <> 'EMPTY'`);
+    for (const b of onLooms) {
+      const k = `${b.shed ?? ""}|${b.loomNo}`;
+      if (wantedLooms.has(k) && !ownBeams.has(b.beamNo)) bail("loom_busy");
+    }
+  }
+
   const nowIso = new Date().toISOString();
 
   const [company] = await db
@@ -768,7 +798,22 @@ export default async function KnottingPage({
       sql`CASE WHEN ${schema.looms.statusWrk} = 'RUNNING' THEN 1 ELSE 0 END`,
       schema.looms.loomNo,
     );
-  const loomPickerRows = loomRows.map((lm) => ({
+  // Looms already carrying a mounted beam are not on offer — one loom, one beam.
+  // This voucher's own looms stay listed so editing it never loses them.
+  const beamsOnLooms = await db
+    .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+    .from(schema.beams)
+    .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) <> 'EMPTY'`);
+  const busyLooms = new Set(beamsOnLooms.map((b) => `${b.shed ?? ""}|${b.loomNo}`));
+  const thisBillLooms = new Set(
+    lines.map((l) => (l.shdHash && l.lmHash ? `${l.shdHash}|${l.lmHash}` : "")).filter(Boolean),
+  );
+  const loomPickerRows = loomRows
+    .filter((lm) => {
+      const k = `${lm.shed}|${lm.loomNo}`;
+      return !busyLooms.has(k) || thisBillLooms.has(k);
+    })
+    .map((lm) => ({
     value: `${lm.shed}|${lm.loomNo}`,
     // Reads "Shed 1 — Loom 24" once picked; the value still carries both.
     code: `Shed ${lm.shed}`,
@@ -838,6 +883,13 @@ export default async function KnottingPage({
           />
         </div>
 
+        {(params.error === "loom_busy" || params.error === "loom_dup") && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            {params.error === "loom_dup"
+              ? "Two lines point at the same loom. A loom carries one beam — give each beam its own loom."
+              : "That loom already carries a beam. Empty it first, or pick a free loom — otherwise the new beam would silently replace the mounted one."}
+          </div>
+        )}
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             V.No already exists. Try again.
