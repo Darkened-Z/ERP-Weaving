@@ -478,6 +478,19 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
+                {/* Opn.Party + Conv.Cont No: tie the opening lot to the conversion
+                    contract it belongs to, so Daily Folding Stock picks it up as
+                    the OPENING column for that contract instead of showing 0. */}
+                <div className="grid grid-cols-4 gap-x-4 gform">
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Opn. Party</label>
+                    <Combobox name="opn_party" options={partyOpts} defaultValue={String(formItem?.opnParty ?? "")} placeholder="Select party" className="input-box mono" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label block mb-1">Conv.Cont No</label>
+                    <Combobox name="conv_cont_no" options={convContOpts} defaultValue={formItem?.convContNo ?? ""} placeholder="Select conversion contract" className="input-box mono" />
+                  </div>
+                </div>
                 <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Gray Width</label>
