@@ -197,12 +197,14 @@ export default async function GreyDespatchPage({
     .where(eq(schema.extGreyConvContract.status, "R"))
     .orderBy(schema.extGreyConvContract.contNo);
   const contracts = [
-    ...intContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, loomType: c.loomType, weaveFrame: c.weaveFrame })),
-    ...extContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, loomType: c.loomType, weaveFrame: c.weaveFrame })),
+    ...intContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, loomType: c.loomType, weaveFrame: c.weaveFrame })),
+    ...extContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, loomType: c.loomType, weaveFrame: c.weaveFrame })),
   ];
+  // Owner: contract number first, then what it weaves, party last — a than is
+  // picked by quality, so the product has to be readable without opening it.
   const contractOpts = contracts.map((c) => ({
     value: c.contNo,
-    label: `${c.contNo} — ${c.party ?? ""}`,
+    label: [c.contNo, c.productQuality ?? c.productName ?? "", c.party ?? ""].filter(Boolean).join(" — "),
     desc: c.party ?? "",
     filterKey: c.party ?? "",
   }));

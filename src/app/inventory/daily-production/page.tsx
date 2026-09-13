@@ -317,9 +317,15 @@ export default async function DailyProductionPage({
     }
     (beamsByLoomNo.get(b.loomNo) ?? beamsByLoomNo.set(b.loomNo, []).get(b.loomNo)!).push(b);
   }
+  // Loom numbers repeat across sheds, so the shed-scoped key is the answer. The
+  // loomNo-only fallback exists ONLY for legacy beams that carry no shed stamp —
+  // it must never widen to another shed's beams. It used to fall back whenever
+  // the scoped lookup was empty, so an emptied Shed 1 Loom 7 offered Shed 2 Loom
+  // 7's beam.
   const beamsForLoom = (shed: string | null, loomNo: number) => {
-    const scoped = shed ? beamsByLoom.get(`${shed}|${loomNo}`) : undefined;
-    return scoped && scoped.length ? scoped : beamsByLoomNo.get(loomNo) ?? [];
+    const scoped = (shed ? beamsByLoom.get(`${shed}|${loomNo}`) : undefined) ?? [];
+    const unshedded = (beamsByLoomNo.get(loomNo) ?? []).filter((b) => !b.shed);
+    return [...scoped, ...unshedded];
   };
   const firstBeamForLoom = (shed: string | null, loomNo: number) => beamsForLoom(shed, loomNo)[0];
 
