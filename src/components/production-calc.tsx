@@ -405,7 +405,7 @@ export function HeaderSetFill({
  * input/change so the live calcs and than serials update, and resets
  * FindingPicker displays.
  */
-export function RowErase({ tbodyId, pairTbodyId }: { tbodyId: string; pairTbodyId: string }) {
+export function RowErase({ tbodyId, pairTbodyId }: { tbodyId: string; pairTbodyId?: string }) {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const btn = (e.target as HTMLElement | null)?.closest?.("button[data-row-erase]");
@@ -429,8 +429,10 @@ export function RowErase({ tbodyId, pairTbodyId }: { tbodyId: string; pairTbodyI
         });
       };
       clear(tr as HTMLTableRowElement);
-      const pairRows = document.getElementById(pairTbodyId)?.querySelectorAll("tr");
-      if (pairRows) clear(pairRows[idx] as HTMLTableRowElement);
+      if (pairTbodyId) {
+        const pairRows = document.getElementById(pairTbodyId)?.querySelectorAll("tr");
+        if (pairRows) clear(pairRows[idx] as HTMLTableRowElement);
+      }
     };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
