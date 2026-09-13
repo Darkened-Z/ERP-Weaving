@@ -215,6 +215,16 @@ async function saveKnotting(formData: FormData) {
       const k = `${b.shed ?? ""}|${b.loomNo}`;
       if (wantedLooms.has(k) && !ownBeams.has(b.beamNo)) bail("loom_busy");
     }
+    // Second source: the loom's own pointer. A beam whose beams-row lost its
+    // loom_no still shows up here, so production never gets two beams on one loom.
+    const mounted = await db
+      .select({ loomNo: schema.looms.loomNo, shed: schema.looms.shed, currentBeam: schema.looms.currentBeam })
+      .from(schema.looms)
+      .where(sql`${schema.looms.currentBeam} IS NOT NULL`);
+    for (const lm of mounted) {
+      const k = `${lm.shed ?? ""}|${lm.loomNo}`;
+      if (wantedLooms.has(k) && !ownBeams.has(lm.currentBeam ?? "")) bail("loom_busy");
+    }
   }
 
   const nowIso = new Date().toISOString();
@@ -791,6 +801,7 @@ export default async function KnottingPage({
       statusWrk: schema.looms.statusWrk,
       shed: schema.looms.shed,
       rpm: schema.looms.rpm,
+      currentBeam: schema.looms.currentBeam,
     })
     .from(schema.looms)
     .orderBy(
@@ -798,34 +809,65 @@ export default async function KnottingPage({
       sql`CASE WHEN ${schema.looms.statusWrk} = 'RUNNING' THEN 1 ELSE 0 END`,
       schema.looms.loomNo,
     );
-  // Looms already carrying a mounted beam are not on offer — one loom, one beam.
-  // This voucher's own looms stay listed so editing it never loses them.
+  // One loom, one beam. From the moment a beam is knotted onto a loom the loom
+  // is occupied — production runs on it, roll after roll, until the LAST ROLL
+  // (L-ROLL) is posted and both loom and beam are freed. So the loom must be
+  // off the pick list until then. Occupancy is read from three sources because
+  // older rows may miss one: the beam's loom_no, the loom's current_beam, and
+  // any saved knotting line whose beam has not gone EMPTY.
   const beamsOnLooms = await db
     .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
     .from(schema.beams)
     .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) <> 'EMPTY'`);
-  const busyLooms = new Set(beamsOnLooms.map((b) => `${b.shed ?? ""}|${b.loomNo}`));
-  const thisBillLooms = new Set(
-    lines.map((l) => (l.shdHash && l.lmHash ? `${l.shdHash}|${l.lmHash}` : "")).filter(Boolean),
-  );
-  const loomPickerRows = loomRows
-    .filter((lm) => {
-      const k = `${lm.shed}|${lm.loomNo}`;
-      return !busyLooms.has(k) || thisBillLooms.has(k);
+  const knottedLooms = await db
+    .select({
+      beamNo: schema.intKnottingSarningLine.beamNo,
+      shed: schema.intKnottingSarningLine.shdHash,
+      loomNo: schema.intKnottingSarningLine.lmHash,
+      status: schema.beams.statusWrk,
     })
-    .map((lm) => ({
+    .from(schema.intKnottingSarningLine)
+    .leftJoin(schema.beams, eq(schema.beams.beamNo, schema.intKnottingSarningLine.beamNo))
+    .where(sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY')`);
+  const busyLooms = new Map<string, string>();
+  for (const b of beamsOnLooms) busyLooms.set(`${b.shed ?? ""}|${b.loomNo}`, b.beamNo);
+  for (const lm of loomRows) if (lm.currentBeam) busyLooms.set(`${lm.shed ?? ""}|${lm.loomNo}`, lm.currentBeam);
+  for (const k of knottedLooms) busyLooms.set(`${k.shed ?? ""}|${k.loomNo}`, k.beamNo ?? "");
+
+  const loomRowOf = (lm: (typeof loomRows)[number]) => ({
     value: `${lm.shed}|${lm.loomNo}`,
     // Reads "Shed 1 — Loom 24" once picked; the value still carries both.
     code: `Shed ${lm.shed}`,
     description: `Loom ${lm.loomNo}`,
-    filterKey: lm.shed,
+    filterKey: lm.shed ?? "",
     cells: {
       shed: lm.shed,
       loomNo: lm.loomNo,
       rpm: lm.rpm ?? "",
       status: lm.statusWrk ?? "",
     },
-  }));
+  });
+  const allLoomPickerRows = loomRows.map(loomRowOf);
+  const freeLoomPickerRows = allLoomPickerRows.filter((r) => !busyLooms.has(r.value));
+  // The exemption is per LINE, not per bill: an already-saved line keeps its own
+  // loom in its own list so it still reads "Shed 1 — Loom 7", while every other
+  // row of the same bill sees only free looms. Bill-wide it was possible to add
+  // a second row on a loom row 1 already held.
+  const loomPickerRowsFor = (l?: { shdHash?: string | null; lmHash?: string | null }) => {
+    const own = l?.shdHash && l?.lmHash ? `${l.shdHash}|${l.lmHash}` : "";
+    if (!own || freeLoomPickerRows.some((r) => r.value === own)) return freeLoomPickerRows;
+    const ownRow =
+      allLoomPickerRows.find((r) => r.value === own) ??
+      {
+        value: own,
+        code: `Shed ${l?.shdHash}`,
+        description: `Loom ${l?.lmHash}`,
+        filterKey: l?.shdHash ?? "",
+        cells: { shed: l?.shdHash, loomNo: l?.lmHash, rpm: "", status: "" },
+      };
+    return [ownRow, ...freeLoomPickerRows];
+  };
+  const loomPickerRows = allLoomPickerRows;
   const loomCols = [
     { key: "shed", label: "Shed", width: 80 },
     { key: "loomNo", label: "Loom No", width: 80 },
@@ -1302,7 +1344,7 @@ export default async function KnottingPage({
                               <FindingPicker
                                 name="lm_hash"
                                 defaultValue={l?.lmHash ? `${l?.shdHash ?? ""}|${l?.lmHash}` : ""}
-                                rows={loomPickerRows}
+                                rows={loomPickerRowsFor(l)}
                                 columns={loomCols}
                                 title="LOOM LIST"
                                 placeholder="F9 loom"
