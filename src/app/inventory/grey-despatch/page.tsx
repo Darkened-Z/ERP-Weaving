@@ -23,7 +23,6 @@ export const dynamic = "force-dynamic";
 
 const VTYPE = "GDP";
 
-const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -1252,82 +1251,43 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
+            {/* Owner: F.T Weave, L.B/Mtr, Brk Code, Supervisor, Brkg Per Mtr,
+                %age, Comm, Loom Type, Bill No/Date/Status are off the form. They
+                stay as hidden inputs so a saved voucher keeps its values through
+                an edit; the DB columns are untouched. */}
             <div className="grid grid-cols-12 gap-3 mb-3 gform">
-              <div className="col-span-2">
-                <label className="label block mb-1">F.T Weave</label>
-                <input name="ft_weave" className="input-box mono text-[12px]" defaultValue={formItem?.ftWeave ?? ""} />
-              </div>
-              <input type="hidden" name="design_no" defaultValue={formItem?.designNo ?? ""} />
-              <div className="col-span-2">
-                <label className="label block mb-1">L.B/Mtr</label>
-                <input name="lb_mtr" type="number" step="any" className="input-box mono text-[12px] text-right" defaultValue={formItem?.lbMtr ?? ""} />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">
-                  Brk Code <span className="text-[9px] text-[var(--muted)]">F9</span>
-                </label>
-                <Combobox name="enc_code" options={partyOpts} defaultValue={formItem?.encCode ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">Supervisor</label>
-                <input name="supervisor" list="supervisors-list" className="input-box mono text-[12px]" defaultValue={formItem?.supervisor ?? ""} />
-              </div>
-              <div className="col-span-2">
-                <label className="label block mb-1">Brkg Per Mtr</label>
-                <input name="brkg_per_mtr" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.brkgPerMtr ?? ""} />
-              </div>
-              <div className="col-span-1">
-                <label className="label block mb-1">%age</label>
-                <input name="age_percent" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.agePercent ?? ""} />
-              </div>
-              <div className="col-span-1">
-                <label className="label block mb-1">Comm</label>
-                <input name="comm" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.comm ?? ""} />
-              </div>
-              <div className="col-span-5">
+              <div className="col-span-4">
                 <label className="label block mb-1">Product Brand</label>
                 <input name="product_brand" list="gd-brands" className="input-box mono text-[12px]" defaultValue={formItem?.productBrand ?? ""} />
               </div>
-
-              <div className="col-span-3">
-                <label className="label block mb-1">Loom Type</label>
-                <select name="loom_type" className="input-box mono text-[12px]" defaultValue={formItem?.loomType ?? ""}>
-                  <option value="">—</option>
-                  {LOOM_TYPES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
-                  {formItem?.loomType && !LOOM_TYPES.includes(formItem.loomType) && (
-                    <option value={formItem.loomType}>{formItem.loomType}</option>
-                  )}
-                </select>
-              </div>
-              <div className="col-span-3">
+              <div className="col-span-4">
                 <label className="label block mb-1">Blend</label>
                 <input name="blend" list="gd-blends" className="input-box mono text-[12px]" defaultValue={formItem?.blend ?? ""} />
               </div>
-              <div className="col-span-3">
-                <label className="label block mb-1">Gray Code</label>
-                <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
-              </div>
-              <div className="col-span-3">
+              <div className="col-span-4">
                 <label className="label block mb-1">Width</label>
                 <input name="width" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.width ?? ""} />
               </div>
-
-              <div className="col-span-12">
+              <div className="col-span-6">
+                <label className="label block mb-1">Gray Code</label>
+                <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
+              </div>
+              <div className="col-span-6">
                 <label className="label block mb-1">Remarks</label>
                 <input name="remarks" className="input-box text-[12px]" defaultValue={formItem?.remarks ?? ""} />
               </div>
-              <div className="col-span-4">
-                <label className="label block mb-1">Bill No</label>
-                <input name="bill_no" className="input-box mono text-[12px]" defaultValue={formItem?.billNo ?? ""} />
-              </div>
-              <div className="col-span-4">
-                <label className="label block mb-1">Bill Date</label>
-                <input name="bill_date" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.billDate ?? ""} />
-              </div>
-              <div className="col-span-4">
-                <label className="label block mb-1">Billing Status</label>
-                <input name="billing_status" className="input-box mono text-[12px]" defaultValue={formItem?.billingStatus ?? ""} />
-              </div>
+              <input type="hidden" name="design_no" defaultValue={formItem?.designNo ?? ""} />
+              <input type="hidden" name="ft_weave" defaultValue={formItem?.ftWeave ?? ""} />
+              <input type="hidden" name="lb_mtr" defaultValue={formItem?.lbMtr ?? ""} />
+              <input type="hidden" name="enc_code" defaultValue={formItem?.encCode ?? ""} />
+              <input type="hidden" name="supervisor" defaultValue={formItem?.supervisor ?? ""} />
+              <input type="hidden" name="brkg_per_mtr" defaultValue={formItem?.brkgPerMtr ?? ""} />
+              <input type="hidden" name="age_percent" defaultValue={formItem?.agePercent ?? ""} />
+              <input type="hidden" name="comm" defaultValue={formItem?.comm ?? ""} />
+              <input type="hidden" name="loom_type" defaultValue={formItem?.loomType ?? ""} />
+              <input type="hidden" name="bill_no" defaultValue={formItem?.billNo ?? ""} />
+              <input type="hidden" name="bill_date" defaultValue={formItem?.billDate ?? ""} />
+              <input type="hidden" name="billing_status" defaultValue={formItem?.billingStatus ?? ""} />
             </div>
 
             <div className="border border-black">

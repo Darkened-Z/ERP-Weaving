@@ -145,11 +145,6 @@ export default async function DailyProductionPage({
     }
   }
 
-  const productList = await db
-    .select({ code: schema.products.code, description: schema.products.description })
-    .from(schema.products)
-    .orderBy(schema.products.code);
-  const productOpts = productList.map((p) => ({ value: String(p.code), label: `${p.code} — ${p.description}` }));
 
   const constructionList = await db
     .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description, width: schema.greyConstruction.width })
@@ -594,7 +589,9 @@ export default async function DailyProductionPage({
     foldingStockCalc = Number(prodSumRow[0]?.s ?? 0) - Number(despSumRow[0]?.s ?? 0);
   }
 
-  // LV.No display = last saved max lvNo across all vouchers.
+  // LV.No = the voucher's own ledger number. A new voucher shows the one it is
+  // about to take (max + 1), the same way V.No shows upcomingVNo — it used to
+  // show MAX(lvNo) and nothing ever assigned it, so every voucher saved 0.
   const lvRow = await db
     .select({ m: sql<number>`COALESCE(MAX(${schema.intDailyProduction.lvNo}),0)` })
     .from(schema.intDailyProduction);
@@ -1084,9 +1081,13 @@ export default async function DailyProductionPage({
             if (dupRows.some((r) => !!r.mm)) throw new Error("DUP_THAN");
           }
 
+          const lvRows = await tx
+            .select({ lv: schema.intDailyProduction.lvNo })
+            .from(schema.intDailyProduction);
+          const nextLv = lvRows.reduce((m, r) => Math.max(m, r.lv ?? 0), 0) + 1;
           const inserted = await tx
             .insert(schema.intDailyProduction)
-            .values({ ...header, vNo, postedDate: nowIso })
+            .values({ ...header, vNo, lvNo: nextLv, postedDate: nowIso })
             .returning({ id: schema.intDailyProduction.id });
           const insertedId = inserted[0].id;
           if (validSets.length) {
@@ -1416,7 +1417,7 @@ export default async function DailyProductionPage({
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">LV.No</label>
-                    <input name="lvNo" type="number" step="1" className="input-box mono bg-gray-100" defaultValue={editing?.lvNo ?? maxLvNo} readOnly tabIndex={-1} />
+                    <input name="lvNo" type="number" step="1" className="input-box mono bg-gray-100" defaultValue={editing?.lvNo ?? maxLvNo + 1} readOnly tabIndex={-1} />
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Time</label>
@@ -1431,10 +1432,6 @@ export default async function DailyProductionPage({
                     <input className="input-box mono bg-gray-100 text-[12px]" defaultValue={editing?.modifiedDate?.slice(0, 10) ?? ""} readOnly tabIndex={-1} />
                   </div>
 
-                  <div className="md:col-span-2">
-                    <label className="label block mb-1">Shed No</label>
-                    <input name="shedNo" list="dp-sheds" className="input-box mono" defaultValue={editing?.shedNo ?? ""} />
-                  </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Folding Stock</label>
                     <input
@@ -1485,18 +1482,22 @@ export default async function DailyProductionPage({
                     <label className="label block mb-1">Remarks</label>
                     <input name="remarks" className="input-box" defaultValue={editing?.remarks ?? ""} />
                   </div>
-                  <div className="md:col-span-3">
-                    <label className="label block mb-1">Bill No</label>
-                    <input name="billNo" className="input-box mono" defaultValue={editing?.billNo ?? ""} />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="label block mb-1">Bill Date</label>
-                    <input name="billDate" type="date" className="input-box mono" defaultValue={editing?.billDate ?? ""} />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="label block mb-1">Billing Status</label>
-                    <input name="billingStatus" className="input-box mono" defaultValue={editing?.billingStatus ?? ""} />
-                  </div>
+                  {/* Owner: Shed No, Bill No/Date/Status and the SHIFT INCHARGE +
+                      CODES sections are off the form. Kept as hidden inputs so a
+                      saved voucher does not lose them on an edit. */}
+                  <input type="hidden" name="shedNo" defaultValue={editing?.shedNo ?? ""} />
+                  <input type="hidden" name="billNo" defaultValue={editing?.billNo ?? ""} />
+                  <input type="hidden" name="billDate" defaultValue={editing?.billDate ?? ""} />
+                  <input type="hidden" name="billingStatus" defaultValue={editing?.billingStatus ?? ""} />
+                  <input type="hidden" name="shiftInchargeTm" defaultValue={editing?.shiftInchargeTm ?? ""} />
+                  <input type="hidden" name="shiftInchargePm" defaultValue={editing?.shiftInchargePm ?? ""} />
+                  <input type="hidden" name="shiftInchargeA" defaultValue={editing?.shiftInchargeA ?? ""} />
+                  <input type="hidden" name="shiftInchargeB" defaultValue={editing?.shiftInchargeB ?? ""} />
+                  <input type="hidden" name="shiftInchargeC" defaultValue={editing?.shiftInchargeC ?? ""} />
+                  <input type="hidden" name="noOfWidths" defaultValue={editing?.noOfWidths ?? ""} />
+                  <input type="hidden" name="prodCode" defaultValue={editing?.prodCode ?? ""} />
+                  <input type="hidden" name="lotNo" defaultValue={editing?.lotNo ?? ""} />
+                  <input type="hidden" name="torOwn" defaultValue={editing?.torOwn ?? ""} />
                 </div>
                 <div className="text-[10px] text-[var(--muted)] mt-3 mono">
                   ALT-E to edit next section. F9 opens LOV on Loom# / Design#.
@@ -1733,92 +1734,6 @@ export default async function DailyProductionPage({
                     </div>
                   </div>
 
-                  <div className="border border-black p-4">
-                    <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">SHIFT INCHARGE</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-3 gform">
-                      <div>
-                        <label className="label block mb-1">TM</label>
-                        <select name="shiftInchargeTm" className="input-box mono" defaultValue={editing?.shiftInchargeTm ?? ""}>
-                          <option value=""></option>
-                          <option value="TEC">TEC</option>
-                          <option value="MANAGER">MANAGER</option>
-                          <option value="S14">S14</option>
-                          <option value="S12">S12</option>
-                          <option value="S13">S13</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label block mb-1">PM</label>
-                        <select name="shiftInchargePm" className="input-box mono" defaultValue={editing?.shiftInchargePm ?? ""}>
-                          <option value=""></option>
-                          <option value="TEC">TEC</option>
-                          <option value="MANAGER">MANAGER</option>
-                          <option value="S14">S14</option>
-                          <option value="S12">S12</option>
-                          <option value="S13">S13</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label block mb-1">A (1)</label>
-                        <select name="shiftInchargeA" className="input-box mono" defaultValue={editing?.shiftInchargeA ?? ""}>
-                          <option value=""></option>
-                          <option value="TEC">TEC</option>
-                          <option value="MANAGER">MANAGER</option>
-                          <option value="S14">S14</option>
-                          <option value="S12">S12</option>
-                          <option value="S13">S13</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label block mb-1">B (2)</label>
-                        <select name="shiftInchargeB" className="input-box mono" defaultValue={editing?.shiftInchargeB ?? ""}>
-                          <option value=""></option>
-                          <option value="TEC">TEC</option>
-                          <option value="MANAGER">MANAGER</option>
-                          <option value="S14">S14</option>
-                          <option value="S12">S12</option>
-                          <option value="S13">S13</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label block mb-1">C (3)</label>
-                        <select name="shiftInchargeC" className="input-box mono" defaultValue={editing?.shiftInchargeC ?? ""}>
-                          <option value=""></option>
-                          <option value="TEC">TEC</option>
-                          <option value="MANAGER">MANAGER</option>
-                          <option value="S14">S14</option>
-                          <option value="S12">S12</option>
-                          <option value="S13">S13</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border border-black p-4">
-                    <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">CODES</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-3 gform">
-                      <div>
-                        <label className="label block mb-1">No of widths</label>
-                        <input name="noOfWidths" type="number" step="1" className="input-box mono text-right" defaultValue={editing?.noOfWidths ?? ""} />
-                      </div>
-                      <div>
-                        <label className="label block mb-1">Prd Code</label>
-                        <Combobox name="prodCode" options={productOpts} defaultValue={editing?.prodCode ?? ""} className="input-box mono" placeholder="Select product" />
-                      </div>
-                      <div>
-                        <label className="label block mb-1">Lot#</label>
-                        <input name="lotNo" className="input-box mono" defaultValue={editing?.lotNo ?? ""} />
-                      </div>
-                      <div>
-                        <label className="label block mb-1">TOR OWN</label>
-                        <select name="torOwn" className="input-box mono" defaultValue={editing?.torOwn ?? ""}>
-                          <option value=""></option>
-                          <option value="TOR">TOR</option>
-                          <option value="OWN">OWN</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
