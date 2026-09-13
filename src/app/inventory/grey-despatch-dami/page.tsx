@@ -357,30 +357,23 @@ export default async function GreyDespatchDamiPage({
 
               {/* Row 2: Purchase Party, Cont No */}
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-6">
+                <div className="col-span-12">
                   <label className="label block mb-1">Purchase Party</label>
                   <input name="purchase_party" className="input-box" defaultValue={formItem?.purchaseParty ?? ""} placeholder="Type party name..." />
                 </div>
-                <div className="col-span-3">
-                  <label className="label block mb-1">Cont #</label>
-                  <input name="cont_no" className="input-box mono" defaultValue={formItem?.contNo ?? ""} />
-                </div>
-                <div className="col-span-3">
-                  <label className="label block mb-1">Term</label>
-                  <input name="term" className="input-box" defaultValue={formItem?.term ?? ""} placeholder="CASH / CREDIT" />
-                </div>
+                {/* Cont # + Term removed from the form; kept as hidden inputs so an
+                    old voucher does not lose those values on edit. */}
+                <input type="hidden" name="cont_no" defaultValue={formItem?.contNo ?? ""} />
+                <input type="hidden" name="term" defaultValue={formItem?.term ?? ""} />
               </div>
 
-              {/* Row 3: Sale Party, Sub Party */}
+              {/* Row 3: Sale Party only. Sub Party removed. */}
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-6">
+                <div className="col-span-12">
                   <label className="label block mb-1">Sale Party</label>
                   <input name="sale_party" className="input-box" defaultValue={formItem?.saleParty ?? ""} placeholder="Sale party name..." />
                 </div>
-                <div className="col-span-6">
-                  <label className="label block mb-1">Sub Party</label>
-                  <input name="sub_party" className="input-box" defaultValue={formItem?.subParty ?? ""} placeholder="Sub party / buyer name..." />
-                </div>
+                <input type="hidden" name="sub_party" defaultValue={formItem?.subParty ?? ""} />
               </div>
 
               {/* Row 4: DSP Quality (Grey Construction) */}
@@ -416,44 +409,34 @@ export default async function GreyDespatchDamiPage({
                 </div>
               </div>
 
-              {/* Row 6: Than, Mtrs (auto-calculated), Rate */}
+              {/* Row 6: Than + Meter (both auto). Rate / Rate Per / Rate Sal removed.
+                  The three rate fields stay as hidden inputs so any existing values
+                  survive an edit. */}
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-2">
+                <div className="col-span-6">
                   <label className="label block mb-1">Than (auto)</label>
                   <input id="dami-than" name="than" type="number" className="input-box mono text-right bg-blue-50" defaultValue={formItem?.than ?? ""} readOnly />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-6">
                   <label className="label block mb-1">Meter (auto)</label>
                   <input id="dami-mtrs" name="mtrs" type="number" step="any" className="input-box mono text-right bg-blue-50" defaultValue={formItem?.mtrs ?? ""} readOnly />
                 </div>
-                <div className="col-span-2">
-                  <label className="label block mb-1">Rate</label>
-                  <input name="rate" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.rate ?? ""} />
-                </div>
-                <div className="col-span-2">
-                  <label className="label block mb-1">Rate Per</label>
-                  <input name="rate_per" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.ratePer ?? ""} />
-                </div>
-                <div className="col-span-2">
-                  <label className="label block mb-1">Rate Sal</label>
-                  <input name="rate_sal" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.rateSal ?? ""} />
-                </div>
+                <input type="hidden" name="rate" defaultValue={formItem?.rate ?? ""} />
+                <input type="hidden" name="rate_per" defaultValue={formItem?.ratePer ?? ""} />
+                <input type="hidden" name="rate_sal" defaultValue={formItem?.rateSal ?? ""} />
               </div>
 
-              {/* Row 7: Printing Name / Location */}
+              {/* Row 7: Printing Name / Location. Broker Name removed. */}
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-3">
+                <div className="col-span-4">
                   <label className="label block mb-1">Printing Name</label>
                   <input name="printing_name" className="input-box" defaultValue={formItem?.printingName ?? ""} placeholder="GHIDY" />
                 </div>
-                <div className="col-span-5">
+                <div className="col-span-8">
                   <label className="label block mb-1">Printing Location</label>
                   <input name="printing_location" className="input-box" defaultValue={formItem?.printingLocation ?? ""} placeholder="GHOSIA DYING LAHORE" />
                 </div>
-                <div className="col-span-4">
-                  <label className="label block mb-1">Broker Name</label>
-                  <input name="broker_name" className="input-box" defaultValue={formItem?.brokerName ?? ""} />
-                </div>
+                <input type="hidden" name="broker_name" defaultValue={formItem?.brokerName ?? ""} />
               </div>
 
               {/* Row 8: Remarks */}
@@ -514,21 +497,15 @@ export default async function GreyDespatchDamiPage({
 
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[12px] mb-3">
                   <div><span className="text-[var(--muted)]">Purchase Party: </span><b>{formItem.purchaseParty ?? "—"}</b></div>
-                  <div><span className="text-[var(--muted)]">Cont #: </span><b>{formItem.contNo ?? "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Sale Party: </span><b>{formItem.saleParty ?? "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Sal Date: </span><b>{formItem.salDate ?? "—"}</b></div>
-                  <div className="col-span-2"><span className="text-[var(--muted)]">Sub Party (Buyer): </span><b>{formItem.subParty ?? "—"}</b></div>
                   <div className="col-span-2"><span className="text-[var(--muted)]">Dsp. Quality: </span><b>{formItem.dspQuality}{formItem.dspQualityDesc ? ` | ${formItem.dspQualityDesc}` : ""}</b></div>
                   <div><span className="text-[var(--muted)]">Product: </span><b>{formItem.product}{formItem.productDesc ? ` | ${formItem.productDesc}` : ""}</b></div>
                   <div><span className="text-[var(--muted)]">Width: </span><b>{formItem.width ? `${formItem.width}"` : "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Than: </span><b className="text-[var(--accent)]">{formatNum(formItem.than)}</b></div>
                   <div><span className="text-[var(--muted)]">Meter: </span><b className="text-[var(--accent)]">{formatNum(formItem.mtrs)}</b></div>
-                  <div><span className="text-[var(--muted)]">Rate Per: </span><b>{formatNum(formItem.ratePer)}</b></div>
-                  <div><span className="text-[var(--muted)]">Rate Sal: </span><b>{formatNum(formItem.rateSal)}</b></div>
                   <div><span className="text-[var(--muted)]">Printing Name: </span><b>{formItem.printingName ?? "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Printing Location: </span><b>{formItem.printingLocation ?? "—"}</b></div>
-                  <div><span className="text-[var(--muted)]">Term: </span><b>{formItem.term ?? "—"}</b></div>
-                  <div><span className="text-[var(--muted)]">Broker: </span><b>{formItem.brokerName ?? "—"}</b></div>
                   {formItem.remarks && <div className="col-span-2"><span className="text-[var(--muted)]">Remarks: </span><b>{formItem.remarks}</b></div>}
                 </div>
 
