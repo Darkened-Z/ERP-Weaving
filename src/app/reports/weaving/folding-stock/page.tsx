@@ -77,18 +77,36 @@ export default async function FoldingStockPage({
     loomsByContract.set(b.contractNo, arr);
   }
 
-  const [prodOpen, prodPer, despOpen, despPer, rejPer] = await Promise.all([prodSum(true), prodSum(false), despSum(true), despSum(false), rejSum()]);
+  const [prodOpen, prodPer, despOpen, despPer, rejPer, invOpen] = await Promise.all([
+    prodSum(true),
+    prodSum(false),
+    despSum(true),
+    despSum(false),
+    rejSum(),
+    // Manually-entered opening lots (Inventory Opening → Grey Lots Open Stock)
+    // are keyed to a conversion contract via conv_cont_no; sum their qty for the
+    // OPENING column so what the operator seeds shows up straight away.
+    db
+      .select({
+        cont: schema.inventoryOpening.convContNo,
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.inventoryOpening.openingQty},0)),0)`,
+      })
+      .from(schema.inventoryOpening)
+      .where(and(eq(schema.inventoryOpening.itemType, "GREY"), eq(schema.inventoryOpening.status, "A")))
+      .groupBy(schema.inventoryOpening.convContNo),
+  ]);
   const toMap = (rows: { cont: string | null; s: number }[]) => {
     const m = new Map<string, number>();
     for (const r of rows) if (r.cont) m.set(r.cont, Number(r.s ?? 0));
     return m;
   };
   const prodOpenM = toMap(prodOpen), prodPerM = toMap(prodPer), despOpenM = toMap(despOpen), despPerM = toMap(despPer), rejPerM = toMap(rejPer);
+  const invOpenM = toMap(invOpen);
 
   type Row = { contNo: string; party: string; quality: string; designNo: string; opening: number; production: number; rejection: number; despatch: number; total: number; balance: number; looms: string[] };
   const rows: Row[] = contracts
     .map((c) => {
-      const opening = (prodOpenM.get(c.contNo) ?? 0) - (despOpenM.get(c.contNo) ?? 0);
+      const opening = (invOpenM.get(c.contNo) ?? 0) + (prodOpenM.get(c.contNo) ?? 0) - (despOpenM.get(c.contNo) ?? 0);
       const production = prodPerM.get(c.contNo) ?? 0;
       const rejection = rejPerM.get(c.contNo) ?? 0;
       const despatch = despPerM.get(c.contNo) ?? 0;
