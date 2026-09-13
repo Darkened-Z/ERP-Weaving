@@ -964,9 +964,28 @@ export default async function DailyProductionPage({
           // beams the new grid dropped back to EMPTY (no history to restore to).
           for (const s of validSets) {
             if (!s.beamNo || !s.beamStatus) continue;
-            const patch: { statusWrk: string; loomNo?: number | null } = { statusWrk: s.beamStatus };
-            if (s.beamStatus.toUpperCase() === "EMPTY") patch.loomNo = null;
+            // L-ROLL is the LAST roll — the beam is finished, so it comes off the
+            // loom exactly like EMPTY and the loom is free for the next knotting.
+            // (F-ROLL / R-CUT / RE-KNOT are mid-run and keep the beam mounted.)
+            const done = ["EMPTY", "L-ROLL"].includes(s.beamStatus.toUpperCase());
+            const patch: { statusWrk: string; loomNo?: number | null } = {
+              statusWrk: done ? "EMPTY" : s.beamStatus,
+            };
+            if (done) patch.loomNo = null;
+            const [was] = done
+              ? await tx
+                  .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+                  .from(schema.beams)
+                  .where(eq(schema.beams.beamNo, s.beamNo))
+                  .limit(1)
+              : [undefined];
             await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
+            if (done && was?.shed && was.loomNo != null) {
+              await tx
+                .update(schema.looms)
+                .set({ statusWrk: "S", currentBeam: null, currentContract: null })
+                .where(and(eq(schema.looms.loomNo, was.loomNo), eq(schema.looms.shed, was.shed)));
+            }
           }
           const newBeams = new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b));
           // Beams the new grid dropped: revert to the knotting mount (KNOTTING)
@@ -1077,9 +1096,28 @@ export default async function DailyProductionPage({
           }
           for (const s of validSets) {
             if (!s.beamNo || !s.beamStatus) continue;
-            const patch: { statusWrk: string; loomNo?: number | null } = { statusWrk: s.beamStatus };
-            if (s.beamStatus.toUpperCase() === "EMPTY") patch.loomNo = null;
+            // L-ROLL is the LAST roll — the beam is finished, so it comes off the
+            // loom exactly like EMPTY and the loom is free for the next knotting.
+            // (F-ROLL / R-CUT / RE-KNOT are mid-run and keep the beam mounted.)
+            const done = ["EMPTY", "L-ROLL"].includes(s.beamStatus.toUpperCase());
+            const patch: { statusWrk: string; loomNo?: number | null } = {
+              statusWrk: done ? "EMPTY" : s.beamStatus,
+            };
+            if (done) patch.loomNo = null;
+            const [was] = done
+              ? await tx
+                  .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+                  .from(schema.beams)
+                  .where(eq(schema.beams.beamNo, s.beamNo))
+                  .limit(1)
+              : [undefined];
             await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
+            if (done && was?.shed && was.loomNo != null) {
+              await tx
+                .update(schema.looms)
+                .set({ statusWrk: "S", currentBeam: null, currentContract: null })
+                .where(and(eq(schema.looms.loomNo, was.loomNo), eq(schema.looms.shed, was.shed)));
+            }
           }
           // Auto "last roll → EMPTY" (see update path for rationale). No-ops
           // until beam length is set.
