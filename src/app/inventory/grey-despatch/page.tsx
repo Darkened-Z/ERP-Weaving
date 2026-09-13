@@ -128,6 +128,11 @@ export default async function GreyDespatchPage({
       (ucCountFillMap[String(c.countCode)] ??= {})[`uc_type_${i}`] = c.type ?? "";
     }
   }
+  // Server-side backstop so an old row (countDescription blank in the DB) still
+  // renders the description, and so a code typed by hand — without ever picking
+  // the datalist option — still shows its description on reload.
+  const descByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
+  const typeByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.type ?? ""]));
 
   // Grey construction master → GreyQualityPicker rows + count labels (Oracle FINDING GREY QUALITY parity).
   const greyList = await db
@@ -602,8 +607,15 @@ export default async function GreyDespatchPage({
         }
         for (let i = 1; i <= maxCountIdx; i++) {
           const countCode = txt(formData.get(`uc_code_${i}`));
-          const countDescription = txt(formData.get(`uc_desc_${i}`));
-          const type = txt(formData.get(`uc_type_${i}`));
+          let countDescription = txt(formData.get(`uc_desc_${i}`));
+          let ucTypeVal = txt(formData.get(`uc_type_${i}`));
+          if (countCode && !countDescription) {
+            countDescription = descByCode.get(String(countCode)) ?? countDescription;
+          }
+          if (countCode && !ucTypeVal) {
+            ucTypeVal = typeByCode.get(String(countCode)) ?? ucTypeVal;
+          }
+          const type = ucTypeVal;
           const calCount = num(formData.get(`uc_cal_${i}`));
           const ends = intVal(formData.get(`uc_ends_${i}`));
           const ratePerLbs = num(formData.get(`uc_rate_${i}`));
@@ -1324,10 +1336,10 @@ export default async function GreyDespatchPage({
                             <input name={`uc_code_${i}`} list="gd-yarn-counts" className={gCls} defaultValue={r?.countCode ?? ""} style={{ width: 60 }} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                            <input name={`uc_desc_${i}`} className={gCls} defaultValue={r?.countDescription ?? ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
+                            <input name={`uc_desc_${i}`} className={gCls} defaultValue={r?.countDescription || descByCode.get(String(r?.countCode ?? "")) || ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                            <input name={`uc_type_${i}`} className={gCls} defaultValue={r?.type ?? ""} />
+                            <input name={`uc_type_${i}`} className={gCls} defaultValue={r?.type || typeByCode.get(String(r?.countCode ?? "")) || ""} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                             <input name={`uc_cal_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.calCount ?? ""} />
