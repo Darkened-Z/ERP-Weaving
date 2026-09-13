@@ -726,13 +726,15 @@ export default async function DailyProductionPage({
       const rm = num(rcvdMtrArr[i]);
       const df = num(diffArr[i]);
       const sh = num(shrinkageArr[i]);
-      // A row counts only when it carries something beyond its serial: row 1's
-      // serial is pre-filled before anything is typed, so a serial alone must not
-      // write a blank production row.
+      // A row counts only when it carries something of its own. Two fields are
+      // NOT substance: the pre-filled than serial, and contNo — the contract is
+      // stamped across the grid, so a blank row still carries it. Counting contNo
+      // saved a blank row per grid slot, which then re-rendered with the contract
+      // still on it and saved itself again on every edit.
       const hasSubstance =
         !!setHash || aC != null || bC != null || cC != null || cpC != null || ppc != null ||
         tc != null || rc != null || !!bsn || !!kt || !!kd || !!bs || ww != null || !!bn ||
-        !!cn || en != null || bl != null || rm != null || df != null || sh != null;
+        en != null || bl != null || rm != null || df != null || sh != null;
       if (!hasSubstance) continue;
       // Server-authoritative total: Total = A + B + C + CP + PPC. Any manually
       // typed totalCount is discarded — the client shows it as a readonly cell.
