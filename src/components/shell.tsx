@@ -110,6 +110,7 @@ const SECTIONS = [
           { href: "/reports/weaving/counts-accounts-design", label: "Counts Accounts by Design", key: "w-counts-design" },
           { href: "/reports/weaving/counts-accounts-summary", label: "Counts Accounts Summary", key: "w-counts-sum" },
           { href: "/reports/weaving/production-date-wise", label: "Production Date Wise", key: "w-prod-date-wise" },
+          { href: "/reports/weaving/delivery-order-partywise", label: "Grey Delivery Order Party Wise", key: "w-do-partywise" },
           { href: "/reports/weaving/daily-folding", label: "Daily Folding", key: "w-daily-folding" },
           { href: "/reports/weaving/folding-stock", label: "Daily Folding Stock", key: "w-folding-stock" },
           { href: "/reports/weaving/folding-fabric", label: "Folding by Fabric Quality", key: "w-folding-fabric" },
