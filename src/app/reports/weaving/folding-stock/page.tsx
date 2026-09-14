@@ -13,13 +13,24 @@ export const dynamic = "force-dynamic";
 export default async function FoldingStockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; party?: string; status?: string; zero?: string }>;
 }) {
   const p = await searchParams;
   const from = p.from?.trim() || sixMonthsAgo();
   const to = p.to?.trim() || todayIso();
+  // Oracle's parameter form: Short Title picks the weaving party, Status is
+  // R/C/F with "none picked" meaning ALL, and W.Z / W.O.Z decides whether rows
+  // that are zero right across are printed or dropped.
+  const partyQ = p.party?.trim() || "";
+  const statusQ = (p.status?.trim() || "").toUpperCase();
+  const withZero = p.zero === "1";
 
-  const contracts = (await loadConvContracts())
+  const allContracts = await loadConvContracts();
+  const partyOpts = [...new Set(allContracts.map((c) => c.party).filter((x): x is string => !!x))].sort();
+  const contracts = allContracts
+    .filter((c) => (partyQ ? c.party === partyQ : true))
+    // No status picked = ALL, exactly as the Oracle form behaves.
+    .filter((c) => (statusQ ? (c.status ?? "").toUpperCase() === statusQ : true))
     .map((c) => ({ contNo: c.contNo, party: c.party, quality: c.productQuality, productName: c.productName, designNo: c.designNo }))
     .sort((a, b) => (a.party ?? "").localeCompare(b.party ?? "") || a.contNo.localeCompare(b.contNo));
 
@@ -120,8 +131,9 @@ export default async function FoldingStockPage({
         opening, production, rejection, despatch, total, balance: total - despatch,
       };
     })
-    // Only contracts with any movement or balance.
-    .filter((r) => r.opening || r.production || r.despatch || r.rejection);
+    // W.O.Z keeps every contract; W.Z (the default, matching the Oracle button
+    // the mill actually uses) drops contracts with nothing on any column.
+    .filter((r) => withZero || r.opening || r.production || r.despatch || r.rejection);
 
   const byParty = new Map<string, Row[]>();
   for (const r of rows) (byParty.get(r.party) ?? byParty.set(r.party, []).get(r.party)!).push(r);
@@ -140,6 +152,9 @@ export default async function FoldingStockPage({
             <h1 className="page-title">Daily Folding Stock</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
               Opening + Production − Despatch = Balance, per conversion contract · {from} to {to}
+              {partyQ ? ` · ${partyQ}` : ""}
+              {statusQ ? ` · ${{ R: "Running", C: "Closed", F: "Finishing" }[statusQ] ?? statusQ}` : " · All statuses"}
+              {withZero ? " · with zero" : " · without zero"}
             </p>
           </div>
           <div className="flex items-end gap-2">
@@ -151,6 +166,31 @@ export default async function FoldingStockPage({
               <div>
                 <label className="label block mb-1">To</label>
                 <input type="date" name="to" defaultValue={to} className="input-box mono" />
+              </div>
+              <div>
+                <label className="label block mb-1">Short Title (Party)</label>
+                <select name="party" defaultValue={partyQ} className="input-box mono" style={{ minWidth: 200 }}>
+                  <option value="">All parties</option>
+                  {partyOpts.map((x) => (
+                    <option key={x} value={x}>{x}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label block mb-1">Status</label>
+                <select name="status" defaultValue={statusQ} className="input-box mono" style={{ minWidth: 110 }}>
+                  <option value="">All</option>
+                  <option value="R">Running</option>
+                  <option value="C">Closed</option>
+                  <option value="F">Finishing</option>
+                </select>
+              </div>
+              <div>
+                <label className="label block mb-1">Zeros</label>
+                <select name="zero" defaultValue={withZero ? "1" : "0"} className="input-box mono" style={{ minWidth: 130 }}>
+                  <option value="0">W.Z — without zero</option>
+                  <option value="1">W.O.Z — with zero</option>
+                </select>
               </div>
               <button className="btn btn-sm">View</button>
             </form>
@@ -171,13 +211,14 @@ export default async function FoldingStockPage({
                 <th className="text-right">Total</th>
                 <th className="text-right">Despatch</th>
                 <th className="text-right">Balance</th>
+                <th className="text-right">Tot.Lm</th>
                 <th>Loom#</th>
                 <th className="no-print"></th>
               </tr>
             </thead>
             <tbody>
               {groups.length === 0 ? (
-                <tr><td colSpan={11} className="text-center text-[var(--muted)] py-8">No folding stock movement in this period.</td></tr>
+                <tr><td colSpan={12} className="text-center text-[var(--muted)] py-8">No folding stock movement in this period.</td></tr>
               ) : (
                 groups.flatMap(([party, prs]) => {
                   const sub = prs.reduce(
@@ -186,7 +227,7 @@ export default async function FoldingStockPage({
                   );
                   return [
                     <tr key={`h-${party}`} style={{ background: "#0f172a", color: "white" }}>
-                      <td colSpan={11} className="mono font-bold text-[12px] px-2 py-1">{party}</td>
+                      <td colSpan={12} className="mono font-bold text-[12px] px-2 py-1">{party}</td>
                     </tr>,
                     ...prs.map((r) => (
                       <tr key={`${party}-${r.contNo}`}>
@@ -199,6 +240,7 @@ export default async function FoldingStockPage({
                         <td className="mono text-right">{fmt(r.total)}</td>
                         <td className="mono text-right">{fmt(r.despatch)}</td>
                         <td className="mono text-right font-bold">{fmt(r.balance)}</td>
+                        <td className="mono text-right">{r.looms.length || ""}</td>
                         <td className="text-[10px] mono">
                           {r.looms.map((l) => (
                             <span key={l} style={{ display: "inline-block", border: "1px solid #aaa", borderRadius: 2, padding: "0 3px", margin: "1px", background: "#f8fafc" }}>{l}</span>
@@ -218,6 +260,7 @@ export default async function FoldingStockPage({
                       <td className="mono text-right">{fmt(sub.despatch)}</td>
                       <td className="mono text-right">{fmt(sub.balance)}</td>
                       <td></td>
+                      <td></td>
                       <td className="no-print"></td>
                     </tr>,
                   ];
@@ -234,6 +277,7 @@ export default async function FoldingStockPage({
                   <td className="mono text-right">{fmt(grand.opening + grand.production)}</td>
                   <td className="mono text-right">{fmt(grand.despatch)}</td>
                   <td className="mono text-right">{fmt(grand.balance)}</td>
+                  <td></td>
                   <td></td>
                   <td className="no-print"></td>
                 </tr>
