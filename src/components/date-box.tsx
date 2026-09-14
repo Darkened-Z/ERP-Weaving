@@ -94,12 +94,15 @@ export function DateBox({
   };
 
   return (
-    <span className="relative block" style={{ minWidth: 132 }}>
+    // flex, not block: around an inline input a block wrapper also inherits the
+    // line-box descender, so the field's height moved with the font and knocked
+    // it out of line with its neighbours in the `items-end` filter bars.
+    <span className="relative flex" style={{ minWidth: 132 }}>
       <input type="hidden" ref={hiddenRef} name={name} value={iso} readOnly />
       <input
         id={id}
         title={title}
-        className={`${className} pr-7`}
+        className={`${className} pr-7 w-full min-w-0`}
         value={text}
         placeholder="DD/MM/YYYY"
         inputMode="numeric"
@@ -135,14 +138,20 @@ export function DateBox({
           }
         }}
       />
-      {/* A visible calendar glyph so the picker is findable — the operator
-          should never have to type a date by hand. The native control sits
-          transparent on top of it and opens the OS picker on click. */}
+      {/* A visible calendar mark so the picker is findable — the operator should
+          never have to type a date by hand. Drawn as an SVG rather than an emoji:
+          an emoji falls back to whatever font the OS has, and on some machines
+          that glyph is taller than the input, which pushed the whole field out of
+          line with its neighbours. An SVG has fixed metrics everywhere. The
+          native control sits transparent on top and opens the OS picker. */}
       <span
         aria-hidden
-        className="absolute right-0 top-0 h-full w-7 flex items-center justify-center text-[13px] text-[var(--muted)] pointer-events-none"
+        className="absolute right-0 top-0 h-full w-7 flex items-center justify-center text-[var(--muted)] pointer-events-none"
       >
-        📅
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <rect x="1.5" y="3" width="13" height="11.5" rx="1" />
+          <path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" />
+        </svg>
       </span>
       <input
         type={NATIVE_DATE}
