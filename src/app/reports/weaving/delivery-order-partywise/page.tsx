@@ -114,9 +114,12 @@ export default async function DeliveryOrderPartyWisePage({
     const cid = idByCont.get(c.contNo);
     const w = cid == null ? "" : warp.find((r) => r.contractId === cid)?.descr ?? "";
     const f = cid == null ? "" : weft.find((r) => r.contractId === cid)?.descr ?? "";
+    // Oracle prints it as {read}X{pick}/{warp}X{weft}"{width}, e.g.
+    // 124X88/36/S PV  PV 90;10X36/S PV  PV 90;10"61
     const rp = c.read != null && c.pick != null ? `${c.read}X${c.pick}` : "";
-    const yarn = w && f ? `${w} BY ${f}` : w || f;
-    countDescByCont.set(c.contNo, [rp, yarn].filter(Boolean).join("  "));
+    const yarn = w && f ? `${w}X${f}` : w || f;
+    const wid = c.width != null ? `"${c.width}` : "";
+    countDescByCont.set(c.contNo, `${rp}${rp && yarn ? "/" : ""}${yarn}${wid}`);
   }
 
   type Row = {

@@ -971,8 +971,19 @@ export const extGreySalContract = sqliteTable("ext_grey_sal_contract", {
   brokagPerBag: real("brokag_per_bag"),
   perMtr: real("per_mtr"),
   greyCode: text("grey_code"),
+  construction: text("construction"),
   weave: text("weave"),
   salvage: text("salvage"),
+  // Woven construction + the costing chain under the warp/weft grids:
+  // warp cost + weft cost + conversion + selvage = total cost rate per metre.
+  read: integer("read"),
+  pick: integer("pick"),
+  width: real("width"),
+  warpCostPerMtr: real("warp_cost_per_mtr"),
+  weftCostPerMtr: real("weft_cost_per_mtr"),
+  convCalculate: real("conv_calculate"),
+  selvageRate: real("selvage_rate"),
+  totalCostRate: real("total_cost_rate"),
   quantityMtr: real("quantity_mtr"),
   ratePerMtr: real("rate_per_mtr"),
   amount: real("amount"),
@@ -1001,6 +1012,40 @@ export const extGreySalContractDelivery = sqliteTable("ext_grey_sal_contract_del
   location: text("location"),
 }, (t) => ({
   ixContract: index("ix_ext_gscd_contract").on(t.contractId),
+}));
+
+// Grey SALE contract warp/weft settings — same shape as the conversion
+// contract's, so a sale contract can carry the woven construction too.
+export const extGreySalContractWarp = sqliteTable("ext_grey_sal_contract_warp", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extGreySalContract.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  count: text("count"),
+  descr: text("descr"),
+  brand: text("brand"),
+  calCount: real("cal_count"),
+  ends: integer("ends"),
+  wtPerMtr: real("wt_per_mtr"),
+  ratePerLbs: real("rate_per_lbs"),
+  costPerMtr: real("cost_per_mtr"),
+}, (t) => ({
+  ixContract: index("ix_ext_gscw_contract").on(t.contractId),
+}));
+
+export const extGreySalContractWeft = sqliteTable("ext_grey_sal_contract_weft", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contractId: integer("contract_id").notNull().references(() => extGreySalContract.id, { onDelete: "cascade" }),
+  srNo: integer("sr_no").notNull(),
+  count: text("count"),
+  descr: text("descr"),
+  brand: text("brand"),
+  calCount: real("cal_count"),
+  ends: integer("ends"),
+  wtPerMtr: real("wt_per_mtr"),
+  ratePerLbs: real("rate_per_lbs"),
+  costPerMtr: real("cost_per_mtr"),
+}, (t) => ({
+  ixContract: index("ix_ext_gscf_contract").on(t.contractId),
 }));
 
 export const extGreyConvContract = sqliteTable("ext_grey_conv_contract", {
