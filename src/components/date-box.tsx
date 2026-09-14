@@ -97,7 +97,10 @@ export function DateBox({
     // flex, not block: around an inline input a block wrapper also inherits the
     // line-box descender, so the field's height moved with the font and knocked
     // it out of line with its neighbours in the `items-end` filter bars.
-    <span className="relative flex" style={{ minWidth: 132 }}>
+    // min() on the width: it wants room for DD/MM/YYYY plus the button, but must
+    // never exceed its container - a flat 132px overflowed the narrow label-left
+    // .gform cells on a phone and pushed the page sideways.
+    <span className="relative flex" style={{ minWidth: "min(132px, 100%)" }}>
       <input type="hidden" ref={hiddenRef} name={name} value={iso} readOnly />
       <input
         id={id}
