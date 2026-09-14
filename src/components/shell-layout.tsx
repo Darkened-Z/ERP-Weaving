@@ -73,11 +73,7 @@ export function ShellLayout({
         </div>
       </aside>
 
-      {/* min-w-0: a flex item defaults to min-width:auto and so cannot shrink
-          below its content. The wide line-item grids inside then pushed main
-          past the viewport and the whole page scrolled sideways on a phone,
-          instead of the grids scrolling inside their own overflow-x wrappers. */}
-      <main className="flex-1 min-w-0 lg:ml-56">
+      <main className="flex-1 lg:ml-56">
         <div className="sticky top-0 z-30 bg-white border-b border-[var(--border-light)] px-4 py-3 flex items-center gap-3 lg:hidden">
           <button
             onClick={() => setOpen(true)}
