@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
+import { DateBox } from "@/components/date-box";
 export const dynamic = "force-dynamic";
 
 const fmt = new Intl.NumberFormat("en-PK");
@@ -113,12 +114,7 @@ export default async function StockPage({
               {hideZero && <input type="hidden" name="nz" value="1" />}
               <div>
                 <label className="label block mb-1">As Of</label>
-                <input
-                  name="asOf"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={asOfDate ?? ""}
-                />
+                <DateBox name="asOf" className="input-box mono" defaultValue={asOfDate ?? ""} />
               </div>
               {locationList.length > 0 && (
                 <div>

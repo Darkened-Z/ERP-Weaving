@@ -14,6 +14,7 @@ import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -587,13 +588,7 @@ export default async function CashReceiptPage({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Date</label>
-                <input
-                  name="v_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formVoucher?.vdate ?? today()}
-                  required
-                />
+                <DateBox name="v_date" className="input-box mono" defaultValue={formVoucher?.vdate ?? today()} required />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Time</label>
@@ -642,21 +637,11 @@ export default async function CashReceiptPage({
 
               <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Due Date</label>
-                <input
-                  name="due_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formVoucher?.dueDate ?? ""}
-                />
+                <DateBox name="due_date" className="input-box mono" defaultValue={formVoucher?.dueDate ?? ""} />
               </div>
               <div className="lg:col-span-2 hidden">
                 <label className="label block mb-1">Exp.Date</label>
-                <input
-                  name="exp_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formVoucher?.expDate ?? ""}
-                />
+                <DateBox name="exp_date" className="input-box mono" defaultValue={formVoucher?.expDate ?? ""} />
               </div>
               <div className="lg:col-span-4">
                 <label className="label block mb-1">Cash A/C (contra — debited)</label>
@@ -759,12 +744,7 @@ export default async function CashReceiptPage({
                             />
                           </td>
                           <td>
-                            <input
-                              name="line_chq_date"
-                              type="date"
-                              className="input-box mono text-[12px]"
-                              defaultValue={l?.chqDate ?? ""}
-                            />
+                            <DateBox name="line_chq_date" className="input-box mono text-[12px]" defaultValue={l?.chqDate ?? ""} />
                           </td>
                           <td>
                             <input

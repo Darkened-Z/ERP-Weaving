@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { fmt, fmt2, sixMonthsAgo, todayIso } from "../../_shared";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -209,11 +210,11 @@ export default async function GreyConvBillKpPpPage({
         >
           <div>
             <label className="label block mb-1">From</label>
-            <input type="date" name="from" defaultValue={from} className="input-box mono" />
+            <DateBox name="from" defaultValue={from} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">To</label>
-            <input type="date" name="to" defaultValue={to} className="input-box mono" />
+            <DateBox name="to" defaultValue={to} className="input-box mono" />
           </div>
           <div className="flex items-end gap-2 sm:col-span-2">
             <button type="submit" className="btn btn-sm">

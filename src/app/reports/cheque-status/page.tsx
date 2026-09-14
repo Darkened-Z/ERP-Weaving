@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { and, eq, gte, lte, isNotNull } from "drizzle-orm";
 import { today } from "@/lib/time";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -155,11 +156,11 @@ export default async function ChequeStatusPage({
           <form method="GET" className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
             <div className="sm:col-span-3">
               <label className="label block mb-1">Date From</label>
-              <input type="date" name="from" className="input-box mono" defaultValue={dateFrom} />
+              <DateBox name="from" className="input-box mono" defaultValue={dateFrom} />
             </div>
             <div className="sm:col-span-3">
               <label className="label block mb-1">Date To</label>
-              <input type="date" name="to" className="input-box mono" defaultValue={dateTo} />
+              <DateBox name="to" className="input-box mono" defaultValue={dateTo} />
             </div>
             <div className="sm:col-span-4">
               <label className="label block mb-1">Status</label>

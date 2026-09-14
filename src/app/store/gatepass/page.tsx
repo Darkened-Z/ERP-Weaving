@@ -17,6 +17,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, txt } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -649,13 +650,7 @@ export default async function GatepassPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Date</label>
-                  <input
-                    name="return_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.returnDate ?? today()}
-                    required
-                  />
+                  <DateBox name="return_date" className="input-box mono" defaultValue={formItem?.returnDate ?? today()} required />
                 </div>
                 <div>
                   <label className="label block mb-1">Department</label>

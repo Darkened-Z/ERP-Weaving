@@ -7,6 +7,7 @@ import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { txt } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -230,23 +231,11 @@ export default async function CompanyProfilePage({
                     </div>
                     <div>
                       <label className="label block mb-1">FY Start *</label>
-                      <input
-                        name="fyStart"
-                        type="date"
-                        className="input-box mono"
-                        defaultValue={profile?.fyStart ?? ""}
-                        required
-                      />
+                      <DateBox name="fyStart" className="input-box mono" defaultValue={profile?.fyStart ?? ""} required />
                     </div>
                     <div>
                       <label className="label block mb-1">FY End *</label>
-                      <input
-                        name="fyEnd"
-                        type="date"
-                        className="input-box mono"
-                        defaultValue={profile?.fyEnd ?? ""}
-                        required
-                      />
+                      <DateBox name="fyEnd" className="input-box mono" defaultValue={profile?.fyEnd ?? ""} required />
                     </div>
                   </div>
                 </div>

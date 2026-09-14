@@ -6,6 +6,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { txt } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -261,12 +262,7 @@ export default async function LockingPage({
                 </div>
                 <div className="md:col-span-2">
                   <label className="label block mb-1">Locked Through</label>
-                  <input
-                    name="lockedThrough"
-                    type="date"
-                    className="input-box mono"
-                    required
-                  />
+                  <DateBox name="lockedThrough" className="input-box mono" required />
                 </div>
                 <div className="md:col-span-4">
                   <label className="label block mb-1">Remarks</label>

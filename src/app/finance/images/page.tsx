@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { and, eq, gte, lte, isNotNull, ne, desc } from "drizzle-orm";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -337,11 +338,11 @@ export default async function ImagesPage({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3">
             <div className="lg:col-span-2">
               <label className="label block mb-1">Date From</label>
-              <input name="from" type="date" className="input-box mono" defaultValue={from} />
+              <DateBox name="from" className="input-box mono" defaultValue={from} />
             </div>
             <div className="lg:col-span-2">
               <label className="label block mb-1">Date To</label>
-              <input name="to" type="date" className="input-box mono" defaultValue={to} />
+              <DateBox name="to" className="input-box mono" defaultValue={to} />
             </div>
             <div className="lg:col-span-3">
               <label className="label block mb-1">Voucher Type</label>

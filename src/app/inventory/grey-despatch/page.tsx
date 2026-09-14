@@ -18,6 +18,7 @@ import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -1131,7 +1132,7 @@ export default async function GreyDespatchPage({
             <div className="grid grid-cols-12 gap-3 mb-2 gform">
               <div className="col-span-2">
                 <label className="label block mb-1">Date</label>
-                <input name="v_date" type="date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
+                <DateBox name="v_date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
               </div>
               <div className="col-span-1">
                 <label className="label block mb-1">Time</label>
@@ -1290,11 +1291,11 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Date From</label>
-                    <input name="date_from" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.dateFrom ?? "2020-11-01"} />
+                    <DateBox name="date_from" className="input-box mono text-[12px]" defaultValue={formItem?.dateFrom ?? "2020-11-01"} />
                   </div>
                   <div>
                     <label className="label block mb-1">Date To</label>
-                    <input name="date_to" type="date" className="input-box mono text-[12px]" defaultValue={formItem?.dateTo ?? today()} />
+                    <DateBox name="date_to" className="input-box mono text-[12px]" defaultValue={formItem?.dateTo ?? today()} />
                   </div>
                 </div>
                 <div className="flex items-end gap-2 pt-1">

@@ -4,6 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
 import { today } from "@/lib/time";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -164,21 +165,11 @@ export default async function LedgerPage({
             </div>
             <div className="sm:col-span-2">
               <label className="label block mb-1">Date From</label>
-              <input
-                type="date"
-                name="from"
-                className="input-box mono"
-                defaultValue={dateFrom}
-              />
+              <DateBox name="from" className="input-box mono" defaultValue={dateFrom} />
             </div>
             <div className="sm:col-span-2">
               <label className="label block mb-1">Date To</label>
-              <input
-                type="date"
-                name="to"
-                className="input-box mono"
-                defaultValue={dateTo}
-              />
+              <DateBox name="to" className="input-box mono" defaultValue={dateTo} />
             </div>
             <div className="sm:col-span-2">
               <label className="label block mb-1">V.Type</label>

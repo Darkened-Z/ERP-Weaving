@@ -17,6 +17,7 @@ import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { num, intVal, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -604,13 +605,7 @@ export default async function GreySalesContractPage({
               <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Contract Date</label>
-                  <input
-                    name="contract_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.contractDate ?? todayVal}
-                    required
-                  />
+                  <DateBox name="contract_date" className="input-box mono" defaultValue={formItem?.contractDate ?? todayVal} required />
                 </div>
                 <div>
                   <label className="label block mb-1">Contract No</label>
@@ -646,12 +641,7 @@ export default async function GreySalesContractPage({
               <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Exp. Date</label>
-                  <input
-                    name="exp_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.expDate ?? ""}
-                  />
+                  <DateBox name="exp_date" className="input-box mono" defaultValue={formItem?.expDate ?? ""} />
                 </div>
                 <div>
                   <label className="label block mb-1">Status</label>
@@ -826,12 +816,7 @@ export default async function GreySalesContractPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Ext. Date</label>
-                  <input
-                    name="ext_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.extDate ?? ""}
-                  />
+                  <DateBox name="ext_date" className="input-box mono" defaultValue={formItem?.extDate ?? ""} />
                 </div>
                 <div>
                   <label className="label block mb-1">GST Rate</label>

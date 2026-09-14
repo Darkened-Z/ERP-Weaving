@@ -14,6 +14,7 @@ import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { num, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -478,13 +479,7 @@ export default async function GreyPurchaseContractPage({
               <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Contract Date</label>
-                  <input
-                    name="contract_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.contractDate ?? todayVal}
-                    required
-                  />
+                  <DateBox name="contract_date" className="input-box mono" defaultValue={formItem?.contractDate ?? todayVal} required />
                 </div>
                 <div>
                   <label className="label block mb-1">Contract No</label>
@@ -520,12 +515,7 @@ export default async function GreyPurchaseContractPage({
               <div className="grid grid-cols-4 gap-3 mb-3 gform">
                 <div>
                   <label className="label block mb-1">Exp. Date</label>
-                  <input
-                    name="exp_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.expDate ?? ""}
-                  />
+                  <DateBox name="exp_date" className="input-box mono" defaultValue={formItem?.expDate ?? ""} />
                 </div>
                 <div>
                   <label className="label block mb-1">Status</label>
@@ -700,12 +690,7 @@ export default async function GreyPurchaseContractPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Ext. Date</label>
-                  <input
-                    name="ext_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.extDate ?? ""}
-                  />
+                  <DateBox name="ext_date" className="input-box mono" defaultValue={formItem?.extDate ?? ""} />
                 </div>
                 <div>
                   <label className="label block mb-1">GST Rate</label>
@@ -791,12 +776,7 @@ export default async function GreyPurchaseContractPage({
                       <tr key={`d-${d.id}`}>
                         <td className="mono text-[12px] text-[var(--muted)]">{i + 1}</td>
                         <td>
-                          <input
-                            name={`del_date_${i}`}
-                            type="date"
-                            className="input-box mono text-[13px]"
-                            defaultValue={d.deliveryDate ?? ""}
-                          />
+                          <DateBox name={`del_date_${i}`} className="input-box mono text-[13px]" defaultValue={d.deliveryDate ?? ""} />
                         </td>
                         <td>
                           <input
@@ -834,12 +814,7 @@ export default async function GreyPurchaseContractPage({
                         <tr key={`e-${idx}`}>
                           <td className="mono text-[12px] text-[var(--muted)]">{idx + 1}</td>
                           <td>
-                            <input
-                              name={`del_date_${idx}`}
-                              type="date"
-                              className="input-box mono text-[13px]"
-                              defaultValue=""
-                            />
+                            <DateBox name={`del_date_${idx}`} className="input-box mono text-[13px]" defaultValue="" />
                           </td>
                           <td>
                             <input

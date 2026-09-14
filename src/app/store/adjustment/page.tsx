@@ -15,6 +15,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -542,13 +543,7 @@ export default async function AdjustmentPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Date</label>
-                  <input
-                    name="adj_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.adjDate ?? today()}
-                    required
-                  />
+                  <DateBox name="adj_date" className="input-box mono" defaultValue={formItem?.adjDate ?? today()} required />
                 </div>
                 <div>
                   <label className="label block mb-1">Type</label>

@@ -5,6 +5,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { today as todayFn, monthsAgo } from "@/lib/time";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -156,11 +157,11 @@ export default async function GreyStockPage({
         >
           <div>
             <label className="label block mb-1">Date From</label>
-            <input type="date" name="from" defaultValue={from} className="input-box mono" />
+            <DateBox name="from" defaultValue={from} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Date To</label>
-            <input type="date" name="to" defaultValue={to} className="input-box mono" />
+            <DateBox name="to" defaultValue={to} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Dsp. Quality</label>

@@ -17,6 +17,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, txt } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -630,13 +631,7 @@ export default async function DemandPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Date</label>
-                  <input
-                    name="demand_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.demandDate ?? today()}
-                    required
-                  />
+                  <DateBox name="demand_date" className="input-box mono" defaultValue={formItem?.demandDate ?? today()} required />
                 </div>
                 <div>
                   <label className="label block mb-1">Department</label>

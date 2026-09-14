@@ -12,6 +12,7 @@ import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { num, intVal, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -426,13 +427,7 @@ export default async function GreyTransferPage({
               <div className="p-4 grid grid-cols-12 gap-3 gform">
                 <div className="col-span-3">
                   <label className="label block mb-1">V. Date</label>
-                  <input
-                    name="v_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formTransfer?.vDate ?? today()}
-                    required
-                  />
+                  <DateBox name="v_date" className="input-box mono" defaultValue={formTransfer?.vDate ?? today()} required />
                 </div>
                 <div className="col-span-3">
                   <label className="label block mb-1">Grey Type</label>

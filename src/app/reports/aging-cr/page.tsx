@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
 import { today } from "@/lib/time";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -156,7 +157,7 @@ export default async function AgingCreditorsPage({
           <form method="GET" className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
             <div className="sm:col-span-4">
               <label className="label block mb-1">As of Date</label>
-              <input type="date" name="asof" className="input-box mono" defaultValue={asOf} />
+              <DateBox name="asof" className="input-box mono" defaultValue={asOf} />
             </div>
             <div className="sm:col-span-2">
               <button type="submit" className="btn btn-sm w-full">View</button>

@@ -16,6 +16,7 @@ import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -1029,13 +1030,7 @@ export default async function KnottingPage({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Date</label>
-                  <input
-                    name="v_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formBill?.vDate ?? today()}
-                    required
-                  />
+                  <DateBox name="v_date" className="input-box mono" defaultValue={formBill?.vDate ?? today()} required />
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Warp Contnoyy</label>
@@ -1047,12 +1042,7 @@ export default async function KnottingPage({
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Find Date</label>
-                  <input
-                    name="find_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formBill?.findDate ?? ""}
-                  />
+                  <DateBox name="find_date" className="input-box mono" defaultValue={formBill?.findDate ?? ""} />
                 </div>
                 <div className="lg:col-span-1 flex items-end">
                   {formBill ? (
@@ -1200,12 +1190,7 @@ export default async function KnottingPage({
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Bill Date</label>
-                  <input
-                    name="bill_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formBill?.billDate ?? ""}
-                  />
+                  <DateBox name="bill_date" className="input-box mono" defaultValue={formBill?.billDate ?? ""} />
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Billing Allowed</label>
@@ -1332,20 +1317,10 @@ export default async function KnottingPage({
                               />
                             </td>
                             <td>
-                              <input
-                                name="issue_date"
-                                type="date"
-                                className="input-box mono text-[12px]"
-                                defaultValue={l?.issueDate ?? ""}
-                              />
+                              <DateBox name="issue_date" className="input-box mono text-[12px]" defaultValue={l?.issueDate ?? ""} />
                             </td>
                             <td>
-                              <input
-                                name="k_date"
-                                type="date"
-                                className="input-box mono text-[12px]"
-                                defaultValue={l?.kDate ?? headerVDate}
-                              />
+                              <DateBox name="k_date" className="input-box mono text-[12px]" defaultValue={l?.kDate ?? headerVDate} />
                             </td>
                             <td>
                               {/* Shd# column removed (owner): the beam pick used to

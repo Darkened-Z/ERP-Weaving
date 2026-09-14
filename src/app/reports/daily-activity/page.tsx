@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { sql, eq } from "drizzle-orm";
 import { today } from "@/lib/time";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -83,12 +84,7 @@ export default async function DailyActivityPage({
           <label className="label" style={{ marginBottom: 0 }}>
             Date
           </label>
-          <input
-            type="date"
-            name="date"
-            defaultValue={date}
-            className="input-box mono"
-          />
+          <DateBox name="date" defaultValue={date} className="input-box mono" />
           <button type="submit" className="btn btn-sm">
             Filter
           </button>

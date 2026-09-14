@@ -8,6 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -332,11 +333,11 @@ export default async function InventoryOpeningPage({
                 <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Date</label>
-                    <input name="entry_date" type="date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
+                    <DateBox name="entry_date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">DO Date</label>
-                    <input name="do_date" type="date" className="input-box mono" defaultValue={formItem?.doDate ?? ""} />
+                    <DateBox name="do_date" className="input-box mono" defaultValue={formItem?.doDate ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">DO/Bilty No</label>
@@ -447,7 +448,7 @@ export default async function InventoryOpeningPage({
                 <div className="grid grid-cols-4 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Date</label>
-                    <input name="entry_date" type="date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
+                    <DateBox name="entry_date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">V.No</label>
@@ -595,7 +596,7 @@ export default async function InventoryOpeningPage({
                 <div className="grid grid-cols-5 gap-x-4 gform">
                   <div>
                     <label className="label block mb-1">Date</label>
-                    <input name="entry_date" type="date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
+                    <DateBox name="entry_date" className="input-box mono" defaultValue={formItem?.entryDate ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">V. No</label>

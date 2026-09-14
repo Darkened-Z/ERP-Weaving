@@ -16,6 +16,7 @@ import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
 import { num, intVal, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -967,13 +968,7 @@ export default async function PackiParchiPage({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
               <div className="lg:col-span-2">
                 <label className="label block mb-1">V. Date</label>
-                <input
-                  name="v_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formItem?.vDate ?? today()}
-                  required
-                />
+                <DateBox name="v_date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">V.No</label>
@@ -1052,12 +1047,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-1 hidden">
                 <label className="label block mb-1">PP. Date</label>
-                <input
-                  name="pp_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formItem?.ppDate ?? ""}
-                />
+                <DateBox name="pp_date" className="input-box mono" defaultValue={formItem?.ppDate ?? ""} />
               </div>
 
               <div className="lg:col-span-6">
@@ -1555,12 +1545,7 @@ export default async function PackiParchiPage({
                 style={{ display: formItem?.termSal === "DUE" ? undefined : "none" }}
               >
                 <label className="label block mb-1">Due Date</label>
-                <input
-                  name="due_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formItem?.dueDate ?? ""}
-                />
+                <DateBox name="due_date" className="input-box mono" defaultValue={formItem?.dueDate ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Alt-S Password</label>

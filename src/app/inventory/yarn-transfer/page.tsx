@@ -18,6 +18,7 @@ import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike, round } from "@/lib/form";
 import { yarnStockGodownDesc, godownLocationOpts, partyCountRateMap } from "@/lib/godowns";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -519,7 +520,7 @@ export default async function YarnTransferPage({
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                       <div className="md:col-span-3">
                         <label className="label block mb-1">Date</label>
-                        <input name="vDate" type="date" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
+                        <DateBox name="vDate" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
                       </div>
                       <div className="md:col-span-2">
                         <label className="label block mb-1">Type</label>

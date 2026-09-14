@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { sql, and, gte, lte } from "drizzle-orm";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -120,21 +121,11 @@ export default async function LoomEfficiencyPage({
             <form method="GET" action="" className="space-y-3">
               <div>
                 <label className="label block mb-1">From</label>
-                <input
-                  type="date"
-                  name="from"
-                  defaultValue={from ?? ""}
-                  className="input-box mono"
-                />
+                <DateBox name="from" defaultValue={from ?? ""} className="input-box mono" />
               </div>
               <div>
                 <label className="label block mb-1">To</label>
-                <input
-                  type="date"
-                  name="to"
-                  defaultValue={to ?? ""}
-                  className="input-box mono"
-                />
+                <DateBox name="to" defaultValue={to ?? ""} className="input-box mono" />
               </div>
               <button type="submit" className="btn btn-sm w-full justify-center">
                 Apply

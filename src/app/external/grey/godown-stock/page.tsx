@@ -17,6 +17,7 @@ import { normQuality as gqNormQuality, countLabelMap, richConstruction as gqRich
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { num, intVal, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -1016,13 +1017,7 @@ export default async function GodownStockPage({
                 <div className="grid grid-cols-12 gap-x-2 gap-y-2 gform">
                   <div className="col-span-2">
                     <label className="label block mb-1">V. Date</label>
-                    <input
-                      name="v_date"
-                      type="date"
-                      className="input-box mono"
-                      defaultValue={formStock?.vDate ?? today()}
-                      required
-                    />
+                    <DateBox name="v_date" className="input-box mono" defaultValue={formStock?.vDate ?? today()} required />
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">KP No</label>
