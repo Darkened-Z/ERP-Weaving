@@ -500,10 +500,20 @@ export function DespatchAmountCalc({
       set("gst", gst ? String(gst) : "");
       set("further", further ? String(further) : "");
       set("amt_tot", total ? String(total) : "");
+      // Update Count: TOT LBS = wt/mtr x qty mtrs, Amount = TOT LBS x rate/lbs,
+      // and the grand total under the grid is the sum of those amounts. Amount
+      // used to be a blank box the operator had to work out by hand.
+      let ucAmtTotal = 0;
       for (let i = 1; i <= countRows; i++) {
         const wt = num(`uc_wt_${i}`);
-        set(`uc_tot_${i}`, wt && qtyMtrs ? String(round(wt * qtyMtrs, 2)) : "");
+        const totLbs = wt && qtyMtrs ? round(wt * qtyMtrs, 2) : 0;
+        set(`uc_tot_${i}`, totLbs ? String(totLbs) : "");
+        const rate = num(`uc_rate_${i}`);
+        const amt = totLbs && rate ? round(totLbs * rate, 2) : 0;
+        set(`uc_amt_${i}`, amt ? String(amt) : "");
+        ucAmtTotal += amt;
       }
+      set("uc_amt_tot", ucAmtTotal ? String(round(ucAmtTotal, 2)) : "");
     };
     const onEvt = (e: Event) => {
       const t = e.target as HTMLInputElement | null;
@@ -511,6 +521,7 @@ export function DespatchAmountCalc({
       if (
         t.name.startsWith("line_") ||
         t.name.startsWith("uc_wt_") ||
+        t.name.startsWith("uc_rate_") ||
         t.name === "conv_rate" ||
         t.name === "gst_rate" ||
         t.name === "ftx_rate"
