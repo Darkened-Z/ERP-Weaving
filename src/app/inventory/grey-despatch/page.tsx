@@ -124,14 +124,19 @@ export default async function GreyDespatchPage({
   const ucCountFillMap: Record<string, Record<string, string>> = {};
   for (const c of yarnCountList) {
     for (let i = 1; i <= 12; i++) {
-      (ucCountFillMap[String(c.countCode)] ??= {})[`uc_desc_${i}`] = c.description ?? "";
+      (ucCountFillMap[String(c.countCode)] ??= {})[`uc_desc_${i}`] = [c.description ?? "", c.type ?? ""].filter(Boolean).join(" ");
       (ucCountFillMap[String(c.countCode)] ??= {})[`uc_type_${i}`] = c.type ?? "";
     }
   }
   // Server-side backstop so an old row (countDescription blank in the DB) still
   // renders the description, and so a code typed by hand — without ever picking
   // the datalist option — still shows its description on reload.
-  const descByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.description ?? ""]));
+  // Count Description carries count AND blend ("36/s PV 90;10") — the count alone
+  // does not identify the yarn, and the contract's warp/weft rows spell it the
+  // same way, so the despatch and the contract read alike.
+  const descByCode = new Map(
+    yarnCountList.map((c) => [String(c.countCode), [c.description ?? "", c.type ?? ""].filter(Boolean).join(" ")]),
+  );
   const typeByCode = new Map(yarnCountList.map((c) => [String(c.countCode), c.type ?? ""]));
 
   // Grey construction master → GreyQualityPicker rows + count labels (Oracle FINDING GREY QUALITY parity).
@@ -202,9 +207,40 @@ export default async function GreyDespatchPage({
     .where(eq(schema.extGreyConvContract.status, "R"))
     .orderBy(schema.extGreyConvContract.contNo);
   const contracts = [
-    ...intContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, grayRatePerMtr: c.grayRatePerMtr, contDate: c.contDate, loomType: c.loomType, weaveFrame: c.weaveFrame })),
-    ...extContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, grayRatePerMtr: c.grayRatePerMtr, contDate: c.contDate, loomType: c.loomType, weaveFrame: c.weaveFrame })),
+    ...intContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, grayRatePerMtr: c.grayRatePerMtr, contDate: c.contDate, loomType: c.loomType, weaveFrame: c.weaveFrame, id: c.id, read: c.read, pick: c.pick, grayQltyCode: c.grayQltyCode, external: false })),
+    ...extContracts.map((c) => ({ contNo: c.contNo, party: c.party, convRatePerMtr: c.convRatePerMtr, designNo: c.designNo, grayCode: c.grayCode, width: c.width, productName: c.productName, productQuality: c.productQuality, grayRatePerMtr: c.grayRatePerMtr, contDate: c.contDate, loomType: c.loomType, weaveFrame: c.weaveFrame, id: c.id, read: null, pick: null, grayQltyCode: null, external: true })),
   ];
+
+  // Contract quality line — the woven construction, read straight off the
+  // contract and its warp/weft rows: "<read> X <pick>  <warp descr> - <weft descr>",
+  // e.g. "124 X 88  36/s PV 90;10 - 36/s PV 90;10". The warp/weft descr already
+  // carries count AND blend, which is exactly what the despatch needs to show.
+  const intContractIds = intContracts.map((c) => c.id);
+  const warpRows = intContractIds.length
+    ? await db
+        .select({ contractId: schema.intGreyConversionWarp.contractId, descr: schema.intGreyConversionWarp.descr, srNo: schema.intGreyConversionWarp.srNo })
+        .from(schema.intGreyConversionWarp)
+        .where(inArray(schema.intGreyConversionWarp.contractId, intContractIds))
+        .orderBy(schema.intGreyConversionWarp.srNo)
+    : [];
+  const weftRows = intContractIds.length
+    ? await db
+        .select({ contractId: schema.intGreyConversionWeft.contractId, descr: schema.intGreyConversionWeft.descr, srNo: schema.intGreyConversionWeft.srNo })
+        .from(schema.intGreyConversionWeft)
+        .where(inArray(schema.intGreyConversionWeft.contractId, intContractIds))
+        .orderBy(schema.intGreyConversionWeft.srNo)
+    : [];
+  const firstDescr = (rows: { contractId: number | null; descr: string | null }[], id: number) =>
+    rows.find((r) => r.contractId === id && r.descr)?.descr ?? "";
+  const qualityByCont: Record<string, string> = {};
+  for (const c of contracts) {
+    if (c.external || c.id == null) continue;
+    const warp = firstDescr(warpRows, c.id);
+    const weft = firstDescr(weftRows, c.id);
+    const rp = c.read != null && c.pick != null ? `${c.read} X ${c.pick}` : "";
+    const yarn = warp && weft ? `${warp} - ${weft}` : warp || weft;
+    qualityByCont[c.contNo] = [rp, yarn].filter(Boolean).join("  ");
+  }
   // Owner: contract number first, then what it weaves, party last — a than is
   // picked by quality, so the product has to be readable without opening it.
   // Oracle CONV. CONT LIST: contract, what it is, what it is made of, and both
@@ -238,7 +274,11 @@ export default async function GreyDespatchPage({
       party: c.party ?? "",
       conv_rate: c.convRatePerMtr ?? 1, // Default conv rate = 1 when contract chosen.
       design_no: c.designNo ?? "",
-      grey_code: c.grayCode ?? "",
+      // gray_code is frequently null on the contract while gray_qlty_code carries
+      // the real construction code — fall back to it rather than leaving the
+      // picker on "Select construction".
+      grey_code: c.grayCode ?? c.grayQltyCode ?? "",
+      grey_quality_disp: qualityByCont[c.contNo] ?? "",
       width: c.width ?? "",
       product_brand: c.productName ?? "",
       loom_type: c.loomType ?? "",
@@ -1033,7 +1073,7 @@ export default async function GreyDespatchPage({
               watch="conv_cont_no"
               map={contractFillMap}
               combos={["party"]}
-              inputs={["conv_rate", "grey_code", "width", "product_brand", "loom_type", "ft_weave", "gst_rate", "ftx_rate", "design_no"]}
+              inputs={["conv_rate", "grey_code", "grey_quality_disp", "width", "product_brand", "loom_type", "ft_weave", "gst_rate", "ftx_rate", "design_no"]}
             />
             <input type="hidden" name="qty_mtrs_calc" defaultValue="" />
             <input type="hidden" name="than_qty_calc" defaultValue="" />
@@ -1285,6 +1325,17 @@ export default async function GreyDespatchPage({
                 <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
               </div>
               <div className="col-span-6">
+                <label className="label block mb-1">Quality (from contract)</label>
+                <input
+                  name="grey_quality_disp"
+                  className="input-box mono text-[12px] bg-gray-100"
+                  defaultValue={formItem?.convContNo ? (qualityByCont[formItem.convContNo] ?? "") : ""}
+                  readOnly
+                  tabIndex={-1}
+                  placeholder="124 X 88  36/s PV 90;10 - 36/s PV 90;10"
+                />
+              </div>
+              <div className="col-span-12">
                 <label className="label block mb-1">Remarks</label>
                 <input name="remarks" className="input-box text-[12px]" defaultValue={formItem?.remarks ?? ""} />
               </div>
@@ -1360,7 +1411,7 @@ export default async function GreyDespatchPage({
                             <input name={`uc_tot_${i}`} type="number" step="any" className={`${gCellNum} bg-gray-100`} defaultValue={r?.totLbs ?? ""} readOnly tabIndex={-1} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                            <input name={`uc_amt_${i}`} type="number" step="any" className={gCellNum} defaultValue={r?.amount ?? ""} />
+                            <input name={`uc_amt_${i}`} type="number" step="any" className={`${gCellNum} bg-gray-100`} defaultValue={r?.amount ?? ""} readOnly tabIndex={-1} />
                           </td>
                           <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                             <input name={`uc_typerej_${i}`} className={gCls} defaultValue={r?.typeRej ?? ""} />
@@ -1369,6 +1420,15 @@ export default async function GreyDespatchPage({
                       );
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-black font-semibold">
+                      <td className="px-1 py-1 text-[11px] uppercase tracking-[0.08em]" colSpan={9}>Total</td>
+                      <td className="px-0.5 py-0.5">
+                        <input name="uc_amt_tot" type="number" step="any" className={`${gCellNum} bg-gray-100 font-bold`} readOnly tabIndex={-1} />
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>
