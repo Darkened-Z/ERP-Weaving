@@ -6,10 +6,14 @@ interface LineRow { srNo: number; than: number; mtrs: string; }
 
 interface Props {
   initialLines: LineRow[];
+  /** id of the <form> to submit into. The grid is rendered in a column OUTSIDE
+   *  that form, so without this its hidden inputs are never submitted and every
+   *  piece row is silently dropped on save. */
+  formId?: string;
   onTotalsChange?: (than: number, mtrs: number) => void;
 }
 
-export function DamiLineGrid({ initialLines, onTotalsChange }: Props) {
+export function DamiLineGrid({ initialLines, formId, onTotalsChange }: Props) {
   const [rows, setRows] = useState<LineRow[]>(() =>
     initialLines.length > 0
       ? initialLines
@@ -84,12 +88,12 @@ export function DamiLineGrid({ initialLines, onTotalsChange }: Props) {
   return (
     <div>
       {/* Hidden inputs to submit to form */}
-      <input type="hidden" name="line_count" value={rows.length} />
+      <input type="hidden" form={formId} name="line_count" value={rows.length} />
       {rows.map((r, i) => (
         <React.Fragment key={i}>
-          <input type="hidden" name={`line_sr_${i}`} value={r.srNo} />
-          <input type="hidden" name={`line_than_${i}`} value={r.than} />
-          <input type="hidden" name={`line_mtrs_${i}`} value={r.mtrs} />
+          <input type="hidden" form={formId} name={`line_sr_${i}`} value={r.srNo} />
+          <input type="hidden" form={formId} name={`line_than_${i}`} value={r.than} />
+          <input type="hidden" form={formId} name={`line_mtrs_${i}`} value={r.mtrs} />
         </React.Fragment>
       ))}
 

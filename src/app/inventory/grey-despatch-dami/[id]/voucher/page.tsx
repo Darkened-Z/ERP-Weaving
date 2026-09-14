@@ -51,29 +51,39 @@ export default async function DamiVoucherPage({
     }
   }
 
-  // 4-column grid
-  const colLength = Math.max(1, Math.ceil(pieces.length / 4));
+  // Seven S#/Mtrs pairs across, 25 rows down — the layout of the printed book,
+  // so one voucher of ~87 thans lands on a single page instead of spilling.
+  const COLS = 7;
+  const MIN_ROWS = 25;
+  const colLength = Math.max(MIN_ROWS, Math.ceil(pieces.length / COLS));
   const gridRows: { sNo: number | null; mtrs: number | null }[][] = [];
   for (let r = 0; r < colLength; r++) {
     const row: { sNo: number | null; mtrs: number | null }[] = [];
-    for (let c = 0; c < 4; c++) {
+    for (let c = 0; c < COLS; c++) {
       const idx = c * colLength + r;
       row.push(idx < pieces.length ? pieces[idx] : { sNo: null, mtrs: null });
     }
     gridRows.push(row);
   }
 
-  const colTotals = [0, 0, 0, 0];
-  for (let c = 0; c < 4; c++) {
+  const colTotals = Array.from({ length: COLS }, (_, c) => {
+    let t = 0;
     for (let r = 0; r < colLength; r++) {
       const idx = c * colLength + r;
-      if (idx < pieces.length) colTotals[c] += pieces[idx].mtrs;
+      if (idx < pieces.length) t += pieces[idx].mtrs;
     }
-  }
+    return t;
+  });
 
   let words = numberToWords(totalMtrs, "");
   if (words.startsWith(" ")) words = words.slice(1);
-  if (words) words = "(" + words.charAt(0).toUpperCase() + words.slice(1) + " Meters)";
+  // The book prints "(Nine thousand Four Hundred Eighty-Eight Only.)".
+  if (words) words = "(" + words.charAt(0).toUpperCase() + words.slice(1) + " Only.)";
+
+  const printedAt = new Date().toLocaleString("en-GB", {
+    day: "2-digit", month: "2-digit", year: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  });
 
   return (
     <>
@@ -91,20 +101,26 @@ export default async function DamiVoucherPage({
         .title-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
         .doc-title { font-size: 20pt; font-weight: 700; color: #222; }
         .logo-qr-block { display: flex; align-items: center; gap: 10px; }
-        .meta-section { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; margin-bottom: 12px; }
-        .meta-row { display: flex; align-items: baseline; border-bottom: 1px solid #ddd; padding: 3px 0; margin-bottom: 2px; }
-        .meta-label { font-size: 9pt; color: #555; width: 105px; flex-shrink: 0; }
-        .meta-val { font-weight: 700; font-size: 10pt; text-transform: uppercase; flex: 1; word-break: break-word; }
-        .summary-strip { display: flex; gap: 24px; justify-content: flex-end; margin-bottom: 6px; font-size: 10pt; }
-        .summary-item { display: flex; gap: 6px; align-items: baseline; }
-        .summary-label { color: #555; }
+        .sheet-head { display: flex; justify-content: space-between; font-size: 8pt; color: #444; margin-bottom: 2px; }
+        .meta-section { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 10px; }
+        .meta-stack { flex: 1 1 auto; min-width: 0; }
+        .meta-right { flex: 0 0 auto; text-align: right; min-width: 200px; }
+        .meta-row { display: flex; align-items: baseline; border-bottom: 1px solid #ddd; padding: 2px 0; }
+        /* Fixed label column: without it a long value squeezed the label and the
+           value wrapped one character per line. */
+        .meta-label { font-size: 9pt; color: #555; flex: 0 0 96px; }
+        .meta-val { font-weight: 700; font-size: 10pt; text-transform: uppercase; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .grey-val { font-size: 8.5pt; letter-spacing: -0.2px; }
+        .summary-item { display: flex; gap: 10px; align-items: baseline; justify-content: flex-end; }
+        .summary-label { color: #555; font-size: 9pt; }
         .summary-val { font-weight: 700; font-size: 12pt; }
-        .words-val { font-size: 8.5pt; font-style: italic; text-align: right; margin-bottom: 8px; color: #444; }
+        .words-val { font-size: 8.5pt; font-style: italic; text-align: right; margin-top: 4px; color: #444; }
         table.grid { width: 100%; border-collapse: collapse; border: 1px solid #aaa; margin-top: 6px; }
-        table.grid th, table.grid td { border: 1px solid #bbb; padding: 3px 6px; font-size: 9.5pt; }
+        /* Seven pairs across: tighter cells so the row still fits the sheet. */
+        table.grid th, table.grid td { border: 1px solid #bbb; padding: 1px 3px; font-size: 8pt; }
         table.grid th { background: #e8eef6; color: #1e3a8a; font-weight: 700; text-align: center; }
         table.grid th:nth-child(even) { text-align: right; }
-        table.grid td:nth-child(odd) { text-align: center; color: #555; width: 40px; }
+        table.grid td:nth-child(odd) { text-align: center; color: #555; width: 22px; }
         table.grid td:nth-child(even) { text-align: right; font-weight: 600; }
         .grid-totals td { background: #dce8f8; font-weight: 700 !important; border-top: 2px solid #aaa; }
         .grand-total-row { margin-top: 8px; display: flex; justify-content: flex-end; gap: 32px; font-size: 11pt; font-weight: 700; border-top: 2px solid #333; padding-top: 6px; }
@@ -122,6 +138,12 @@ export default async function DamiVoucherPage({
         </div>
 
         <div className="chalan-page">
+          {/* Print stamp and page marker, the way the book heads each sheet. */}
+          <div className="sheet-head">
+            <span>{printedAt}</span>
+            <span>Page 1 of 1</span>
+          </div>
+
           {/* Title + Logo */}
           <div className="title-row">
             <div className="doc-title">Delivery Voucher</div>
@@ -134,39 +156,41 @@ export default async function DamiVoucherPage({
             </div>
           </div>
 
-          {/* Meta info */}
+          {/* Meta: one left-hand stack exactly as the book lists it, with Than /
+              Meters Tot. and the amount in words on the right. The label column
+              is fixed-width so a value like IGDD-0001 cannot wrap a character
+              per line, which is what the two-column layout used to do. */}
           <div className="meta-section">
-            <div>
-              <div className="meta-row"><span className="meta-label">Book #</span><span className="meta-val">{dami.vNo}</span></div>
+            <div className="meta-stack">
+              <div className="meta-row"><span className="meta-label">Book.#</span><span className="meta-val">{dami.vNo}</span></div>
               <div className="meta-row"><span className="meta-label">Date</span><span className="meta-val">{dami.vDate}</span></div>
-              <div className="meta-row"><span className="meta-label">Party</span><span className="meta-val" style={{ borderBottom: "1px solid #000", flex: 1 }}>{dami.subParty ?? dami.party ?? ""}</span></div>
-              <div className="meta-row"><span className="meta-label">Despatch Loc</span><span className="meta-val" style={{ borderBottom: "1px solid #000", flex: 1 }}>{dami.printingLocation ?? ""}</span></div>
-              <div className="meta-row"><span className="meta-label">Cont #</span><span className="meta-val">{dami.contNo ?? ""}</span></div>
+              <div className="meta-row"><span className="meta-label">Party</span><span className="meta-val">{dami.subParty ?? dami.party ?? ""}</span></div>
+              <div className="meta-row"><span className="meta-label">Contract #</span><span className="meta-val">{dami.contNo ?? ""}</span></div>
+              <div className="meta-row"><span className="meta-label">Despatch Loc</span><span className="meta-val">{dami.printingLocation ?? ""}</span></div>
+              <div className="meta-row"><span className="meta-label">Product</span><span className="meta-val">{dami.productDesc ?? ""}</span></div>
+              <div className="meta-row"><span className="meta-label">Grey</span><span className="meta-val grey-val">{dami.dspQualityDesc ?? dami.dspQuality ?? ""}</span></div>
+              <div className="meta-row">
+                <span className="meta-label">Width</span>
+                <span className="meta-val" style={{ flex: "0 0 70px" }}>{dami.width ?? ""}</span>
+                <span className="meta-val" style={{ flex: 1 }}>{dami.printingName ?? ""}</span>
+              </div>
             </div>
-            <div>
-              <div className="meta-row"><span className="meta-label">Product</span><span className="meta-val" style={{ borderBottom: "1px solid #000", flex: 1 }}>{dami.productDesc ?? ""}</span></div>
-              <div className="meta-row"><span className="meta-label">Grey</span><span className="meta-val" style={{ fontSize: "9pt" }}>{dami.dspQualityDesc ?? dami.dspQuality ?? ""}</span></div>
-              <div className="meta-row"><span className="meta-label">Width</span><span className="meta-val" style={{ borderBottom: "1px solid #000", flex: 1 }}>{dami.width ? `${dami.width}"` : ""}</span></div>
-              <div className="meta-row"><span className="meta-label">Term</span><span className="meta-val">{dami.term ?? ""}</span></div>
-              <div className="meta-row"><span className="meta-label">Broker</span><span className="meta-val">{dami.brokerName ?? ""}</span></div>
+            <div className="meta-right">
+              <div className="summary-item"><span className="summary-label">Than</span><span className="summary-val">{formatNum(totalThan)}</span></div>
+              <div className="summary-item"><span className="summary-label">Meters Tot.</span><span className="summary-val">{formatNum(totalMtrs)}</span></div>
+              <div className="words-val">{words}</div>
             </div>
           </div>
-
-          {/* Summary */}
-          <div className="summary-strip">
-            <div className="summary-item"><span className="summary-label">Than:</span><span className="summary-val">{formatNum(totalThan)}</span></div>
-            <div className="summary-item"><span className="summary-label">Meters Tot:</span><span className="summary-val">{formatNum(totalMtrs)}</span></div>
-          </div>
-          <div className="words-val">{words}</div>
 
           {/* 4-column grid */}
           <table className="grid">
             <thead>
               <tr>
-                <th>S#</th><th>Mtrs</th>
-                <th>S#</th><th>Mtrs</th>
-                <th>S#</th><th>Mtrs</th>
-                <th>S#</th><th>Mtrs</th>
+                {Array.from({ length: COLS }).map((_, c) => (
+                  <React.Fragment key={c}>
+                    <th>S#</th><th>Mtrs</th>
+                  </React.Fragment>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -180,14 +204,15 @@ export default async function DamiVoucherPage({
                   ))}
                 </tr>
               )) : (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>No piece entries recorded.</td></tr>
+                <tr><td colSpan={COLS * 2} style={{ textAlign: "center", padding: "20px" }}>No piece entries recorded.</td></tr>
               )}
               {gridRows.length > 0 && (
                 <tr className="grid-totals">
-                  <td></td><td>{colTotals[0] > 0 ? formatNum(colTotals[0]) : ""}</td>
-                  <td></td><td>{colTotals[1] > 0 ? formatNum(colTotals[1]) : ""}</td>
-                  <td></td><td>{colTotals[2] > 0 ? formatNum(colTotals[2]) : ""}</td>
-                  <td></td><td>{colTotals[3] > 0 ? formatNum(colTotals[3]) : ""}</td>
+                  {colTotals.map((t, c) => (
+                    <React.Fragment key={c}>
+                      <td></td><td>{t > 0 ? formatNum(t) : ""}</td>
+                    </React.Fragment>
+                  ))}
                 </tr>
               )}
             </tbody>
