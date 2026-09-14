@@ -17,7 +17,10 @@ import { DateBox } from "@/components/date-box";
 export const dynamic = "force-dynamic";
 
 const VTYPE = "JV";
-const LINE_ROWS = 4;
+// The month-start / month-end expense vouchers run to a dozen-plus party lines
+// (the Oracle sheet shows 13 filled with spares below), so open with enough
+// rows to key one straight through without re-saving to get more.
+const LINE_ROWS = 20;
 
 const TRN_TYPES = [
   "",
