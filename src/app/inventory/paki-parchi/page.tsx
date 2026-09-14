@@ -27,6 +27,29 @@ export default async function PakiParchiPage() {
     .where(sql`${schema.intGreyDespatchDami.pakki_parchi_id} IS NOT NULL`)
     .orderBy(desc(schema.intGreyDespatchDami.id));
 
+  // Grey cloth despatches for the same conversion contract. A Pakki Parchi and a
+  // despatch meet on the contract, so the parchi can show what has gone out
+  // against it without the operator opening the despatch register separately.
+  const despatches = await db
+    .select({
+      id: schema.intGreyDespatch.id,
+      vNo: schema.intGreyDespatch.vNo,
+      vDate: schema.intGreyDespatch.vDate,
+      party: schema.intGreyDespatch.party,
+      convContNo: schema.intGreyDespatch.convContNo,
+      gpNo: schema.intGreyDespatch.gpNo,
+      thanQty: schema.intGreyDespatch.thanQty,
+    })
+    .from(schema.intGreyDespatch)
+    .orderBy(desc(schema.intGreyDespatch.id));
+  const despByContract = new Map<string, typeof despatches>();
+  for (const d of despatches) {
+    const k = (d.convContNo ?? "").trim();
+    if (!k) continue;
+    if (!despByContract.has(k)) despByContract.set(k, []);
+    despByContract.get(k)!.push(d);
+  }
+
   // Build a map: pakki_parchi_id → list of dami vouchers
   const damiByPP = new Map<number, typeof damiLinks>();
   for (const d of damiLinks) {
@@ -76,6 +99,7 @@ export default async function PakiParchiPage() {
                 <th className="text-right">Width</th>
                 <th className="text-right">Rate</th>
                 <th className="text-right">Amount</th>
+                <th>Grey Despatch</th>
                 <th>Dami Voucher</th>
               </tr>
             </thead>
@@ -98,6 +122,36 @@ export default async function PakiParchiPage() {
                     <td className="text-right mono">{r.greyWidth ?? "—"}</td>
                     <td className="text-right mono">{r.rate ?? "—"}</td>
                     <td className="text-right mono font-bold">{r.amount != null ? formatNum(r.amount) : "—"}</td>
+                    <td>
+                      {(() => {
+                        const ds = despByContract.get((r.contractNo ?? "").trim()) ?? [];
+                        if (!ds.length) return <span className="text-[11px] text-[var(--muted)]">—</span>;
+                        return (
+                          <div className="flex flex-col gap-1">
+                            {ds.map((d) => (
+                              <div key={d.id} className="flex items-center gap-2">
+                                <Link
+                                  href={`/inventory/grey-despatch?id=${d.id}`}
+                                  className="text-[var(--accent)] font-bold text-[12px] mono hover:underline"
+                                >
+                                  {d.vNo}
+                                </Link>
+                                <span className="text-[11px] text-[var(--muted)]">{d.vDate}</span>
+                                {d.gpNo && (
+                                  <span className="text-[10px] mono text-[var(--muted)]">OGP #{d.gpNo}</span>
+                                )}
+                              </div>
+                            ))}
+                            <Link
+                              href={`/reports/weaving/delivery-order-partywise?party=${encodeURIComponent(r.party ?? "")}`}
+                              className="text-[10px] px-2 py-0.5 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white w-fit"
+                            >
+                              Delivery Order
+                            </Link>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td>
                       {damis.length === 0 ? (
                         <span className="text-[11px] text-[var(--muted)]">—</span>
