@@ -7,6 +7,8 @@ import { FindingPicker } from "@/components/finding-picker";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ImageAttach } from "@/components/image-attach";
+import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { GreySaleCostCalc } from "@/components/grey-sale-cost-calc";
 import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -81,6 +83,29 @@ export default async function GreySalesContractPage({
         .orderBy(schema.extGreySalContractDelivery.id)
     : [];
 
+  // Warp/weft settings, same shape the conversion contract carries.
+  const warpRows = formItem
+    ? await db
+        .select()
+        .from(schema.extGreySalContractWarp)
+        .where(eq(schema.extGreySalContractWarp.contractId, formItem.id))
+        .orderBy(schema.extGreySalContractWarp.srNo)
+    : [];
+  const weftRows = formItem
+    ? await db
+        .select()
+        .from(schema.extGreySalContractWeft)
+        .where(eq(schema.extGreySalContractWeft.contractId, formItem.id))
+        .orderBy(schema.extGreySalContractWeft.srNo)
+    : [];
+  // Picking a Grey Code fills read/pick/width and the warp/weft count rows from
+  // the grey_construction master — the same map the conversion contract uses, so
+  // the operator types the quality once and the grids follow.
+  const warpLen = Math.max(4, ...warpRows.map((r) => r.srNo));
+  const weftLen = Math.max(4, ...weftRows.map((r) => r.srNo));
+  const warpGrid = Array.from({ length: warpLen }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
+  const weftGrid = Array.from({ length: weftLen }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
+
   const todayVal = today();
 
   const nextContractNo = (() => {
@@ -148,6 +173,36 @@ export default async function GreySalesContractPage({
     ])
   );
 
+  // Typing a count in a grid row fills that row's Desc from the yarn count
+  // master (count + blend), matching how the despatch grid spells it.
+  const countFillMap: Record<string, Record<string, string>> = {};
+  for (const c of yarnCountList) {
+    const desc = [c.description ?? "", c.type ?? ""].filter(Boolean).join(" ");
+    for (let i = 1; i <= 9; i++) {
+      (countFillMap[String(c.countCode)] ??= {})[`warp_descr_${i}`] = desc;
+      (countFillMap[String(c.countCode)] ??= {})[`weft_descr_${i}`] = desc;
+    }
+  }
+
+  const greyFillMap: Record<string, Record<string, string | number>> = {};
+  for (const g of greyList) {
+    greyFillMap[g.code] = {
+      construction: g.description ?? "",
+      read: g.reed ?? "",
+      pick: g.pick ?? "",
+      width: g.width ?? "",
+      warp_count_1: g.warpCount ?? "",
+      warp_count_2: g.warp2 ?? "",
+      warp_count_3: g.warp3 ?? "",
+      warp_count_4: g.warp4 ?? "",
+      weft_count_1: g.weftCount ?? "",
+      weft_count_2: g.weft2 ?? "",
+      weft_count_3: g.weft3 ?? "",
+      weft_count_4: g.weft4 ?? "",
+    };
+  }
+
+
   // Short code (HAMIDAN) is the visible token; full name is the helper description.
   const partyOpts = parties.map((p) => ({
     value: p.description,
@@ -182,6 +237,46 @@ export default async function GreySalesContractPage({
 
   async function saveContract(formData: FormData) {
     "use server";
+    const txt = (v: FormDataEntryValue | null) => {
+      const t = (v as string | null)?.trim();
+      return t ? t : null;
+    };
+    const round = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
+    // Same maths the conversion contract uses: WT/mtr = ends / 731.52 / cal count,
+    // cost/mtr = WT/mtr x rate/lbs. A row counts as filled if any cell is set.
+    const parseRows = (prefix: "warp" | "weft") => {
+      const out: {
+        srNo: number; count: string | null; descr: string | null; brand: string | null;
+        calCount: number | null; ends: number | null; wtPerMtr: number;
+        ratePerLbs: number | null; costPerMtr: number;
+      }[] = [];
+      for (let i = 1; i <= 9; i++) {
+        const count = txt(formData.get(`${prefix}_count_${i}`));
+        const descr = txt(formData.get(`${prefix}_descr_${i}`));
+        const brand = txt(formData.get(`${prefix}_brand_${i}`));
+        const calCount = num(formData.get(`${prefix}_cal_count_${i}`));
+        const ends = intVal(formData.get(`${prefix}_ends_${i}`));
+        const ratePerLbs = num(formData.get(`${prefix}_rate_${i}`));
+        if (count || descr || brand || calCount !== null || ends !== null || ratePerLbs !== null) {
+          const wtPerMtr = calCount && calCount > 0 ? round((ends ?? 0) / 731.52 / calCount, 6) : 0;
+          out.push({ srNo: i, count, descr, brand, calCount, ends, wtPerMtr, ratePerLbs, costPerMtr: round(wtPerMtr * (ratePerLbs ?? 0), 4) });
+        }
+      }
+      return out;
+    };
+    const warpParsed = parseRows("warp");
+    const weftParsed = parseRows("weft");
+    // Costs are derived here too, so what is stored cannot drift from the grid
+    // even if the client calc never ran (JS off, or a direct POST).
+    const warpCostPerMtr = round(warpParsed.reduce((a, r) => a + r.costPerMtr, 0), 4);
+    const weftCostPerMtr = round(weftParsed.reduce((a, r) => a + r.costPerMtr, 0), 4);
+    const convCalculate = num(formData.get("conv_calculate"));
+    const selvageRate = num(formData.get("selvage_rate"));
+    const totalCostRate = round(
+      warpCostPerMtr + weftCostPerMtr + (convCalculate ?? 0) + (selvageRate ?? 0),
+      4,
+    );
+
     const idRaw = formData.get("id") as string;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isNew = !Number.isFinite(id);
@@ -222,6 +317,15 @@ export default async function GreySalesContractPage({
       brokagPerBag,
       perMtr,
       greyCode,
+      construction: txt(formData.get("construction")),
+      read: intVal(formData.get("read")),
+      pick: intVal(formData.get("pick")),
+      width: num(formData.get("width")),
+      warpCostPerMtr,
+      weftCostPerMtr,
+      convCalculate,
+      selvageRate,
+      totalCostRate,
       weave,
       salvage,
       quantityMtr,
@@ -316,6 +420,14 @@ export default async function GreySalesContractPage({
               deliveryRows.map((d) => ({ ...d, contractId: cid as number }))
             );
           }
+
+          // Replace-on-save, the way the conversion contract handles its grid.
+          await tx.delete(schema.extGreySalContractWarp).where(eq(schema.extGreySalContractWarp.contractId, cid));
+          await tx.delete(schema.extGreySalContractWeft).where(eq(schema.extGreySalContractWeft.contractId, cid));
+          if (warpParsed.length)
+            await tx.insert(schema.extGreySalContractWarp).values(warpParsed.map((r) => ({ contractId: cid as number, ...r })));
+          if (weftParsed.length)
+            await tx.insert(schema.extGreySalContractWeft).values(weftParsed.map((r) => ({ contractId: cid as number, ...r })));
         }
 
         return cid;
@@ -752,39 +864,10 @@ export default async function GreySalesContractPage({
                 />
               </div>
 
-              <div className="mb-3">
-                <label className="label block mb-1">Payment Term</label>
-                <select
-                  name="payment_term"
-                  className="input-box"
-                  defaultValue={formItem?.paymentTerm ?? ""}
-                >
-                  <option value="">--</option>
-                  {["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                  {formItem?.paymentTerm && !["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].includes(formItem.paymentTerm) && (
-                    <option value={formItem.paymentTerm}>{formItem.paymentTerm}</option>
-                  )}
-                </select>
-              </div>
-
-              <div className="mb-3">
-                <label className="label block mb-1">Delivery Term</label>
-                <select
-                  name="delivery_term"
-                  className="input-box"
-                  defaultValue={formItem?.deliveryTerm ?? ""}
-                >
-                  <option value="">--</option>
-                  {["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                  {formItem?.deliveryTerm && !["CASH", "CREDIT", "ADVANCE", "PDC", "30 DAYS", "60 DAYS"].includes(formItem.deliveryTerm) && (
-                    <option value={formItem.deliveryTerm}>{formItem.deliveryTerm}</option>
-                  )}
-                </select>
-              </div>
+              {/* Payment Term / Delivery Term are off the form (owner). Kept as
+                  hidden inputs so an existing contract does not lose them on edit. */}
+              <input type="hidden" name="payment_term" defaultValue={formItem?.paymentTerm ?? ""} />
+              <input type="hidden" name="delivery_term" defaultValue={formItem?.deliveryTerm ?? ""} />
 
               <div className="mb-3">
                 <label className="label block mb-1">Evidence Photo</label>
@@ -800,104 +883,150 @@ export default async function GreySalesContractPage({
                 />
               </div>
 
-              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2 mt-6 border-b border-black pb-1">
-                Delivery Schesual
+              {/* WARP / WEFT settings, carried over from the conversion contract so a
+                  sale contract records the woven construction too. WT/mtr and
+                  cost/mtr are derived on save, not typed. */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-6 mb-4">
+                <div className="border border-black">
+                  <div className="bg-green-100 border-b border-black px-3 py-1 flex items-center justify-between">
+                    <div className="text-[12px] uppercase tracking-[0.1em] font-bold">WARP</div>
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <span className="label">Read</span>
+                      <input name="read" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.read ?? ""} />
+                      <span className="label">Pick</span>
+                      <input name="pick" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.pick ?? ""} />
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {warpGrid.map((r, idx) => {
+                          const i = idx + 1;
+                          return (
+                            <tr key={i}>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-[12px] text-center text-[var(--muted)]">{i}</td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_count_${i}`} list="gs-yarn-counts" className="input-box mono text-[12px]" defaultValue={r?.count ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_descr_${i}`} className="input-box text-[12px]" defaultValue={r?.descr ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_brand_${i}`} className="input-box text-[12px]" defaultValue={r?.brand ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_cal_count_${i}`} type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={r?.calCount ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_ends_${i}`} type="number" step="1" className="input-box mono text-right text-[12px]" defaultValue={r?.ends ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`warp_rate_${i}`} type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={r?.ratePerLbs ?? ""} /></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="border border-black">
+                  <div className="bg-blue-100 border-b border-black px-3 py-1 flex items-center justify-between">
+                    <div className="text-[12px] uppercase tracking-[0.1em] font-bold">WEFT</div>
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <span className="label">Width</span>
+                      <input name="width" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.width ?? ""} />
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {weftGrid.map((r, idx) => {
+                          const i = idx + 1;
+                          return (
+                            <tr key={i}>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)] mono text-[12px] text-center text-[var(--muted)]">{i}</td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_count_${i}`} list="gs-yarn-counts" className="input-box mono text-[12px]" defaultValue={r?.count ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_descr_${i}`} className="input-box text-[12px]" defaultValue={r?.descr ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_brand_${i}`} className="input-box text-[12px]" defaultValue={r?.brand ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_cal_count_${i}`} type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={r?.calCount ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_ends_${i}`} type="number" step="1" className="input-box mono text-right text-[12px]" defaultValue={r?.ends ?? ""} /></td>
+                              <td className="px-1 py-0.5 border-b border-[var(--border-light)]"><input name={`weft_rate_${i}`} type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={r?.ratePerLbs ?? ""} /></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
 
-              <div className="overflow-x-auto mb-4">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: "40px" }}>#</th>
-                      <th>Date</th>
-                      <th>Meters</th>
-                      <th>Location</th>
-                      <th style={{ width: "60px" }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {deliveries.map((d, i) => (
-                      <tr key={`d-${d.id}`}>
-                        <td className="mono text-[12px] text-[var(--muted)]">{i + 1}</td>
-                        <td>
-                          <input
-                            name={`del_date_${i}`}
-                            type="date"
-                            className="input-box mono text-[13px]"
-                            defaultValue={d.deliveryDate ?? ""}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            name={`del_meters_${i}`}
-                            type="number"
-                            step="any"
-                            className="input-box mono text-[13px]"
-                            defaultValue={d.meters ?? ""}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            name={`del_location_${i}`}
-                            className="input-box text-[13px]"
-                            defaultValue={d.location ?? ""}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="submit"
-                            formAction={deleteDeliveryRow}
-                            name="delete_delivery_id"
-                            value={d.id}
-                            className="btn btn-outline btn-sm"
-                            title="Delete row"
-                          >
-                            X
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {Array.from({ length: emptyRows }).map((_, i) => {
-                      const idx = deliveries.length + i;
-                      return (
-                        <tr key={`e-${idx}`}>
-                          <td className="mono text-[12px] text-[var(--muted)]">{idx + 1}</td>
-                          <td>
-                            <input
-                              name={`del_date_${idx}`}
-                              type="date"
-                              className="input-box mono text-[13px]"
-                              defaultValue=""
-                            />
-                          </td>
-                          <td>
-                            <input
-                              name={`del_meters_${idx}`}
-                              type="number"
-                              step="any"
-                              className="input-box mono text-[13px]"
-                              defaultValue=""
-                            />
-                          </td>
-                          <td>
-                            <input
-                              name={`del_location_${idx}`}
-                              className="input-box text-[13px]"
-                              defaultValue=""
-                            />
-                          </td>
-                          <td className="text-[12px] text-[var(--muted)] text-center">-</td>
-                        </tr>
-                      );
-                    })}
-                    <tr>
-                      <td colSpan={5} className="text-[11px] text-[var(--muted)] mono">
-                        {deliveries.length} saved, {totalDeliveryRows - deliveries.length} empty
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              {/* Costing chain (owner): each grid totals its own cost/mtr, then
+                  conversion and selvage are added to give the total cost rate —
+                  so the contract shows what the cloth actually costs to make and
+                  the difference against the sale rate is visible. Every box here
+                  is computed live by GreySaleCostCalc; only Conversion and
+                  Selvage are typed. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="border border-black p-3">
+                  <label className="label block mb-1">Warp Cost / Mtr</label>
+                  <input name="warp_cost_per_mtr" id="gs-warp-cost" type="number" step="any" className="input-box mono text-right bg-gray-100" defaultValue={formItem?.warpCostPerMtr ?? ""} readOnly tabIndex={-1} />
+                </div>
+                <div className="border border-black p-3">
+                  <label className="label block mb-1">Weft Cost / Mtr</label>
+                  <input name="weft_cost_per_mtr" id="gs-weft-cost" type="number" step="any" className="input-box mono text-right bg-gray-100" defaultValue={formItem?.weftCostPerMtr ?? ""} readOnly tabIndex={-1} />
+                </div>
               </div>
+
+              <div className="border border-black p-3 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 gform">
+                  <div>
+                    <label className="label block mb-1">Conv. Calculate</label>
+                    <input name="conv_calculate" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.convCalculate ?? ""} placeholder="50" />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Selvage</label>
+                    <input name="selvage_rate" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.selvageRate ?? ""} placeholder="20" />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Total Cost Rate</label>
+                    <input name="total_cost_rate" id="gs-total-cost" type="number" step="any" className="input-box mono text-right bg-gray-100 font-bold" defaultValue={formItem?.totalCostRate ?? ""} readOnly tabIndex={-1} />
+                  </div>
+                </div>
+                <div className="text-[10px] text-[var(--muted)] mt-2">
+                  Warp cost + Weft cost + Conversion + Selvage = Total cost rate. Row cost = Ends ÷ 731.52 ÷ Cal Count × Rate/Lbs.
+                </div>
+              </div>
+
+              <GreySaleCostCalc rows={9} />
+              <AutoFill
+                watch="grey_code"
+                map={greyFillMap}
+                inputs={[
+                  "construction", "read", "pick", "width",
+                  "warp_count_1", "warp_count_2", "warp_count_3", "warp_count_4",
+                  "weft_count_1", "weft_count_2", "weft_count_3", "weft_count_4",
+                ]}
+              />
+              {Array.from({ length: 9 }).map((_, k) => {
+                const i = k + 1;
+                return (
+                  <span key={`ww-af-${i}`}>
+                    <RowAutoFill watch={`warp_count_${i}`} map={countFillMap} />
+                    <RowAutoFill watch={`weft_count_${i}`} map={countFillMap} />
+                  </span>
+                );
+              })}
 
               <div className="flex items-end gap-2 mt-4 flex-wrap">
                 <button type="submit" className="btn btn-sm">Save</button>
