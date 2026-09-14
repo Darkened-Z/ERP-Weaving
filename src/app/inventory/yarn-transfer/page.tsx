@@ -107,8 +107,35 @@ export default async function YarnTransferPage({
   const partyOpts = parties
     .filter((p) => String(p.code).startsWith(WVG_CONVERSION_PREFIX))
     .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
-  const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
+  // Count Code follows Define → Party Count for the TRANSFER FROM party: pick
+  // 786 weaving and only the counts set up for it are on offer, and picking one
+  // fills Rate/Lbs from that same party_counts row (PartyCountRate below, keyed
+  // on transferFromParty). A party with nothing configured keeps the full list.
+  const partyDescByCode2: Record<string, string> = {};
+  for (const pt of parties) partyDescByCode2[pt.code] = pt.description;
+  const partyCountPairs = await db
+    .select({ partyCode: schema.partyCounts.partyCode, countCode: schema.yarnCounts.countCode })
+    .from(schema.partyCounts)
+    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
+  const partiesByCount = new Map<string, string[]>();
+  const configuredParties = new Set<string>();
+  for (const r of partyCountPairs) {
+    if (!r.countCode) continue;
+    const desc = partyDescByCode2[r.partyCode] ?? r.partyCode;
+    configuredParties.add(desc);
+    const arr = partiesByCount.get(r.countCode) ?? [];
+    if (!arr.includes(desc)) arr.push(desc);
+    partiesByCount.set(r.countCode, arr);
+  }
+  const unconfiguredParties = partyOpts
+    .map((pt) => pt.value)
+    .filter((v) => !configuredParties.has(v));
+  const countOpts = countList.map((c) => ({
+    value: c.code,
+    label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}`,
+    filterKeys: [...(partiesByCount.get(c.code) ?? []), ...unconfiguredParties],
+  }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
 
   // AutoFill map: picking a party in Transfer-From copies it to Transfer-To.
@@ -585,7 +612,7 @@ export default async function YarnTransferPage({
 
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Count Code (F9)</label>
-                        <Combobox name="countCode" options={countOpts} defaultValue={editing?.countCode ?? ""} placeholder="Select count" />
+                        <Combobox name="countCode" options={countOpts} defaultValue={editing?.countCode ?? ""} placeholder="Select count" filterByField="transferFromParty" />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Qty Bags</label>
