@@ -156,7 +156,32 @@ export default async function YarnReceiptPage({
   // godown (helper resolves it by CODE), field stays changeable.
   const yarnGodownDesc = yarnStockGodownDesc(parties);
   const godownOpts = godownLocationOpts(parties);
-  const countOpts = countList.map((c) => ({ value: c.code, label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}` }));
+  // Count Code is scoped to what Define → Party Count sets up for the picked party:
+  // choose 786 weaving and only its configured counts are on offer, and picking one
+  // fills Rate/Lbs from that same party_counts row (see PartyCountRate below). A
+  // party with nothing configured yet keeps the full list rather than a dead picker.
+  const partyCountPairs = await db
+    .select({ partyCode: schema.partyCounts.partyCode, countCode: schema.yarnCounts.countCode })
+    .from(schema.partyCounts)
+    .leftJoin(schema.yarnCounts, eq(schema.partyCounts.countCode, schema.yarnCounts.id));
+  const partiesByCount = new Map<string, string[]>();
+  const configuredParties = new Set<string>();
+  for (const r of partyCountPairs) {
+    if (!r.countCode) continue;
+    const desc = partyDescByCode[r.partyCode] ?? r.partyCode;
+    configuredParties.add(desc);
+    const arr = partiesByCount.get(r.countCode) ?? [];
+    if (!arr.includes(desc)) arr.push(desc);
+    partiesByCount.set(r.countCode, arr);
+  }
+  const unconfiguredParties = convPartyOpts
+    .map((p) => p.value)
+    .filter((v) => !configuredParties.has(v));
+  const countOpts = countList.map((c) => ({
+    value: c.code,
+    label: `${c.code} — ${c.description}${c.type ? ' ' + c.type : ''}`,
+    filterKeys: [...(partiesByCount.get(c.code) ?? []), ...unconfiguredParties],
+  }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
@@ -811,7 +836,7 @@ export default async function YarnReceiptPage({
 
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Count Code (F9)</label>
-                        <Combobox name="countCode" options={countOpts} defaultValue={editing?.countCode ?? ""} placeholder="Select count" />
+                        <Combobox name="countCode" options={countOpts} defaultValue={editing?.countCode ?? ""} placeholder="Select count" filterByField="party" />
                       </div>
                       <div className="md:col-span-4">
                         <label className="label block mb-1">Warp Bags</label>
