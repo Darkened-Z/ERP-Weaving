@@ -80,7 +80,10 @@ export function DateBox({
   };
 
   return (
-    <span className="relative block">
+    // A native date control carries its own intrinsic width; a bare text input
+    // does not, so inside a flex filter bar it collapsed to a couple of
+    // characters. Hold enough room for DD/MM/YYYY plus the calendar button.
+    <span className="relative block" style={{ minWidth: 132 }}>
       <input type="hidden" ref={hiddenRef} name={name} value={iso} readOnly />
       <input
         id={id}
