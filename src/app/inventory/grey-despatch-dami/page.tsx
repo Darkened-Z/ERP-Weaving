@@ -129,7 +129,10 @@ export default async function GreyDespatchDamiPage({
         const than = intVal(formData.get(`line_than_${i}`)) ?? 1;
         const mtrsRaw = num(formData.get(`line_mtrs_${i}`));
         const srNo = intVal(formData.get(`line_sr_${i}`)) ?? i + 1;
-        if (mtrsRaw != null) {
+        // Keep a row that carries meters, or one whose than was actually typed.
+        // Only the untouched starter row (than 1, no meters) is treated as empty,
+        // so a piece the operator entered is never dropped.
+        if (mtrsRaw != null || than > 1) {
           lineRows.push({ srNo, than, mtrs: mtrsRaw });
         }
       }
@@ -163,9 +166,10 @@ export default async function GreyDespatchDamiPage({
             did = ins.id;
           }
 
-          // Save line rows
+          // Replace the piece rows. The delete is unconditional: guarding it on
+          // lineRows.length meant clearing every piece left the old ones behind.
+          await tx.delete(schema.intGreyDespatchDamiLine).where(eq(schema.intGreyDespatchDamiLine.damiId, did));
           if (lineRows.length > 0) {
-            await tx.delete(schema.intGreyDespatchDamiLine).where(eq(schema.intGreyDespatchDamiLine.damiId, did));
             await tx.insert(schema.intGreyDespatchDamiLine).values(
               lineRows.map((r) => ({ damiId: did, srNo: r.srNo, than: r.than, mtrs: r.mtrs }))
             );
@@ -524,6 +528,7 @@ export default async function GreyDespatchDamiPage({
             <div className="text-[10px] text-[var(--muted)] mb-2">Press Enter to add next row</div>
             <DamiLineGrid
               initialLines={initialLineRows}
+              formId="dami-save-form"
             />
             <script
               dangerouslySetInnerHTML={{
