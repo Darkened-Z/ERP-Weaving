@@ -464,6 +464,39 @@ export default async function GodownStockPage({
       },
     };
   });
+  // The same detail panel for the WVG (internal) contracts. Picking a Conv
+  // Contract WVG filled the rate and quality but showed none of the contract's
+  // information underneath — only the purchase-conv side had a panel, so a
+  // 786 weaving stock entry looked blank below the picker.
+  const intContractInfoMap: Record<string, { label: string; value: string }[]> = {};
+  for (const c of intConvContracts) {
+    const constr = c.grayQltyCode ? qualityByCode[c.grayQltyCode] ?? c.grayQltyCode : c.grayCode ?? "";
+    const cnts = wvgCountFillMap[c.contNo] ?? [];
+    const lbl = (code: string | null) => {
+      if (!code) return "";
+      const l = countLabelByCode.get(String(code));
+      return l ? `${code} — ${l}` : String(code);
+    };
+    const warp = cnts.filter((x) => x.type === "WARP").map((x) => lbl(x.code)).filter(Boolean).join(", ");
+    const weft = cnts.filter((x) => x.type === "WEFT").map((x) => lbl(x.code)).filter(Boolean).join(", ");
+    const rpw =
+      c.read != null && c.pick != null
+        ? `${fmtN(c.read)}\u00d7${fmtN(c.pick)}${c.width != null ? `\u00d7${fmtN(c.width)}` : ""}`
+        : "";
+    intContractInfoMap[c.contNo] = [
+      { label: "Party", value: c.party ?? "" },
+      { label: "Quality", value: constr },
+      { label: "Read\u00d7Pick\u00d7Wd", value: rpw },
+      { label: "Warp", value: warp },
+      { label: "Weft", value: weft },
+      { label: "Conv Rate", value: fmtN(c.convRatePerMtr, 2) },
+      { label: "Gray Rate", value: fmtN(c.grayRatePerMtr, 2) },
+      { label: "Qty Mtr", value: fmtN(c.qtyMtr) },
+      { label: "Date", value: c.contDate ?? "" },
+      { label: "Status", value: c.status ?? "" },
+    ];
+  }
+
   const intContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
     intConvContracts.map((c) => [
       c.contNo,
@@ -1175,6 +1208,9 @@ export default async function GodownStockPage({
 
                   <div className="col-span-12">
                     <ContractInfoPanel watch="cont_no" map={contractInfoMap} title="PUR CONV CONTRACT — INFO" />
+                  </div>
+                  <div className="col-span-12">
+                    <ContractInfoPanel watch="conv_cont_wvg" map={intContractInfoMap} title="CONV CONTRACT WVG — INFO" />
                   </div>
 
                   {/* Measurements — one dense row */}
