@@ -3,6 +3,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { and, eq, gte, lte, isNotNull, ne, desc } from "drizzle-orm";
 import { DateBox } from "@/components/date-box";
+import { parseImages } from "@/lib/attachments";
 
 export const dynamic = "force-dynamic";
 
@@ -384,8 +385,12 @@ export default async function ImagesPage({
             const href = SOURCE_HREF[r.source]?.(r.id) ?? null;
             const card = (
               <div className="border border-black p-2 h-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={r.img} alt={r.vno} className="w-full h-40 object-cover border border-[var(--border)]" />
+                {/* A record may carry several photos (stored as a JSON array);
+                    older ones hold a single bare data URL. parseImages reads both. */}
+                {parseImages(r.img).map((src, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} src={src} alt={`${r.vno} ${i + 1}`} className="w-full h-40 object-cover border border-[var(--border)] mb-1" />
+                ))}
                 <div className="mt-2 text-[11px] mono flex items-center justify-between">
                   <span className="font-semibold">{r.source}</span>
                   <span className="text-[var(--muted)]">{r.date}</span>

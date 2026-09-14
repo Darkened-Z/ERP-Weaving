@@ -7,6 +7,7 @@ import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { DateBox } from "@/components/date-box";
+import { parseImages } from "@/lib/attachments";
 
 export const dynamic = "force-dynamic";
 
@@ -185,8 +186,12 @@ export default async function EodImagesPage({
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-3">
                 {items.map((it) => (
                   <div key={it.id} className="border border-[var(--border)] p-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={it.img} alt={it.category ?? "eod"} className="w-full h-40 object-cover border border-[var(--border)]" />
+                    {/* Several photos per entry are stored as a JSON array; older
+                        entries hold a single bare data URL. Both are read here. */}
+                    {parseImages(it.img).map((src, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={i} src={src} alt={`${it.category ?? "eod"} ${i + 1}`} className="w-full h-40 object-cover border border-[var(--border)] mb-1" />
+                    ))}
                     <div className="mt-2 text-[11px] mono flex items-center justify-between">
                       <span className="font-semibold">{it.category ?? "-"}</span>
                       <span className="text-[var(--muted)]">#{it.id}</span>

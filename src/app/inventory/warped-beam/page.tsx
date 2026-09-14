@@ -93,9 +93,24 @@ export default async function WarpedBeamReceivingPage({
   // Beam Receiving From = sizing party → only CREDITOR - SIZING COMMERCIAL (3.03.06.02.*).
   const sizingPrefix = await headByLike("%SIZING%COMMERCIAL%");
   const sizingPartyOpts = optsUnder(sizingPrefix);
-  // Bm Sale Party = converting party → DEBITORS - CONVERSION WVG (1.01.01.01.*).
   const convPrefix = await headByLike("%CONVERSION%WVG%");
   const convPartyOpts = optsUnder(convPrefix);
+  // Bm Sale Party = the DEBIT party the beam is sold to. Scoped to CONVERSION
+  // WVG it offered exactly one account, so every other debtor the mill sells a
+  // beam to was unreachable. It now lists every level-5 account under DEBTORS —
+  // conversion (WVG and commercial), grey sale, yarn sale, waste, sundry — which
+  // is a superset that still includes the conversion party Daily Production uses
+  // for Beam Cost Party.
+  // The chart spells it both ways - "TRADE DEBITORS" (1.01.01, the one that
+  // holds the party accounts) and "TRADER DEBTORS (WVG)" (1.01.03) - so match
+  // either and take the lowest code, which is the trade-debtors group.
+  const [debtorsHead] = await db
+    .select({ code: schema.chartOfAccounts.code })
+    .from(schema.chartOfAccounts)
+    .where(sql`${schema.chartOfAccounts.level} = 3 AND (upper(${schema.chartOfAccounts.description}) LIKE '%DEBITOR%' OR upper(${schema.chartOfAccounts.description}) LIKE '%DEBTOR%')`)
+    .orderBy(schema.chartOfAccounts.code)
+    .limit(1);
+  const bmSalePartyOpts = optsUnder(debtorsHead?.code ? `${debtorsHead.code}.` : null);
   // Beam Stock-Loaded = the loaded-beam godown, defaulted + locked.
   const beamLoadedGodown =
     parties.find((p) => /godown/i.test(p.description) && /(loaded\s*beam|beam\s*(loaded|stock))/i.test(p.description))?.description ?? "";
@@ -983,7 +998,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Bm Sale Party <span className="text-[9px] text-[var(--muted)]">(converting — DEBITORS CONV WVG)</span></label>
-                  <Combobox name="bmSaleParty" options={convPartyOpts} defaultValue={editing?.bmSaleParty ?? ""} placeholder="converting party" />
+                  <Combobox name="bmSaleParty" options={bmSalePartyOpts} defaultValue={editing?.bmSaleParty ?? ""} placeholder="Select debit party" />
                 </div>
 
                 <div className="lg:col-span-4">
