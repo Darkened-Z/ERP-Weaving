@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Opt = { value: string; label: string; desc?: string; filterKey?: string };
+type Opt = { value: string; label: string; desc?: string; filterKey?: string;
+  /** Like filterKey but for options valid under SEVERAL values of the watched
+   *  field (a yarn count configured for more than one party). An empty array
+   *  means "no watched value matches this option" — it hides once a value is
+   *  picked, unlike a missing filterKey/filterKeys which always shows. */
+  filterKeys?: string[] };
 
 // Fields we walk with Enter (mirror of the global FormKeyboard selector).
 const NEXT_FIELD_SELECTOR =
@@ -76,7 +81,11 @@ export function Combobox({
   }, [filterByField]);
   const visibleOptions = !filterByField || !filterVal
     ? options
-    : options.filter((o) => !o.filterKey || o.filterKey === filterVal);
+    : options.filter((o) =>
+        o.filterKeys
+          ? o.filterKeys.includes(filterVal)
+          : !o.filterKey || o.filterKey === filterVal
+      );
   const mirrorDesc = (v: string) => {
     if (!descTargetId) return;
     const t = document.getElementById(descTargetId) as HTMLInputElement | null;
