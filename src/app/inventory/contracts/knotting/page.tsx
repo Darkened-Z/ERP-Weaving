@@ -11,6 +11,7 @@ import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -284,13 +285,7 @@ export default async function KnottingContractPage({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 gform">
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Cont. Date</label>
-                <input
-                  name="cont_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formContract?.contDate ?? today()}
-                  required
-                />
+                <DateBox name="cont_date" className="input-box mono" defaultValue={formContract?.contDate ?? today()} required />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Cont.#</label>
@@ -303,12 +298,7 @@ export default async function KnottingContractPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Exp. Date</label>
-                <input
-                  name="exp_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formContract?.expDate ?? ""}
-                />
+                <DateBox name="exp_date" className="input-box mono" defaultValue={formContract?.expDate ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Find</label>

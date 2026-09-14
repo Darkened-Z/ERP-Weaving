@@ -11,6 +11,7 @@ import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike, fmtMoney as formatNum } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -600,7 +601,7 @@ export default async function AdvanceChequePage({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform mb-4">
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Date</label>
-                  <input name="v_date" type="date" className="input-box mono" defaultValue={today()} required />
+                  <DateBox name="v_date" className="input-box mono" defaultValue={today()} required />
                 </div>
               </div>
 
@@ -637,7 +638,7 @@ export default async function AdvanceChequePage({
                           </td>
                           <td><input name="line_adv_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.bankAdv) ?? "" : ""} readOnly tabIndex={-1} /></td>
                           <td><input name="line_chq_no" className="input-box mono text-[12px]" /></td>
-                          <td><input name="line_chq_date" type="date" className="input-box mono text-[12px]" /></td>
+                          <td><DateBox name="line_chq_date" className="input-box mono text-[12px]" /></td>
                           <td><input name="line_amt" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" defaultValue={pf?.amount ?? ""} /></td>
                           <td><input name="line_cash" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" placeholder="0" title="Cash bhi saath diya to yahan — Dr party (chq+cash) / Cr cash alehda" /></td>
                           <td><input name="line_narr" className="input-box text-[12px]" /></td>
@@ -679,7 +680,7 @@ export default async function AdvanceChequePage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Clear Date</label>
-                <input name="clear_date" type="date" className="input-box mono" defaultValue={today()} />
+                <DateBox name="clear_date" className="input-box mono" defaultValue={today()} />
               </div>
               <div className="lg:col-span-3 flex gap-2">
                 <button type="submit" className="btn btn-sm flex-1">Confirm Clear</button>
@@ -704,7 +705,7 @@ export default async function AdvanceChequePage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Bounce Date</label>
-                <input name="bounce_date" type="date" className="input-box mono" defaultValue={today()} />
+                <DateBox name="bounce_date" className="input-box mono" defaultValue={today()} />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Reason</label>

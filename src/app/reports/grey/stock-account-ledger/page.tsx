@@ -5,6 +5,7 @@ import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { and, gte, lte, or, sql } from "drizzle-orm";
 import { fmt, escLike, sixMonthsAgo, todayIso, partyByNameOptions } from "../../_shared";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -168,11 +169,11 @@ export default async function GreyStockAccountLedgerPage({
         <form method="GET" action="" className="border border-black p-4 mb-4 grid grid-cols-1 sm:grid-cols-4 gap-4 no-print">
           <div>
             <label className="label block mb-1">Date From</label>
-            <input type="date" name="from" defaultValue={from} className="input-box mono" />
+            <DateBox name="from" defaultValue={from} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Date To</label>
-            <input type="date" name="to" defaultValue={to} className="input-box mono" />
+            <DateBox name="to" defaultValue={to} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Party <span className="text-[9px] text-[var(--muted)]">(supplier / customer)</span></label>

@@ -6,6 +6,7 @@ import { requireSession, getSession } from "@/lib/auth";
 import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -119,7 +120,7 @@ export default async function EodImagesPage({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Date</label>
-                <input name="img_date" type="date" className="input-box mono" defaultValue={today()} required />
+                <DateBox name="img_date" className="input-box mono" defaultValue={today()} required />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Category</label>
@@ -150,11 +151,11 @@ export default async function EodImagesPage({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3">
             <div className="lg:col-span-3">
               <label className="label block mb-1">From</label>
-              <input name="from" type="date" className="input-box mono" defaultValue={from} />
+              <DateBox name="from" className="input-box mono" defaultValue={from} />
             </div>
             <div className="lg:col-span-3">
               <label className="label block mb-1">To</label>
-              <input name="to" type="date" className="input-box mono" defaultValue={to} />
+              <DateBox name="to" className="input-box mono" defaultValue={to} />
             </div>
             <div className="lg:col-span-3">
               <label className="label block mb-1">Category</label>

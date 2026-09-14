@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DateBox } from "@/components/date-box";
 
 /**
  * Term picker: CASH or DUE. When DUE is chosen, a Days field and a Due-Date field
@@ -69,13 +70,7 @@ export function TermSelect({
             <label className="label block mb-1">
               Due Date <span className="text-[9px] text-[var(--muted)]">(auto)</span>
             </label>
-            <input
-              name="due_date"
-              type="date"
-              className="input-box mono"
-              value={due}
-              onChange={(e) => setDue(e.target.value)}
-            />
+            <DateBox name="due_date" className="input-box mono" />
           </div>
         </>
       )}

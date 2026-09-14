@@ -4,6 +4,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { and, gte, lte, sql } from "drizzle-orm";
+import { DateBox } from "@/components/date-box";
 import {
   fmt,
   fmt2,
@@ -178,11 +179,11 @@ export default async function YarnStockPage({
         >
           <div>
             <label className="label block mb-1">Date From</label>
-            <input type="date" name="from" defaultValue={from} className="input-box mono" />
+            <DateBox name="from" defaultValue={from} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Date To</label>
-            <input type="date" name="to" defaultValue={to} className="input-box mono" />
+            <DateBox name="to" defaultValue={to} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Party</label>

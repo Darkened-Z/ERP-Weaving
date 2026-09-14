@@ -4,6 +4,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { fmt2, todayIso } from "../../_shared";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -133,11 +134,11 @@ export default async function ProductionDateWisePage({
         <form method="GET" className="flex items-end gap-2 flex-wrap mb-5 no-print border border-black p-3">
           <div>
             <label className="label block mb-1">Date From</label>
-            <input type="date" name="from" defaultValue={from} className="input-box mono" />
+            <DateBox name="from" defaultValue={from} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Date To</label>
-            <input type="date" name="to" defaultValue={to} className="input-box mono" />
+            <DateBox name="to" defaultValue={to} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Shed No</label>

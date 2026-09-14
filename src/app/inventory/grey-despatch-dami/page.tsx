@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
 import Link from "next/link";
 import { DamiLineGrid } from "./dami-line-grid";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -332,7 +333,7 @@ export default async function GreyDespatchDamiPage({
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
                 <div className="col-span-2">
                   <label className="label block mb-1">V.Date</label>
-                  <input name="v_date" type="date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
+                  <DateBox name="v_date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
                 </div>
                 <div className="col-span-2">
                   <label className="label block mb-1">V.No</label>
@@ -344,7 +345,7 @@ export default async function GreyDespatchDamiPage({
                 </div>
                 <div className="col-span-3">
                   <label className="label block mb-1">Sal Date</label>
-                  <input name="sal_date" type="date" className="input-box mono" defaultValue={formItem?.salDate ?? ""} />
+                  <DateBox name="sal_date" className="input-box mono" defaultValue={formItem?.salDate ?? ""} />
                 </div>
                 <div className="col-span-3">
                   <label className="label block mb-1">Find</label>

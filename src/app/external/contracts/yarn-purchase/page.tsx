@@ -14,6 +14,7 @@ import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { num, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -451,13 +452,7 @@ export default async function YarnPurchaseContractPage({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-4 gap-y-3 lg:gap-y-4 gform">
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Cont. Date</label>
-                <input
-                  name="cont_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formContract?.contDate ?? today()}
-                  required
-                />
+                <DateBox name="cont_date" className="input-box mono" defaultValue={formContract?.contDate ?? today()} required />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Cont. No</label>
@@ -511,12 +506,7 @@ export default async function YarnPurchaseContractPage({
 
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Expd Dte</label>
-                <input
-                  name="expd_date"
-                  type="date"
-                  className="input-box mono"
-                  defaultValue={formContract?.expdDate ?? ""}
-                />
+                <DateBox name="expd_date" className="input-box mono" defaultValue={formContract?.expdDate ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Status</label>
@@ -719,12 +709,7 @@ export default async function YarnPurchaseContractPage({
                       {deliveries.map((d) => (
                         <tr key={d.id}>
                           <td>
-                            <input
-                              name="delivery_date"
-                              type="date"
-                              className="input-box mono text-[12px]"
-                              defaultValue={d.deliveryDate ?? ""}
-                            />
+                            <DateBox name="delivery_date" className="input-box mono text-[12px]" defaultValue={d.deliveryDate ?? ""} />
                           </td>
                           <td>
                             <input
@@ -754,11 +739,7 @@ export default async function YarnPurchaseContractPage({
                       {emptySlots.map((i) => (
                         <tr key={`e-${i}`}>
                           <td>
-                            <input
-                              name="delivery_date"
-                              type="date"
-                              className="input-box mono text-[12px]"
-                            />
+                            <DateBox name="delivery_date" className="input-box mono text-[12px]" />
                           </td>
                           <td>
                             <input name="do_no" className="input-box mono text-[12px]" />

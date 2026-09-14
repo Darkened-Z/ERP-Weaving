@@ -17,6 +17,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, txt } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -657,13 +658,7 @@ export default async function GrnPage({
                 </div>
                 <div>
                   <label className="label block mb-1">Date</label>
-                  <input
-                    name="grn_date"
-                    type="date"
-                    className="input-box mono"
-                    defaultValue={formItem?.grnDate ?? today()}
-                    required
-                  />
+                  <DateBox name="grn_date" className="input-box mono" defaultValue={formItem?.grnDate ?? today()} required />
                 </div>
                 <div>
                   <label className="label block mb-1">Supplier</label>

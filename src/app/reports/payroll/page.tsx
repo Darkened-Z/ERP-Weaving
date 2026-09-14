@@ -3,6 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { sql, and, gte, lte, isNotNull } from "drizzle-orm";
 import { toKarachiDate } from "@/lib/time";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -132,21 +133,11 @@ export default async function PayrollPage({
         >
           <div>
             <label className="label block mb-1">From</label>
-            <input
-              type="date"
-              name="from"
-              defaultValue={from ?? ""}
-              className="input-box mono"
-            />
+            <DateBox name="from" defaultValue={from ?? ""} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">To</label>
-            <input
-              type="date"
-              name="to"
-              defaultValue={to ?? ""}
-              className="input-box mono"
-            />
+            <DateBox name="to" defaultValue={to ?? ""} className="input-box mono" />
           </div>
           <div>
             <label className="label block mb-1">Rate / Mtr (Rs)</label>

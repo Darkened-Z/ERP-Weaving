@@ -22,6 +22,7 @@ import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { num, txt, round, intVal } from "@/lib/form";
 import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -632,7 +633,7 @@ export default async function IntGreyConversionContractPage({
                 <div className="grid grid-cols-5 gap-3 mb-3 gform">
                   <div>
                     <label className="label block mb-1">Cont. Date</label>
-                    <input name="cont_date" type="date" className="input-box mono" defaultValue={formItem?.contDate ?? today} />
+                    <DateBox name="cont_date" className="input-box mono" defaultValue={formItem?.contDate ?? today} />
                   </div>
                   <div>
                     <label className="label block mb-1">Status</label>
@@ -667,7 +668,7 @@ export default async function IntGreyConversionContractPage({
                 <div className="grid grid-cols-5 gap-3 mb-3 gform">
                   <div>
                     <label className="label block mb-1">Exp. Date</label>
-                    <input name="exp_date" type="date" className="input-box mono" defaultValue={formItem?.expDate ?? ""} />
+                    <DateBox name="exp_date" className="input-box mono" defaultValue={formItem?.expDate ?? ""} />
                   </div>
                   <div className="col-span-4 flex items-end">
                     <span className="text-[11px] text-[var(--muted)]">(R-Running, C-Completed)</span>

@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
 import { yarnStockGodownDesc } from "@/lib/godowns";
+import { DateBox } from "@/components/date-box";
 
 const VTYPE_GL = "EXT";
 
@@ -861,7 +862,7 @@ export default async function WarpedBeamReceivingPage({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Date</label>
-                  <input name="vDate" type="date" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
+                  <DateBox name="vDate" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
                 </div>
                 <div className="lg:col-span-1">
                   <label className="label block mb-1">Time</label>
@@ -957,11 +958,11 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Bill Date</label>
-                  <input name="billDate" type="date" className="input-box mono" defaultValue={editing?.billDate ?? ""} />
+                  <DateBox name="billDate" className="input-box mono" defaultValue={editing?.billDate ?? ""} />
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Bill Due Date</label>
-                  <input name="billDueDate" type="date" className="input-box mono" defaultValue={editing?.billDueDate ?? ""} />
+                  <DateBox name="billDueDate" className="input-box mono" defaultValue={editing?.billDueDate ?? ""} />
                 </div>
                 <div className="lg:col-span-1">
                   <label className="label block mb-1">Billing Status</label>
@@ -974,7 +975,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Gp.Date</label>
-                  <input name="gpDate" type="date" className="input-box mono" defaultValue={editing?.gpDate ?? ""} />
+                  <DateBox name="gpDate" className="input-box mono" defaultValue={editing?.gpDate ?? ""} />
                 </div>
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Result Count SZG</label>
@@ -1049,7 +1050,7 @@ export default async function WarpedBeamReceivingPage({
                               </button>
                               {i + 1}
                             </td>
-                            <td><input name="rDate" type="date" className={gridCellCls} defaultValue={l?.rDate ?? ""} /></td>
+                            <td><DateBox name="rDate" className={gridCellCls} defaultValue={l?.rDate ?? ""} /></td>
                             <td><input name="yarnLotNo" className={gridCellCls} defaultValue={l?.yarnLotNo ?? ""} /></td>
                             <td><input name="yarnBrand" list="iwb-brands" className={gridCellCls} defaultValue={l?.yarnBrand ?? ""} /></td>
                             <td><input name="setNo" className={gridCellCls} defaultValue={l?.setNo ?? ""} /></td>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { DateBox } from "@/components/date-box";
 
 type Line = {
   accCode: string;
@@ -183,12 +184,7 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
                 </div>
                 <div>
                   <label className="label block mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={vdate}
-                    onChange={(e) => setVdate(e.target.value)}
-                    className="input-box mono"
-                  />
+                  <DateBox className="input-box mono" />
                 </div>
                 <div>
                   <label className="label block mb-2">Narration</label>

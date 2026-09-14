@@ -19,6 +19,7 @@ import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { num, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -1081,13 +1082,7 @@ export default async function YarnSaleVoucherPage({
                   </div>
                   <div className="lg:col-span-2">
                     <label className="label block mb-1">Date</label>
-                    <input
-                      name="v_date"
-                      type="date"
-                      className="input-box mono"
-                      defaultValue={formVoucher?.vDate ?? today()}
-                      required
-                    />
+                    <DateBox name="v_date" className="input-box mono" defaultValue={formVoucher?.vDate ?? today()} required />
                   </div>
                   <div className="lg:col-span-1">
                     <label className="label block mb-1">Type</label>

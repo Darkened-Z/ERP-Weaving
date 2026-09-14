@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { sql } from "drizzle-orm";
+import { DateBox } from "@/components/date-box";
 import {
   TICKET_PRIORITIES,
   TICKET_TYPES,
@@ -298,7 +299,7 @@ export default async function NewTicketPage({
 
             <div>
               <label className="label block mb-1">Due Date</label>
-              <input name="due_date" type="date" className="input-box mono" />
+              <DateBox name="due_date" className="input-box mono" />
             </div>
 
             <div className="md:col-span-2 gform-full">

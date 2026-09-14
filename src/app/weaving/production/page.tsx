@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +46,7 @@ export default async function ProductionPage({
           </div>
           <form className="flex items-center gap-3">
             <label className="label">Date</label>
-            <input
-              type="date"
-              name="date"
-              defaultValue={date}
-              className="input-box mono text-[13px] w-44"
-            />
+            <DateBox name="date" defaultValue={date} className="input-box mono text-[13px] w-44" />
             <button type="submit" className="btn btn-sm">Go</button>
           </form>
         </div>

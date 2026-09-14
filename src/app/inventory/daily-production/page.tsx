@@ -18,6 +18,7 @@ import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike } from "@/lib/form";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
@@ -1436,7 +1437,7 @@ export default async function DailyProductionPage({
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Date</label>
-                    <input name="vDate" type="date" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
+                    <DateBox name="vDate" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">No.</label>
@@ -1595,7 +1596,7 @@ export default async function DailyProductionPage({
                                 <option value="M">M</option>
                               </select>
                             </td>
-                            <td><input name="kSmDate" type="date" className="input-box mono text-[12px]" defaultValue={s?.kSmDate ?? ""} /></td>
+                            <td><DateBox name="kSmDate" className="input-box mono text-[12px]" defaultValue={s?.kSmDate ?? ""} /></td>
                             <td>
                               <select name="beamStatus" className="input-box mono text-[12px]" defaultValue={s?.beamStatus ?? ""}>
                                 <option value=""></option>
