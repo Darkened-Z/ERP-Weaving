@@ -9,26 +9,34 @@ const isoToDisplay = (iso: string) => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 };
 
+/**
+ * Parse a typed day-first date. The year must be exactly 2 or 4 digits — NOT
+ * 2-to-4: a half-typed "202" would otherwise parse and produce "202-10-01".
+ * The day/month are checked against a real calendar so 31/02 is rejected
+ * rather than silently rolling into March.
+ */
 const displayToIso = (txt: string) => {
-  const m = /^(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{2,4})$/.exec((txt ?? "").trim());
+  const m = /^(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{2}|\d{4})$/.exec((txt ?? "").trim());
   if (!m) return "";
-  const d = m[1].padStart(2, "0");
-  const mo = m[2].padStart(2, "0");
-  let y = m[3];
-  if (y.length === 2) y = String(2000 + Number(y));
-  if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return "";
-  return `${y}-${mo}-${d}`;
+  const d = Number(m[1]);
+  const mo = Number(m[2]);
+  const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return "";
+  return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 };
 
 /**
  * Day-first date box.
  *
- * A native browser date control renders its text in the BROWSER's locale, not
- * the document's — so on a US-locale browser every date read 09/01/2026 for the
- * 1st of September, and no document-level setting changes it. This paints
- * DD/MM/YYYY itself and submits ISO through a hidden input under the real field
- * name, so nothing downstream changes. The calendar button still opens the OS
- * picker through an invisible native control laid over it.
+ * A native browser date control paints its text in the BROWSER's locale, not
+ * the document's, so on a US-locale browser 1 September read as 09/01/2026.
+ * This paints DD/MM/YYYY itself and submits ISO through a hidden input under
+ * the real field name, so nothing downstream changes.
+ *
+ * While the box has focus the typed text is the ONLY source of truth — nothing
+ * rewrites it mid-keystroke. Normalising happens on blur.
  */
 export function DateBox({
   name,
@@ -50,13 +58,18 @@ export function DateBox({
   const [iso, setIso] = useState(defaultValue ?? "");
   const [text, setText] = useState(isoToDisplay(defaultValue ?? ""));
   const hiddenRef = useRef<HTMLInputElement>(null);
+  // True while WE are writing the hidden field. Without this the sync listener
+  // below hears our own commit and overwrites the half-typed text with a
+  // reformatted date — typing "01/10/20" became "01/10/2020" under the cursor.
+  const selfWrite = useRef(false);
+  const focused = useRef(false);
 
-  // Follow programmatic writes to the hidden field (AutoFill, row-erase, a
-  // sibling calc) so the visible text never drifts from what gets submitted.
+  // Follow writes made by something else (AutoFill, row-erase, a sibling calc).
   useEffect(() => {
     const el = hiddenRef.current;
     if (!el) return;
     const sync = () => {
+      if (selfWrite.current || focused.current) return;
       const v = el.value ?? "";
       setIso(v);
       setText(isoToDisplay(v));
@@ -72,17 +85,15 @@ export function DateBox({
   const commit = (nextIso: string) => {
     setIso(nextIso);
     const el = hiddenRef.current;
-    if (el) {
-      el.value = nextIso;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    }
+    if (!el) return;
+    selfWrite.current = true;
+    el.value = nextIso;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    selfWrite.current = false;
   };
 
   return (
-    // A native date control carries its own intrinsic width; a bare text input
-    // does not, so inside a flex filter bar it collapsed to a couple of
-    // characters. Hold enough room for DD/MM/YYYY plus the calendar button.
     <span className="relative block" style={{ minWidth: 132 }}>
       <input type="hidden" ref={hiddenRef} name={name} value={iso} readOnly />
       <input
@@ -95,17 +106,49 @@ export function DateBox({
         autoComplete="off"
         required={required}
         disabled={disabled}
-        onChange={(e) => {
-          setText(e.target.value);
-          const next = displayToIso(e.target.value);
-          if (next || !e.target.value.trim()) commit(next);
+        onFocus={() => {
+          focused.current = true;
         }}
-        onBlur={() => setText(isoToDisplay(iso))}
+        onChange={(e) => {
+          // Show exactly what was typed. Commit only once it is a real date, so
+          // a partial entry never writes a wrong value, and never blank the box
+          // just because it is not finished yet.
+          const typed = e.target.value;
+          setText(typed);
+          if (!typed.trim()) {
+            commit("");
+            return;
+          }
+          const next = displayToIso(typed);
+          if (next) commit(next);
+        }}
+        onBlur={() => {
+          focused.current = false;
+          // Tidy a valid entry into DD/MM/YYYY; leave anything unparseable as
+          // typed so the operator can see and correct it.
+          const next = displayToIso(text);
+          if (next) {
+            if (next !== iso) commit(next);
+            setText(isoToDisplay(next));
+          } else if (!text.trim()) {
+            setText("");
+          }
+        }}
       />
+      {/* A visible calendar glyph so the picker is findable — the operator
+          should never have to type a date by hand. The native control sits
+          transparent on top of it and opens the OS picker on click. */}
+      <span
+        aria-hidden
+        className="absolute right-0 top-0 h-full w-7 flex items-center justify-center text-[13px] text-[var(--muted)] pointer-events-none"
+      >
+        📅
+      </span>
       <input
         type={NATIVE_DATE}
         tabIndex={-1}
-        aria-hidden
+        aria-label="Open date picker"
+        title="Pick a date"
         disabled={disabled}
         value={iso}
         onChange={(e) => {
