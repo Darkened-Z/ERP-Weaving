@@ -23,7 +23,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
+    {/* en-GB, not en: the browser renders <input type="date"> in the document's
+        locale, and plain "en" gives the US MM/DD/YYYY order. The mill reads
+        day-first (01-09-26), so every date box across the app must show
+        DD/MM/YYYY. The stored value is ISO either way, so nothing else moves. */}
+    <html lang="en-GB" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );
