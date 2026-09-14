@@ -158,10 +158,8 @@ export default async function FoldingStockPage({
               {withZero ? " · with zero" : " · without zero"}
             </p>
           </div>
-          <div className="flex items-end gap-2 flex-wrap">
-            {/* flex-wrap: five filters in one unwrapped row held the form at
-                ~800px, which pushed the whole report sideways on a phone. */}
-            <form method="GET" className="flex items-end gap-2 flex-wrap">
+          <div className="flex items-end gap-2">
+            <form method="GET" className="flex items-end gap-2">
               <div>
                 <label className="label block mb-1">From</label>
                 <DateBox name="from" defaultValue={from} className="input-box mono" />
