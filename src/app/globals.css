@@ -303,12 +303,6 @@ tr:hover td {
    Add `gform` to a header field grid whose children are <div><label.label/>…</div>.
    Every field becomes label-left, 2 per row. Wide fields (col-span ≥ 4, or an
    explicit `gform-full`) span the whole row. CSS-only: no markup/logic change. */
-/* DateBox: wants room for DD/MM/YYYY plus its calendar button in ordinary
-   layouts, but inside a compact label-left .gform cell the label already takes
-   96px, so the box must be free to shrink instead of bursting out of the cell. */
-.datebox { min-width: 132px; }
-.gform .datebox { min-width: 0; }
-
 .gform {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
