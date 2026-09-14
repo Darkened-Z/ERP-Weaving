@@ -778,6 +778,33 @@ export default async function DailyProductionPage({
       });
     }
 
+    // Shed/loom come off the BEAM. Shed No is no longer a field on this form and
+    // the grid's loom cell is only filled when the beam was picked with a loom,
+    // so without this every saved row lands with shed_no and loom_no NULL and the
+    // production reports cannot group by shed at all. Stamp both from the beam
+    // the row names, and give the header the shed of its first beam.
+    const namedBeams = Array.from(
+      new Set(validSets.map((s) => (s.beamNo ?? "").trim()).filter(Boolean)),
+    );
+    if (namedBeams.length) {
+      const beamRows = await db
+        .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+        .from(schema.beams)
+        .where(inArray(schema.beams.beamNo, namedBeams));
+      const byBeam = new Map(beamRows.map((b) => [b.beamNo, b]));
+      for (const st of validSets) {
+        const b = byBeam.get((st.beamNo ?? "").trim());
+        if (!b) continue;
+        if (st.loomNo == null && b.loomNo != null) st.loomNo = b.loomNo;
+      }
+      if (!header.shedNo) {
+        const firstShed = validSets
+          .map((st) => byBeam.get((st.beamNo ?? "").trim())?.shed)
+          .find((x) => !!x);
+        if (firstShed) header.shedNo = firstShed;
+      }
+    }
+
     // ---- validations ----
     const hasBeam = validSets.some((s) => (s.beamNo ?? "").trim().length > 0);
     if (!hasBeam) {
