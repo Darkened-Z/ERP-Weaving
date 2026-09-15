@@ -6,6 +6,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
 import { numberToWords } from "@/lib/number-to-words";
+import { countLabelMap, richConstruction } from "@/lib/grey-quality";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,35 @@ export default async function DamiVoucherPage({
         )
         .limit(1)
     : [];
+
+  // "GC-001" means nothing to whoever receives the cloth — print the construction
+  // it stands for (reed x pick, warp x weft counts) when the slip did not store a
+  // description of its own.
+  const qualityCode = dami.dspQuality ?? "";
+  let greyLine = dami.dspQualityDesc ?? "";
+  if (!greyLine && qualityCode) {
+    const [constr] = await db
+      .select({
+        code: schema.greyConstruction.code,
+        description: schema.greyConstruction.description,
+        reed: schema.greyConstruction.reed,
+        pick: schema.greyConstruction.pick,
+        warpCount: schema.greyConstruction.warpCount,
+        warp2: schema.greyConstruction.warp2,
+        weftCount: schema.greyConstruction.weftCount,
+        weft2: schema.greyConstruction.weft2,
+      })
+      .from(schema.greyConstruction)
+      .where(eq(schema.greyConstruction.code, qualityCode))
+      .limit(1);
+    if (constr) {
+      const counts = await db
+        .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+        .from(schema.yarnCounts);
+      greyLine = richConstruction(constr, countLabelMap(counts)) || constr.description || qualityCode;
+    }
+  }
+  if (!greyLine) greyLine = qualityCode;
 
   const formatNum = (n: number) =>
     new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
@@ -140,7 +170,7 @@ export default async function DamiVoucherPage({
     ["Contract #", dami.contNo ?? ""],
     ["Despatch Loc", dami.printingLocation ?? ""],
     ["Product", dami.productDesc ?? dami.product ?? ""],
-    ["Grey", dami.dspQualityDesc ?? dami.dspQuality ?? ""],
+    ["Grey", greyLine],
     ["Width", dami.width != null ? String(dami.width) : ""],
   ].filter(([, v]) => v !== "") as [string, string][];
 
@@ -338,7 +368,6 @@ export default async function DamiVoucherPage({
             </div>
             <div className="dv-tot">
               <div className="dv-tot-row"><span>THAN</span><span>{formatNum(totalThan)}</span></div>
-              <div className="dv-tot-row"><span>WIDTH</span><span>{dami.width ?? "—"}</span></div>
               <div className="dv-tot-row grand"><span>METERS TOTAL</span><span>{formatNum(totalMtrs)}</span></div>
             </div>
           </div>

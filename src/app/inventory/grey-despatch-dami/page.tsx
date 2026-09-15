@@ -12,6 +12,8 @@ import { redirect } from "next/navigation";
 import { num, intVal, txt, nextVNoFromRows, escLike } from "@/lib/form";
 import Link from "next/link";
 import { DamiLineGrid } from "./dami-line-grid";
+import { SelectFill } from "./select-fill";
+import { countLabelMap, richConstruction } from "@/lib/grey-quality";
 import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +48,14 @@ export default async function GreyDespatchDamiPage({
         .from(schema.intGreyDespatchDami)
         .orderBy(desc(schema.intGreyDespatchDami.id));
 
-  const selected = isEditing ? damis.find((d) => d.id === idParam) ?? null : null;
+  // A Find that narrows the list to a slip should OPEN it — the operator typed a
+  // V.No to work on that voucher, and leaving the form on a blank new slip meant
+  // its pieces never appeared beside it.
+  const selected = isEditing
+    ? damis.find((d) => d.id === idParam) ?? null
+    : !isAdding && findFilter && damis.length > 0
+      ? damis[0]
+      : null;
   const formItem = isAdding ? null : selected;
 
   // Load lines if editing
@@ -61,11 +70,37 @@ export default async function GreyDespatchDamiPage({
   const upcomingVNo = nextVNoFromRows(damis, "IGDD");
   const upcomingLvNo = damis.length + 1;
 
-  // Grey constructions for DSP quality LOV
+  // Grey constructions for DSP quality LOV. The code alone ("GC-001") says
+  // nothing on a despatch slip — the operator picks a quality by its reed x pick
+  // and its warp/weft counts, so the option carries the whole construction.
   const greyConstructions = await db
-    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      width: schema.greyConstruction.width,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+    })
     .from(schema.greyConstruction)
     .orderBy(schema.greyConstruction.code);
+
+  const yarnCountList = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts)
+    .where(eq(schema.yarnCounts.status, "A"))
+    .orderBy(schema.yarnCounts.countCode);
+  // Same builder packi and godown use, so a construction reads identically here.
+  const countLabelByCode = countLabelMap(yarnCountList);
+  const constructionDesc: Record<string, string> = {};
+  for (const g of greyConstructions) {
+    const rich = richConstruction(g, countLabelByCode);
+    const w = g.width != null ? `${g.width}"` : "";
+    constructionDesc[g.code] = [rich || g.description, w].filter(Boolean).join("  ");
+  }
 
   // Pakki Parchi list for linking
   const pakkiParchis = await db
@@ -383,13 +418,16 @@ export default async function GreyDespatchDamiPage({
                   <select name="dsp_quality" className="input-box mono text-[11px]" defaultValue={formItem?.dspQuality ?? ""}>
                     <option value="">— select —</option>
                     {greyConstructions.map((g) => (
-                      <option key={g.code} value={g.code}>{g.code}</option>
+                      <option key={g.code} value={g.code}>
+                        {constructionDesc[g.code] ? `${g.code} — ${constructionDesc[g.code]}` : g.code}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div className="col-span-9">
                   <label className="label block mb-1">Grey Construction</label>
-                  <input name="dsp_quality_desc" className="input-box mono text-[11px]" defaultValue={formItem?.dspQualityDesc ?? ""} placeholder="71 X 56  30/S MVS  PV 65;35 X 20/S PVT  PV 80;20" />
+                  <input name="dsp_quality_desc" className="input-box mono text-[11px]" defaultValue={formItem?.dspQualityDesc ?? constructionDesc[formItem?.dspQuality ?? ""] ?? ""} placeholder="71 X 56  30/S MVS  PV 65;35 X 20/S PVT  PV 80;20" />
+                  <SelectFill watch="dsp_quality" target="dsp_quality_desc" map={constructionDesc} />
                 </div>
               </div>
 
@@ -522,14 +560,54 @@ export default async function GreyDespatchDamiPage({
             )}
           </div>
 
-          {/* ─── RIGHT: Piece Line Grid ─── */}
-          <div className="w-56 shrink-0 border border-black p-3">
+          {/* ─── RIGHT: Piece Line Grid + the slip's own details ─── */}
+          <div className="w-72 shrink-0 border border-black p-3">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">Pieces (Than / Mtr)</div>
             <div className="text-[10px] text-[var(--muted)] mb-2">Press Enter to add next row</div>
             <DamiLineGrid
               initialLines={initialLineRows}
               formId="dami-save-form"
             />
+
+            {/* The whole slip, readable here — the operator should not have to open
+                the print page to check what a voucher carries. */}
+            {formItem && (
+              <div className="mt-4 pt-3 border-t-2 border-black">
+                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">Voucher Details</div>
+                <div className="text-[11px] leading-[1.7]">
+                  {([
+                    ["V.No", formItem.vNo ?? "—"],
+                    ["Book #", formItem.lvNo != null ? String(formItem.lvNo) : "—"],
+                    ["Date", formItem.vDate ?? "—"],
+                    ["Party", formItem.saleParty ?? formItem.subParty ?? formItem.party ?? "—"],
+                    ["Contract", formItem.contNo ?? "—"],
+                    ["Despatch Loc", formItem.printingLocation ?? "—"],
+                    ["Product", formItem.productDesc ?? formItem.product ?? "—"],
+                    ["Grey", formItem.dspQualityDesc ?? constructionDesc[formItem.dspQuality ?? ""] ?? formItem.dspQuality ?? "—"],
+                    ["Width", formItem.width != null ? `${formItem.width}"` : "—"],
+                  ] as [string, string][]).map(([k, v]) => (
+                    <div key={k} className="flex gap-2 items-baseline">
+                      <span className="text-[var(--muted)] shrink-0" style={{ flex: "0 0 74px" }}>{k}</span>
+                      <span className="font-semibold break-words min-w-0">{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between mt-2 pt-2 border-t border-[var(--border)] text-[12px]">
+                  <span><span className="text-[var(--muted)]">Than </span><b>{formatNum(formItem.than)}</b></span>
+                  <span><span className="text-[var(--muted)]">Mtrs </span><b>{formatNum(formItem.mtrs)}</b></span>
+                </div>
+                <div className="text-[10px] text-[var(--muted)] mt-1">
+                  {existingLines.length} piece row{existingLines.length === 1 ? "" : "s"} saved
+                </div>
+                <Link
+                  href={`/inventory/grey-despatch-dami/${formItem.id}/voucher`}
+                  target="_blank"
+                  className="btn btn-outline btn-sm w-full mt-2 no-print"
+                >
+                  Open Delivery Voucher
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 
@@ -559,7 +637,7 @@ export default async function GreyDespatchDamiPage({
                     <tr key={d.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold text-[13px]"><a href={href} className="no-underline block" style={st}>{d.vNo}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={st}>{d.vDate}</a></td>
-                      <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.subParty ?? d.party ?? "—"}</a></td>
+                      <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.subParty ?? d.party ?? d.saleParty ?? "—"}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.printingLocation ?? "—"}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.productDesc ?? "—"}</a></td>
                       <td className="text-right mono text-[13px]"><a href={href} className="no-underline block" style={st}>{formatNum(d.than)}</a></td>
