@@ -45,8 +45,14 @@ export function DamiLineGrid({
         el.dispatchEvent(new Event("input", { bubbles: true }));
       }
     };
-    write(thanFieldId, String(totalThan));
-    write(mtrsFieldId, totalMtrs ? String(Math.round(totalMtrs * 100) / 100) : "");
+    // A pristine starter row is not an edit — leave whatever the voucher already
+    // holds alone. Otherwise opening an older slip that has header totals but no
+    // saved pieces would knock its Than down to 1 and blank its meters.
+    const pristine = rows.length === 1 && rows[0].than === 1 && !rows[0].mtrs;
+    if (!pristine) {
+      write(thanFieldId, String(totalThan));
+      write(mtrsFieldId, totalMtrs ? String(Math.round(totalMtrs * 100) / 100) : "");
+    }
     onTotalsChange?.(totalThan, totalMtrs);
   }, [rows, onTotalsChange, thanFieldId, mtrsFieldId]);
 
