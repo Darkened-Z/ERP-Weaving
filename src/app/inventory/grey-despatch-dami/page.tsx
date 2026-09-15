@@ -253,6 +253,12 @@ export default async function GreyDespatchDamiPage({
     redirect("/inventory/grey-despatch-dami");
   }
 
+  // Day-first on screen too, not just in the date boxes.
+  const fmtDate = (iso?: string | null) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso ?? "—");
+  };
+
   const formatNum = (n?: number | null) =>
     n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
@@ -510,7 +516,7 @@ export default async function GreyDespatchDamiPage({
                   </div>
                   <div className="text-right text-[11px]">
                     <div className="text-[var(--muted)]">Date</div>
-                    <div className="font-bold mono">{formItem.vDate}</div>
+                    <div className="font-bold mono">{fmtDate(formItem.vDate)}</div>
                     {formItem.postedBy && <div className="text-[var(--muted)] mt-1">Posted by: <b>{formItem.postedBy}</b></div>}
                   </div>
                 </div>
@@ -578,7 +584,7 @@ export default async function GreyDespatchDamiPage({
                   {([
                     ["V.No", formItem.vNo ?? "—"],
                     ["Book #", formItem.lvNo != null ? String(formItem.lvNo) : "—"],
-                    ["Date", formItem.vDate ?? "—"],
+                    ["Date", fmtDate(formItem.vDate)],
                     ["Party", formItem.saleParty ?? formItem.subParty ?? formItem.party ?? "—"],
                     ["Contract", formItem.contNo ?? "—"],
                     ["Despatch Loc", formItem.printingLocation ?? "—"],
@@ -636,7 +642,7 @@ export default async function GreyDespatchDamiPage({
                   return (
                     <tr key={d.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold text-[13px]"><a href={href} className="no-underline block" style={st}>{d.vNo}</a></td>
-                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={st}>{d.vDate}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={st}>{fmtDate(d.vDate)}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.subParty ?? d.party ?? d.saleParty ?? "—"}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.printingLocation ?? "—"}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.productDesc ?? "—"}</a></td>
