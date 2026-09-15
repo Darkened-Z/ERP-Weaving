@@ -140,6 +140,13 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Rejection:** account **`1.01.25.01.0038`** GODOWN - REJECTION GREY STOCK (WVG) created (godown head 1.01.25.01) — ready for GL. Currently rejection is **tracked in the folding-stock report** (Rejection column = Σ `set.rejCount` per contract); no rejection GL yet (owner to confirm the Dr/Cr before posting).
 - **Godown accounts added under 1.01.25.01:** `.0037` FOLDING GREY STOCK, `.0038` REJECTION GREY STOCK (both created in Turso + local).
 
+## Posting accounts vs the chart (`src/lib/gl-accounts.ts` + `posting_accounts`)
+
+- **A posting key can name a code that has no chart row.** The GL still writes it, the ledger cannot name it, and the money is effectively invisible. Audit with: every `posting_accounts.acc_code` must exist in `chart_of_accounts`.
+- Fixed 2026-09: created the `5.01.01.01` income branch (ICWA/IGST/IFST/INCY/INVG) and, under heads that were already correct, `7.01.06.01.0001-0003` knotting/sarning/maroori (DIRECT WAGES) and `1.01.25.16.0001` store parts stock (STOCK - STORE). Corrected three keys: `GST_OUTPUT` and `FURTHER_TAX` were off by one on the Oracle page, and `YARN_PURCHASE_STOCK` pointed into ADMIN OFFICE EXPENSES instead of `1.01.25.01.0001 GODOWN - YARN STOCK (WVG)`.
+- **Still unbacked, and NOT to be created where they currently point** (their heads contradict the account): `PARTS_CONSUMPTION` 7.01.07.01.0006 and `ADVANCE_CLEARING` 7.05.10.0001 have no parent head at all; `ADJUSTMENT_LOSS`, `WARPING_SIZING_EXP`, `PARTS_STOCK_EXP` all point into `7.05.01.01 ADMIN OFFICE EXPENSES (SHED-1) SHUTTLESS`. The chart already holds better homes — `7.02.01.0001.0006` / `7.02.01.0002.0005` SIZING WARPING CHARGES (Sulzer / Airjet, shed-specific so it needs the owner's call) and `7.01.06.04 PARTS EXPENSE A/C (WVG)`.
+- `YPV#1` still carries **1,855,000** on the dead code `7.05.01.01.0020`; repointing the key does not move posted rows — reclassing a posted voucher is the mill's decision.
+
 ## Inventory — Grey Cloth Despatch (`inventory/grey-despatch`) — thaans panel + line grid
 
 - **The route lists UNDELIVERED thans, so a saved voucher's own thans must be asked for by name.** Saving stamps `dlv_status='Y'`; without the `keep=` query param (comma-separated mm/Than Sr No) reopening IGD-0001 showed an empty panel and no trace of the 200 m it carried. `seeded` ref gates `fillLineGrid` so the first render of an edit cannot wipe the server-rendered hidden line inputs with an empty selection.
