@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 const round = (v: number, d: number) => {
   const p = 10 ** d;
@@ -590,40 +590,78 @@ function fillLineGrid(selected: ThanRow[], maxRows: number) {
   }
 }
 
-export function DesignThansFill({ lineRows }: { lineRows: number }) {
+export function DesignThansFill({
+  lineRows,
+  savedContNo = "",
+  savedThans = [],
+}: {
+  lineRows: number;
+  /** Conv.Cont No of the voucher being edited, so its thaans load on arrival. */
+  savedContNo?: string;
+  /** mm/Than Sr No values this voucher already despatched — ticked on load. */
+  savedThans?: string[];
+}) {
   const [thans, setThans] = useState<ThanRow[]>([]);
   const [removed, setRemoved] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [lastDesign, setLastDesign] = useState("");
+  // Nothing may be written back into the hidden line inputs until the panel has
+  // actually loaded the saved voucher's thaans; otherwise the first render of an
+  // edit wipes the server-rendered lines with an empty selection.
+  const seeded = useRef(!savedContNo);
 
   const selected = thans.filter((t) => t.mm && !removed.has(t.id));
   const selectedMtrs =
     Math.round(selected.reduce((sum, t) => sum + (t.totalCount ?? 0), 0) * 100) / 100;
 
-  const fetchThans = useCallback(async (contNo: string) => {
+  const fetchThans = useCallback(async (contNo: string, keep: string[] = []) => {
     if (!contNo.trim()) { setThans([]); setRemoved(new Set()); setLastDesign(""); return; }
     setLoading(true);
     try {
-      const res = await fetch(`/inventory/grey-despatch/thans?contNo=${encodeURIComponent(contNo)}`);
+      const qs = new URLSearchParams({ contNo });
+      if (keep.length) qs.set("keep", keep.join(","));
+      const res = await fetch(`/inventory/grey-despatch/thans?${qs.toString()}`);
       const data: ThanRow[] = await res.json();
       setThans(data);
-      setRemoved(new Set());
+      // On an edit only the voucher's own thaans start ticked; the rest of the
+      // contract's undelivered stock is offered unticked so it can be added.
+      setRemoved(
+        keep.length
+          ? new Set(data.filter((t) => !t.mm || !keep.includes(t.mm)).map((t) => t.id))
+          : new Set()
+      );
       setLastDesign(contNo);
     } catch { /* ignore */ } finally { setLoading(false); }
   }, []);
+
+  // Editing a saved voucher: pull its thaans in on mount. They are delivered
+  // already, so the plain undelivered query returns nothing for them — `keep`
+  // brings exactly this voucher's serials back.
+  useEffect(() => {
+    if (!savedContNo) return;
+    let live = true;
+    (async () => {
+      await fetchThans(savedContNo, savedThans);
+      if (live) seeded.current = true;
+    })();
+    return () => { live = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedContNo, savedThans.join(",")]);
 
   useEffect(() => {
     const onCombo = (e: Event) => {
       const d = (e as CustomEvent).detail as { name?: string; value?: string } | undefined;
       if (d?.name !== "conv_cont_no") return;
-      fetchThans(d.value ?? "");
+      seeded.current = true;
+      fetchThans(d.value ?? "", d.value === savedContNo ? savedThans : []);
     };
     document.addEventListener("combobox:change", onCombo);
     return () => document.removeEventListener("combobox:change", onCombo);
-  }, [fetchThans]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchThans, savedContNo, savedThans.join(",")]);
 
   useEffect(() => {
-    if (lastDesign) fillLineGrid(selected, lineRows);
+    if (lastDesign && seeded.current) fillLineGrid(selected, lineRows);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [removed, thans, lineRows]);
 

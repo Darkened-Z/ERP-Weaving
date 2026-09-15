@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/db";
-import { and, eq, isNotNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   const contNo = req.nextUrl.searchParams.get("contNo")?.trim();
   if (!contNo) return NextResponse.json([]);
+
+  // Thaans already on the voucher being edited. Saving stamps dlvStatus='Y', so
+  // without this the thaans a saved voucher despatched drop straight out of the
+  // panel and the operator can no longer see what the voucher carries.
+  const keep = (req.nextUrl.searchParams.get("keep") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   // Scoped to the CONTRACT, not its party (owner): a party can run several
   // contracts and a than's quality follows its contract, so a party-wide list
@@ -33,7 +41,8 @@ export async function GET(req: NextRequest) {
         isNotNull(schema.intDailyProductionSet.mmThanSrNo),
         or(
           sql`${schema.intDailyProductionSet.dlvStatus} IS NULL`,
-          ne(schema.intDailyProductionSet.dlvStatus, "Y")
+          ne(schema.intDailyProductionSet.dlvStatus, "Y"),
+          ...(keep.length ? [inArray(schema.intDailyProductionSet.mmThanSrNo, keep)] : [])
         )
       )
     )
