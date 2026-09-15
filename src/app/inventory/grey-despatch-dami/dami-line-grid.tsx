@@ -10,10 +10,19 @@ interface Props {
    *  that form, so without this its hidden inputs are never submitted and every
    *  piece row is silently dropped on save. */
   formId?: string;
+  /** Header fields the row totals are written into. */
+  thanFieldId?: string;
+  mtrsFieldId?: string;
   onTotalsChange?: (than: number, mtrs: number) => void;
 }
 
-export function DamiLineGrid({ initialLines, formId, onTotalsChange }: Props) {
+export function DamiLineGrid({
+  initialLines,
+  formId,
+  thanFieldId = "dami-than",
+  mtrsFieldId = "dami-mtrs",
+  onTotalsChange,
+}: Props) {
   const [rows, setRows] = useState<LineRow[]>(() =>
     initialLines.length > 0
       ? initialLines
@@ -21,12 +30,25 @@ export function DamiLineGrid({ initialLines, formId, onTotalsChange }: Props) {
   );
   const tableRef = useRef<HTMLTableElement>(null);
 
-  // Calculate totals whenever rows change
+  // Calculate totals whenever rows change, and stamp them straight onto the
+  // header fields. They used to be summed by a script listening for input
+  // events, which read the hidden mirror inputs BEFORE React had re-rendered
+  // them — so the header was always one edit behind and the voucher saved a
+  // short meter total (three pieces of 100/200/300 stored 300, not 600).
   useEffect(() => {
     const totalThan = rows.reduce((s, r) => s + (r.than || 0), 0);
     const totalMtrs = rows.reduce((s, r) => s + (parseFloat(r.mtrs) || 0), 0);
+    const write = (id: string, val: string) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el && el.value !== val) {
+        el.value = val;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+    write(thanFieldId, String(totalThan));
+    write(mtrsFieldId, totalMtrs ? String(Math.round(totalMtrs * 100) / 100) : "");
     onTotalsChange?.(totalThan, totalMtrs);
-  }, [rows, onTotalsChange]);
+  }, [rows, onTotalsChange, thanFieldId, mtrsFieldId]);
 
   function updateRow(idx: number, field: "than" | "mtrs", val: string) {
     setRows(prev => {
