@@ -14,7 +14,7 @@ import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
-import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
+import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, fullConstruction as gqFullConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
 import { num, intVal, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -141,11 +141,13 @@ export default async function PackiParchiPage({
     .orderBy(schema.greyConstruction.description);
   const wfPart = (c: (typeof constructions)[number]) => gqWfPart(c, countLabelByCode);
   const richConstruction = (c: (typeof constructions)[number]) => gqRichConstruction(c, countLabelByCode);
+  // Both sides spelled out for anything the operator or the bill reads.
+  const fullConstruction = (c: (typeof constructions)[number]) => gqFullConstruction(c, countLabelByCode);
   // Quality is keyed by construction CODE (e.g. GC-001) everywhere, so packi and godown
   // stock line up. Label shows code + the rich construction.
   const qualityOpts = constructions.map((c) => ({
     value: c.code,
-    label: richConstruction(c) || c.code,
+    label: fullConstruction(c) || c.code,
   }));
   const qualityRichMap: Record<string, Record<string, string>> = Object.fromEntries(
     constructions.map((c) => [c.code, { quality_rich_disp: richConstruction(c), quality_print_rich_disp: richConstruction(c) }])
@@ -336,7 +338,7 @@ export default async function PackiParchiPage({
   // Print stays the full construction list — any random quality is allowed there.)
   // Quality shown as the FULL construction (reed×pick + warp/weft) — no code, no
   // doubling. Looked up by the normalized code so even a legacy rich value resolves.
-  const richByCode = new Map(constructions.map((c) => [c.code, richConstruction(c) || c.description]));
+  const richByCode = new Map(constructions.map((c) => [c.code, fullConstruction(c) || c.description]));
   const richFull = (code: string) => richByCode.get(normQuality(code)) ?? richByCode.get(code) ?? code;
   const stockQualityOpts = Object.entries(qualityStockMap)
     .filter(([, s]) => Number(s.grey_stock_mtr_disp) > 0 || Number(s.grey_stock_than_disp) > 0)
@@ -1069,6 +1071,31 @@ export default async function PackiParchiPage({
                 />
               </div>
 
+              {/* What this quality actually has lying in the godown. The operator
+                  picks a quality and needs to know, right there, whether there is
+                  enough of it to sell — without opening the stock report. */}
+              <div className="lg:col-span-12">
+                <div className="flex flex-wrap items-stretch gap-0 border border-black">
+                  <div className="px-3 py-1.5 bg-black text-white text-[10px] uppercase tracking-[0.12em] font-semibold flex items-center">
+                    In Stock
+                  </div>
+                  {([
+                    ["Than", ppStockThan != null ? formatNum(ppStockThan) : "—"],
+                    ["Meter", ppStockMtr != null ? formatNum(ppStockMtr) : "—"],
+                    ["Avg Rate", ppAvgRate != null ? formatNum(ppAvgRate) : "—"],
+                    ["Stock Value", ppStockMtr != null && ppAvgRate != null ? formatNum(Math.round(ppStockMtr * ppAvgRate)) : "—"],
+                  ] as [string, string][]).map(([k, v]) => (
+                    <div key={k} className="px-3 py-1.5 border-l border-black flex items-baseline gap-2">
+                      <span className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">{k}</span>
+                      <span className="mono text-[13px] font-bold">{v}</span>
+                    </div>
+                  ))}
+                  <div className="px-3 py-1.5 border-l border-black flex items-center text-[10px] text-[var(--muted)]">
+                    {curQualityCode ? richFull(curQualityCode) : "pick a quality to see its stock"}
+                  </div>
+                </div>
+              </div>
+
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Meter Re</label>
                 <input
@@ -1567,49 +1594,19 @@ export default async function PackiParchiPage({
               </div>
             </div>
 
-            <div className="mt-6">
-              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">BAGS</div>
-              <div className="overflow-x-auto border border-black">
-                <table style={{ minWidth: "900px" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: "70px" }}>Section</th>
-                      <th>Quality</th>
-                      <th className="text-right">WT/Meter</th>
-                      <th className="text-right">Bags</th>
-                      <th className="text-right">Rate</th>
-                      <th className="text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="mono text-[12px] text-center font-bold">Warp</td>
-                      <td><Combobox name="warp_quality" options={qualityOpts} defaultValue={warpBag?.quality ?? ""} placeholder="Quality…" className={gridCellCls} /></td>
-                      <td><input name="warp_wt" type="number" step="any" className={gridCellNumCls} defaultValue={warpBag?.wtPerMeter ?? ""} /></td>
-                      <td><input name="warp_bags" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={warpBag?.bags ?? ""} readOnly /></td>
-                      <td><input name="warp_rate" type="number" step="any" className={gridCellNumCls} defaultValue={warpBag?.rate ?? ""} /></td>
-                      <td><input name="warp_amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={warpBag?.amount ?? ""} readOnly /></td>
-                    </tr>
-                    <tr>
-                      <td className="mono text-[12px] text-center font-bold">Weft</td>
-                      <td><Combobox name="weft_quality" options={qualityOpts} defaultValue={weftBag?.quality ?? ""} placeholder="Quality…" className={gridCellCls} /></td>
-                      <td><input name="weft_wt" type="number" step="any" className={gridCellNumCls} defaultValue={weftBag?.wtPerMeter ?? ""} /></td>
-                      <td><input name="weft_bags" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={weftBag?.bags ?? ""} readOnly /></td>
-                      <td><input name="weft_rate" type="number" step="any" className={gridCellNumCls} defaultValue={weftBag?.rate ?? ""} /></td>
-                      <td><input name="weft_amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={weftBag?.amount ?? ""} readOnly /></td>
-                    </tr>
-                    <tr className="bg-gray-50 font-bold">
-                      <td className="mono text-[12px] text-center">Total</td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      <td className="text-right mono text-[12px] pr-2">Sum</td>
-                      <td className="text-right mono text-[12px] pr-2">{formatNum(bagTotalAmount)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* BAGS grid removed at the client's request. The fields stay as hidden
+                inputs so editing a parchi that already has bag rows does not wipe
+                them on save. */}
+            <input type="hidden" name="warp_quality" defaultValue={warpBag?.quality ?? ""} />
+            <input type="hidden" name="warp_wt" defaultValue={warpBag?.wtPerMeter ?? ""} />
+            <input type="hidden" name="warp_bags" defaultValue={warpBag?.bags ?? ""} />
+            <input type="hidden" name="warp_rate" defaultValue={warpBag?.rate ?? ""} />
+            <input type="hidden" name="warp_amount" defaultValue={warpBag?.amount ?? ""} />
+            <input type="hidden" name="weft_quality" defaultValue={weftBag?.quality ?? ""} />
+            <input type="hidden" name="weft_wt" defaultValue={weftBag?.wtPerMeter ?? ""} />
+            <input type="hidden" name="weft_bags" defaultValue={weftBag?.bags ?? ""} />
+            <input type="hidden" name="weft_rate" defaultValue={weftBag?.rate ?? ""} />
+            <input type="hidden" name="weft_amount" defaultValue={weftBag?.amount ?? ""} />
 
             <div className="mt-6">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
