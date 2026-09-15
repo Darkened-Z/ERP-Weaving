@@ -530,30 +530,6 @@ export default async function GreyDespatchDamiPage({
               initialLines={initialLineRows}
               formId="dami-save-form"
             />
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-                  // Sync grid totals to main form fields
-                  (function() {
-                    function syncTotals() {
-                      var rows = document.querySelectorAll('[name^="line_than_"]');
-                      var mrows = document.querySelectorAll('[name^="line_mtrs_"]');
-                      var than = 0, mtrs = 0;
-                      rows.forEach(function(r) { than += parseInt(r.value) || 0; });
-                      mrows.forEach(function(r) { mtrs += parseFloat(r.value) || 0; });
-                      var thanEl = document.getElementById('dami-than');
-                      var mtrsEl = document.getElementById('dami-mtrs');
-                      if (thanEl) thanEl.value = than;
-                      if (mtrsEl) mtrsEl.value = mtrs.toFixed(2);
-                    }
-                    document.addEventListener('change', syncTotals);
-                    document.addEventListener('input', syncTotals);
-                    document.addEventListener('keyup', syncTotals);
-                    syncTotals();
-                  })();
-                `,
-              }}
-            />
           </div>
         </div>
 
