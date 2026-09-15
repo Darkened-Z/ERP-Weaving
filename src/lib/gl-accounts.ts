@@ -32,10 +32,14 @@ const ORACLE_DEFAULTS: Record<PostingKey, string> = {
   GREY_COMMISSION_INCOME: "5.01.01.01.0006",
   // DR brokerage expense, created under the CREDITOR - BROKER head (3.03.25.03.*).
   SALE_BROKERAGE_EXP: "3.03.25.03.0003",
-  GST_OUTPUT: "5.01.01.05.0005",
-  FURTHER_TAX: "5.01.01.01.0002",
+  // Chart Of Accounts (WVG) p.25: 0002 is IGST, 0003 is IFST. These two used to
+  // be off by one, with GST pointing at SALES OF JACQURAD.
+  GST_OUTPUT: "5.01.01.01.0002",
+  FURTHER_TAX: "5.01.01.01.0003",
   FURTHER_ADJ: "5.01.01.01.0003",
-  YARN_PURCHASE_STOCK: "7.05.01.01.0020",
+  // Yarn purchase debits STOCK, not an office expense — the old default was a
+  // non-existent code under ADMIN OFFICE EXPENSES.
+  YARN_PURCHASE_STOCK: "1.01.25.01.0001",
   WARPING_SIZING_EXP: "7.05.01.01.0047",
   PARTS_STOCK: "1.01.25.16.0001",
   PARTS_CONSUMPTION: "7.01.07.01.0006",
