@@ -192,6 +192,10 @@ export default async function DamiVoucherPage({
         /* ---- piece grid ---- */
         table.dv-grid { width: 100%; border-collapse: collapse; }
         table.dv-grid th, table.dv-grid td { border: 1px solid #c7d2e3; padding: 1px 3px; font-size: 8pt; }
+        /* Fixed row height: an empty cell has no line box, so a voucher with
+           few pieces printed its blank rows as hairlines while the filled ones
+           stayed tall — the grid stopped looking like a ruled form. */
+        table.dv-grid td { height: 12px; }
         table.dv-grid th { background: #1e3a8a; color: #fff; font-weight: 700; text-align: center; letter-spacing: 0.04em; }
         table.dv-grid th:nth-child(even) { text-align: right; }
         table.dv-grid td:nth-child(odd) { text-align: center; color: #64748b; width: 22px; }
