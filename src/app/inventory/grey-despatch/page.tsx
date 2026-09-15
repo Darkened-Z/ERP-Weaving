@@ -81,6 +81,9 @@ export default async function GreyDespatchPage({
     : [];
 
   const lineGrid = Array.from({ length: Math.max(LINE_ROWS, lineRows.length) }, (_, i) => lineRows[i] ?? null);
+  const savedThanSerials = lineRows
+    .map((l) => (l.tSrNo as unknown as string | null))
+    .filter((v): v is string => !!v);
   // Qty Mtrs has no column of its own — it is Σ line length, same number the save
   // guards check the grid against.
   const savedQtyMtrs = lineRows.length ? round2(lineRows.reduce((s, l) => s + (l.lengthMtrs ?? 0), 0)) : "";
@@ -101,7 +104,11 @@ export default async function GreyDespatchPage({
   const lNoRow = await db
     .select({ m: sql<number>`COALESCE(MAX(${schema.intGreyDespatch.lNo}),0)` })
     .from(schema.intGreyDespatch);
+  // L.No doubles as the GL voucher number, so a new despatch takes the NEXT one.
+  // Showing the max meant the very first despatch carried L.No 0, and the ledger
+  // post is guarded on `vno > 0` — the voucher saved with no GL entry at all.
   const maxLNo = Number(lNoRow[0]?.m ?? 0);
+  const nextLNoDisplay = maxLNo + 1;
 
   // Parties (level>=4).
   const parties = await db
@@ -502,6 +509,13 @@ export default async function GreyDespatchPage({
     data.further = furtherVal;
     data.amtTot = amtTotVal;
 
+    // Ledger description, same wording the grey-purchase and packi-sale posts
+    // use: "<than> THAN <mtr> MTR @ <rate>, <quality> (GREY DESPATCH)".
+    const narrQuality = txt(formData.get("grey_quality_disp")) ?? "";
+    const despNarr = `${data.thanQty ?? filledLineCount} THAN ${round2(summedMtrs)} MTR @ ${convRateVal}${
+      narrQuality ? `, ${narrQuality}` : ""
+    } (GREY DESPATCH)`.trim();
+
     const inputThanSerials = inLines.map((l) => l.tSrNo).filter((s): s is string => !!s);
     const seenSerials = new Set<string>();
     for (const s of inputThanSerials) {
@@ -580,6 +594,16 @@ export default async function GreyDespatchPage({
           } else {
             vno = data.lNo;
           }
+          if (vno <= 0) {
+            // Vouchers written before L.No was assigned properly carry 0, and the
+            // GL post below is guarded on vno > 0 — they would stay unposted for
+            // ever. Hand out the next number on the first edit.
+            const [lRowUp] = await tx
+              .select({ m: sql<number>`COALESCE(MAX(${schema.intGreyDespatch.lNo}),0)` })
+              .from(schema.intGreyDespatch);
+            vno = Number(lRowUp?.m ?? 0) + 1;
+          }
+          data.lNo = vno;
           await tx.update(schema.intGreyDespatch).set(data).where(eq(schema.intGreyDespatch.id, id));
           did = id;
           // Reset dlvStatus for serials this voucher previously consumed before rewriting.
@@ -599,7 +623,7 @@ export default async function GreyDespatchPage({
           const nextLNo = Number(lRowIn?.m ?? 0) + 1;
           const providedVNo = txt(formData.get("v_no"));
           const vNo = providedVNo ?? nextVNoFromRows(existing, "IGD");
-          const savedLNo = data.lNo ?? nextLNo;
+          const savedLNo = data.lNo && data.lNo > 0 ? data.lNo : nextLNo;
           const [ins] = await tx
             .insert(schema.intGreyDespatch)
             .values({
@@ -713,7 +737,7 @@ export default async function GreyDespatchPage({
             vno,
             vdate: data.vDate,
             accCode: partyCoa,
-            narration: `GP#${data.gpNo ?? ""} ${data.party ?? ""}`.trim(),
+            narration: despNarr,
             vtime: nowTime(),
             balanceAmount: data.amtTot,
           });
@@ -727,7 +751,7 @@ export default async function GreyDespatchPage({
             accCode: partyCoa,
             partyCode: partyCoa,
             contNo: data.convContNo,
-            narration: `Grey despatch ${data.gpNo ?? ""}`.trim(),
+            narration: despNarr,
             debit: data.amtTot ?? 0,
             credit: 0,
           });
@@ -738,6 +762,7 @@ export default async function GreyDespatchPage({
             srno: 2,
             accCode: greySaleAcc,
             partyCode: partyCoa,
+            narration: despNarr,
             debit: 0,
             credit: data.amnt ?? 0,
           });
@@ -1144,7 +1169,7 @@ export default async function GreyDespatchPage({
               </div>
               <div className="col-span-1">
                 <label className="label block mb-1">LNo</label>
-                <input name="l_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lNo ?? maxLNo} readOnly tabIndex={-1} />
+                <input name="l_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lNo || nextLNoDisplay} readOnly tabIndex={-1} />
               </div>
               <div className="col-span-1 flex items-end">
                 <button type="button" className="btn btn-outline btn-sm w-full" title="Clear OK">OK</button>
@@ -1170,7 +1195,11 @@ export default async function GreyDespatchPage({
                     grid repeated the same rows, so it is gone. Its inputs stay as
                     hidden fields: DesignThansFill writes the picked thaans into them
                     and saveAction still reads them to build the despatch lines. */}
-                <DesignThansFill lineRows={LINE_ROWS} />
+                <DesignThansFill
+                  lineRows={LINE_ROWS}
+                  savedContNo={formItem?.convContNo ?? ""}
+                  savedThans={savedThanSerials}
+                />
                 {lineGrid.map((r, idx) => {
                   const i = idx + 1;
                   const cpDefault = r?.cp ?? (r?.cpRej != null && r?.rej == null ? r.cpRej : "");
