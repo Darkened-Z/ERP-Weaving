@@ -6,7 +6,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
 import { numberToWords } from "@/lib/number-to-words";
-import { countLabelMap, richConstruction } from "@/lib/grey-quality";
+import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +89,7 @@ export default async function DamiVoucherPage({
       const counts = await db
         .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
         .from(schema.yarnCounts);
-      greyLine = richConstruction(constr, countLabelMap(counts)) || constr.description || qualityCode;
+      greyLine = fullConstruction(constr, countLabelMap(counts)) || constr.description || qualityCode;
     }
   }
   if (!greyLine) greyLine = qualityCode;
@@ -151,16 +151,20 @@ export default async function DamiVoucherPage({
     hour: "2-digit", minute: "2-digit", hour12: true,
   });
 
-  // Deliver-to lines: only what this voucher actually carries, so a party with
-  // no address on its account does not print an empty numbered row.
-  const deliverTo = [
-    partyName,
-    partyAcc?.address ?? null,
-    partyAcc?.city ?? null,
-    [partyAcc?.phone, partyAcc?.mobile].filter(Boolean).join(" · ") || null,
-    partyAcc?.email ?? null,
-    partyAcc?.ntn ? `NTN ${partyAcc.ntn}` : null,
-  ].filter((v): v is string => !!v && String(v).trim() !== "");
+  // Deliver-to lines, each with the mark that says what it is — a line the party
+  // has no data for simply does not print. Despatch Loc sits here rather than in
+  // the right-hand column: it is where the cloth is going, so it belongs with the
+  // address, not with the voucher's own numbers.
+  type ToLine = { icon: "person" | "pin" | "mail" | "phone" | "globe" | "id"; text: string };
+  const deliverTo: ToLine[] = ([
+    { icon: "person", text: partyName },
+    { icon: "pin", text: dami.printingLocation ?? "" },
+    { icon: "globe", text: partyAcc?.address ?? "" },
+    { icon: "globe", text: partyAcc?.city ?? "" },
+    { icon: "phone", text: [partyAcc?.phone, partyAcc?.mobile].filter(Boolean).join(" · ") },
+    { icon: "mail", text: partyAcc?.email ?? "" },
+    { icon: "id", text: partyAcc?.ntn ? `NTN ${partyAcc.ntn}` : "" },
+  ] as ToLine[]).filter((l) => l.text && l.text.trim() !== "");
 
   // Right-hand meta column — the voucher's own identity, label : value.
   const meta: [string, string][] = [
@@ -168,11 +172,26 @@ export default async function DamiVoucherPage({
     ["Book #", dami.lvNo != null ? String(dami.lvNo) : ""],
     ["Date", formatDate(dami.vDate)],
     ["Contract #", dami.contNo ?? ""],
-    ["Despatch Loc", dami.printingLocation ?? ""],
     ["Product", dami.productDesc ?? dami.product ?? ""],
     ["Grey", greyLine],
     ["Width", dami.width != null ? String(dami.width) : ""],
   ].filter(([, v]) => v !== "") as [string, string][];
+
+  const ToIcon = ({ kind }: { kind: ToLine["icon"] }) => {
+    const p = {
+      person: <><circle cx="8" cy="5.5" r="2.6" /><path d="M2.6 14c0-3 2.4-4.6 5.4-4.6s5.4 1.6 5.4 4.6" /></>,
+      pin: <><path d="M8 1.6c2.6 0 4.6 2 4.6 4.5C12.6 9.6 8 14.4 8 14.4S3.4 9.6 3.4 6.1C3.4 3.6 5.4 1.6 8 1.6Z" /><circle cx="8" cy="6" r="1.7" /></>,
+      mail: <><rect x="1.8" y="3.4" width="12.4" height="9.2" rx="1" /><path d="m1.8 4.4 6.2 4.6 6.2-4.6" /></>,
+      phone: <path d="M3 2.4h3l1.2 3-1.6 1.3a9 9 0 0 0 3.7 3.7l1.3-1.6 3 1.2v3c0 .6-.5 1-1.1 1C7.2 14 2 8.8 2 3.5c0-.6.4-1.1 1-1.1Z" />,
+      globe: <><circle cx="8" cy="8" r="6.2" /><path d="M1.8 8h12.4M8 1.8c3 3.4 3 9 0 12.4M8 1.8c-3 3.4-3 9 0 12.4" /></>,
+      id: <><rect x="1.8" y="3.4" width="12.4" height="9.2" rx="1" /><path d="M4.4 10.4h3.2M4.4 7.6h7.2" /></>,
+    }[kind];
+    return (
+      <svg className="dv-to-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+        {p}
+      </svg>
+    );
+  };
 
   return (
     <>
@@ -209,7 +228,7 @@ export default async function DamiVoucherPage({
         .dv-band-right { flex: 1 1 48%; min-width: 0; padding-left: 14px; border-left: 1px solid #cbd5e1; }
         .dv-chip { display: inline-block; background: #1e3a8a; color: #fff; font-size: 8pt; font-weight: 700; letter-spacing: 0.06em; padding: 2px 8px; margin-bottom: 6px; }
         .dv-to-row { display: flex; gap: 7px; align-items: baseline; margin-bottom: 2px; }
-        .dv-to-num { flex: 0 0 14px; height: 14px; border-radius: 50%; background: #1e3a8a; color: #fff; font-size: 7pt; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+        .dv-to-icon { flex: 0 0 13px; color: #1e3a8a; position: relative; top: 2px; }
         .dv-to-val { font-size: 9.5pt; min-width: 0; word-break: break-word; }
         .dv-to-val.name { font-weight: 700; text-transform: uppercase; }
         .dv-meta-row { display: flex; align-items: baseline; font-size: 9.5pt; padding: 1.5px 0; }
@@ -307,8 +326,8 @@ export default async function DamiVoucherPage({
               {deliverTo.length > 0 ? (
                 deliverTo.map((line, i) => (
                   <div className="dv-to-row" key={i}>
-                    <span className="dv-to-num">{i + 1}</span>
-                    <span className={`dv-to-val${i === 0 ? " name" : ""}`}>{line}</span>
+                    <ToIcon kind={line.icon} />
+                    <span className={`dv-to-val${i === 0 ? " name" : ""}`}>{line.text}</span>
                   </div>
                 ))
               ) : (

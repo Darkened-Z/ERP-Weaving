@@ -45,6 +45,26 @@ export function richConstruction(c: GreyConstr, labels: Map<string, string>): st
 }
 
 /**
+ * Warp and weft spelled out in full, NEVER collapsed — "<warp> × <weft>" even
+ * when the two counts are the same. {@link wfPart} folds an identical pair into
+ * one label to keep dropdowns short; a printed voucher has to state both sides,
+ * because the party reads the warp and the weft off it separately.
+ */
+export function wfPartFull(c: GreyConstr, labels: Map<string, string>): string {
+  const warp = [c.warpCount, c.warp2].map((x) => lbl(x, labels)).filter(Boolean).join(" / ");
+  const weft = [c.weftCount, c.weft2].map((x) => lbl(x, labels)).filter(Boolean).join(" / ");
+  if (warp && weft) return `${warp} × ${weft}`;
+  return warp || weft;
+}
+
+/** Full construction line for print: "<reed> X <pick>  <warp> × <weft>". */
+export function fullConstruction(c: GreyConstr, labels: Map<string, string>): string {
+  const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
+  const wf = wfPartFull(c, labels);
+  return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
+}
+
+/**
  * Normalize a stored quality (a bare construction code "GC-001" OR a rich string
  * like "GC-001 71×56×61 [W:2 F:2]") to the construction CODE, so the same quality
  * aggregates as one everywhere. `codes` is the set of valid construction codes.
