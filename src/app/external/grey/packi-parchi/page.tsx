@@ -483,7 +483,9 @@ export default async function PackiParchiPage({
     const greyAmtSal = rnd(meterNetC * (greyRateKp ?? 0));
     const commissionSaleAmt = rnd((greyAmtSal * (commissionSale ?? 0)) / 100);
     const kaatSalAmt = rnd((greyAmtSal * (kaatPercentSale ?? 0)) / 100);
-    const checkerySalAmt = rnd((meterNetC / 40) * (checkerySale ?? 0));
+    // Checkery is a rate per METER, same as the purchase side and godown stock.
+    // The /40 here made 5,000 mtr @ 0.20 come out as 25 instead of 1,000.
+    const checkerySalAmt = rnd(meterNetC * (checkerySale ?? 0));
     const salAmtTot = greyAmtSal + commissionSaleAmt - kaatSalAmt - checkerySalAmt;
 
     const brokerAmtSal = rnd((greyAmtSal * (brokerPercentSale ?? 0)) / 100);
@@ -958,6 +960,15 @@ export default async function PackiParchiPage({
               <a href="/external/grey/packi-parchi?adding=1" className="btn btn-outline btn-sm">New</a>
               <button type="submit" form="pp-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
+              {formItem && (
+                <a
+                  href={`/external/grey/packi-parchi/${formItem.id}/bill`}
+                  target="_blank"
+                  className="btn btn-sm"
+                >
+                  Bill
+                </a>
+              )}
               <a href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Exit</a>
               {formItem ? (
                 <form action={deleteParchi} className="inline">
