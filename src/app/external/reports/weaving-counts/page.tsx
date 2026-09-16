@@ -495,10 +495,22 @@ export default async function WeavingCountsReportPage({
     }
   }
 
-  const totalRecords = rows.length;
-  const totalAmount = rows.reduce((s, r) => s + (r.amount ?? 0), 0);
-  const totalQty = rows.reduce((s, r) => s + (r.qty ?? 0), 0);
-  const totalParties = new Set(rows.map((r) => r.party ?? "").filter((x) => x !== "")).size;
+  // The counts view builds its own grouped structure rather than flat `rows`,
+  // so the tiles above it have to count that instead of reporting zeros.
+  const accCountRows = countsAcc.reduce((s, g) => s + g.counts.length, 0);
+  const totalRecords = view === "COUNTS_ACC" ? accCountRows : rows.length;
+  const totalAmount =
+    view === "COUNTS_ACC"
+      ? countsAcc.reduce((s, g) => s + g.counts.reduce((a, c) => a + c.amount, 0), 0)
+      : rows.reduce((s, r) => s + (r.amount ?? 0), 0);
+  const totalQty =
+    view === "COUNTS_ACC"
+      ? countsAcc.reduce((s, g) => s + g.counts.reduce((a, c) => a + c.balLbs, 0), 0)
+      : rows.reduce((s, r) => s + (r.qty ?? 0), 0);
+  const totalParties =
+    view === "COUNTS_ACC"
+      ? countsAcc.length
+      : new Set(rows.map((r) => r.party ?? "").filter((x) => x !== "")).size;
 
   const qtyUnit = isConv ? "mtr" : "bags";
 
@@ -664,7 +676,7 @@ export default async function WeavingCountsReportPage({
             <div className="mono text-xl font-bold">
               {fmt(totalQty)}{" "}
               <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider ml-1">
-                {qtyUnit}
+                {view === "COUNTS_ACC" ? "LBS" : qtyUnit}
               </span>
             </div>
             <div className="stat-label">Total Quantity</div>
