@@ -121,7 +121,26 @@ export default async function WeavingCountsReportPage({
     partyConditions.push(sql`${schema.chartOfAccounts.code} LIKE ${p} ESCAPE '\\'`);
   }
 
-  const parties = await db
+  // Only parties this report can actually say anything about: whoever holds a
+  // grey conversion contract, plus whoever is set up in the Party Count master.
+  // The unfiltered chart of accounts put several hundred heads in the picker,
+  // almost none of which have counts behind them.
+  const [convPartyRows, intConvPartyRows, partyCountRows] = await Promise.all([
+    db.select({ party: schema.extGreyConvContract.party }).from(schema.extGreyConvContract),
+    db.select({ party: schema.intGreyConversionContract.party }).from(schema.intGreyConversionContract),
+    db.select({ partyCode: schema.partyCounts.partyCode }).from(schema.partyCounts),
+  ]);
+  const allowedParty = new Set<string>();
+  for (const r of [...convPartyRows, ...intConvPartyRows]) {
+    const v = (r.party ?? "").trim();
+    if (v) allowedParty.add(v.toUpperCase());
+  }
+  for (const r of partyCountRows) {
+    const v = (r.partyCode ?? "").trim();
+    if (v) allowedParty.add(v.toUpperCase());
+  }
+
+  const allParties = await db
     .select({
       code: schema.chartOfAccounts.code,
       description: schema.chartOfAccounts.description,
@@ -129,6 +148,15 @@ export default async function WeavingCountsReportPage({
     })
     .from(schema.chartOfAccounts)
     .where(and(...partyConditions));
+  // A party is named by code in party_counts and by description on a contract,
+  // so match either. If nothing matched at all, fall back to the full list
+  // rather than handing back an empty report.
+  const scoped = allParties.filter(
+    (p) =>
+      allowedParty.has((p.code ?? "").toUpperCase()) ||
+      allowedParty.has((p.description ?? "").toUpperCase()),
+  );
+  const parties = scoped.length > 0 ? scoped : allParties;
 
   const partyCodeToDesc = new Map(parties.map((p) => [p.code, p.description]));
   const partyDescToCode = new Map(parties.map((p) => [p.description, p.code]));

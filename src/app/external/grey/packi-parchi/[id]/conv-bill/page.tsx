@@ -63,6 +63,12 @@ export default async function PackiConvBillPage({
   // held onto a customer document precisely when nobody meant it to. A blank
   // here is visible and gets filled in; a wrong construction is not.
   const greyDesc = constrOf(pp.qualityPrint);
+  // The printed bill carries the cloth width beside the construction.
+  const [widthConstr] = await db
+    .select({ width: schema.greyConstruction.width })
+    .from(schema.greyConstruction)
+    .where(eq(schema.greyConstruction.code, normQuality(pp.qualityPrint ?? pp.quality, codeSet)))
+    .limit(1);
 
   // Piece rows come from the godown stock this parchi sold out of.
   const stockRows = pp.purchaseParty
@@ -381,6 +387,7 @@ export default async function PackiConvBillPage({
                 ["PP No.", pp.ppNo ?? ""],
                 ["Date", fmtDate(pp.vDate)],
                 ["Grey Desc", greyDesc],
+                ["Width", widthConstr?.width != null ? `${widthConstr.width}"` : ""],
                 ["Conv Cont", pp.convContNoSale ?? pp.convContNo ?? ""],
                 ["Conv Rate", pp.convRate != null ? `${fmt(rate, 2)} / mtr` : "NOT SET"],
                 // Stock quality is deliberately NOT on the bill. The party is
