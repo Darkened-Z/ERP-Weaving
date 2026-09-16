@@ -187,7 +187,8 @@ export default async function WeavingCountsReportPage({
     .from(schema.yarnCounts);
   const countDescByCode = new Map(countRows.map((r) => [r.countCode, r.description]));
 
-  const isConv = view.startsWith("CONV");
+  // COUNTS_ACC reads the conversion side too, it just does not start with CONV.
+  const isConv = view.startsWith("CONV") || view === "COUNTS_ACC";
 
   let rows: RowOut[] = [];
   let headers: ColSpec[] = [];
