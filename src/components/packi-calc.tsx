@@ -82,7 +82,8 @@ function recompute() {
   const greyAmtSal = r(meterNet * greyRateKp);
   const commissionSaleAmt = r((greyAmtSal * (numOf("commission_sale") ?? 0)) / 100);
   const kaatSalAmt = r((greyAmtSal * (numOf("kaat_percent_sale") ?? 0)) / 100);
-  const checkerySalAmt = r((meterNet / 40) * (numOf("checkery_sale") ?? 0));
+  // Rate per METER (see the server note) — the /40 understated it 40-fold.
+  const checkerySalAmt = r(meterNet * (numOf("checkery_sale") ?? 0));
   const salAmtTot = greyAmtSal + commissionSaleAmt - kaatSalAmt - checkerySalAmt;
 
   const brokerAmtSal = r((greyAmtSal * (numOf("broker_percent_sale") ?? 0)) / 100);
