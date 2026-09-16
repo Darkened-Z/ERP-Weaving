@@ -199,25 +199,29 @@ export default async function PackiBillPage({
     );
   };
 
-  // The ladder, exactly the order the printed bill lists it.
-  const ladder: { label: string; a?: string; b?: string; bold?: boolean; rule?: boolean }[] = [
-    { label: "Than", a: fmt(n(pp.than), 2), b: `Mtr   ${fmt(n(pp.kpMeter) || meterNet, 2)}` },
-    { label: "Rejection", a: pp.meterRe != null ? fmt(n(pp.meterRe), 2) : "" },
-    { label: "EL-Cumi", a: pp.elMeter != null ? fmt(n(pp.elMeter), 2) : "" },
-    { label: "Mtr Kami", a: pp.meterKam != null ? fmt(n(pp.meterKam), 2) : "" },
-    { label: "Net Mtr", a: fmt(meterNet, 2), rule: true },
-    { label: "Rate", a: fmt(rate, 2) },
-    { label: "Amount", a: fmt(amount, 2) },
-    { label: "Kaat", a: "", b: fmt(kaatAmt, 2) },
-    { label: "Checkery", a: pp.checkerySale != null ? fmt(n(pp.checkerySale), 2) : "", b: fmt(checkeryAmt, 2) },
-    { label: "Commission", a: pp.commissionSale != null ? fmt(n(pp.commissionSale), 2) : "", b: fmt(commissionAmt, 2) },
-    { label: "Net Amount", a: fmt(netAmount, 2), bold: true, rule: true },
-    {
-      label: "Days",
-      a: pp.termSal ?? "",
-      b: pp.dueDate ? `1     ${fmtDate(pp.dueDate)}` : "",
-    },
-    { label: "Print", a: pp.printingName ?? "" },
+  // The bill, top to bottom, the order the mill reads it: what came in, what was
+  // knocked off it, what is owed. Quantity rows carry their own rate and amount
+  // where they have one, so Net Meter states the money on the same line instead
+  // of leaving the reader to pair it up with a rate further down.
+  type BillRow = {
+    label: string;
+    qty?: string;
+    rate?: string;
+    amount?: string;
+    kind?: "qty" | "sub" | "adj" | "net";
+  };
+  const sign = (v: number) => (v > 0 ? `+${fmt(v, 2)}` : v < 0 ? `−${fmt(Math.abs(v), 2)}` : fmt(0, 2));
+  const billRows: BillRow[] = [
+    { label: "Than", qty: fmt(n(pp.than), 2), kind: "qty" },
+    { label: "Meter", qty: fmt(n(pp.kpMeter) || meterNet, 2), kind: "qty" },
+    { label: "Rejection", qty: pp.meterRe != null ? fmt(n(pp.meterRe), 2) : "—", kind: "qty" },
+    { label: "EL-Cumi", qty: pp.elMeter != null ? fmt(n(pp.elMeter), 2) : "—", kind: "qty" },
+    { label: "Mtr Kami", qty: pp.meterKam != null ? fmt(n(pp.meterKam), 2) : "—", kind: "qty" },
+    { label: "Net Meter", qty: fmt(meterNet, 2), rate: fmt(rate, 2), amount: fmt(amount, 2), kind: "sub" },
+    { label: "Commission", qty: pp.commissionSale != null ? `${fmt(n(pp.commissionSale), 2)} %` : "—", amount: sign(commissionAmt), kind: "adj" },
+    { label: "Checkery", qty: pp.checkerySale != null ? `${fmt(n(pp.checkerySale), 2)} / mtr` : "—", amount: checkeryAmt ? `−${fmt(checkeryAmt, 2)}` : fmt(0, 2), kind: "adj" },
+    { label: "Kaat", qty: pp.kaatPercentSale != null ? `${fmt(n(pp.kaatPercentSale), 2)} %` : "—", amount: kaatAmt ? `−${fmt(kaatAmt, 2)}` : fmt(0, 2), kind: "adj" },
+    { label: "Net Amount", amount: fmt(netAmount, 2), kind: "net" },
   ];
 
   return (
@@ -225,6 +229,10 @@ export default async function PackiBillPage({
       <style>{`
         @page { size: A4 portrait; margin: 8mm 10mm; }
         @media print {
+          /* Browsers drop background fills when printing unless told otherwise.
+             The grid header is white text on a navy fill, so without this the
+             whole header printed blank and the table read as an empty box. */
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           html, body { background: #fff !important; }
           .no-print { display: none !important; }
           .bv-page { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; }
@@ -256,18 +264,36 @@ export default async function PackiBillPage({
         .bv-meta-sep { flex: 0 0 8px; color: #94a3b8; }
         .bv-meta-val { flex: 1 1 auto; min-width: 0; font-weight: 700; text-transform: uppercase; word-break: break-word; }
 
-        .bv-body { display: flex; gap: 12px; align-items: flex-start; }
-        .bv-grid-col { flex: 1 1 auto; min-width: 0; }
-        .bv-ladder { flex: 0 0 300px; border: 1px solid #1e3a8a; }
-        .bv-ladder-head { background: #1e3a8a; color: #fff; font-size: 8pt; font-weight: 700; letter-spacing: 0.08em; padding: 3px 8px; }
-        .bv-l-row { display: flex; align-items: baseline; gap: 6px; padding: 2.5px 8px; font-size: 9.5pt; }
-        .bv-l-row.rule { border-top: 1px solid #c7d2e3; }
-        .bv-l-row.bold { background: #e8eef6; font-weight: 700; }
-        .bv-l-label { flex: 0 0 82px; color: #475569; }
-        .bv-l-a { flex: 1 1 auto; text-align: right; font-family: monospace; min-width: 0; }
-        .bv-l-b { flex: 0 0 110px; text-align: right; font-family: monospace; }
-        .bv-bal { border-top: 2px solid #1e3a8a; margin-top: 2px; }
-        .bv-bal .bv-l-row { font-size: 9pt; }
+        /* ---- the bill itself ---- */
+        table.bv-bill { width: 100%; border-collapse: collapse; margin-top: 4px; }
+        table.bv-bill th {
+          background: #1e3a8a; color: #fff; font-size: 8pt; font-weight: 700;
+          letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 10px; text-align: right;
+        }
+        table.bv-bill td { padding: 4px 10px; font-size: 10pt; border-bottom: 1px solid #e2e8f0; }
+        .bv-c-label { color: #334155; }
+        .bv-c-num { text-align: right; font-family: monospace; white-space: nowrap; }
+        .bv-c-amt { font-weight: 600; }
+        /* Quantity rows are the tally; the sub row is where the money starts. */
+        .bv-r-sub td { border-top: 1.5px solid #1e3a8a; font-weight: 700; background: #f5f8fd; }
+        .bv-r-adj .bv-c-label { padding-left: 22px; color: #64748b; }
+        .bv-r-net td {
+          border-top: 2px solid #1e3a8a; border-bottom: 2px solid #1e3a8a;
+          background: #1e3a8a; color: #fff; font-weight: 700; font-size: 12pt; padding: 6px 10px;
+        }
+
+        .bv-after { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; }
+        .bv-after-l { flex: 1 1 auto; min-width: 0; }
+        .bv-print-line { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; font-size: 9.5pt; }
+        .bv-print-val { font-weight: 700; text-transform: uppercase; }
+        .bv-l-label { flex: 0 0 82px; color: #475569; font-size: 9.5pt; }
+        .bv-bal { flex: 0 0 270px; border: 1px solid #1e3a8a; }
+        .bv-bal-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 10px; font-size: 9.5pt; }
+        .bv-bal-row span:last-child { font-family: monospace; font-weight: 700; }
+        .bv-bal-row.net { background: #e8eef6; border-top: 1.5px solid #1e3a8a; font-weight: 700; }
+
+        .bv-pieces { margin-top: 12px; }
+        .bv-pieces-head { font-size: 8pt; font-weight: 700; letter-spacing: 0.08em; color: #1e3a8a; margin-bottom: 3px; }
 
         table.bv-grid { width: 100%; border-collapse: collapse; }
         table.bv-grid th, table.bv-grid td { border: 1px solid #c7d2e3; padding: 1px 3px; font-size: 8pt; }
@@ -362,8 +388,56 @@ export default async function PackiBillPage({
             </div>
           </div>
 
-          <div className="bv-body">
-            <div className="bv-grid-col">
+          <table className="bv-bill">
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>Description</th>
+                <th>Quantity</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {billRows.map((r, i) => (
+                <tr key={i} className={`bv-r-${r.kind ?? "qty"}`}>
+                  <td className="bv-c-label">{r.label}</td>
+                  <td className="bv-c-num">{r.qty ?? ""}</td>
+                  <td className="bv-c-num">{r.rate ?? ""}</td>
+                  <td className="bv-c-num bv-c-amt">{r.amount ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="bv-after">
+            <div className="bv-after-l">
+              <div className="bv-words">
+                <div className="bv-words-label">AMOUNT IN WORDS:</div>
+                <div className="bv-words-val">{words || "—"}</div>
+              </div>
+              <div className="bv-print-line">
+                <span className="bv-l-label">Printing</span>
+                <span className="bv-print-val">{pp.printingName ?? "—"}</span>
+              </div>
+              {pp.termSal && (
+                <div className="bv-print-line">
+                  <span className="bv-l-label">Days</span>
+                  <span className="bv-print-val">
+                    {pp.termSal}{pp.dueDate ? `  ·  ${fmtDate(pp.dueDate)}` : ""}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="bv-bal">
+              <div className="bv-bal-row"><span>Previous</span><span>{fmt(previous, 0)}</span></div>
+              <div className="bv-bal-row"><span>Current Tran</span><span>{fmt(netAmount, 0)}</span></div>
+              <div className="bv-bal-row net"><span>Remaining Balance</span><span>{fmt(remaining, 0)}</span></div>
+            </div>
+          </div>
+
+          {pieces.length > 0 && (
+            <div className="bv-pieces">
+              <div className="bv-pieces-head">THAN DETAIL — {pieces.length} PIECES</div>
               <table className="bv-grid">
                 <thead>
                   <tr>
@@ -395,28 +469,7 @@ export default async function PackiBillPage({
                 </tbody>
               </table>
             </div>
-
-            <div className="bv-ladder">
-              <div className="bv-ladder-head">BILL</div>
-              {ladder.map((l, i) => (
-                <div key={i} className={`bv-l-row${l.rule ? " rule" : ""}${l.bold ? " bold" : ""}`}>
-                  <span className="bv-l-label">{l.label}</span>
-                  <span className="bv-l-a">{l.a ?? ""}</span>
-                  <span className="bv-l-b">{l.b ?? ""}</span>
-                </div>
-              ))}
-              <div className="bv-bal">
-                <div className="bv-l-row"><span className="bv-l-label">Previous</span><span className="bv-l-a"></span><span className="bv-l-b">{fmt(previous, 0)}</span></div>
-                <div className="bv-l-row"><span className="bv-l-label">Current Tran</span><span className="bv-l-a"></span><span className="bv-l-b">{fmt(netAmount, 0)}</span></div>
-                <div className="bv-l-row bold"><span className="bv-l-label">Remaining</span><span className="bv-l-a"></span><span className="bv-l-b">{fmt(remaining, 0)}</span></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bv-words">
-            <div className="bv-words-label">AMOUNT IN WORDS:</div>
-            <div className="bv-words-val">{words || "—"}</div>
-          </div>
+          )}
 
           <div className="bv-thanks">We appreciate your business!</div>
 

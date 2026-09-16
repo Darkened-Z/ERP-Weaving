@@ -203,6 +203,10 @@ export default async function DamiVoucherPage({
       <style>{`
         @page { size: A4 portrait; margin: 8mm 10mm; }
         @media print {
+          /* Browsers drop background fills when printing unless told otherwise.
+             The grid header is white text on a navy fill, so without this the
+             whole header printed blank and the table read as an empty box. */
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           html, body { background: #fff !important; }
           .no-print { display: none !important; }
           .dv-page { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; }
