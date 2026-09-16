@@ -486,6 +486,10 @@ export default async function PackiParchiPage({
     // Checkery is a rate per METER, same as the purchase side and godown stock.
     // The /40 here made 5,000 mtr @ 0.20 come out as 25 instead of 1,000.
     const checkerySalAmt = rnd(meterNetC * (checkerySale ?? 0));
+    // Conversion amount is derived, never taken from the form — the box on
+    // screen is read-only and a posted form could otherwise carry anything.
+    const convRate = num(formData.get("conv_rate"));
+    const convAmount = convRate != null ? rnd(meterNetC * convRate) : null;
     const salAmtTot = greyAmtSal + commissionSaleAmt - kaatSalAmt - checkerySalAmt;
 
     const brokerAmtSal = rnd((greyAmtSal * (brokerPercentSale ?? 0)) / 100);
@@ -731,7 +735,7 @@ export default async function PackiParchiPage({
             meterFineNum, meterFineDen, greyRate, wokc, wkcBrk: wkcBrkC, elCumiNum, elCumiDen,
             elMeter: elMeterC, elMeterMode, type, kaatPercent, checkery: checkeryC, commission, convContNo,
             saleParty, convContNoSale, convContSale2, commissionSale, greyRateKp, kaatPercentSale,
-            checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
+            checkerySale, convRate, convAmount, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
             wc, wck, printingName, commissionTotal: commissionTotalC, diff: diffC, termSal, dueDate,
             typeRej, imgNo, kpId: kpLinkId,
             modifiedDate: nowIso,
@@ -782,7 +786,7 @@ export default async function PackiParchiPage({
               meterFineNum, meterFineDen, greyRate, wokc, wkcBrk: wkcBrkC, elCumiNum, elCumiDen,
               elMeter: elMeterC, elMeterMode, type, kaatPercent, checkery: checkeryC, commission, convContNo,
               saleParty, convContNoSale, convContSale2, commissionSale, greyRateKp, kaatPercentSale,
-              checkerySale, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
+              checkerySale, convRate, convAmount, brokerNameSale, brokerPercentSale, remarks, salAmtDiff: salAmtDiffC, woc,
               wc, wck, printingName, commissionTotal: commissionTotalC, diff: diffC, termSal, dueDate,
               typeRej, imgNo, kpId: kpLinkId,
               postedDate: nowIso,
@@ -961,13 +965,22 @@ export default async function PackiParchiPage({
               <button type="submit" form="pp-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
               {formItem && (
-                <a
-                  href={`/external/grey/packi-parchi/${formItem.id}/bill`}
-                  target="_blank"
-                  className="btn btn-sm"
-                >
-                  Bill
-                </a>
+                <>
+                  <a
+                    href={`/external/grey/packi-parchi/${formItem.id}/bill`}
+                    target="_blank"
+                    className="btn btn-sm"
+                  >
+                    Bill
+                  </a>
+                  <a
+                    href={`/external/grey/packi-parchi/${formItem.id}/conv-bill`}
+                    target="_blank"
+                    className="btn btn-sm"
+                  >
+                    Conv Bill
+                  </a>
+                </>
               )}
               <a href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Exit</a>
               {formItem ? (
@@ -1415,6 +1428,25 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Rate <span className="text-[9px] text-[var(--muted)]">(grey sale rate)</span></label>
                 <input name="grey_rate_kp" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.greyRateKp ?? ""} />
+              </div>
+
+              {/* Conversion billing runs on its own rate. The mill agrees a conv
+                  rate per metre against the conversion contract and nudges it up
+                  or down per parchi; the amount beside it is always
+                  conv rate x net metre and is never typed by hand, so the two can
+                  never disagree. The conversion BILL prints this rate, not the
+                  grey sale rate. */}
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">
+                  Conv Rate <span className="text-[9px] text-[var(--muted)]">(+/− per mtr)</span>
+                </label>
+                <input name="conv_rate" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.convRate ?? ""} />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="label block mb-1">
+                  Conv Amount <span className="text-[9px] text-[var(--muted)]">(locked)</span>
+                </label>
+                <input name="conv_amount_disp" type="number" step="any" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Rate Amount <span className="text-[9px] text-[var(--muted)]">(rate × mtr)</span></label>

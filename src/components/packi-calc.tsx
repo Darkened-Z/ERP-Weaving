@@ -103,6 +103,11 @@ function recompute() {
   setNum("sale_amt_disp", greyAmtSal); // rate amount = net meter × sale rate
   setNum("commission_amt_sal_disp", commissionSaleAmt); // commission value (+add / −less on bill)
   setNum("checkery_amt_sal_disp", checkerySalAmt); // checkery value
+
+  // Conversion billing: the amount is ALWAYS conv rate x net metre, so the
+  // locked box cannot drift from the rate the operator nudged.
+  const convRate = numOf("conv_rate");
+  setNum("conv_amount_disp", convRate != null ? r(meterNet * convRate) : null);
 }
 
 function syncDueDate() {
