@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
+import { QualityStockStrip } from "./quality-stock-strip";
 import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -349,6 +350,20 @@ export default async function PackiParchiPage({
   const curQualityCode = normQuality(formItem?.quality);
   if (curQualityCode && !stockQualityOpts.some((o) => o.value === curQualityCode)) {
     stockQualityOpts.unshift({ value: curQualityCode, label: richFull(curQualityCode) });
+  }
+
+  // Same numbers the strip shows, handed to the client so it can follow the
+  // operator's pick instead of only reflecting a saved record.
+  const stockByQuality: Record<string, { than: number | null; mtr: number | null; avg: number | null; label: string }> = {};
+  for (const [code, st] of Object.entries(qualityStockMap)) {
+    const key = normQuality(code) || code;
+    const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
+    stockByQuality[key] = {
+      than: n(st.grey_stock_than_disp),
+      mtr: n(st.grey_stock_mtr_disp),
+      avg: n(st.grey_stock_avg_disp),
+      label: richFull(code),
+    };
   }
 
   const curStock = curQualityCode ? qualityStockMap[curQualityCode] : undefined;
@@ -1075,25 +1090,7 @@ export default async function PackiParchiPage({
                   picks a quality and needs to know, right there, whether there is
                   enough of it to sell — without opening the stock report. */}
               <div className="lg:col-span-12">
-                <div className="flex flex-wrap items-stretch gap-0 border border-black">
-                  <div className="px-3 py-1.5 bg-black text-white text-[10px] uppercase tracking-[0.12em] font-semibold flex items-center">
-                    In Stock
-                  </div>
-                  {([
-                    ["Than", ppStockThan != null ? formatNum(ppStockThan) : "—"],
-                    ["Meter", ppStockMtr != null ? formatNum(ppStockMtr) : "—"],
-                    ["Avg Rate", ppAvgRate != null ? formatNum(ppAvgRate) : "—"],
-                    ["Stock Value", ppStockMtr != null && ppAvgRate != null ? formatNum(Math.round(ppStockMtr * ppAvgRate)) : "—"],
-                  ] as [string, string][]).map(([k, v]) => (
-                    <div key={k} className="px-3 py-1.5 border-l border-black flex items-baseline gap-2">
-                      <span className="text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">{k}</span>
-                      <span className="mono text-[13px] font-bold">{v}</span>
-                    </div>
-                  ))}
-                  <div className="px-3 py-1.5 border-l border-black flex items-center text-[10px] text-[var(--muted)]">
-                    {curQualityCode ? richFull(curQualityCode) : "pick a quality to see its stock"}
-                  </div>
-                </div>
+                <QualityStockStrip stock={stockByQuality} initialCode={curQualityCode} />
               </div>
 
               <div className="lg:col-span-2">
