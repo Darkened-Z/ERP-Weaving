@@ -6,6 +6,7 @@ const WATCH = new Set([
   "kp_meter", "meter_re", "meter_kam", "el_cumi_num", "el_cumi_den",
   "meter_fine_num", "meter_fine_den", "grey_rate", "grey_rate_kp", "wkc_brk",
   "checkery", "commission", "commission_sale", "kaat_percent_sale", "checkery_sale",
+  "conv_rate",
   "broker_percent", "broker_percent_sale", "woc", "wc", "wck",
   "warp_wt", "warp_rate", "weft_wt", "weft_rate",
 ]);
