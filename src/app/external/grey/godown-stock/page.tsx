@@ -743,7 +743,10 @@ export default async function GodownStockPage({
         await tx
           .update(schema.extGodownStock)
           .set({
-            vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo, contactQuality, dspQuality,
+            // convContWvg was parsed from the form and then dropped from both
+            // payloads, so the Conv Contract WVG an operator picked never
+            // reached the table and the field came back empty on every reopen.
+            vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo, convContWvg, contactQuality, dspQuality,
             than, meter, elCumiNum, elCumiDen, kamiMtr, rateConversion, term, dueDate, days, rateSal, salContNo,
             greySaleCont, kaatPercent, elMeter, elMeterMode, netMeter, checkery, commission, total, balance,
             profitPerMtr, profitAmt,
@@ -809,7 +812,7 @@ export default async function GodownStockPage({
           const inserted = await tx
             .insert(schema.extGodownStock)
             .values({
-              vNo, lvNo: nextL, vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo,
+              vNo, lvNo: nextL, vDate, kpNo, type, purchaseParty, gdnParty, contNo, purContNo, convContWvg,
               contactQuality, dspQuality, than, meter, elCumiNum, elCumiDen, kamiMtr, rateConversion,
               term, dueDate, days, rateSal, salContNo, greySaleCont, kaatPercent, elMeter, elMeterMode, netMeter,
               checkery, commission, total, balance, profitPerMtr, profitAmt, printingName, brokerName, remarks, imgHash,
