@@ -20,7 +20,19 @@ function escLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => "\\" + m);
 }
 
+type CountAccRow = {
+  countCode: string;
+  descr: string;
+  totalLbs: number;
+  bags: number;
+  balLbs: number;
+  rate: number;
+  amount: number;
+};
+type CountAccGroup = { party: string; counts: CountAccRow[] };
+
 type View =
+  | "COUNTS_ACC"
   | "CONV_NEW"
   | "CONV_SUM"
   | "CONV_SUM_NEW"
@@ -29,6 +41,7 @@ type View =
   | "SALE_SUM_NEW";
 
 const VIEWS: readonly View[] = [
+  "COUNTS_ACC",
   "CONV_NEW",
   "CONV_SUM",
   "CONV_SUM_NEW",
@@ -38,6 +51,7 @@ const VIEWS: readonly View[] = [
 ] as const;
 
 const VIEW_LABELS: Record<View, string> = {
+  COUNTS_ACC: "Counts Accounts (Party → Counts)",
   CONV_NEW: "Conv - New (Detail)",
   CONV_SUM: "Conv - Sum by Party",
   CONV_SUM_NEW: "Conv - Sum by Party + Grey Code",
@@ -104,8 +118,8 @@ export default async function WeavingCountsReportPage({
   const rateParsed = parseFloat(rateStr);
   const rate = rateStr !== "" && Number.isFinite(rateParsed) ? rateParsed : null;
 
-  const viewRaw = (params.view?.trim().toUpperCase()) || "CONV_NEW";
-  const view: View = (VIEWS as readonly string[]).includes(viewRaw) ? (viewRaw as View) : "CONV_NEW";
+  const viewRaw = (params.view?.trim().toUpperCase()) || "COUNTS_ACC";
+  const view: View = (VIEWS as readonly string[]).includes(viewRaw) ? (viewRaw as View) : "COUNTS_ACC";
 
   const partyConditions = [eq(schema.chartOfAccounts.status, partyStatus)];
   if (shortTittle) {
@@ -177,6 +191,7 @@ export default async function WeavingCountsReportPage({
 
   let rows: RowOut[] = [];
   let headers: ColSpec[] = [];
+  let countsAcc: CountAccGroup[] = [];
 
   if (isConv) {
     const conds = [
@@ -200,7 +215,80 @@ export default async function WeavingCountsReportPage({
 
     const filtered = convRows.filter((r) => r.party && partyDescSet.has(r.party));
 
-    if (view === "CONV_NEW") {
+    if (view === "COUNTS_ACC") {
+      // The mill's own WEAVING COUNTS ACCOUNTS REPORT: every conversion party as
+      // a heading, and under it the counts that party is set up with in the
+      // Party Count master — not the counts that happen to have moved, so a
+      // count sitting at zero still shows and can be seen to be at zero.
+      const partyOfCode = new Map(parties.map((p) => [p.code, p.description ?? p.code]));
+      const convPartyNames = new Set(
+        filtered.map((r) => (r.party ?? "").trim()).filter(Boolean),
+      );
+
+      const [pcRows, yarnCountRows, purLines, salLines] = await Promise.all([
+        db.select().from(schema.partyCounts),
+        db
+          .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+          .from(schema.yarnCounts),
+        db
+          .select({ party: schema.extYarnPurVoucher.party, count: schema.extYarnPurVoucherLine.count, bag: schema.extYarnPurVoucherLine.bag, lbs: schema.extYarnPurVoucherLine.lbs })
+          .from(schema.extYarnPurVoucherLine)
+          .innerJoin(schema.extYarnPurVoucher, eq(schema.extYarnPurVoucher.id, schema.extYarnPurVoucherLine.voucherId)),
+        db
+          .select({ party: schema.extYarnSalVoucher.party, count: schema.extYarnSalVoucherLine.count, bag: schema.extYarnSalVoucherLine.bag, lbs: schema.extYarnSalVoucherLine.lbs })
+          .from(schema.extYarnSalVoucherLine)
+          .innerJoin(schema.extYarnSalVoucher, eq(schema.extYarnSalVoucher.id, schema.extYarnSalVoucherLine.voucherId)),
+      ]);
+
+      const countLabel = new Map(
+        yarnCountRows.map((c) => [String(c.countCode), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()]),
+      );
+
+      // Yarn in and out, keyed party|count. A party is named by description on a
+      // voucher and by code in party_counts, so both spellings are indexed.
+      const mv = new Map<string, { inLbs: number; inBags: number; outLbs: number }>();
+      const key = (p: string | null, c: string | null) => `${(p ?? "").trim().toUpperCase()}|${(c ?? "").trim()}`;
+      const bump = (k: string, f: (v: { inLbs: number; inBags: number; outLbs: number }) => void) => {
+        const v = mv.get(k) ?? { inLbs: 0, inBags: 0, outLbs: 0 };
+        f(v);
+        mv.set(k, v);
+      };
+      for (const l of purLines) bump(key(l.party, l.count), (v) => { v.inLbs += l.lbs ?? 0; v.inBags += l.bag ?? 0; });
+      for (const l of salLines) bump(key(l.party, l.count), (v) => { v.outLbs += l.lbs ?? 0; });
+
+      const groups = new Map<string, { party: string; counts: CountAccRow[] }>();
+      for (const pc of pcRows) {
+        const partyName = (partyOfCode.get(pc.partyCode) ?? pc.partyCode ?? "").trim();
+        if (!partyName) continue;
+        // Only conversion parties — this is the conversion counts ledger.
+        if (convPartyNames.size > 0 && !convPartyNames.has(partyName)) continue;
+        const cc = String(pc.countCode);
+        const m =
+          mv.get(key(partyName, cc)) ?? mv.get(key(pc.partyCode, cc)) ?? { inLbs: 0, inBags: 0, outLbs: 0 };
+        const balLbs = Math.round((m.inLbs - m.outLbs) * 100) / 100;
+        const rateL = pc.ratePerLbs ?? 0;
+        const g = groups.get(partyName) ?? { party: partyName, counts: [] };
+        g.counts.push({
+          countCode: cc,
+          descr: countLabel.get(cc) ?? cc,
+          totalLbs: Math.round(m.inLbs * 100) / 100,
+          bags: Math.round(m.inBags * 100) / 100,
+          balLbs,
+          rate: rateL,
+          amount: Math.round(balLbs * rateL * 100) / 100,
+        });
+        groups.set(partyName, g);
+      }
+      countsAcc = Array.from(groups.values())
+        .map((g) => ({
+          ...g,
+          counts: g.counts.sort((a, b) => Number(a.countCode) - Number(b.countCode)),
+        }))
+        .sort((a, b) => a.party.localeCompare(b.party));
+
+      headers = [];
+      rows = [];
+    } else if (view === "CONV_NEW") {
       headers = [
         { key: "contNo", label: "Cont No" },
         { key: "contDate", label: "Cont Date" },
@@ -586,6 +674,62 @@ export default async function WeavingCountsReportPage({
           </div>
         </div>
 
+        {view === "COUNTS_ACC" ? (
+          <div className="overflow-x-auto">
+            <table style={{ minWidth: 900 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 70 }}>Count</th>
+                  <th>Count Description</th>
+                  <th className="text-right">Total Lbs</th>
+                  <th className="text-right">Bags</th>
+                  <th className="text-right">Bal Lbs</th>
+                  <th className="text-right">Rate</th>
+                  <th className="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {countsAcc.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center text-[var(--muted)] py-8">No conversion party has counts set up in Party Count for this filter.</td></tr>
+                ) : (
+                  countsAcc.flatMap((g) => {
+                    const sub = g.counts.reduce(
+                      (a, c) => ({
+                        totalLbs: a.totalLbs + c.totalLbs,
+                        bags: a.bags + c.bags,
+                        balLbs: a.balLbs + c.balLbs,
+                        amount: a.amount + c.amount,
+                      }),
+                      { totalLbs: 0, bags: 0, balLbs: 0, amount: 0 },
+                    );
+                    return [
+                      <tr key={`h-${g.party}`} style={{ background: "#0f172a", color: "white" }}>
+                        <td className="mono text-[12px] font-bold px-2 py-1">{g.counts.length}</td>
+                        <td className="mono text-[12px] font-bold px-2 py-1">{g.party}</td>
+                        <td className="mono text-right text-[12px] font-bold">{fmt(sub.totalLbs)}</td>
+                        <td className="mono text-right text-[12px] font-bold">{fmt(sub.bags)}</td>
+                        <td className="mono text-right text-[12px] font-bold">{fmt(sub.balLbs)}</td>
+                        <td></td>
+                        <td className="mono text-right text-[12px] font-bold">{fmt(sub.amount)}</td>
+                      </tr>,
+                      ...g.counts.map((c) => (
+                        <tr key={`${g.party}-${c.countCode}`}>
+                          <td className="mono text-[12px]">{c.countCode}</td>
+                          <td className="text-[12px]">{c.descr}</td>
+                          <td className="mono text-right">{fmt(c.totalLbs)}</td>
+                          <td className="mono text-right">{fmt(c.bags)}</td>
+                          <td className="mono text-right">{fmt(c.balLbs)}</td>
+                          <td className="mono text-right">{fmt(c.rate)}</td>
+                          <td className="mono text-right font-bold">{fmt(c.amount)}</td>
+                        </tr>
+                      )),
+                    ];
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table>
             <thead>
@@ -671,6 +815,7 @@ export default async function WeavingCountsReportPage({
             )}
           </table>
         </div>
+        )}
       </div>
     </Shell>
   );
