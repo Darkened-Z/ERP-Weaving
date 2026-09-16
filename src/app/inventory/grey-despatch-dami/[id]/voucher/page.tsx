@@ -68,9 +68,14 @@ export default async function DamiVoucherPage({
   // "GC-001" means nothing to whoever receives the cloth — print the construction
   // it stands for (reed x pick, warp x weft counts) when the slip did not store a
   // description of its own.
+  // The construction master is the source of truth, not the copy stored on the
+  // slip: a slip saved before the "always show it in full" rule carries the old
+  // collapsed text, and reprinting it would keep showing half a quality. Derive
+  // whenever the slip names a code; the stored line only stands in when it does
+  // not (a hand-written quality with no code behind it).
   const qualityCode = dami.dspQuality ?? "";
-  let greyLine = dami.dspQualityDesc ?? "";
-  if (!greyLine && qualityCode) {
+  let greyLine = qualityCode ? "" : dami.dspQualityDesc ?? "";
+  if (qualityCode) {
     const [constr] = await db
       .select({
         code: schema.greyConstruction.code,
@@ -92,7 +97,7 @@ export default async function DamiVoucherPage({
       greyLine = fullConstruction(constr, countLabelMap(counts)) || constr.description || qualityCode;
     }
   }
-  if (!greyLine) greyLine = qualityCode;
+  if (!greyLine) greyLine = dami.dspQualityDesc ?? qualityCode;
 
   const formatNum = (n: number) =>
     new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
