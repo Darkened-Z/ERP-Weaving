@@ -28,8 +28,14 @@ const lbl = (code: string | number | null | undefined, labels: Map<string, strin
   code == null || code === "" ? "" : labels.get(String(code)) || String(code);
 
 /**
- * Warp/weft count description (collapsed to one when warp === weft), no reed×pick.
- * Used for short dropdown labels.
+ * Warp/weft count description, no reed×pick. **Collapses** an identical warp and
+ * weft into a single label.
+ *
+ * House rule (client, 2026-09): a quality is shown in FULL — reed, pick, warp AND
+ * weft — everywhere, unless someone asks otherwise for a specific screen. So this
+ * is NOT the default: {@link wfPartFull} is. Collapsing made GC-001 read
+ * "71 X 56  30/S MVS PV 65;35" while GC-006, whose two sides differ, read in full
+ * — the same dropdown showed some qualities half and others whole.
  */
 export function wfPart(c: GreyConstr, labels: Map<string, string>): string {
   const warp = [c.warpCount, c.warp2].map((x) => lbl(x, labels)).filter(Boolean).join(" / ");
@@ -37,11 +43,14 @@ export function wfPart(c: GreyConstr, labels: Map<string, string>): string {
   return warp && weft ? (warp === weft ? warp : `${warp} × ${weft}`) : warp || weft;
 }
 
-/** Full construction line: "<reed> X <pick>  <warp/weft desc>". */
+/**
+ * The construction line every screen should use: "<reed> X <pick>  <warp> × <weft>",
+ * both sides always spelled out. Same output as {@link fullConstruction}, kept
+ * under this name so existing callers get the house rule without each having to
+ * opt in.
+ */
 export function richConstruction(c: GreyConstr, labels: Map<string, string>): string {
-  const rp = c.reed != null && c.pick != null ? `${c.reed} X ${c.pick}` : "";
-  const wf = wfPart(c, labels);
-  return `${rp}${rp && wf ? "  " : ""}${wf}`.trim();
+  return fullConstruction(c, labels);
 }
 
 /**
