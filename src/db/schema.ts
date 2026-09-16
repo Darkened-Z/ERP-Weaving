@@ -1452,6 +1452,11 @@ export const extPackiParchi = sqliteTable("ext_packi_parchi", {
   convContNo: text("conv_cont_no"),
   saleParty: text("sale_party"),
   convContNoSale: text("conv_cont_no_sale"),
+  // Conversion billing runs on its own rate, not the grey sale rate: the mill
+  // agrees a conv rate per metre and nudges it up or down per parchi. The amount
+  // is always convRate x meterNet and is never typed by hand.
+  convRate: real("conv_rate"),
+  convAmount: real("conv_amount"),
   convContSale2: text("conv_cont_sale2"),
   commissionSale: real("commission_sale"),
   greyRateKp: real("grey_rate_kp"),
