@@ -330,6 +330,10 @@ export default async function PackiParchiPage({
       ...(convContractMap[c.contNo] ?? {}),
       sale_party: c.party ?? "",
       grey_rate_kp: c.grayRatePerMtr ?? "",
+      // The contract's agreed conversion rate. The grey rate above is what the
+      // party's LEDGER is posted at; this is what the conversion BILL is worked
+      // out on, and the operator may still nudge it per parchi.
+      conv_rate: c.convRatePerMtr ?? "",
       ...contractFill(c.grayQltyCode),
     };
 
@@ -1419,7 +1423,7 @@ export default async function PackiParchiPage({
                   watch="conv_cont_sale2"
                   map={convContractMap}
                   combos={["quality", "sale_party"]}
-                  inputs={["grey_rate_kp", "quality_rich_disp", "grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp", "than", "kp_meter"]}
+                  inputs={["grey_rate_kp", "conv_rate", "quality_rich_disp", "grey_stock_than_disp", "grey_stock_mtr_disp", "grey_stock_avg_disp", "stock_value_disp", "than", "kp_meter"]}
                 />
               </div>
 
