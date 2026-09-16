@@ -58,10 +58,11 @@ export default async function PackiBillPage({
     return c ? fullConstruction(c, labels) || c.description || code : code || "";
   };
 
-  // The bill states the PRINT quality — that is the whole point of the field:
-  // stock is recorded under one construction, and what actually leaves may
-  // differ a little, so the bill carries the printed one.
-  const greyDesc = constrOf(pp.qualityPrint) || constrOf(pp.quality);
+  // The bill states the PRINT quality and nothing else. No falling back to the
+  // stock quality when Quality Print is blank: that would leak what the godown
+  // held onto a customer document precisely when nobody meant it to. A blank
+  // here is visible and gets filled in; a wrong construction is not.
+  const greyDesc = constrOf(pp.qualityPrint);
 
   // Piece rows come from the godown stock this parchi sold out of.
   const stockRows = pp.purchaseParty
@@ -377,7 +378,9 @@ export default async function PackiBillPage({
                 ["PP No.", pp.ppNo ?? ""],
                 ["Date", fmtDate(pp.vDate)],
                 ["Grey Desc", greyDesc],
-                ["Stock Qlty", constrOf(pp.quality)],
+                // Stock quality is deliberately NOT on the bill. The party is
+                // told what was SENT, never what the godown held — the whole
+                // reason Quality Print exists is that the two can differ.
               ] as [string, string][]).filter(([, v]) => v !== "")).map(([k, v]) => (
                 <div className="bv-meta-row" key={k}>
                   <span className="bv-meta-label">{k}</span>
