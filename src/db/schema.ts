@@ -1168,6 +1168,10 @@ export const extYarnPurVoucher = sqliteTable("ext_yarn_pur_voucher", {
 
 export const extYarnPurVoucherLine = sqliteTable("ext_yarn_pur_voucher_line", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  // One purchase line IS one batch of yarn, the way one production row is one
+  // than. The batch carries its own rate, brand and godown, and a sale consumes
+  // the batch rather than an anonymous pool of a count.
+  batchNo: text("batch_no"),
   voucherId: integer("voucher_id").notNull().references(() => extYarnPurVoucher.id, { onDelete: "cascade" }),
   contNo: text("cont_no"),
   count: text("count"),
@@ -1224,6 +1228,11 @@ export const extYarnSalVoucher = sqliteTable("ext_yarn_sal_voucher", {
 
 export const extYarnSalVoucherLine = sqliteTable("ext_yarn_sal_voucher_line", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  // Which purchase batch this sale took from. The purchase line's lock is
+  // DERIVED from the presence of rows like this rather than stored as a flag on
+  // the purchase — delete the sale and the batch frees itself, so a correction
+  // can never leave stock stranded.
+  batchNo: text("batch_no"),
   voucherId: integer("voucher_id").notNull().references(() => extYarnSalVoucher.id, { onDelete: "cascade" }),
   contNo: text("cont_no"),
   count: text("count"),
