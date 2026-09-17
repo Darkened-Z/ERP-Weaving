@@ -21,18 +21,18 @@ async function savePeriodLock(formData: FormData) {
   if (!canManage(session.roleName)) redirect(`${BASE}?error=forbidden`);
 
   const fyCode = txt(formData.get("fyCode"));
-  const module = txt(formData.get("module"));
+  const moduleName = txt(formData.get("module"));
   const lockedThrough = txt(formData.get("lockedThrough"));
   const remarks = txt(formData.get("remarks"));
 
-  if (!fyCode || !module || !lockedThrough) redirect(`${BASE}?error=missing`);
-  if (!(MODULES as readonly string[]).includes(module!)) redirect(`${BASE}?error=bad_module`);
+  if (!fyCode || !moduleName || !lockedThrough) redirect(`${BASE}?error=missing`);
+  if (!(MODULES as readonly string[]).includes(moduleName!)) redirect(`${BASE}?error=bad_module`);
 
   const now = new Date().toISOString();
   const existing = await db
     .select({ id: schema.periodLocks.id, lockedThrough: schema.periodLocks.lockedThrough })
     .from(schema.periodLocks)
-    .where(and(eq(schema.periodLocks.fyCode, fyCode!), eq(schema.periodLocks.module, module!)))
+    .where(and(eq(schema.periodLocks.fyCode, fyCode!), eq(schema.periodLocks.module, moduleName!)))
     .limit(1);
 
   if (existing[0]) {
@@ -50,7 +50,7 @@ async function savePeriodLock(formData: FormData) {
   } else {
     await db.insert(schema.periodLocks).values({
       fyCode: fyCode!,
-      module: module!,
+      module: moduleName!,
       lockedThrough: lockedThrough!,
       lockedBy: session.userId,
       lockedAt: now,

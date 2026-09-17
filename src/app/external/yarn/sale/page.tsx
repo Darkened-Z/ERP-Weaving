@@ -1222,7 +1222,7 @@ export default async function YarnSaleVoucherPage({
                   </div>
 
                   <div className="lg:col-span-2">
-                    <label className="label block mb-1">Cont <span className="text-[9px] text-[var(--muted)]">(party's running)</span></label>
+                    <label className="label block mb-1">Cont <span className="text-[9px] text-[var(--muted)]">(party&apos;s running)</span></label>
                     <FindingPicker
                       name="cont"
                       defaultValue={formVoucher?.cont ?? ""}

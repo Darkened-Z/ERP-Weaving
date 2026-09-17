@@ -30,6 +30,10 @@ export function GreyInfoPanel({
 
   useEffect(() => {
     const el = document.querySelector<HTMLInputElement>(`input[name="${watch}"]`);
+    // Seeding from a server-rendered field on mount. The DOM does not exist
+    // during render, so this genuinely cannot be derived there — without it an
+    // edit screen shows an empty panel beside a field that already has a value.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (el?.value) setKey(el.value);
     const onChange = (e: Event) => {
       const t = e.target as HTMLInputElement | null;

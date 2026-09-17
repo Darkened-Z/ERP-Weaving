@@ -796,29 +796,19 @@ export default async function GreyDespatchPage({
           await tx.insert(schema.transDetail).values(details);
           }
 
-          // Folding grey stock reversal (separate voucher DPR): grey leaving stock
-          // reverses the daily-production holding — DR party / CR folding stock.
-          // Nets against production's DR folding / CR party. Delete-before-guard.
-          const FOLDING_STOCK_ACC = "1.01.25.01.0037";
+          // The folding-stock reversal is gone with its counterpart in daily
+          // production: the cloth is the party's under a conversion contract, so
+          // neither holding it nor releasing it belongs on the mill's books, and
+          // routing it through the party's receivable is what put a second
+          // identical debit beside the conversion bill. The deletes remain so a
+          // voucher posted under the old behaviour is cleaned on its next save.
           await tx.delete(schema.transDetail).where(
             and(eq(schema.transDetail.vtype, "DPR"), eq(schema.transDetail.vno, vno))
           );
           await tx.delete(schema.transMain).where(
             and(eq(schema.transMain.vtype, "DPR"), eq(schema.transMain.vno, vno))
           );
-          if (partyCoa && fyCode && (data.amnt ?? 0) > 0) {
-            const revAmt = data.amnt ?? 0;
-            const revNarr = `FOLDING GREY STOCK REVERSAL — GP#${data.gpNo ?? ""}`.trim();
-            await tx.insert(schema.transMain).values({
-              fyCode, vtype: "DPR", vno, vdate: data.vDate, accCode: partyCoa,
-              narration: revNarr, vtime: nowTime(), balanceAmount: revAmt,
-            });
-            await tx.insert(schema.transDetail).values([
-              { fyCode, vtype: "DPR", vno, srno: 1, accCode: partyCoa, partyCode: FOLDING_STOCK_ACC, contNo: data.convContNo, narration: revNarr, debit: revAmt, credit: 0 },
-              { fyCode, vtype: "DPR", vno, srno: 2, accCode: FOLDING_STOCK_ACC, partyCode: partyCoa, narration: revNarr, debit: 0, credit: revAmt },
-            ]);
-          }
-        }
+                  }
 
         return did;
       });

@@ -112,11 +112,12 @@ export default async function GreyStockAccountLedgerPage({
     a.date === b.date ? (a.kind === b.kind ? 0 : a.kind === "DR" ? -1 : 1) : a.date.localeCompare(b.date),
   );
 
-  let bal = 0;
-  const ledger = rows.map((r) => {
-    bal += r.dr - r.cr;
-    return { ...r, balance: bal };
-  });
+  // Running balance from the accumulator, not a variable outside the map.
+  const ledger = rows.reduce<Array<(typeof rows)[number] & { balance: number }>>((acc, r) => {
+    const balance = (acc[acc.length - 1]?.balance ?? 0) + r.dr - r.cr;
+    acc.push({ ...r, balance });
+    return acc;
+  }, []);
 
   const totalDr = rows.reduce((a, r) => a + r.dr, 0);
   const totalCr = rows.reduce((a, r) => a + r.cr, 0);

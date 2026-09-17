@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -364,7 +365,7 @@ export default async function GreyRegisterPage({
           >
             Register / Print
           </a>
-          <a href="/" className="btn btn-outline btn-sm">Exit</a>
+          <Link href="/" className="btn btn-outline btn-sm">Exit</Link>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border-2 border-black mb-8 no-print">

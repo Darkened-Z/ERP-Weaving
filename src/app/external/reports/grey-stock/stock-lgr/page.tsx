@@ -49,11 +49,13 @@ export default async function StockLgrPage({
     .where(and(...conditions))
     .orderBy(schema.extGodownStock.vDate, schema.extGodownStock.id);
 
-  let running = 0;
-  const enriched = rows.map((r) => {
-    running += r.netMeter ?? 0;
-    return { ...r, running };
-  });
+  // Running balance carried through the accumulator rather than a variable
+  // outside the map — reassigning one during render is what the compiler flags.
+  const enriched = rows.reduce<Array<(typeof rows)[number] & { running: number }>>((acc, r) => {
+    const running = (acc[acc.length - 1]?.running ?? 0) + (r.netMeter ?? 0);
+    acc.push({ ...r, running });
+    return acc;
+  }, []);
 
   const totalMeter = rows.reduce((s, r) => s + (r.meter ?? 0), 0);
   const totalNet = rows.reduce((s, r) => s + (r.netMeter ?? 0), 0);
@@ -141,7 +143,7 @@ export default async function StockLgrPage({
                   <td className="num">{fmt(totalNet)}</td>
                   <td className="num">{fmt(totalKaat)}</td>
                   <td className="num">{fmt(totalValue)}</td>
-                  <td className="num">{fmt(running)}</td>
+                  <td className="num">{fmt(enriched[enriched.length - 1]?.running ?? 0)}</td>
                 </tr>
               )}
             </tbody>

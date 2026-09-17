@@ -1,5 +1,12 @@
 "use client";
 
+/** One key cap in the shortcut bar. Defined at module scope on purpose: a
+ *  component declared inside another gets a fresh identity on every render,
+ *  so React unmounts and remounts it rather than updating in place. */
+function Key({ children }: { children: React.ReactNode }) {
+  return <kbd className="mono border border-[var(--border-light)] px-1 leading-none">{children}</kbd>;
+}
+
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
@@ -259,10 +266,6 @@ export function FormKeyboard() {
     };
   }, []);
 
-  const Key = ({ children }: { children: React.ReactNode }) => (
-    <kbd className="mono border border-[var(--border-light)] px-1 leading-none">{children}</kbd>
-  );
-
   return (
     <>
       {hasForm && (
@@ -312,15 +315,22 @@ function LovPopup({
     ? options.filter((o) => `${o.label} ${o.value}`.toLowerCase().includes(q.trim().toLowerCase()))
     : options;
 
-  useEffect(() => {
+  // Reset the highlight during render, not in an effect — an effect paints the
+  // stale row first and corrects it a frame later.
+  const [prevQ, setPrevQ] = useState(q);
+  if (prevQ !== q) {
+    setPrevQ(q);
     setSel(0);
-  }, [q]);
+  }
 
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" });
   }, [sel]);
 
   function pick(value: string) {
+    // `field` is a live DOM node, not React state — writing to it IS the point
+    // of the picker. The immutability rule cannot tell the two apart here.
+    // eslint-disable-next-line react-hooks/immutability
     field.value = value;
     // selects only react to "change"; inputs listen for "input" — fire both.
     field.dispatchEvent(new Event("input", { bubbles: true }));

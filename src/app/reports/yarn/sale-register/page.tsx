@@ -74,12 +74,12 @@ export default async function YarnSaleRegisterPage({
     .where(and(...conds))
     .orderBy(schema.extYarnSalVoucher.vDate, schema.extYarnSalVoucher.vNo);
 
-  let running = 0;
-  const rows = joined.map((r) => {
+  // Running total from the accumulator, not a variable outside the map.
+  const rows = joined.reduce<Array<(typeof joined)[number] & { amt: number; running: number }>>((acc, r) => {
     const amt = r.amt ?? 0;
-    running += amt;
-    return { ...r, amt, running };
-  });
+    acc.push({ ...r, amt, running: (acc[acc.length - 1]?.running ?? 0) + amt });
+    return acc;
+  }, []);
 
   const totBags = rows.reduce((s, r) => s + (r.bag ?? 0), 0);
   const totLbs = rows.reduce((s, r) => s + (r.lbs ?? 0), 0);

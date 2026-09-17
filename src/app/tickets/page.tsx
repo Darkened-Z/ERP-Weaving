@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
@@ -168,9 +169,9 @@ export default async function TicketsPage({
                 List
               </a>
             </div>
-            <a href="/tickets/new" className="btn btn-sm">
+            <Link href="/tickets/new" className="btn btn-sm">
               New Ticket
-            </a>
+            </Link>
           </div>
         </div>
 
