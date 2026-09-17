@@ -32,7 +32,7 @@ const infoCls = "input-box mono text-[12px] bg-gray-100";
 export default async function DailyProductionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; than?: string; dv?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -66,6 +66,23 @@ export default async function DailyProductionPage({
         .where(eq(schema.intDailyProductionSet.productionId, editing.id))
         .orderBy(schema.intDailyProductionSet.srNo)
     : [];
+
+  // Which despatch voucher took each than of this production voucher. A than
+  // that has gone out must not be quietly edited underneath the despatch that
+  // carries it, so the row is locked and says which despatch holds it.
+  const despatchedSerials = setRows.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
+  const despatchOfThan = new Map<string, string>();
+  if (despatchedSerials.length) {
+    const taken = await db
+      .select({ than: schema.intGreyDespatchLine.tSrNo, vNo: schema.intGreyDespatch.vNo })
+      .from(schema.intGreyDespatchLine)
+      .innerJoin(schema.intGreyDespatch, eq(schema.intGreyDespatch.id, schema.intGreyDespatchLine.despatchId))
+      .where(inArray(schema.intGreyDespatchLine.tSrNo, despatchedSerials as unknown as number[]));
+    for (const t of taken) {
+      const k = (t.than as unknown as string | null) ?? "";
+      if (k) despatchOfThan.set(k, t.vNo);
+    }
+  }
 
   const maxRow = await db
     .select({
@@ -922,6 +939,13 @@ export default async function DailyProductionPage({
             })
             .from(schema.intDailyProductionSet)
             .where(eq(schema.intDailyProductionSet.productionId, id));
+          const oldSets2 = await tx
+            .select({
+              mmThanSrNo: schema.intDailyProductionSet.mmThanSrNo,
+              totalCount: schema.intDailyProductionSet.totalCount,
+            })
+            .from(schema.intDailyProductionSet)
+            .where(eq(schema.intDailyProductionSet.productionId, id));
           const oldBeamStatus = new Map<string, string | null>();
           // Per-ROW delivery memory (serial + beam) — rows of one voucher share a
           // serial now, so a serial-only key would cross-mark the A/B/C thans.
@@ -947,6 +971,31 @@ export default async function DailyProductionPage({
               s.mmThanSrNo = `${formVNo}/${thanLetter(gridRowOf[k])}`;
             }
           });
+
+          // A than that has gone out on a despatch is that despatch's now. Refuse
+          // the save if this grid drops it or changes its meters — the read-only
+          // inputs already stop it in the browser, but a posted form must not be
+          // able to move cloth out from under a voucher that is already billed.
+          const lockedRows = await tx
+            .select({ than: schema.intGreyDespatchLine.tSrNo, vNo: schema.intGreyDespatch.vNo })
+            .from(schema.intGreyDespatchLine)
+            .innerJoin(schema.intGreyDespatch, eq(schema.intGreyDespatch.id, schema.intGreyDespatchLine.despatchId));
+          const lockedBy = new Map<string, string>();
+          for (const l of lockedRows) {
+            const k = (l.than as unknown as string | null) ?? "";
+            if (k) lockedBy.set(k, l.vNo);
+          }
+          const incomingByThan = new Map<string, (typeof validSets)[number]>();
+          for (const v of validSets) if (v.mmThanSrNo) incomingByThan.set(v.mmThanSrNo, v);
+          for (const os of oldSets2) {
+            const k = os.mmThanSrNo ?? "";
+            if (!k || !lockedBy.has(k)) continue;
+            const now = incomingByThan.get(k);
+            if (!now) throw new Error(`THAN_LOCKED:${k}:${lockedBy.get(k)}`);
+            if (Math.round(Number(now.totalCount ?? 0) * 100) !== Math.round(Number(os.totalCount ?? 0) * 100)) {
+              throw new Error(`THAN_LOCKED:${k}:${lockedBy.get(k)}`);
+            }
+          }
 
           const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
           if (inputSerials.length) {
@@ -1196,6 +1245,11 @@ export default async function DailyProductionPage({
       }
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message ?? "unknown";
+      if (msg.startsWith("THAN_LOCKED:")) {
+        const [, than, vno] = msg.split(":");
+        const q = Number.isFinite(id) && id > 0 ? `?id=${id}` : `?adding=1`;
+        redirect(`/inventory/daily-production${q}&error=than_locked&than=${encodeURIComponent(than)}&dv=${encodeURIComponent(vno ?? "")}`);
+      }
       if (msg === "DUP_THAN") {
         const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
         redirect(`/inventory/daily-production${q}`);
@@ -1323,6 +1377,12 @@ export default async function DailyProductionPage({
               <> — locked through <span className="mono">{params.thru}</span></>
             )}
             .
+          </div>
+        )}
+        {params.error === "than_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Than {params.than} has already gone out on despatch {params.dv} — it cannot be changed or removed here.
+            Edit despatch {params.dv} first if the cloth really did not leave.
           </div>
         )}
         {params.error === "dup_than" && (
@@ -1648,28 +1708,48 @@ export default async function DailyProductionPage({
                     <tbody id="idp-count-rows">
                       {Array.from({ length: Math.max(SET_ROWS, setRows.length + 2) }).map((_, i) => {
                         const s = setRows[i];
+                        // Locked once the than has left on a despatch. The inputs stay
+                        // in the form (readOnly still submits) so saving the voucher
+                        // for some other reason cannot blank a despatched row.
+                        const gone = s?.mmThanSrNo ? despatchOfThan.get(s.mmThanSrNo) : undefined;
+                        const lockCls = gone ? " bg-gray-100 cursor-not-allowed" : "";
+                        const ro = gone ? { readOnly: true as const, tabIndex: -1 } : {};
                         return (
-                          <tr key={i}>
+                          <tr
+                            key={i}
+                            style={gone ? { background: "#fff7ed" } : undefined}
+                            title={gone ? `Despatched on ${gone} — edit that despatch to change this than` : undefined}
+                          >
                             <td className="mono text-[12px] text-center">{i + 1}</td>
                             <td className="text-center">
-                              <button
-                                type="button"
-                                data-row-erase
-                                title="Erase this whole row (both containers)"
-                                className="mono text-[12px] font-bold cursor-pointer hover:text-white"
-                                style={{ color: "var(--danger)", background: "none", border: "none", padding: "0 4px" }}
-                              >
-                                ✕
-                              </button>
+                              {gone ? (
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#b45309" strokeWidth="1.6" aria-label="Locked">
+                                  <rect x="3" y="7" width="10" height="7" rx="1" />
+                                  <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+                                </svg>
+                              ) : (
+                                <button
+                                  type="button"
+                                  data-row-erase
+                                  title="Erase this whole row (both containers)"
+                                  className="mono text-[12px] font-bold cursor-pointer hover:text-white"
+                                  style={{ color: "var(--danger)", background: "none", border: "none", padding: "0 4px" }}
+                                >
+                                  ✕
+                                </button>
+                              )}
                             </td>
-                            <td><input name="mmThanSrNo" className="input-box mono text-[12px]" defaultValue={s?.mmThanSrNo ?? ""} /></td>
-                            <td><input name="aCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.aCount ?? ""} /></td>
-                            <td><input name="bCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.bCount ?? ""} /></td>
-                            <td><input name="cCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cCount ?? ""} /></td>
-                            <td><input name="cpCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.cpCount ?? ""} /></td>
-                            <td><input name="ppcCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.ppcCount ?? ""} /></td>
+                            <td>
+                              <input name="mmThanSrNo" className={`input-box mono text-[12px]${lockCls}`} defaultValue={s?.mmThanSrNo ?? ""} {...ro} />
+                              {gone && <div className="text-[10px] mono" style={{ color: "#b45309" }}>out on {gone}</div>}
+                            </td>
+                            <td><input name="aCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.aCount ?? ""} {...ro} /></td>
+                            <td><input name="bCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.bCount ?? ""} {...ro} /></td>
+                            <td><input name="cCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.cCount ?? ""} {...ro} /></td>
+                            <td><input name="cpCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.cpCount ?? ""} {...ro} /></td>
+                            <td><input name="ppcCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.ppcCount ?? ""} {...ro} /></td>
                             <td><input name="totalCount" type="number" step="0.01" className="input-box mono text-[12px] text-right bg-gray-100" defaultValue={s?.totalCount ?? ""} readOnly tabIndex={-1} /></td>
-                            <td><input name="rejCount" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={s?.rejCount ?? ""} /></td>
+                            <td><input name="rejCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.rejCount ?? ""} {...ro} /></td>
                           </tr>
                         );
                       })}

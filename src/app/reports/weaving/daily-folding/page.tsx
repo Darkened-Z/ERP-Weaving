@@ -33,18 +33,26 @@ export default async function DailyFoldingPage({
   ];
   if (shedQ) conds.push(eq(schema.intDailyProduction.shedNo, shedQ));
 
-  const raw = await db
+  // Grouped in JS rather than SQL because the loom has to be resolved per set
+  // row first. Daily production pairs a counts row with the beam row at the SAME
+  // index, so the 2nd, 3rd ... than of a single-beam voucher carries no beam of
+  // its own — grouping on the joined loom put those rows under a "-" loom. When
+  // the whole voucher ran on ONE beam that beam is unambiguous, so its loom
+  // stands for every row of the voucher. (Same rule the despatch thans list uses.)
+  const setRows = await db
     .select({
+      productionId: schema.intDailyProductionSet.productionId,
       vDate: schema.intDailyProduction.vDate,
       shed: schema.intDailyProduction.shedNo,
+      beamNo: schema.intDailyProductionSet.beamNo,
       loomNo: schema.beams.loomNo,
-      a: sql<number>`coalesce(sum(${schema.intDailyProductionSet.aCount}), 0)`,
-      b: sql<number>`coalesce(sum(${schema.intDailyProductionSet.bCount}), 0)`,
-      c: sql<number>`coalesce(sum(${schema.intDailyProductionSet.cCount}), 0)`,
-      cp: sql<number>`coalesce(sum(${schema.intDailyProductionSet.cpCount}), 0)`,
-      ppc: sql<number>`coalesce(sum(${schema.intDailyProductionSet.ppcCount}), 0)`,
-      rej: sql<number>`coalesce(sum(${schema.intDailyProductionSet.rejCount}), 0)`,
-      total: sql<number>`coalesce(sum(${schema.intDailyProductionSet.totalCount}), 0)`,
+      a: schema.intDailyProductionSet.aCount,
+      b: schema.intDailyProductionSet.bCount,
+      c: schema.intDailyProductionSet.cCount,
+      cp: schema.intDailyProductionSet.cpCount,
+      ppc: schema.intDailyProductionSet.ppcCount,
+      rej: schema.intDailyProductionSet.rejCount,
+      total: schema.intDailyProductionSet.totalCount,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(
@@ -53,21 +61,38 @@ export default async function DailyFoldingPage({
     )
     .leftJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
     .where(and(...conds))
-    .groupBy(schema.intDailyProduction.vDate, schema.intDailyProduction.shedNo, schema.beams.loomNo)
     .orderBy(schema.intDailyProduction.vDate);
 
-  const rows = raw.map((r) => ({
-    date: r.vDate,
-    shed: r.shed ?? "-",
-    loom: r.loomNo ?? "-",
-    a: r.a ?? 0,
-    b: r.b ?? 0,
-    c: r.c ?? 0,
-    cp: r.cp ?? 0,
-    ppc: r.ppc ?? 0,
-    rej: r.rej ?? 0,
-    total: r.total ?? 0,
-  }));
+  const loomsOfVoucher = new Map<number, Set<string>>();
+  for (const r of setRows) {
+    if (r.loomNo == null) continue;
+    const set = loomsOfVoucher.get(r.productionId) ?? new Set<string>();
+    set.add(String(r.loomNo));
+    loomsOfVoucher.set(r.productionId, set);
+  }
+
+  const agg = new Map<string, { date: string; shed: string; loom: string; a: number; b: number; c: number; cp: number; ppc: number; rej: number; total: number }>();
+  for (const r of setRows) {
+    let loom = r.loomNo != null ? String(r.loomNo) : "";
+    if (!loom) {
+      const only = loomsOfVoucher.get(r.productionId);
+      if (only && only.size === 1) loom = [...only][0];
+    }
+    const shed = r.shed ?? "-";
+    const key = `${r.vDate}|${shed}|${loom || "-"}`;
+    const g = agg.get(key) ?? { date: r.vDate, shed, loom: loom || "-", a: 0, b: 0, c: 0, cp: 0, ppc: 0, rej: 0, total: 0 };
+    g.a += r.a ?? 0;
+    g.b += r.b ?? 0;
+    g.c += r.c ?? 0;
+    g.cp += r.cp ?? 0;
+    g.ppc += r.ppc ?? 0;
+    g.rej += r.rej ?? 0;
+    g.total += r.total ?? 0;
+    agg.set(key, g);
+  }
+  const rows = Array.from(agg.values()).sort(
+    (x, y) => x.date.localeCompare(y.date) || x.shed.localeCompare(y.shed) || x.loom.localeCompare(y.loom),
+  );
 
   const totA = rows.reduce((s, r) => s + r.a, 0);
   const totB = rows.reduce((s, r) => s + r.b, 0);
