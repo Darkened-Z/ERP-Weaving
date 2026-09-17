@@ -72,15 +72,24 @@ export default async function DailyProductionPage({
   // carries it, so the row is locked and says which despatch holds it.
   const despatchedSerials = setRows.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
   const despatchOfThan = new Map<string, string>();
+  const openOnDespatch = new Map<string, string>();
   if (despatchedSerials.length) {
     const taken = await db
-      .select({ than: schema.intGreyDespatchLine.tSrNo, vNo: schema.intGreyDespatch.vNo })
+      .select({
+        than: schema.intGreyDespatchLine.tSrNo,
+        vNo: schema.intGreyDespatch.vNo,
+        lockState: schema.intGreyDespatch.lockState,
+      })
       .from(schema.intGreyDespatchLine)
       .innerJoin(schema.intGreyDespatch, eq(schema.intGreyDespatch.id, schema.intGreyDespatchLine.despatchId))
       .where(inArray(schema.intGreyDespatchLine.tSrNo, despatchedSerials as unknown as number[]));
     for (const t of taken) {
       const k = (t.than as unknown as string | null) ?? "";
-      if (k) despatchOfThan.set(k, t.vNo);
+      if (!k) continue;
+      // FINAL locks the row; EDIT leaves it open but still says where it went,
+      // so the operator can see what their correction will feed back into.
+      if ((t.lockState ?? "FINAL").toUpperCase() === "EDIT") openOnDespatch.set(k, t.vNo);
+      else despatchOfThan.set(k, t.vNo);
     }
   }
 
@@ -977,13 +986,21 @@ export default async function DailyProductionPage({
           // inputs already stop it in the browser, but a posted form must not be
           // able to move cloth out from under a voucher that is already billed.
           const lockedRows = await tx
-            .select({ than: schema.intGreyDespatchLine.tSrNo, vNo: schema.intGreyDespatch.vNo })
+            .select({
+              than: schema.intGreyDespatchLine.tSrNo,
+              vNo: schema.intGreyDespatch.vNo,
+              despatchId: schema.intGreyDespatch.id,
+              lockState: schema.intGreyDespatch.lockState,
+            })
             .from(schema.intGreyDespatchLine)
             .innerJoin(schema.intGreyDespatch, eq(schema.intGreyDespatch.id, schema.intGreyDespatchLine.despatchId));
           const lockedBy = new Map<string, string>();
+          const openDespatchOf = new Map<string, number>();
           for (const l of lockedRows) {
             const k = (l.than as unknown as string | null) ?? "";
-            if (k) lockedBy.set(k, l.vNo);
+            if (!k) continue;
+            if ((l.lockState ?? "FINAL").toUpperCase() === "EDIT") openDespatchOf.set(k, l.despatchId);
+            else lockedBy.set(k, l.vNo);
           }
           const incomingByThan = new Map<string, (typeof validSets)[number]>();
           for (const v of validSets) if (v.mmThanSrNo) incomingByThan.set(v.mmThanSrNo, v);
@@ -995,6 +1012,27 @@ export default async function DailyProductionPage({
             if (Math.round(Number(now.totalCount ?? 0) * 100) !== Math.round(Number(os.totalCount ?? 0) * 100)) {
               throw new Error(`THAN_LOCKED:${k}:${lockedBy.get(k)}`);
             }
+          }
+
+          // A than on a despatch that is open for EDIT: the correction made here is
+          // the point of opening it, so push the new meters into that despatch's
+          // line and rebuild its header. 200 corrected to 250 means the despatch
+          // carries 250 and bills for 250.
+          const touchedDespatches = new Set<number>();
+          for (const v of validSets) {
+            const k = v.mmThanSrNo ?? "";
+            const did = k ? openDespatchOf.get(k) : undefined;
+            if (did == null) continue;
+            await tx
+              .update(schema.intGreyDespatchLine)
+              .set({ lengthMtrs: v.totalCount ?? 0, a: v.aCount ?? null, b: v.bCount ?? null, c: v.cCount ?? null, rej: v.rejCount ?? null })
+              .where(
+                and(
+                  eq(schema.intGreyDespatchLine.despatchId, did),
+                  eq(schema.intGreyDespatchLine.tSrNo, k as unknown as number),
+                ),
+              );
+            touchedDespatches.add(did);
           }
 
           const inputSerials = validSets.map((s) => s.mmThanSrNo).filter((x): x is string => !!x);
@@ -1014,6 +1052,44 @@ export default async function DailyProductionPage({
             await tx
               .insert(schema.intDailyProductionSet)
               .values(validSets.map((s) => ({ ...s, productionId: id })));
+          }
+
+          // Rebuild the header of every despatch we just fed a correction into, so
+          // its Than/Qty, amount and tax follow the new meters instead of going
+          // stale against their own lines.
+          for (const did of touchedDespatches) {
+            const lines = await tx
+              .select({ mtr: schema.intGreyDespatchLine.lengthMtrs })
+              .from(schema.intGreyDespatchLine)
+              .where(eq(schema.intGreyDespatchLine.despatchId, did));
+            const [hdr] = await tx
+              .select({
+                convRate: schema.intGreyDespatch.convRate,
+                amnt: schema.intGreyDespatch.amnt,
+                gst: schema.intGreyDespatch.gst,
+                further: schema.intGreyDespatch.further,
+              })
+              .from(schema.intGreyDespatch)
+              .where(eq(schema.intGreyDespatch.id, did));
+            const mtrs = Math.round(lines.reduce((a, l) => a + (l.mtr ?? 0), 0) * 100) / 100;
+            const amnt = Math.round(mtrs * Number(hdr?.convRate ?? 0) * 100) / 100;
+            // GST and further tax are stored as amounts, not rates, so scale them
+            // by however much the amount moved rather than inventing a rate.
+            const oldAmnt = Number(hdr?.amnt ?? 0);
+            const k = oldAmnt > 0 ? amnt / oldAmnt : 0;
+            const gst = Math.round(Number(hdr?.gst ?? 0) * k * 100) / 100;
+            const further = Math.round(Number(hdr?.further ?? 0) * k * 100) / 100;
+            await tx
+              .update(schema.intGreyDespatch)
+              .set({
+                thanQty: lines.length,
+                amnt,
+                gst,
+                further,
+                amtTot: Math.round((amnt + gst + further) * 100) / 100,
+                modifiedDate: nowIso,
+              })
+              .where(eq(schema.intGreyDespatch.id, did));
           }
 
           // Re-stamp dlvStatus='Y' per ROW where the old voucher already delivered.
@@ -1712,6 +1788,7 @@ export default async function DailyProductionPage({
                         // in the form (readOnly still submits) so saving the voucher
                         // for some other reason cannot blank a despatched row.
                         const gone = s?.mmThanSrNo ? despatchOfThan.get(s.mmThanSrNo) : undefined;
+                        const openOn = s?.mmThanSrNo ? openOnDespatch.get(s.mmThanSrNo) : undefined;
                         const lockCls = gone ? " bg-gray-100 cursor-not-allowed" : "";
                         const ro = gone ? { readOnly: true as const, tabIndex: -1 } : {};
                         return (
@@ -1742,6 +1819,11 @@ export default async function DailyProductionPage({
                             <td>
                               <input name="mmThanSrNo" className={`input-box mono text-[12px]${lockCls}`} defaultValue={s?.mmThanSrNo ?? ""} {...ro} />
                               {gone && <div className="text-[10px] mono" style={{ color: "#b45309" }}>out on {gone}</div>}
+                              {openOn && (
+                                <div className="text-[10px] mono" style={{ color: "#15803d" }}>
+                                  {openOn} in edit — change feeds back
+                                </div>
+                              )}
                             </td>
                             <td><input name="aCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.aCount ?? ""} {...ro} /></td>
                             <td><input name="bCount" type="number" step="0.01" className={`input-box mono text-[12px] text-right${lockCls}`} defaultValue={s?.bCount ?? ""} {...ro} /></td>

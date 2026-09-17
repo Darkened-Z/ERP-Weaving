@@ -849,6 +849,22 @@ export default async function GreyDespatchPage({
     }
   }
 
+  // EDIT releases this voucher's thans so daily production can be corrected;
+  // FINAL locks them again. Nothing else about the voucher changes.
+  async function setLockState(formData: FormData) {
+    "use server";
+    const id = parseInt((formData.get("id") as string) ?? "", 10);
+    const next = ((formData.get("state") as string) ?? "").toUpperCase() === "EDIT" ? "EDIT" : "FINAL";
+    if (!Number.isFinite(id) || id <= 0) return;
+    await db
+      .update(schema.intGreyDespatch)
+      .set({ lockState: next })
+      .where(eq(schema.intGreyDespatch.id, id));
+    revalidatePath("/inventory/grey-despatch");
+    revalidatePath("/inventory/daily-production");
+    redirect(`/inventory/grey-despatch?id=${id}`);
+  }
+
   async function deleteDespatch(formData: FormData) {
     "use server";
     const session = await getSession();
@@ -1066,10 +1082,44 @@ export default async function GreyDespatchPage({
                 : formItem
                 ? `Edit — ${formItem.vNo}`
                 : "GREY CLOTH DESPATCH (WVG)"}
+              {formItem && (
+                <span
+                  className="ml-2 text-[10px] uppercase tracking-[0.1em] px-2 py-0.5"
+                  style={
+                    formItem.lockState === "EDIT"
+                      ? { background: "#fff7ed", color: "#b45309", border: "1px solid #b45309" }
+                      : { background: "#0f172a", color: "#fff" }
+                  }
+                  title={
+                    formItem.lockState === "EDIT"
+                      ? "Thans released — daily production can be corrected"
+                      : "Thans locked in daily production"
+                  }
+                >
+                  {formItem.lockState === "EDIT" ? "Edit — thans released" : "Final — thans locked"}
+                </span>
+              )}
             </div>
             <div className="flex gap-2 no-print flex-wrap">
               <a href="/inventory/grey-despatch?adding=1" className="btn btn-outline btn-sm">New</a>
               <button type="submit" form="gd-save-form" className="btn btn-sm">Save</button>
+              {formItem && (
+                <form action={setLockState} className="inline flex gap-2">
+                  <input type="hidden" name="id" value={formItem.id} />
+                  <input type="hidden" name="state" value={formItem.lockState === "EDIT" ? "FINAL" : "EDIT"} />
+                  <button
+                    type="submit"
+                    className={formItem.lockState === "EDIT" ? "btn btn-sm" : "btn btn-outline btn-sm"}
+                    title={
+                      formItem.lockState === "EDIT"
+                        ? "Lock these thans again in daily production"
+                        : "Release these thans so daily production can be corrected"
+                    }
+                  >
+                    {formItem.lockState === "EDIT" ? "Final" : "Edit"}
+                  </button>
+                </form>
+              )}
               <PrintButton label="Print" />
               <a href="/inventory/grey-despatch" className="btn btn-outline btn-sm">Exit</a>
               {formItem ? (
