@@ -29,6 +29,9 @@ type CountAccRow = {
   rate: number;
   amount: number;
 };
+
+/** A balance the mill reads as Dr (owed to us) or Cr (owed by us). */
+const drcr = (v: number) => (v === 0 ? "" : v > 0 ? "Dr" : "Cr");
 type CountAccGroup = { party: string; counts: CountAccRow[] };
 
 type View =
@@ -241,6 +244,9 @@ export default async function WeavingCountsReportPage({
           .innerJoin(schema.extYarnSalVoucher, eq(schema.extYarnSalVoucher.id, schema.extYarnSalVoucherLine.voucherId)),
       ]);
 
+      // "21 — 36/s" tells nobody what the yarn is; the blend belongs with it.
+      // A count that the yarn master does not carry says so plainly instead of
+      // printing its own code back as if that were a description.
       const countLabel = new Map(
         yarnCountRows.map((c) => [String(c.countCode), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()]),
       );
@@ -271,7 +277,7 @@ export default async function WeavingCountsReportPage({
         const g = groups.get(partyName) ?? { party: partyName, counts: [] };
         g.counts.push({
           countCode: cc,
-          descr: countLabel.get(cc) ?? cc,
+          descr: countLabel.get(cc) ?? `${cc} — not in Yarn Count master`,
           totalLbs: Math.round(m.inLbs * 100) / 100,
           bags: Math.round(m.inBags * 100) / 100,
           balLbs,
@@ -723,7 +729,10 @@ export default async function WeavingCountsReportPage({
                         <td className="mono text-right text-[12px] font-bold">{fmt(sub.bags)}</td>
                         <td className="mono text-right text-[12px] font-bold">{fmt(sub.balLbs)}</td>
                         <td></td>
-                        <td className="mono text-right text-[12px] font-bold">{fmt(sub.amount)}</td>
+                        <td className="mono text-right text-[12px] font-bold">
+                          {fmt(Math.abs(sub.amount))}
+                          {drcr(sub.amount) && <span className="text-[10px] ml-1">{drcr(sub.amount)}</span>}
+                        </td>
                       </tr>,
                       ...g.counts.map((c) => (
                         <tr key={`${g.party}-${c.countCode}`}>
@@ -733,7 +742,10 @@ export default async function WeavingCountsReportPage({
                           <td className="mono text-right">{fmt(c.bags)}</td>
                           <td className="mono text-right">{fmt(c.balLbs)}</td>
                           <td className="mono text-right">{fmt(c.rate)}</td>
-                          <td className="mono text-right font-bold">{fmt(c.amount)}</td>
+                          <td className="mono text-right font-bold">
+                            {fmt(Math.abs(c.amount))}
+                            {drcr(c.amount) && <span className="text-[10px] text-[var(--muted)] ml-1">{drcr(c.amount)}</span>}
+                          </td>
                         </tr>
                       )),
                     ];
