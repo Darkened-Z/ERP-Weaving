@@ -24,6 +24,19 @@ import { acc } from "@/lib/gl-accounts";
 import { num, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
+
+/** A, B ... Z, AA, AB ... — the than-serial convention, reused for yarn batches. */
+function batchLetter(i: number): string {
+  let s = "";
+  let n = i + 1;
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 export const dynamic = "force-dynamic";
 
 const today = () => pkToday();
@@ -432,12 +445,17 @@ export default async function YarnPurchaseVoucherPage({
     const bags = formData.getAll("line_bag") as string[];
     const cons = formData.getAll("line_con") as string[];
     const lbss = formData.getAll("line_lbs") as string[];
+    // A batch travels on the form. The update path deletes and re-inserts every
+    // line, so without carrying it a saved batch would be reassigned by position
+    // and any sale pointing at it would be left pointing at different yarn.
+    const batchNos = formData.getAll("line_batch_no") as string[];
     const units = formData.getAll("line_unit") as string[];
     const dspParties = formData.getAll("line_despatch_party") as string[];
     const rates = formData.getAll("line_rate") as string[];
     const rateSvs = formData.getAll("line_rate_sv") as string[];
 
     const validLines: {
+      batchNo: string | null;
       contNo: string | null;
       count: string | null;
       countDot: string | null;
@@ -485,6 +503,7 @@ export default async function YarnPurchaseVoucherPage({
       }
 
       validLines.push({
+        batchNo: (batchNos[i] ?? "").trim() || null,
         contNo: c || null,
         count: ct || null,
         countDot: dt || null,
@@ -563,10 +582,12 @@ export default async function YarnPurchaseVoucherPage({
 
       if (Number.isFinite(id) && id > 0) {
         const [existing] = await db
-          .select({ lvNo: schema.extYarnPurVoucher.lvNo })
+          .select({ lvNo: schema.extYarnPurVoucher.lvNo, vNo: schema.extYarnPurVoucher.vNo })
           .from(schema.extYarnPurVoucher)
           .where(eq(schema.extYarnPurVoucher.id, id));
         const existingLvNo = existing?.lvNo ?? 0;
+        // Batch numbers are prefixed with the voucher they belong to.
+        const formVNo = existing?.vNo ?? "";
 
         await db.transaction(async (tx) => {
           await tx
@@ -583,6 +604,21 @@ export default async function YarnPurchaseVoucherPage({
             .where(eq(schema.extYarnPurVoucherLine.voucherId, id));
 
           if (validLines.length) {
+            // Every batch that arrives without a number gets one, continuing past the
+            // letters this voucher already uses so an edit never reuses a batch that a
+            // sale is already pointing at.
+            {
+              const used = new Set(validLines.map((l) => l.batchNo).filter(Boolean) as string[]);
+              let next = 0;
+              for (const l of validLines) {
+                if (l.batchNo) continue;
+                let cand = `${formVNo}/${batchLetter(next)}`;
+                while (used.has(cand)) cand = `${formVNo}/${batchLetter(++next)}`;
+                l.batchNo = cand;
+                used.add(cand);
+                next += 1;
+              }
+            }
             await tx
               .insert(schema.extYarnPurVoucherLine)
               .values(validLines.map((l) => ({ ...l, voucherId: id })));
@@ -653,6 +689,21 @@ export default async function YarnPurchaseVoucherPage({
             const insertedId = inserted[0].id;
 
             if (validLines.length) {
+              // Every batch that arrives without a number gets one, continuing past the
+              // letters this voucher already uses so an edit never reuses a batch that a
+              // sale is already pointing at.
+              {
+                const used = new Set(validLines.map((l) => l.batchNo).filter(Boolean) as string[]);
+                let next = 0;
+                for (const l of validLines) {
+                  if (l.batchNo) continue;
+                  let cand = `${vNo}/${batchLetter(next)}`;
+                  while (used.has(cand)) cand = `${vNo}/${batchLetter(++next)}`;
+                  l.batchNo = cand;
+                  used.add(cand);
+                  next += 1;
+                }
+              }
               await tx
                 .insert(schema.extYarnPurVoucherLine)
                 .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
@@ -1270,6 +1321,7 @@ export default async function YarnPurchaseVoucherPage({
                         <tr>
                           <th style={{ width: "30px" }}>#</th>
                           <th style={{ width: "26px" }}></th>
+                          <th style={{ width: "88px" }}>Batch</th>
                           <th>Cont.#</th>
                           <th>Party Count</th>
                           <th>Count</th>
@@ -1301,6 +1353,9 @@ export default async function YarnPurchaseVoucherPage({
                               >
                                 ✕
                               </button>
+                            </td>
+                            <td className="mono text-[11px]" style={{ color: "var(--muted)" }}>
+                              {row?.batchNo ?? ""}
                             </td>
                             <td style={{ minWidth: 66 }}>
                               <Combobox
@@ -1414,6 +1469,11 @@ export default async function YarnPurchaseVoucherPage({
                             {/* Unit dropped at the client's request. Still
                                 submitted so an existing line keeps its value. */}
                             <input type="hidden" name="line_unit" defaultValue={row?.unit ?? ""} />
+                            {/* The batch this line IS. Carried on the form because
+                                saving deletes and re-inserts every line — without
+                                it a batch would be reassigned by position and any
+                                sale pointing at it would point at other yarn. */}
+                            <input type="hidden" name="line_batch_no" defaultValue={row?.batchNo ?? ""} />
                             <td style={{ minWidth: 200 }}>
                               <FindingPicker
                                 name="line_despatch_party"
