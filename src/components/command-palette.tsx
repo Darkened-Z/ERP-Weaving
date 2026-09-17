@@ -30,6 +30,7 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(0);
+  const selIdxRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -174,7 +175,7 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
       setSelected((s) => Math.max(s - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const row = rows[selected];
+      const row = rows[selIdxRef.current];
       if (row) go(row);
     }
   }
@@ -205,13 +206,15 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
 
   useEffect(() => {
     if (!listRef.current) return;
-    const el = listRef.current.querySelector<HTMLElement>(`[data-index="${selected}"]`);
+    const el = listRef.current.querySelector<HTMLElement>(`[data-index="${selIdxRef.current}"]`);
     if (el) el.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
-  // Clamp during render: a selection past the end of a shrunken list would
-  // otherwise be painted once before the effect pulled it back.
-  if (selected > rows.length - 1) setSelected(Math.max(0, rows.length - 1));
+  // Clamp by DERIVING, not by writing state during render. Setting it here
+  // never converged on an empty list: `selected > -1` stays true no matter what
+  // is written, so React re-rendered until it threw "Too many re-renders".
+  const selIdx = rows.length > 0 ? Math.min(selected, rows.length - 1) : 0;
+  selIdxRef.current = selIdx;
 
   if (!open) return null;
 
@@ -280,7 +283,7 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
                 {group}
               </div>
               {items.map(({ row, index }) => {
-                const isSel = index === selected;
+                const isSel = index === selIdx;
                 return (
                   <div
                     key={index}
