@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -400,7 +401,7 @@ export default async function YarnRegisterPage({
                 <a href={buildHref("/external/reports/yarn-register/register-party")} target="_blank" rel="noopener" className="btn btn-outline btn-sm text-center">Register/Party</a>
                 <a href={buildHref("/external/reports/yarn-register/do-no")} target="_blank" rel="noopener" className="btn btn-outline btn-sm text-center">DO No</a>
               </div>
-              <a href="/" className="btn btn-sm text-center">Exit</a>
+              <Link href="/" className="btn btn-sm text-center">Exit</Link>
             </div>
           </div>
         </div>

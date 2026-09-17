@@ -78,6 +78,10 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
       setTimeout(() => inputRef.current?.focus(), 0);
     } else {
       document.body.style.overflow = "";
+      // Closing the palette resets it. This runs for a real event (the dialog
+      // closing), not to mirror a prop, and it sits with the body-scroll lock
+      // it belongs to.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQ("");
       setResults([]);
       setSelected(0);
@@ -88,6 +92,10 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
   }, [open]);
 
   useEffect(() => {
+    // Resetting the highlight alongside a debounced search that also sets
+    // results and loading — all three belong to the same async pass, so they
+    // stay together in the effect rather than being split across render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelected(0);
     if (q.trim().length < 2) {
       setResults([]);
@@ -201,9 +209,9 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
     if (el) el.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
-  useEffect(() => {
-    if (selected > rows.length - 1) setSelected(Math.max(0, rows.length - 1));
-  }, [rows.length, selected]);
+  // Clamp during render: a selection past the end of a shrunken list would
+  // otherwise be painted once before the effect pulled it back.
+  if (selected > rows.length - 1) setSelected(Math.max(0, rows.length - 1));
 
   if (!open) return null;
 

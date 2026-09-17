@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { eq, sql } from "drizzle-orm";
@@ -184,7 +185,7 @@ export default async function ProductionBoardPage() {
             <div className="text-2xl font-light tracking-[0.35em] uppercase text-neutral-400">Live Production</div>
           </div>
           <div className="flex items-center gap-6">
-            <a href="/" className="text-white/50 hover:text-white text-[11px] uppercase tracking-[0.1em] no-print">BACK</a>
+            <Link href="/" className="text-white/50 hover:text-white text-[11px] uppercase tracking-[0.1em] no-print">BACK</Link>
             {isFallback && (
               <div className="bg-yellow-500 text-black px-3 py-1 text-[11px] uppercase tracking-[0.15em] font-bold">
                 Latest: {useDate}

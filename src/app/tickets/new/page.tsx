@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
@@ -168,9 +169,9 @@ export default async function NewTicketPage({
               Report an issue, defect, or maintenance need
             </p>
           </div>
-          <a href="/tickets" className="btn btn-outline btn-sm">
+          <Link href="/tickets" className="btn btn-outline btn-sm">
             Cancel
-          </a>
+          </Link>
         </div>
 
         <form action={createTicket} className="border border-black p-6">
@@ -316,9 +317,9 @@ export default async function NewTicketPage({
             <button type="submit" className="btn btn-sm">
               Create Ticket
             </button>
-            <a href="/tickets" className="btn btn-outline btn-sm">
+            <Link href="/tickets" className="btn btn-outline btn-sm">
               Cancel
-            </a>
+            </Link>
           </div>
         </form>
       </div>

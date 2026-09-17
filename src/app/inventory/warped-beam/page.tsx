@@ -1002,7 +1002,7 @@ export default async function WarpedBeamReceivingPage({
                 </div>
 
                 <div className="lg:col-span-4">
-                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(Bm Sale Party's — inventory contracts)</span></label>
+                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(Bm Sale Party&apos;s — inventory contracts)</span></label>
                   <Combobox
                     name="sizingContNo"
                     options={sizingContractOpts}

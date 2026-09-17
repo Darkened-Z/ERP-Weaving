@@ -85,6 +85,11 @@ export function AccountPicker({
       };
       tree.forEach((r) => visit(r, 0));
     }
+    // The auto-expansion is a reset of user-toggled state whenever the query or
+    // the tree changes, not a mirror of a prop — it deliberately discards which
+    // nodes the operator had opened by hand, because a new search means a new
+    // map. Keeping it in an effect is what makes that reset explicit.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpanded(next);
   }, [open, q, tree]);
 

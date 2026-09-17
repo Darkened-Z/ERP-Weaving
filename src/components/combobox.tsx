@@ -114,9 +114,15 @@ export function Combobox({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
-  useEffect(() => {
+  // Reset the highlighted row when the query or the panel changes. Done during
+  // render (React's documented "adjusting state when props change") rather than
+  // in an effect: an effect renders the stale highlight first and corrects it on
+  // the next pass, which shows as a flicker on a fast typist.
+  const [prevQuery, setPrevQuery] = useState(`${typed}|${open}`);
+  if (prevQuery !== `${typed}|${open}`) {
+    setPrevQuery(`${typed}|${open}`);
     setSel(0);
-  }, [typed, open]);
+  }
 
   useEffect(() => {
     mirrorDesc(val);

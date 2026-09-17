@@ -78,18 +78,21 @@ export default async function GreyStockDetailLedgerPage({
     })),
   ].sort((a, b) => (a.date === b.date ? (a.kind === b.kind ? a.id - b.id : a.kind === "IN" ? -1 : 1) : a.date.localeCompare(b.date)));
 
-  let balThan = 0;
-  let balMtr = 0;
-  const rows = moves.map((m) => {
-    if (m.kind === "IN") { balThan += m.than; balMtr += m.meter; }
-    else { balThan -= m.than; balMtr -= m.meter; }
-    return {
+  // Both running balances come off the previous row rather than variables
+  // outside the map.
+  const rows = moves.reduce<Array<(typeof moves)[number] & { narration: string; balThan: number; balMtr: number }>>((acc, m) => {
+    const prev = acc[acc.length - 1];
+    const sign = m.kind === "IN" ? 1 : -1;
+    const balThan = (prev?.balThan ?? 0) + sign * m.than;
+    const balMtr = (prev?.balMtr ?? 0) + sign * m.meter;
+    acc.push({
       ...m,
       narration: `${m.than} THAN ${fmt(m.meter)} MTR @ ${m.rate}${m.quality ? ` , ${m.quality}` : ""} (${m.kind === "IN" ? "GREY PURCHASE" : "PACKI SALE"})`,
       balThan: Math.round(balThan * 100) / 100,
       balMtr: Math.round(balMtr * 100) / 100,
-    };
-  });
+    });
+    return acc;
+  }, []);
 
   const t = {
     inThan: moves.filter((m) => m.kind === "IN").reduce((a, m) => a + m.than, 0),

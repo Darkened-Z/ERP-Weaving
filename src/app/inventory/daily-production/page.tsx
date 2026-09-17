@@ -1192,17 +1192,18 @@ export default async function DailyProductionPage({
             }
           }
 
-          // Folding grey stock GL (delete-before-guard): DR folding stock / CR conv party.
+          // Folding grey stock is NOT posted to the general ledger. Under a
+          // conversion contract the cloth belongs to the party, not the mill, so
+          // capitalising it here and crediting the party swung their receivable
+          // by the full cloth value for reasons that have nothing to do with what
+          // they owe — which is what made the ledger read as a double beside the
+          // conversion bill. The deletes stay so vouchers posted under the old
+          // behaviour are cleaned up the next time they are saved. Daily Folding
+          // Stock reads the production and despatch tables directly, not the GL,
+          // so nothing is lost by leaving it off the books.
           await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "DP"), eq(schema.transDetail.vno, id)));
           await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "DP"), eq(schema.transMain.vno, id)));
-          if (canPostFolding) {
-            await tx.insert(schema.transMain).values({ fyCode, vtype: "DP", vno: id, vdate: header.vDate, accCode: FOLDING_STOCK_ACC, narration: foldingNarr, balanceAmount: foldingAmount });
-            await tx.insert(schema.transDetail).values([
-              { fyCode, vtype: "DP", vno: id, srno: 1, accCode: FOLDING_STOCK_ACC, partyCode: convPartyCode, narration: foldingNarr, debit: foldingAmount, credit: 0 },
-              { fyCode, vtype: "DP", vno: id, srno: 2, accCode: convPartyCode, partyCode: FOLDING_STOCK_ACC, narration: foldingNarr, debit: 0, credit: foldingAmount },
-            ]);
-          }
-        });
+                  });
         revalidatePath("/inventory/daily-production");
         redirect(`/inventory/daily-production?id=${id}`);
       } else {
@@ -1306,14 +1307,7 @@ export default async function DailyProductionPage({
             }
           }
 
-          // Folding grey stock GL: DR folding stock / CR conv party.
-          if (canPostFolding) {
-            await tx.insert(schema.transMain).values({ fyCode, vtype: "DP", vno: insertedId, vdate: header.vDate, accCode: FOLDING_STOCK_ACC, narration: foldingNarr, balanceAmount: foldingAmount });
-            await tx.insert(schema.transDetail).values([
-              { fyCode, vtype: "DP", vno: insertedId, srno: 1, accCode: FOLDING_STOCK_ACC, partyCode: convPartyCode, narration: foldingNarr, debit: foldingAmount, credit: 0 },
-              { fyCode, vtype: "DP", vno: insertedId, srno: 2, accCode: convPartyCode, partyCode: FOLDING_STOCK_ACC, narration: foldingNarr, debit: 0, credit: foldingAmount },
-            ]);
-          }
+          // No folding-stock GL here either — see the note on the update path.
           return insertedId;
         });
         revalidatePath("/inventory/daily-production");
