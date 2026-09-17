@@ -644,7 +644,10 @@ export default async function PackiParchiPage({
         vdate: vDate,
         accCode: partyCoa,
         narration: `${ppNarr}  [PP#${vNoForGl ?? ""}${kpNo ? ` KP#${kpNo}` : ""}]`.trim(),
-        balanceAmount: greyAmtSal,
+        // The party owes what the BILL says, not the gross: commission, checkery
+        // and kaat are settled on the bill, so posting the gross left the ledger
+        // disagreeing with the document the party was handed.
+        balanceAmount: salAmtTot,
       });
 
       const details: (typeof schema.transDetail.$inferInsert)[] = [
@@ -656,7 +659,7 @@ export default async function PackiParchiPage({
           accCode: partyCoa,
           partyCode: partyCoa,
           narration: ppNarr,
-          debit: greyAmtSal,
+          debit: salAmtTot,
           credit: 0,
         },
         {
@@ -671,7 +674,7 @@ export default async function PackiParchiPage({
           credit: commissionTotalC,
         },
       ];
-      const clearDiff = greyAmtSal - commissionTotalC;
+      const clearDiff = salAmtTot - commissionTotalC;
       if (Math.abs(clearDiff) >= 0.01) {
         details.push({
           fyCode,
