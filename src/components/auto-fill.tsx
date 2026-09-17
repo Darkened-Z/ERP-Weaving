@@ -150,7 +150,24 @@ export function FieldCalc({
  * (keys of the fill object = sibling input names). Only fills empty siblings,
  * so a manually edited row is not clobbered.
  */
-export function RowAutoFill({ watch, map }: { watch: string; map: Record<string, Fill> }) {
+export function RowAutoFill({
+  watch,
+  map,
+  force = false,
+}: {
+  watch: string;
+  map: Record<string, Fill>;
+  /**
+   * Overwrite fields that already hold a value.
+   *
+   * Off by default so a filled-in row is never clobbered. Turn it on where the
+   * watched field IS the identity of the row's source — a yarn batch, say,
+   * whose rate, brand and godown must follow the batch. Leaving stale values
+   * from a previously picked batch there would sell one batch at another's
+   * rate, which is worse than losing a hand-typed override.
+   */
+  force?: boolean;
+}) {
   useEffect(() => {
     const onChange = (e: Event) => {
       const t = e.target as HTMLInputElement;
@@ -161,11 +178,17 @@ export function RowAutoFill({ watch, map }: { watch: string; map: Record<string,
       if (!tr) return;
       for (const [name, v] of Object.entries(data)) {
         const el = tr.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
-        if (el && !el.value && v != null && v !== "") el.value = String(v);
+        if (!el || v == null || v === "") continue;
+        if (el.value && !force) continue;
+        if (el.value === String(v)) continue;
+        el.value = String(v);
+        // Downstream calculators (amt = lbs x rate) listen for these.
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
       }
     };
     document.addEventListener("change", onChange, true);
     return () => document.removeEventListener("change", onChange, true);
-  }, [watch, map]);
+  }, [watch, map, force]);
   return null;
 }

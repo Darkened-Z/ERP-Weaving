@@ -1194,6 +1194,11 @@ export const extYarnPurVoucherLine = sqliteTable("ext_yarn_pur_voucher_line", {
 }));
 
 export const extYarnSalVoucher = sqliteTable("ext_yarn_sal_voucher", {
+  // EDIT or FINAL. FINAL is the normal state: the yarn has gone, so the batches
+  // this sale took are locked back in yarn purchase. Pressing EDIT releases them
+  // so a purchase can be corrected. The LOCK itself is derived from live sale
+  // rows, not from this — this only says whether the release is open.
+  lockState: text("lock_state").default("FINAL"),
   id: integer("id").primaryKey({ autoIncrement: true }),
   vNo: text("v_no").notNull().unique(),
   lvNo: integer("lv_no"),

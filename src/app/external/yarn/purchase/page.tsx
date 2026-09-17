@@ -13,7 +13,7 @@ import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
-import { and, eq, ne, sql, desc } from "drizzle-orm";
+import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
@@ -62,7 +62,16 @@ function nextVNo(rows: { vNo: string }[], prefix: string): string {
 export default async function YarnPurchaseVoucherPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{
+    id?: string;
+    adding?: string;
+    error?: string;
+    find?: string;
+    thru?: string;
+    batch?: string;
+    why?: string;
+    sold?: string;
+  }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -100,6 +109,53 @@ export default async function YarnPurchaseVoucherPage({
         .where(eq(schema.extYarnPurVoucherLine.voucherId, formVoucher.id))
         .orderBy(schema.extYarnPurVoucherLine.id)
     : [];
+
+  // A purchase line is locked because a sale is live against its batch — never
+  // because of a stored flag. Delete or shrink that sale and the lock lifts by
+  // itself, so yarn can't be stranded in stock by a flag nobody cleared.
+  //
+  // The release valve is the sale voucher's own EDIT/FINAL switch: while every
+  // sale consuming a batch sits in EDIT, this line opens up for correction.
+  const formBatchNos = lines.map((l) => l.batchNo).filter(Boolean) as string[];
+  const batchUse = formBatchNos.length
+    ? await db
+        .select({
+          batchNo: schema.extYarnSalVoucherLine.batchNo,
+          bag: schema.extYarnSalVoucherLine.bag,
+          lbs: schema.extYarnSalVoucherLine.lbs,
+          saleVNo: schema.extYarnSalVoucher.vNo,
+          saleId: schema.extYarnSalVoucher.id,
+          lockState: schema.extYarnSalVoucher.lockState,
+        })
+        .from(schema.extYarnSalVoucherLine)
+        .innerJoin(
+          schema.extYarnSalVoucher,
+          eq(schema.extYarnSalVoucherLine.voucherId, schema.extYarnSalVoucher.id)
+        )
+        .where(inArray(schema.extYarnSalVoucherLine.batchNo, formBatchNos))
+    : [];
+  type BatchLock = {
+    soldBag: number;
+    soldLbs: number;
+    sales: { vNo: string; id: number; open: boolean }[];
+    locked: boolean;
+  };
+  const batchLock = new Map<string, BatchLock>();
+  for (const u of batchUse) {
+    if (!u.batchNo) continue;
+    const cur = batchLock.get(u.batchNo) ?? { soldBag: 0, soldLbs: 0, sales: [], locked: false };
+    cur.soldBag = round2(cur.soldBag + (u.bag ?? 0));
+    cur.soldLbs = round2(cur.soldLbs + (u.lbs ?? 0));
+    const open = (u.lockState ?? "FINAL") === "EDIT";
+    if (!cur.sales.some((x) => x.id === u.saleId)) {
+      cur.sales.push({ vNo: u.saleVNo ?? String(u.saleId), id: u.saleId, open });
+    }
+    batchLock.set(u.batchNo, cur);
+  }
+  for (const v of batchLock.values()) {
+    // Locked unless every sale holding this batch has been opened for edit.
+    v.locked = !v.sales.every((x) => x.open);
+  }
 
   const parties = await db
     .select({
@@ -337,7 +393,6 @@ export default async function YarnPurchaseVoucherPage({
     godownAccounts.find((p) => p.code === YARN_STOCK_GODOWN)?.description ??
     godownAccounts[0]?.description ??
     "";
-  const despatchPartyOpts = godownAccounts.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
   const despatchFindRows = godownAccounts.map((p) => ({ value: p.description, code: p.code, description: p.description }));
 
   // Historical brand inference — from past yarn purchase voucher lines. When a
@@ -529,6 +584,57 @@ export default async function YarnPurchaseVoucherPage({
           ? `/external/yarn/purchase?id=${id}&error=no_lines`
           : `/external/yarn/purchase?error=no_lines`
       );
+    }
+
+    // Stock integrity: a batch that has already been sold cannot be taken off
+    // this voucher, nor cut below what went out on it. Without this, correcting
+    // a purchase would leave sale rows pointing at yarn that no longer exists
+    // and the count would show negative stock at month end — the exact thing
+    // that must not happen during a purchase/sale correction.
+    //
+    // This runs whatever the sale's EDIT/FINAL state is. EDIT unlocks the
+    // fields so a line can be fixed; it does not license overselling. To cut a
+    // purchase below what's sold, cut the sale first.
+    if (Number.isFinite(id) && id > 0) {
+      const priorBatches = (
+        await db
+          .select({ batchNo: schema.extYarnPurVoucherLine.batchNo })
+          .from(schema.extYarnPurVoucherLine)
+          .where(eq(schema.extYarnPurVoucherLine.voucherId, id))
+      )
+        .map((r) => r.batchNo)
+        .filter(Boolean) as string[];
+      if (priorBatches.length) {
+        const sold = await db
+          .select({
+            batchNo: schema.extYarnSalVoucherLine.batchNo,
+            bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+            lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
+          })
+          .from(schema.extYarnSalVoucherLine)
+          .where(inArray(schema.extYarnSalVoucherLine.batchNo, priorBatches))
+          .groupBy(schema.extYarnSalVoucherLine.batchNo);
+        const incoming = new Map<string, { bag: number; lbs: number }>();
+        for (const l of validLines) {
+          if (!l.batchNo) continue;
+          const cur = incoming.get(l.batchNo) ?? { bag: 0, lbs: 0 };
+          cur.bag += l.bag ?? 0;
+          cur.lbs += l.lbs ?? 0;
+          incoming.set(l.batchNo, cur);
+        }
+        for (const srow of sold) {
+          const b = srow.batchNo;
+          if (!b) continue;
+          if (srow.bag <= 0 && srow.lbs <= 0) continue;
+          const inc = incoming.get(b);
+          const q = (reason: string) =>
+            redirect(
+              `/external/yarn/purchase?id=${id}&error=batch_sold&batch=${encodeURIComponent(b)}&why=${reason}&sold=${srow.lbs}`
+            );
+          if (!inc) q("removed");
+          else if (inc.lbs + 0.01 < srow.lbs) q("short");
+        }
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -899,6 +1005,15 @@ export default async function YarnPurchaseVoucherPage({
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Voucher number already exists. Try again.
+          </div>
+        )}
+        {params.error === "batch_sold" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Batch {params.batch ?? "?"} is already sold ({params.sold ?? "?"} lbs).{" "}
+            {params.why === "removed"
+              ? "It cannot be removed from this voucher."
+              : "This voucher cannot carry less than what has gone out on it."}{" "}
+            Correct the yarn sale first, then come back. Nothing was saved.
           </div>
         )}
         {params.error === "no_lines" && (
@@ -1338,26 +1453,61 @@ export default async function YarnPurchaseVoucherPage({
                         </tr>
                       </thead>
                       <tbody id="ypv-line-rows">
-                        {gridRows.map((row, i) => (
-                          <tr key={row?.id ?? `e-${i}`}>
+                        {gridRows.map((row, i) => {
+                          const bl = row?.batchNo ? batchLock.get(row.batchNo) : undefined;
+                          const locked = !!bl?.locked;
+                          const openOn = bl && !bl.locked ? bl.sales.map((x) => x.vNo).join(", ") : "";
+                          const soldOn = bl ? bl.sales.map((x) => x.vNo).join(", ") : "";
+                          const ro = locked ? { readOnly: true as const, tabIndex: -1 } : {};
+                          const lockCls = locked ? " bg-gray-100" : "";
+                          const frozen = locked
+                            ? ({ pointerEvents: "none", opacity: 0.75 } as const)
+                            : undefined;
+                          return (
+                          <tr
+                            key={row?.id ?? `e-${i}`}
+                            style={locked ? { background: "#fff7ed" } : undefined}
+                            title={
+                              locked
+                                ? `Sold on ${soldOn} — put that sale in EDIT to change this line`
+                                : undefined
+                            }
+                          >
                             <td className="mono text-[11px] text-center text-[var(--muted)]">
                               {i + 1}
                             </td>
                             <td className="text-center">
-                              <button
-                                type="button"
-                                data-row-erase
-                                title="Clear this line — the contract and the rest of the voucher stay"
-                                className="mono text-[12px] font-bold cursor-pointer"
-                                style={{ color: "var(--danger)", background: "none", border: "none", padding: "0 3px" }}
-                              >
-                                ✕
-                              </button>
+                              {locked ? (
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#b45309" strokeWidth="1.6" aria-label="Locked">
+                                  <rect x="3" y="7" width="10" height="7" rx="1" />
+                                  <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+                                </svg>
+                              ) : (
+                                <button
+                                  type="button"
+                                  data-row-erase
+                                  title="Clear this line — the contract and the rest of the voucher stay"
+                                  className="mono text-[12px] font-bold cursor-pointer"
+                                  style={{ color: "var(--danger)", background: "none", border: "none", padding: "0 3px" }}
+                                >
+                                  ✕
+                                </button>
+                              )}
                             </td>
                             <td className="mono text-[11px]" style={{ color: "var(--muted)" }}>
                               {row?.batchNo ?? ""}
+                              {locked && (
+                                <div className="text-[10px] mono" style={{ color: "#b45309" }}>
+                                  sold on {soldOn}
+                                </div>
+                              )}
+                              {openOn && (
+                                <div className="text-[10px] mono" style={{ color: "#15803d" }}>
+                                  {openOn} in edit
+                                </div>
+                              )}
                             </td>
-                            <td style={{ minWidth: 66 }}>
+                            <td style={frozen ? { minWidth: 66, ...frozen } : { minWidth: 66 }}>
                               <Combobox
                                 name="line_cont_no"
                                 options={contractOpts}
@@ -1367,7 +1517,7 @@ export default async function YarnPurchaseVoucherPage({
                                 filterByField="party"
                               />
                             </td>
-                            <td>
+                            <td style={frozen}>
                               <select
                                 name="line_party_count"
                                 className="input-box mono text-[12px]"
@@ -1386,17 +1536,19 @@ export default async function YarnPurchaseVoucherPage({
                               <input
                                 name="line_count"
                                 list="ypv-counts"
-                                className="input-box mono text-[12px]"
+                                className={`input-box mono text-[12px]${lockCls}`}
                                 defaultValue={row?.count ?? ""}
                                 style={{ width: 60 }}
+                              {...ro}
                               />
                             </td>
                             <td>
                               <input
                                 name="line_count_dot"
-                                className="input-box mono text-[12px]"
+                                className={`input-box mono text-[12px]${lockCls}`}
                                 defaultValue={row?.countDot ?? ""}
                                 style={{ width: 44 }}
+                              {...ro}
                               />
                             </td>
                             <td>
@@ -1422,26 +1574,29 @@ export default async function YarnPurchaseVoucherPage({
                             <td>
                               <input
                                 name="line_pack"
-                                className="input-box mono text-[12px]"
+                                className={`input-box mono text-[12px]${lockCls}`}
                                 defaultValue={row?.pack ?? ""}
                                 style={{ width: 60 }}
+                              {...ro}
                               />
                             </td>
                             <td>
                               <input
                                 name="line_brand"
                                 list="ypv-brands"
-                                className="input-box mono text-[12px]"
+                                className={`input-box mono text-[12px]${lockCls}`}
                                 defaultValue={row?.brand ?? ""}
                                 style={{ width: 90 }}
+                              {...ro}
                               />
                             </td>
                             <td>
                               <input
                                 name="line_do_no"
-                                className="input-box mono text-[12px]"
+                                className={`input-box mono text-[12px]${lockCls}`}
                                 defaultValue={row?.doNo ?? ""}
                                 style={{ width: 70 }}
+                              {...ro}
                               />
                             </td>
                             <td>
@@ -1449,9 +1604,10 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_qty"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px] text-right"
+                                className={`input-box mono text-[12px] text-right${lockCls}`}
                                 defaultValue={row?.qty ?? ""}
                                 style={{ width: 70 }}
+                              {...ro}
                               />
                             </td>
                             <td>
@@ -1474,7 +1630,7 @@ export default async function YarnPurchaseVoucherPage({
                                 it a batch would be reassigned by position and any
                                 sale pointing at it would point at other yarn. */}
                             <input type="hidden" name="line_batch_no" defaultValue={row?.batchNo ?? ""} />
-                            <td style={{ minWidth: 200 }}>
+                            <td style={frozen ? { minWidth: 200, ...frozen } : { minWidth: 200 }}>
                               <FindingPicker
                                 name="line_despatch_party"
                                 defaultValue={row?.despatchParty || godownParty}
@@ -1489,9 +1645,10 @@ export default async function YarnPurchaseVoucherPage({
                                 name="line_rate"
                                 type="number"
                                 step="any"
-                                className="input-box mono text-[12px] text-right"
+                                className={`input-box mono text-[12px] text-right${lockCls}`}
                                 defaultValue={row?.rate ?? ""}
                                 style={{ width: 80 }}
+                              {...ro}
                               />
                             </td>
                             <td>
@@ -1511,12 +1668,14 @@ export default async function YarnPurchaseVoucherPage({
                               />
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                   <div className="text-[10px] text-[var(--muted)] mt-2">
                     Empty rows are ignored on save. On update, all lines are replaced with the current grid.
+                    A line with a padlock has been sold out of its batch — open that yarn sale with EDIT to change it.
                   </div>
                 </div>
 
