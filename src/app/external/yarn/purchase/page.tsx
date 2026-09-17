@@ -315,8 +315,13 @@ export default async function YarnPurchaseVoucherPage({
   // Godown accounts (STOCK-YARN godowns) for the Despatch Party picker. Default
   // to the WVG/own yarn-stock godown when present; otherwise the first GODOWN.
   const godownAccounts = partyAccounts.filter((p) => p.description.toUpperCase().includes("GODOWN"));
+  // Yarn bought for the mill lands in GODOWN - YARN STOCK (WVG). Pinned by CODE:
+  // the old name regex matched whichever godown happened to read like "own yarn
+  // stock" and picked 1.01.25.01.0028. F9 still opens every godown for the
+  // occasions when it goes somewhere else.
+  const YARN_STOCK_GODOWN = "1.01.25.01.0001";
   const godownParty =
-    godownAccounts.find((p) => /WVG|GHAR|OWN|YARN STOCK/i.test(p.description))?.description ??
+    godownAccounts.find((p) => p.code === YARN_STOCK_GODOWN)?.description ??
     godownAccounts[0]?.description ??
     "";
   const despatchPartyOpts = godownAccounts.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
@@ -1275,7 +1280,6 @@ export default async function YarnPurchaseVoucherPage({
                           <th>DO.No</th>
                           <th>Qty</th>
                           <th>Lbs</th>
-                          <th>Unit</th>
                           <th>Despatch Party</th>
                           <th>Rate</th>
                           <th>Amt</th>
@@ -1407,15 +1411,9 @@ export default async function YarnPurchaseVoucherPage({
                                 style={{ width: 75 }}
                               />
                             </td>
-                            <td>
-                              <input
-                                name="line_unit"
-                                list="ypv-units"
-                                className="input-box mono text-[12px]"
-                                defaultValue={row?.unit ?? ""}
-                                style={{ width: 55 }}
-                              />
-                            </td>
+                            {/* Unit dropped at the client's request. Still
+                                submitted so an existing line keeps its value. */}
+                            <input type="hidden" name="line_unit" defaultValue={row?.unit ?? ""} />
                             <td style={{ minWidth: 200 }}>
                               <FindingPicker
                                 name="line_despatch_party"
