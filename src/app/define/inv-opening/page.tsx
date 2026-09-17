@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Combobox } from "@/components/combobox";
-import { AutoFill } from "@/components/auto-fill";
+import { AutoFill, FieldCalc } from "@/components/auto-fill";
 import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
 import { getSession } from "@/lib/auth";
 import { db, schema } from "@/db";
@@ -554,16 +554,24 @@ export default async function InventoryOpeningPage({
                     <input name="fy_code" className="input-box mono" defaultValue={formItem?.fyCode ?? ""} required />
                   </div>
                   <div>
+                    <label className="label block mb-1">Than</label>
+                    <input name="than" type="number" step="any" className="input-box mono" defaultValue={formItem?.than ?? ""} />
+                  </div>
+                  <div>
                     <label className="label block mb-1">Qty</label>
                     <input name="qty" type="number" step="any" className="input-box mono" defaultValue={formItem?.openingQty ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Net Mtr.</label>
+                    <input name="net_mtr" type="number" step="any" className="input-box mono" defaultValue={formItem?.netMtr ?? ""} />
                   </div>
                   <div>
                     <label className="label block mb-1">Rate <span className="text-[9px] text-[var(--muted)]">(conv — from contract)</span></label>
                     <input name="rate" type="number" step="any" className="input-box mono" defaultValue={formItem?.openingRate ?? ""} />
                   </div>
                   <div>
-                    <label className="label block mb-1">Amount</label>
-                    <input name="amount" type="number" step="any" className="input-box mono" defaultValue={formItem?.openingAmount ?? ""} />
+                    <label className="label block mb-1">Amount <span className="text-[9px] text-[var(--muted)]">(qty × rate)</span></label>
+                    <input name="amount" type="number" step="any" className="input-box mono bg-gray-100" defaultValue={formItem?.openingAmount ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div>
                     <label className="label block mb-1">Unit</label>
@@ -578,18 +586,14 @@ export default async function InventoryOpeningPage({
                     </select>
                   </div>
                 </div>
+                {/* Amount is qty x rate and nothing else, so it is computed and
+                    locked rather than typed — a hand-keyed total that disagrees
+                    with its own qty and rate is worse than no total. */}
+                <FieldCalc target="amount" a="qty" b="rate" />
                 <div className="grid grid-cols-4 gap-x-4 gform">
-                  <div>
-                    <label className="label block mb-1">Than</label>
-                    <input name="than" type="number" step="any" className="input-box mono" defaultValue={formItem?.than ?? ""} />
-                  </div>
                   <div>
                     <label className="label block mb-1">Rejection</label>
                     <input name="rejection" type="number" step="any" className="input-box mono" defaultValue={formItem?.rejection ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Net Mtr.</label>
-                    <input name="net_mtr" type="number" step="any" className="input-box mono" defaultValue={formItem?.netMtr ?? ""} />
                   </div>
                 </div>
               </div>
