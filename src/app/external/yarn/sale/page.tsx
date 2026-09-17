@@ -280,7 +280,6 @@ export default async function YarnSaleVoucherPage({
     godownAccounts.find((p) => p.code === YARN_STOCK_GODOWN)?.description ??
     godownAccounts[0]?.description ??
     "";
-  const despatchFindRows = godownAccounts.map((p) => ({ value: p.description, code: p.code, description: p.description }));
 
   // Historical brand inference — most recent brand ever used on that count, preferring party match.
   const recentSaleLines = await db
@@ -327,74 +326,94 @@ export default async function YarnSaleVoucherPage({
     if (c.type) countBlendByCode[String(c.code)] = c.type;
   }
 
-  // Stock-per-count-per-godown: what's actually available to sell right now.
-  // Purchases in (extYarnPurVoucherLine) minus sales out (extYarnSalVoucherLine)
-  // grouped by (count, despatchParty). Excludes the voucher being edited so its
-  // own lines don't self-deduct.
-  const purByCountLoc = await db
+  // Stock lives in BATCHES, not in an anonymous per-count pool. Every yarn
+  // purchase line is a batch (YPV-0001/A) carrying its own rate, brand and
+  // godown, so selling picks a specific batch and inherits all three from it.
+  // Balance = that batch's purchased quantity minus every sale row pointing at
+  // it, excluding the voucher being edited so its own lines don't self-deduct.
+  const purBatches = await db
     .select({
+      batchNo: schema.extYarnPurVoucherLine.batchNo,
       count: schema.extYarnPurVoucherLine.count,
       loc: schema.extYarnPurVoucherLine.despatchParty,
-      bag: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
-      con: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.con}), 0)`,
-      lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
-      wrate: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+      brand: schema.extYarnPurVoucherLine.brand,
+      pack: schema.extYarnPurVoucherLine.pack,
+      rate: schema.extYarnPurVoucherLine.rate,
+      bag: schema.extYarnPurVoucherLine.bag,
+      con: schema.extYarnPurVoucherLine.con,
+      lbs: schema.extYarnPurVoucherLine.lbs,
+      vDate: schema.extYarnPurVoucher.vDate,
     })
     .from(schema.extYarnPurVoucherLine)
-    .groupBy(schema.extYarnPurVoucherLine.count, schema.extYarnPurVoucherLine.despatchParty);
-  const salByCountLoc = await db
+    .innerJoin(
+      schema.extYarnPurVoucher,
+      eq(schema.extYarnPurVoucherLine.voucherId, schema.extYarnPurVoucher.id)
+    );
+  const salByBatch = await db
     .select({
-      count: schema.extYarnSalVoucherLine.count,
-      loc: schema.extYarnSalVoucherLine.despatchParty,
+      batchNo: schema.extYarnSalVoucherLine.batchNo,
       bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
       con: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.cons}), 0)`,
       lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
     })
     .from(schema.extYarnSalVoucherLine)
     .where(formVoucher ? ne(schema.extYarnSalVoucherLine.voucherId, formVoucher.id) : undefined)
-    .groupBy(schema.extYarnSalVoucherLine.count, schema.extYarnSalVoucherLine.despatchParty);
+    .groupBy(schema.extYarnSalVoucherLine.batchNo);
+  const soldByBatch = new Map<string, { bag: number; con: number; lbs: number }>();
+  for (const r of salByBatch) {
+    if (!r.batchNo) continue;
+    soldByBatch.set(r.batchNo, { bag: r.bag, con: r.con, lbs: r.lbs });
+  }
 
-  type Stock = { bag: number; con: number; lbs: number; avgRate: number };
-  const stockKey = (c: string, l: string) => `${c}||${l}`;
-  const stockMap = new Map<string, Stock>();
-  for (const p of purByCountLoc) {
-    if (!p.count) continue;
-    const loc = p.loc ?? "";
-    stockMap.set(stockKey(p.count, loc), {
-      bag: p.bag,
-      con: p.con,
-      lbs: p.lbs,
-      avgRate: p.bag > 0 ? round2(p.wrate / p.bag) : 0,
+  type Batch = {
+    batchNo: string;
+    count: string;
+    loc: string;
+    brand: string;
+    pack: string;
+    rate: number;
+    bag: number;
+    con: number;
+    lbs: number;
+    vDate: string;
+  };
+  const batchStock: Batch[] = [];
+  for (const b of purBatches) {
+    if (!b.batchNo || !b.count) continue;
+    const sold = soldByBatch.get(b.batchNo) ?? { bag: 0, con: 0, lbs: 0 };
+    batchStock.push({
+      batchNo: b.batchNo,
+      count: String(b.count),
+      loc: b.loc ?? "",
+      brand: b.brand ?? "",
+      pack: b.pack ?? "",
+      rate: b.rate ?? 0,
+      bag: round2((b.bag ?? 0) - sold.bag),
+      con: round2((b.con ?? 0) - sold.con),
+      lbs: round2((b.lbs ?? 0) - sold.lbs),
+      vDate: b.vDate ?? "",
     });
   }
-  for (const s of salByCountLoc) {
-    if (!s.count) continue;
-    const k = stockKey(s.count, s.loc ?? "");
-    const cur = stockMap.get(k);
-    if (!cur) continue;
-    cur.bag -= s.bag;
-    cur.con -= s.con;
-    cur.lbs -= s.lbs;
-  }
 
-  // Build the enriched line-count picker: value is "count||despatchLoc" so each
-  // (count, godown) combo is a distinct option. Only rows with balance > 0.
+  // The batch picker. Value is the batch number, so a sale line records exactly
+  // which purchase it came out of. Only batches with something left are listed.
   type CountStockOpt = { value: string; label: string; desc?: string };
   const countStockOpts: CountStockOpt[] = [];
   const countStockFillMap: Record<string, Record<string, string | number>> = {};
-  for (const [key, s] of stockMap.entries()) {
-    if (s.bag <= 0 && s.lbs <= 0) continue;
-    const [c, loc] = key.split("||");
-    const blend = countBlendByCode[c] ?? "";
-    const label = `${c} ${blend ? `(${blend})` : ""} — bal ${s.bag.toFixed(2)} bag / ${s.lbs.toFixed(0)} lbs @ ${s.avgRate} — ${loc || "—"}`;
-    countStockOpts.push({ value: key, label });
-    countStockFillMap[key] = {
-      line_count: c,
+  for (const b of batchStock) {
+    if (b.bag <= 0 && b.lbs <= 0) continue;
+    const blend = countBlendByCode[b.count] ?? "";
+    const label = `${b.batchNo} · ${b.count}${blend ? ` (${blend})` : ""}${b.brand ? ` ${b.brand}` : ""} — bal ${b.bag.toFixed(2)} bag / ${b.lbs.toFixed(0)} lbs @ ${b.rate} — ${b.loc || "—"}`;
+    countStockOpts.push({ value: b.batchNo, label });
+    countStockFillMap[b.batchNo] = {
+      line_batch_no: b.batchNo,
+      line_count: b.count,
       line_bld: blend,
-      line_pack: 24,
-      line_rate: s.avgRate,
+      line_pack: b.pack || 24,
+      line_rate: b.rate,
+      line_brand: b.brand,
       line_unit: "GDN",
-      line_despatch_party: loc,
+      line_despatch_party: b.loc,
     };
   }
   countStockOpts.sort((a, b) => a.label.localeCompare(b.label));
@@ -505,6 +524,7 @@ export default async function YarnSaleVoucherPage({
     const pendingFinance = txt(formData.get("pending_finance"));
 
     const contNos = formData.getAll("line_cont_no") as string[];
+    const batchNos = formData.getAll("line_batch_no") as string[];
     const counts = formData.getAll("line_count") as string[];
     const dots = formData.getAll("line_count_dot") as string[];
     const partyCounts = formData.getAll("line_party_count") as string[];
@@ -524,6 +544,7 @@ export default async function YarnSaleVoucherPage({
 
     const validLines: {
       contNo: string | null;
+      batchNo: string | null;
       count: string | null;
       countDot: string | null;
       partyCount: string | null;
@@ -543,13 +564,14 @@ export default async function YarnSaleVoucherPage({
     }[] = [];
 
     const rowCount = Math.max(
-      contNos.length, counts.length, partyCounts.length, blds.length, packs.length, brands.length,
+      contNos.length, batchNos.length, counts.length, partyCounts.length, blds.length, packs.length, brands.length,
       doNos.length, qtys.length, bags.length, conss.length, lbss.length,
       units.length, dspParties.length, rates.length, amts.length, rmks.length
     );
 
     for (let i = 0; i < rowCount; i++) {
       const c = (contNos[i] || "").trim();
+      const bt = (batchNos[i] || "").trim();
       const ct = (counts[i] || "").trim();
       const dt = (dots[i] || "").trim();
       const pc = (partyCounts[i] || "").trim();
@@ -576,6 +598,7 @@ export default async function YarnSaleVoucherPage({
 
       validLines.push({
         contNo: c || null,
+        batchNo: bt || null,
         count: ct || null,
         countDot: dt || null,
         partyCount: pc || null,
@@ -729,6 +752,8 @@ export default async function YarnSaleVoucherPage({
         });
 
         revalidatePath("/external/yarn/sale");
+    // the purchase side draws its padlocks from these rows
+    revalidatePath("/external/yarn/purchase");
         redirect(`/external/yarn/sale?id=${id}`);
       } else {
         const providedVNo = ((formData.get("v_no") as string) || "").trim();
@@ -825,6 +850,8 @@ export default async function YarnSaleVoucherPage({
         }
 
         revalidatePath("/external/yarn/sale");
+    // the purchase side draws its padlocks from these rows
+    revalidatePath("/external/yarn/purchase");
         redirect(`/external/yarn/sale?id=${newId}`);
       }
     } catch (e: unknown) {
@@ -837,6 +864,25 @@ export default async function YarnSaleVoucherPage({
       }
       throw e;
     }
+  }
+
+  // The release valve for the purchase side. While this sale sits in EDIT the
+  // purchase lines its batches came from open up for correction; FINAL locks
+  // them again. The lock itself is derived from these sale rows — this only
+  // decides whether the release is open.
+  async function setLockState(formData: FormData) {
+    "use server";
+    const vid = parseInt((formData.get("id") as string) ?? "", 10);
+    const next = ((formData.get("state") as string) ?? "").toUpperCase() === "EDIT" ? "EDIT" : "FINAL";
+    if (!Number.isFinite(vid) || vid <= 0) return;
+    await db
+      .update(schema.extYarnSalVoucher)
+      .set({ lockState: next })
+      .where(eq(schema.extYarnSalVoucher.id, vid));
+    revalidatePath("/external/yarn/sale");
+    // the purchase side draws its padlocks from these rows
+    revalidatePath("/external/yarn/purchase");
+    redirect(`/external/yarn/sale?id=${vid}`);
   }
 
   async function deleteVoucher(formData: FormData) {
@@ -864,6 +910,8 @@ export default async function YarnSaleVoucherPage({
       await tx.delete(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));
     });
     revalidatePath("/external/yarn/sale");
+    // the purchase side draws its padlocks from these rows
+    revalidatePath("/external/yarn/purchase");
     redirect("/external/yarn/sale");
   }
 
@@ -876,6 +924,8 @@ export default async function YarnSaleVoucherPage({
       .set({ statusOk: "OK" })
       .where(eq(schema.extYarnSalVoucher.id, id));
     revalidatePath("/external/yarn/sale");
+    // the purchase side draws its padlocks from these rows
+    revalidatePath("/external/yarn/purchase");
     redirect(`/external/yarn/sale?id=${id}`);
   }
 
@@ -888,6 +938,8 @@ export default async function YarnSaleVoucherPage({
       .set({ statusOk: null })
       .where(eq(schema.extYarnSalVoucher.id, id));
     revalidatePath("/external/yarn/sale");
+    // the purchase side draws its padlocks from these rows
+    revalidatePath("/external/yarn/purchase");
     redirect(`/external/yarn/sale?id=${id}`);
   }
 
@@ -1045,6 +1097,23 @@ export default async function YarnSaleVoucherPage({
                   <button type="submit" form="ysv-save-form" className="btn btn-sm">
                     Save
                   </button>
+                  {formVoucher && (
+                    <form action={setLockState} className="inline flex gap-2">
+                      <input type="hidden" name="id" value={formVoucher.id} />
+                      <input type="hidden" name="state" value={formVoucher.lockState === "EDIT" ? "FINAL" : "EDIT"} />
+                      <button
+                        type="submit"
+                        className={formVoucher.lockState === "EDIT" ? "btn btn-sm" : "btn btn-outline btn-sm"}
+                        title={
+                          formVoucher.lockState === "EDIT"
+                            ? "Lock the purchase batches this sale took"
+                            : "Release the purchase batches this sale took so yarn purchase can be corrected"
+                        }
+                      >
+                        {formVoucher.lockState === "EDIT" ? "Final" : "Edit"}
+                      </button>
+                    </form>
+                  )}
                   <PrintButton label="Print" />
                   {formVoucher && (
                     <form action={deleteVoucher} className="inline">
@@ -1386,7 +1455,7 @@ export default async function YarnSaleVoucherPage({
                     headerContractField="cont"
                     blendByContract={blendByContract}
                   />
-                  <RowAutoFill watch="line_stock_key" map={countStockFillMap} />
+                  <RowAutoFill watch="line_stock_key" map={countStockFillMap} force />
                   <RowCalc target="line_lbs" a="line_qty" factor={100} round={0} />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
@@ -1398,7 +1467,8 @@ export default async function YarnSaleVoucherPage({
                         <tr>
                           <th style={{ width: "30px" }}>#</th>
                           <th>Cont.#</th>
-                          <th title="Pick a purchased count in stock — auto-fills the row">Stock</th>
+                          <th title="Pick a purchase batch — its rate, brand and godown come with it">Stock Batch</th>
+                          <th title="The purchase batch this line is selling out of">Batch</th>
                           <th>Party Count</th>
                           <th>Count</th>
                           <th>Dot</th>
@@ -1436,10 +1506,21 @@ export default async function YarnSaleVoucherPage({
                                 name="line_stock_key"
                                 list="ysv-stock-list"
                                 className="input-box mono text-[11px]"
-                                placeholder="pick from stock…"
-                                defaultValue=""
-                                style={{ minWidth: 180 }}
+                                placeholder="pick a batch…"
+                                defaultValue={row?.batchNo ?? ""}
+                                style={{ minWidth: 200 }}
                               />
+                              <input
+                                type="hidden"
+                                name="line_batch_no"
+                                defaultValue={row?.batchNo ?? ""}
+                              />
+                            </td>
+                            <td
+                              className="mono text-[11px] text-center whitespace-nowrap"
+                              title="The purchase batch this yarn is coming out of"
+                            >
+                              {row?.batchNo ?? ""}
                             </td>
                             <td>
                               <select
