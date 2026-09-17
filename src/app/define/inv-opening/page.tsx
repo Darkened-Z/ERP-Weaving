@@ -2,6 +2,8 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Combobox } from "@/components/combobox";
+import { AutoFill } from "@/components/auto-fill";
+import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
 import { getSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
@@ -27,6 +29,17 @@ export default async function InventoryOpeningPage({
   const yarnBrands = await db.select().from(schema.yarnBrands);
   const locations = await db.select().from(schema.locations);
   const greyConstructions = await db.select().from(schema.greyConstruction);
+  // The code alone says nothing. An opening lot is identified by its
+  // construction — reed x pick with both yarn counts — so the picker spells it
+  // out the same way every other screen does.
+  const openingCounts = await db
+    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+    .from(schema.yarnCounts);
+  const openingCountLabels = countLabelMap(openingCounts);
+  const constructionLabel = (g: (typeof greyConstructions)[number]) => {
+    const rich = fullConstruction(g, openingCountLabels);
+    return rich ? `${g.code} — ${rich}` : `${g.code} - ${g.description}`;
+  };
   const yarnBlends = await db.select().from(schema.yarnBlends);
 
   const parties = await db
@@ -55,11 +68,18 @@ export default async function InventoryOpeningPage({
   ].sort();
 
   const extConvCont = await db
-    .select({ contNo: schema.extGreyConvContract.contNo })
+    .select({ contNo: schema.extGreyConvContract.contNo, convRate: schema.extGreyConvContract.convRatePerMtr, party: schema.extGreyConvContract.party })
     .from(schema.extGreyConvContract);
   const intConvCont = await db
-    .select({ contNo: schema.intGreyConversionContract.contNo })
+    .select({ contNo: schema.intGreyConversionContract.contNo, convRate: schema.intGreyConversionContract.convRatePerMtr, party: schema.intGreyConversionContract.party })
     .from(schema.intGreyConversionContract);
+  // An opening lot is valued at the conversion rate of the contract it belongs
+  // to, so picking the contract fills the rate rather than leaving it to memory.
+  const convFillMap: Record<string, Record<string, string | number | null>> = {};
+  for (const c of [...extConvCont, ...intConvCont]) {
+    if (!c.contNo) continue;
+    convFillMap[c.contNo] = { rate: c.convRate ?? "", opn_party: c.party ?? "" };
+  }
   const convContOpts = [
     ...new Set([...extConvCont, ...intConvCont].map((c) => c.contNo).filter(Boolean)),
   ]
@@ -474,7 +494,9 @@ export default async function InventoryOpeningPage({
                     <select name="gray_construction" className="input-box" defaultValue={formItem?.grayConstruction ?? ""}>
                       <option value="">--</option>
                       {greyConstructions.map((g) => (
-                        <option key={g.id} value={g.code}>{g.code} - {g.description}</option>
+                        <option key={g.id} value={g.code}>
+                          {constructionLabel(g)}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -490,34 +512,16 @@ export default async function InventoryOpeningPage({
                   <div className="col-span-2">
                     <label className="label block mb-1">Conv.Cont No</label>
                     <Combobox name="conv_cont_no" options={convContOpts} defaultValue={formItem?.convContNo ?? ""} placeholder="Select conversion contract" className="input-box mono" />
+                    <AutoFill watch="conv_cont_no" map={convFillMap} inputs={["rate"]} />
                   </div>
                 </div>
+                {/* Gray Width, Blend and Weave dropped at the client's request — the
+                    construction above already states all three. Kept as hidden
+                    fields so editing an older lot does not wipe what it holds. */}
+                <input type="hidden" name="gray_width" defaultValue={formItem?.grayWidth ?? ""} />
+                <input type="hidden" name="blend" defaultValue={formItem?.blend ?? ""} />
+                <input type="hidden" name="weave" defaultValue={formItem?.weave ?? ""} />
                 <div className="grid grid-cols-4 gap-x-4 gform">
-                  <div>
-                    <label className="label block mb-1">Gray Width</label>
-                    <input name="gray_width" type="number" step="any" className="input-box mono" defaultValue={formItem?.grayWidth ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Blend</label>
-                    <select name="blend" className="input-box" defaultValue={formItem?.blend ?? ""}>
-                      <option value="">--</option>
-                      {yarnBlends.map((b) => (
-                        <option key={b.id} value={b.description}>{b.description}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label block mb-1">Weave</label>
-                    <select name="weave" className="input-box" defaultValue={formItem?.weave ?? ""}>
-                      <option value="">--</option>
-                      {["1/1", "PLAIN", "TWILL", "SATIN", "DRILL"].map((w) => (
-                        <option key={w} value={w}>{w}</option>
-                      ))}
-                      {formItem?.weave && !["1/1", "PLAIN", "TWILL", "SATIN", "DRILL"].includes(formItem.weave) && (
-                        <option value={formItem.weave}>{formItem.weave}</option>
-                      )}
-                    </select>
-                  </div>
                   <div>
                     <label className="label block mb-1">Design No</label>
                     <input name="design_no" className="input-box mono" defaultValue={formItem?.designNo ?? ""} />
@@ -554,7 +558,7 @@ export default async function InventoryOpeningPage({
                     <input name="qty" type="number" step="any" className="input-box mono" defaultValue={formItem?.openingQty ?? ""} />
                   </div>
                   <div>
-                    <label className="label block mb-1">Rate</label>
+                    <label className="label block mb-1">Rate <span className="text-[9px] text-[var(--muted)]">(conv — from contract)</span></label>
                     <input name="rate" type="number" step="any" className="input-box mono" defaultValue={formItem?.openingRate ?? ""} />
                   </div>
                   <div>
