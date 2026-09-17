@@ -1542,14 +1542,20 @@ export default async function YarnSaleVoucherPage({
                             {/* Unit dropped at the client's request. Still
                                 submitted so an existing line keeps its value. */}
                             <input type="hidden" name="line_unit" defaultValue={row?.unit ?? ""} />
+                            {/* On a SALE the godown is not a choice: yarn leaves the
+                                godown that actually holds that count, which the stock
+                                pick above fills in. Fixed here on purpose — picking a
+                                different one would take stock out of a godown that
+                                never had it. Purchase is where it is changeable. */}
                             <td style={{ minWidth: 200 }}>
-                              <FindingPicker
+                              <input
                                 name="line_despatch_party"
-                                defaultValue={row?.despatchParty || godownParty}
-                                rows={despatchFindRows}
-                                title="DESPATCH — FIND GODOWN / PARTY"
-                                placeholder="Godown / other party…"
-                                className="input-box mono text-[12px] cursor-pointer"
+                                readOnly
+                                tabIndex={-1}
+                                title="Set by the stock this count is being sold from"
+                                className="input-box mono text-[12px] bg-gray-100"
+                                defaultValue={row?.despatchParty ?? ""}
+                                placeholder="from stock…"
                               />
                             </td>
                             <td>

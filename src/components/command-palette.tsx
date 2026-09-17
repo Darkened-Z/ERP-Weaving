@@ -204,17 +204,23 @@ export function CommandPalette({ sections }: { sections: Section[] }) {
     }
   }
 
-  useEffect(() => {
-    if (!listRef.current) return;
-    const el = listRef.current.querySelector<HTMLElement>(`[data-index="${selIdxRef.current}"]`);
-    if (el) el.scrollIntoView({ block: "nearest" });
-  }, [selected]);
-
   // Clamp by DERIVING, not by writing state during render. Setting it here
   // never converged on an empty list: `selected > -1` stays true no matter what
   // is written, so React re-rendered until it threw "Too many re-renders".
   const selIdx = rows.length > 0 ? Math.min(selected, rows.length - 1) : 0;
-  selIdxRef.current = selIdx;
+
+  // The key handler is registered once and would otherwise close over a stale
+  // index, so it reads this ref. Synced in an effect — writing a ref during
+  // render is the same class of mistake as writing state there.
+  useEffect(() => {
+    selIdxRef.current = selIdx;
+  }, [selIdx]);
+
+  useEffect(() => {
+    if (!listRef.current) return;
+    const el = listRef.current.querySelector<HTMLElement>(`[data-index="${selIdx}"]`);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [selIdx]);
 
   if (!open) return null;
 
