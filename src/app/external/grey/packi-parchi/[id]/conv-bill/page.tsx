@@ -121,10 +121,24 @@ export default async function PackiConvBillPage({
   const n = (v: number | null | undefined) => Number(v ?? 0);
   const rnd = (v: number) => Math.round(v * 100) / 100;
   const meterNet = n(pp.meterNet);
-  // The whole point of this document: it bills the conversion rate. Falling back
-  // to the sale rate would quietly print the wrong number, so a parchi with no
-  // conv rate set bills zero and shows it.
-  const rate = n(pp.convRate);
+
+  // The conversion contract can sit in any of three fields depending on which
+  // picker the operator used, so all three are tried before giving up.
+  const convContNo = pp.convContSale2 ?? pp.convContNoSale ?? pp.convContNo ?? "";
+  const [convContract] = convContNo
+    ? await db
+        .select({ convRatePerMtr: schema.extGreyConvContract.convRatePerMtr })
+        .from(schema.extGreyConvContract)
+        .where(eq(schema.extGreyConvContract.contNo, convContNo))
+        .limit(1)
+    : [];
+
+  // This document bills the CONVERSION rate. The parchi's own rate wins when it
+  // has one (the operator may nudge it per parchi); otherwise the contract's
+  // agreed rate stands, which is what a parchi saved before that field existed
+  // has behind it. Falling back to the grey SALE rate is never right — it would
+  // quietly print a number several times too big.
+  const rate = pp.convRate != null ? n(pp.convRate) : n(convContract?.convRatePerMtr);
   const amount = rnd(meterNet * rate);
   const kaatAmt = rnd((amount * n(pp.kaatPercentSale)) / 100);
   // Checkery is a rate per METER.
@@ -388,8 +402,8 @@ export default async function PackiConvBillPage({
                 ["Date", fmtDate(pp.vDate)],
                 ["Grey Desc", greyDesc],
                 ["Width", widthConstr?.width != null ? `${widthConstr.width}"` : ""],
-                ["Conv Cont", pp.convContNoSale ?? pp.convContNo ?? ""],
-                ["Conv Rate", pp.convRate != null ? `${fmt(rate, 2)} / mtr` : "NOT SET"],
+                ["Conv Cont", convContNo],
+                ["Conv Rate", rate > 0 ? `${fmt(rate, 2)} / mtr` : "NOT SET"],
                 // Stock quality is deliberately NOT on the bill. The party is
                 // told what was SENT, never what the godown held — the whole
                 // reason Quality Print exists is that the two can differ.
