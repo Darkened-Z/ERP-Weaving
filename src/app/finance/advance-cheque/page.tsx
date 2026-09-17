@@ -10,7 +10,7 @@ import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, intVal, txt, escLike, fmtMoney as formatNum } from "@/lib/form";
+import { num, intVal, txt, fmtMoney as formatNum } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
@@ -595,7 +595,9 @@ export default async function AdvanceChequePage({
         {showIssueForm && (
           <div className="border border-black p-4 mb-6">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4">
-              {isReissue ? "Re-issue Advance Cheque (fresh cheque no, prefilled from bounced cheque)" : "New Advance Cheque — Issue (add multiple parties / cheques)"}
+              {isReissue
+                ? "Re-issue Advance Cheque — prefilled from the bounced cheque, same cheque no. Change the no if the bank gave a new leaf."
+                : "New Advance Cheque — Issue (add multiple parties / cheques)"}
             </div>
             <form action={issueCheques}>
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform mb-4">
@@ -637,8 +639,13 @@ export default async function AdvanceChequePage({
                             </select>
                           </td>
                           <td><input name="line_adv_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.bankAdv) ?? "" : ""} readOnly tabIndex={-1} /></td>
-                          <td><input name="line_chq_no" className="input-box mono text-[12px]" /></td>
-                          <td><DateBox name="line_chq_date" className="input-box mono text-[12px]" /></td>
+                          {/* Carry the bounced number back. A bounced cheque physically
+                              returns, so the same leaf is usually re-presented — and the
+                              issue guard already allows it (bounces >= issues). Leaving
+                              this blank was the only reason the number never came back;
+                              operators were inventing "1122/1" to get past it. */}
+                          <td><input name="line_chq_no" className="input-box mono text-[12px]" defaultValue={pf?.chqNo ?? ""} /></td>
+                          <td><DateBox name="line_chq_date" className="input-box mono text-[12px]" defaultValue={pf?.chqDate ?? ""} /></td>
                           <td><input name="line_amt" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" defaultValue={pf?.amount ?? ""} /></td>
                           <td><input name="line_cash" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" placeholder="0" title="Cash bhi saath diya to yahan — Dr party (chq+cash) / Cr cash alehda" /></td>
                           <td><input name="line_narr" className="input-box text-[12px]" /></td>

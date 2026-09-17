@@ -155,7 +155,10 @@ export function FindingPicker({
           readOnly
           data-lov-picker
           className={className}
-          value={selected ? `${selected.code} — ${selected.description}` : value}
+          // Name only. The client reads these boxes at a glance and the account
+          // code in front of the name was just noise — the code is still on the
+          // row in the finding list and in its footer.
+          value={selected ? selected.description || selected.code : value}
           placeholder={placeholder}
           onClick={() => setOpen(true)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
