@@ -96,6 +96,55 @@ export function RowCalc({
 }
 
 /**
+ * Form-scoped version of {@link RowCalc}: target = a [x b] x factor, for fields
+ * that are NOT inside a table row. RowCalc walks up to the nearest <tr> to find
+ * its siblings, so on a plain div-grid form it matches nothing and silently
+ * computes nothing — which looks exactly like a broken total.
+ */
+export function FieldCalc({
+  target,
+  a,
+  b,
+  factor = 1,
+  round = 2,
+}: {
+  target: string;
+  a: string;
+  b?: string;
+  factor?: number;
+  round?: number;
+}) {
+  useEffect(() => {
+    const pick = (n: string) => document.querySelector<HTMLInputElement>(`[name="${n}"]`);
+    const recompute = () => {
+      const t = pick(target);
+      if (!t) return;
+      const av = parseFloat(pick(a)?.value ?? "");
+      const bv = b ? parseFloat(pick(b)?.value ?? "") : 1;
+      if (!Number.isFinite(av) || !Number.isFinite(bv)) return;
+      const p = 10 ** round;
+      const next = String(Math.round(av * bv * factor * p) / p);
+      if (t.value === next) return;
+      t.value = next;
+      t.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const onInput = (e: Event) => {
+      const n = (e.target as HTMLInputElement)?.name;
+      if (n === a || n === b) recompute();
+    };
+    document.addEventListener("input", onInput, true);
+    document.addEventListener("change", onInput, true);
+    // Fill in for a record opened for edit, where nothing has been typed yet.
+    recompute();
+    return () => {
+      document.removeEventListener("input", onInput, true);
+      document.removeEventListener("change", onInput, true);
+    };
+  }, [target, a, b, factor, round]);
+  return null;
+}
+
+/**
  * Per-row auto-fill for line grids. When an input named `watch` inside a <tr>
  * changes, fills sibling inputs in the same row from `map[value]`
  * (keys of the fill object = sibling input names). Only fills empty siblings,
