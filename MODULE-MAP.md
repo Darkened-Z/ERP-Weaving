@@ -28,6 +28,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 | `src/lib/conv-contracts.ts` | `loadConvContracts()` — running grey-conversion contracts from **BOTH** `int_grey_conversion_contract` (IGCC-) **and** `ext_grey_conv_contract` (GCC-), unified (contNo, party, quality, rates, first warp brand, `source`). **The mill's live contracts are external**, so every conv-contract picker (daily production, grey despatch, folding-stock report) MUST use this — reading only the internal table leaves the picker empty. cont_no prefixes differ so no collisions. |
 
 ---
+- **`FindingPicker`** (F9 LOV) — the closed box shows the **description only**; the account code lives in the list's Code column and the modal footer (`Current: <code>`). Never re-add the code to the box: the client reads these at a glance. The stored value is unchanged (whatever the page puts in `Row.value`).
 
 ## Grey — Godown Stock (`external/grey/godown-stock`)
 - **Purchase Party** = supplier (kept). **Gdn Party** auto-locked to the grey-stock godown `1.01.25.15.0001` ("Godown - Grey Stock Treading").
@@ -93,7 +94,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Per-book usage**: leaf n = `startNo..startNo+leaves-1`; "used" if `prefix+n` or bare `n` matches a register cheque no. Usage bar + status tally + Unused. CRUD (create/edit; ADMIN delete); dup name → `error=exists`. **Print** = `finance/cheque-books/[id]/print` (full leaf register, standalone printable, PrintButton).
 - Nav: Finance → Cheque Books (`fin-cheque-books`), next to Advance Cheque.
 - **Clear:** Dr Bank-Advance / Cr Bank (`1.01.15.02.*`). **Bounce:** Dr Bank-Advance / Cr party dishonour (`1.01.15.04.*` "CHQ FAILLED <party>"). Both guard against double-processing (already cleared/bounced).
-- **Re-issue** (on a bounced cheque): opens a fresh ISSUE form prefilled with party+amount, new cheque no. (GL = normal issue; whether to also move from dishonour→advance is an owner call — left as plain re-issue.)
+- **Re-issue** (on a bounced cheque): opens an ISSUE form prefilled with party + bank-advance + amount **and the bounced cheque's own number and date** — a bounced cheque physically comes back, so the same leaf is normally re-presented, and the issue guard already allows it (a number is free once bounces >= issues). Both are overtypeable for a new leaf. Leaving the no blank was why operators invented `1122/1`. (GL = normal issue; whether to also move dishonour→advance is an owner call — left as plain re-issue.)
 - Delete (ADMIN) removes the issue + its clear/bounce (all vnos sharing the chq no). Postings flow into `/ledger` + `/reports/cheque-status` like other cheque vouchers. Reuses `getSession`, `assertPeriodOpen`, `Combobox`, `ConfirmButton` — same pattern as BP.
 
 ## Inventory — Knotting / Maroori / Sarning Bill (`inventory/knotting`)
