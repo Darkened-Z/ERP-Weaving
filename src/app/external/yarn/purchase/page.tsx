@@ -4,6 +4,8 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
+import { RowErase } from "@/components/production-calc";
+import { RowReconcileFromPartyCount } from "@/components/row-reconcile";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { FindingPicker } from "@/components/finding-picker";
@@ -1235,6 +1237,13 @@ export default async function YarnPurchaseVoucherPage({
                     combos={["broker"]}
                     inputs={["percent", "per_bag", "pur", "bal", "ci_rate", "ci_age", "ci_days", "ci_qty", "ci_date", "ci_remarks"]}
                   />
+                  {/* Clearing one line must not cost the operator the whole voucher. */}
+                  <RowErase tbodyId="ypv-line-rows" />
+                  {/* A saved line can carry a Count and a Count Desc that disagree
+                      with its Party Count — the three were written at different
+                      times. The Party Count is the authority (it is the count the
+                      party is set up with), so on load the row is reconciled to it. */}
+                  <RowReconcileFromPartyCount selectName="line_party_count" map={partyCountFillMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
                   <RowAutoFill watch="line_party_count" map={partyCountFillMap} />
                   <PartyCountSelectFilter partyField="party" selectName="line_party_count" countsByParty={countsByParty} allCounts={allPartyCountOpts} />
@@ -1255,6 +1264,7 @@ export default async function YarnPurchaseVoucherPage({
                       <thead>
                         <tr>
                           <th style={{ width: "30px" }}>#</th>
+                          <th style={{ width: "26px" }}></th>
                           <th>Cont.#</th>
                           <th>Party Count</th>
                           <th>Count</th>
@@ -1271,11 +1281,22 @@ export default async function YarnPurchaseVoucherPage({
                           <th>Amt</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody id="ypv-line-rows">
                         {gridRows.map((row, i) => (
                           <tr key={row?.id ?? `e-${i}`}>
                             <td className="mono text-[11px] text-center text-[var(--muted)]">
                               {i + 1}
+                            </td>
+                            <td className="text-center">
+                              <button
+                                type="button"
+                                data-row-erase
+                                title="Clear this line — the contract and the rest of the voucher stay"
+                                className="mono text-[12px] font-bold cursor-pointer"
+                                style={{ color: "var(--danger)", background: "none", border: "none", padding: "0 3px" }}
+                              >
+                                ✕
+                              </button>
                             </td>
                             <td style={{ minWidth: 66 }}>
                               <Combobox
