@@ -105,8 +105,6 @@ const SECTIONS = [
       {
         label: "Weaving Reports",
         items: [
-          { href: "/reports/weaving/count-report", label: "Counts Accounts Report", key: "w-count-report" },
-          { href: "/reports/weaving/counts-accounts-pp", label: "Counts Accounts Party Wise", key: "w-counts-pp" },
           { href: "/reports/weaving/counts-accounts", label: "Counts Accounts", key: "w-counts" },
           { href: "/reports/weaving/counts-accounts-design", label: "Counts Accounts by Design", key: "w-counts-design" },
           { href: "/reports/weaving/counts-accounts-summary", label: "Counts Accounts Summary", key: "w-counts-sum" },
@@ -165,6 +163,7 @@ const SECTIONS = [
           { href: "/external/reports/yarn-stock", label: "Yarn Stock", key: "ext-r-yarnstock" },
           { href: "/external/reports/weaving-counts", label: "Weaving Counts Accounts", key: "ext-r-weaving" },
           { href: "/external/reports/weaving-counts-sale", label: "Weaving Counts Accounts — Sale", key: "ext-r-weaving-sale" },
+          { href: "/external/reports/weaving-counts-partywise", label: "Weaving Counts Accounts — Party Wise", key: "ext-r-weaving-pp" },
         ],
       },
     ],

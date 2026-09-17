@@ -160,6 +160,21 @@ export function FindingPicker({
           onClick={() => setOpen(true)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
         />
+        {/* The display is readOnly and a click opens the list, so there was no
+            way at all to take a pick back — on a phone there is not even a
+            Delete key to reach for. Only shown once something is picked. */}
+        {value ? (
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => pickRow("")}
+            title="Clear this selection"
+            aria-label="Clear selection"
+            style={{ padding: "0 8px", fontSize: 12, color: "var(--danger)" }}
+          >
+            ✕
+          </button>
+        ) : null}
         <button
           type="button"
           className="btn btn-outline btn-sm"
