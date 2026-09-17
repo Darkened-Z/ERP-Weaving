@@ -2014,6 +2014,11 @@ export const intKnottingSarningLine = sqliteTable("int_knotting_sarning_line", {
 // --- GREY CLOTH DESPATCH ---
 
 export const intGreyDespatch = sqliteTable("int_grey_despatch", {
+  // EDIT or FINAL. FINAL is the normal state: the cloth has gone, so the thans
+  // this voucher took are locked back in daily production. Pressing EDIT on the
+  // despatch releases them so production can be corrected, and the correction
+  // flows back into this voucher's line.
+  lockState: text("lock_state").default("FINAL"),
   id: integer("id").primaryKey({ autoIncrement: true }),
   vDate: text("v_date").notNull(),
   time: text("time"),
