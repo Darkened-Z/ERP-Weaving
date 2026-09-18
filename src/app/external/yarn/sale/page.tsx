@@ -9,6 +9,7 @@ import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { FindingPicker } from "@/components/finding-picker";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
+import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { acc } from "@/lib/gl-accounts";
@@ -365,6 +366,10 @@ export default async function YarnSaleVoucherPage({
     soldByBatch.set(r.batchNo, { bag: r.bag, con: r.con, lbs: r.lbs });
   }
 
+  // Bags are derived, never read from the column: the mill counts 100 lbs to a
+  // bag and the stored `bag` is blank on every live row. The client's own Oracle
+  // COUNT LIST agrees exactly — 57995 lbs shows as 579.95 bags.
+  const bagsOf = (lbs: number) => round2(lbs / 100);
   type Batch = {
     batchNo: string;
     count: string;
@@ -372,6 +377,13 @@ export default async function YarnSaleVoucherPage({
     brand: string;
     pack: string;
     rate: number;
+    /** Purchased on this batch. */
+    purCon: number;
+    purLbs: number;
+    /** Sold off it so far (this voucher excluded). */
+    salCon: number;
+    salLbs: number;
+    /** What is left. */
     bag: number;
     con: number;
     lbs: number;
@@ -381,6 +393,8 @@ export default async function YarnSaleVoucherPage({
   for (const b of purBatches) {
     if (!b.batchNo || !b.count) continue;
     const sold = soldByBatch.get(b.batchNo) ?? { bag: 0, con: 0, lbs: 0 };
+    const purLbs = round2(b.lbs ?? 0);
+    const salLbs = round2(sold.lbs);
     batchStock.push({
       batchNo: b.batchNo,
       count: String(b.count),
@@ -388,27 +402,27 @@ export default async function YarnSaleVoucherPage({
       brand: b.brand ?? "",
       pack: b.pack ?? "",
       rate: b.rate ?? 0,
-      bag: round2((b.bag ?? 0) - sold.bag),
+      purCon: round2(b.con ?? 0),
+      purLbs,
+      salCon: round2(sold.con),
+      salLbs,
+      bag: bagsOf(purLbs - salLbs),
       con: round2((b.con ?? 0) - sold.con),
-      lbs: round2((b.lbs ?? 0) - sold.lbs),
+      lbs: round2(purLbs - salLbs),
       vDate: b.vDate ?? "",
     });
   }
 
-  // The batch picker. Value is the batch number, so a sale line records exactly
-  // which purchase it came out of. Only batches with something left are listed.
-  type CountStockOpt = { value: string; label: string; desc?: string };
-  const countStockOpts: CountStockOpt[] = [];
+  // Picking a batch fills the row from it: the batch's own rate, brand, pack and
+  // godown travel with the yarn. Value is the batch number, so a sale line
+  // records exactly which purchase it came out of.
   const countStockFillMap: Record<string, Record<string, string | number>> = {};
   for (const b of batchStock) {
-    if (b.bag <= 0 && b.lbs <= 0) continue;
-    const blend = countBlendByCode[b.count] ?? "";
-    const label = `${b.batchNo} · ${b.count}${blend ? ` (${blend})` : ""}${b.brand ? ` ${b.brand}` : ""} — bal ${b.bag.toFixed(2)} bag / ${b.lbs.toFixed(0)} lbs @ ${b.rate} — ${b.loc || "—"}`;
-    countStockOpts.push({ value: b.batchNo, label });
+    if (b.lbs <= 0) continue;
     countStockFillMap[b.batchNo] = {
       line_batch_no: b.batchNo,
       line_count: b.count,
-      line_bld: blend,
+      line_bld: countBlendByCode[b.count] ?? "",
       line_pack: b.pack || 24,
       line_rate: b.rate,
       line_brand: b.brand,
@@ -416,7 +430,72 @@ export default async function YarnSaleVoucherPage({
       line_despatch_party: b.loc,
     };
   }
-  countStockOpts.sort((a, b) => a.label.localeCompare(b.label));
+
+  // The COUNT LIST the client works from in Oracle: one row per batch with what
+  // was purchased, what has gone out on sales, and what is left — bags, cones
+  // and lbs side by side, plus the rate, brand, blend and godown. A one-line
+  // datalist could never answer "is this the batch I mean"; this can.
+  const nf = (n: number, d = 2) =>
+    n === 0 ? "0" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: d }).format(n);
+  const batchLovColumns = [
+    { key: "count", label: "Count", width: 120 },
+    { key: "pack", label: "Packing", width: 60, align: "right" as const },
+    { key: "brand", label: "Brand", width: 90 },
+    { key: "loc", label: "Desc_Dsp", width: 210 },
+    { key: "purBag", label: "Pur Bag", width: 70, align: "right" as const },
+    { key: "purCon", label: "Pur Cones", width: 70, align: "right" as const },
+    { key: "purLbs", label: "Pur Lbs", width: 75, align: "right" as const },
+    { key: "salBag", label: "Sal Bag", width: 70, align: "right" as const },
+    { key: "salCon", label: "Sal Cones", width: 70, align: "right" as const },
+    { key: "salLbs", label: "Sal Lbs", width: 75, align: "right" as const },
+    { key: "balBag", label: "Bal Bag", width: 70, align: "right" as const },
+    { key: "balCon", label: "Bal Cones", width: 70, align: "right" as const },
+    { key: "balLbs", label: "Bal Lbs", width: 75, align: "right" as const },
+    { key: "rate", label: "Rate", width: 60, align: "right" as const },
+    { key: "blend", label: "Blend", width: 80 },
+    { key: "batch", label: "Batch", width: 90 },
+  ];
+  const batchLovRows = batchStock
+    .filter((b) => b.lbs > 0)
+    .sort((a, b) => a.count.localeCompare(b.count) || a.batchNo.localeCompare(b.batchNo))
+    .map((b) => {
+      const blend = countBlendByCode[b.count] ?? "";
+      const countLabel = countList.find((c) => String(c.code) === b.count);
+      return {
+        value: b.batchNo,
+        code: b.batchNo,
+        description: `${[countLabel?.description, blend].filter(Boolean).join(" ").trim() || b.count} · ${b.batchNo}`,
+        cells: {
+          count: [countLabel?.description ?? b.count, blend].filter(Boolean).join("  "),
+          pack: b.pack || "24",
+          brand: b.brand,
+          loc: b.loc,
+          purBag: nf(bagsOf(b.purLbs)),
+          purCon: nf(b.purCon),
+          purLbs: nf(b.purLbs, 0),
+          salBag: nf(bagsOf(b.salLbs)),
+          salCon: nf(b.salCon),
+          salLbs: nf(b.salLbs, 0),
+          balBag: nf(b.bag),
+          balCon: nf(b.con),
+          balLbs: nf(b.lbs, 0),
+          rate: nf(b.rate),
+          blend,
+          batch: b.batchNo,
+        },
+      };
+    });
+  // In Stock strip, keyed by batch — the same strip Packi Parchi carries for
+  // grey, in the units yarn uses: bags (lbs/100), lbs and the batch's own rate.
+  const stockByBatch: Record<string, { lbs: number; rate: number | null; label: string }> = {};
+  for (const b of batchStock) {
+    const blend = countBlendByCode[b.count] ?? "";
+    stockByBatch[b.batchNo] = {
+      lbs: b.lbs,
+      rate: b.rate || null,
+      label: [b.count, blend, b.brand, b.loc].filter(Boolean).join(" · "),
+    };
+  }
   // Party-specific rates only apply once the voucher has a saved party.
   const savedPartyCode = formVoucher?.party
     ? partyAccounts.find((p) => p.description === formVoucher.party)?.code
@@ -1046,13 +1125,6 @@ export default async function YarnSaleVoucherPage({
             <option key={c.contNo} value={c.contNo} />
           ))}
         </datalist>
-        <datalist id="ysv-stock-list">
-          {countStockOpts.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </datalist>
         <datalist id="ysv-count-list">
           {countList.map((c) => (
             <option key={c.code} value={String(c.code)}>
@@ -1461,6 +1533,12 @@ export default async function YarnSaleVoucherPage({
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
                   </div>
+                  <YarnStockStrip
+                    stock={stockByBatch}
+                    watch="line_stock_key"
+                    unitLabel="batch"
+                    initialCode={gridRows[0]?.batchNo ?? ""}
+                  />
                   <div className="overflow-x-auto border border-black">
                     <table style={{ minWidth: "1700px" }}>
                       <thead>
@@ -1502,13 +1580,14 @@ export default async function YarnSaleVoucherPage({
                               />
                             </td>
                             <td>
-                              <input
+                              <FindingPicker
                                 name="line_stock_key"
-                                list="ysv-stock-list"
-                                className="input-box mono text-[11px]"
-                                placeholder="pick a batch…"
                                 defaultValue={row?.batchNo ?? ""}
-                                style={{ minWidth: 200 }}
+                                rows={batchLovRows}
+                                columns={batchLovColumns}
+                                title="COUNT LIST — PURCHASE / SALE / BALANCE BY BATCH"
+                                placeholder="pick a batch…"
+                                className="input-box mono text-[11px] cursor-pointer"
                               />
                               <input
                                 type="hidden"
