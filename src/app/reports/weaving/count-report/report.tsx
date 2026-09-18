@@ -87,9 +87,13 @@ export async function CountsAccountsReport({
     .groupBy(schema.extPackiParchi.saleParty, schema.extPackiParchiCount.code);
 
   // Yarn also reaches a party through the PURCHASE side — a return comes back
-  // that way — so the seed is both books added together, not the sale side
-  // alone. Kept as two visible columns so it is always clear which book a
-  // figure came out of.
+  // that way — so Total Lbs is purchase minus sale, both books netted.
+  //
+  // The two were shown as their own columns for a while. They are not printed
+  // any more: on a normal row the purchase figure simply repeats Total Lbs and
+  // the sale column sits at zero, which reads as the same number twice. The
+  // mill's own sheet carries Total / Bags / Bal / Rate / Amount and nothing
+  // else. The split still drives the total; it is just not a column.
   const purConds = [gte(schema.extYarnPurVoucher.vDate, from), lte(schema.extYarnPurVoucher.vDate, to)];
   if (party) { const pat = `%${escLike(party)}%`; purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\\'`); }
   if (count) purConds.push(eq(schema.extYarnPurVoucherLine.count, count));
@@ -239,7 +243,6 @@ export async function CountsAccountsReport({
             <ExcelExportButton
               rows={rows.map((r) => ({
                 party: r.party, count: r.count, description: r.desc,
-                purLbs: Math.round(r.purLbs), salLbs: Math.round(r.salLbs),
                 totalLbs: Math.round(r.totalLbs), bags: r.bags,
                 consumedLbs: Math.round(r.consumedLbs), balLbs: Math.round(r.balLbs),
                 rate: Number(r.rate.toFixed(2)), amount: Math.round(r.amount),
@@ -248,8 +251,6 @@ export async function CountsAccountsReport({
                 { key: "party", label: "Party" },
                 { key: "count", label: "Count" },
                 { key: "description", label: "Count Desc" },
-                { key: "purLbs", label: "Pur Lbs" },
-                { key: "salLbs", label: "Sale Lbs (out)" },
                 { key: "totalLbs", label: "Total Lbs" },
                 { key: "bags", label: "Bags" },
                 { key: "consumedLbs", label: "Consumed Lbs" },
@@ -291,8 +292,6 @@ export async function CountsAccountsReport({
             <thead>
               <tr>
                 <th>Count Desc</th>
-                <th className="text-right">Pur Lbs</th>
-                <th className="text-right">Sale Lbs (out)</th>
                 <th className="text-right">Total Lbs</th>
                 <th className="text-right">Bags</th>
                 <th className="text-right">Consumed Lbs</th>
@@ -305,7 +304,7 @@ export async function CountsAccountsReport({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center text-[var(--muted)] py-8">
+                  <td colSpan={8} className="text-center text-[var(--muted)] py-8">
                     {partyScope === "grey-sale-contract" && (scopedParties?.size ?? 0) === 0
                       ? "No external grey conversion contract is set to type SALE, so there are no parties to report. Set a contract's type to SALE and its parties appear here with their Party Counts."
                       : "No count activity in period"}
@@ -319,11 +318,11 @@ export async function CountsAccountsReport({
                   );
                   return (
                     <tr key={pt} className="contents">
-                      <td colSpan={10} className="p-0">
+                      <td colSpan={8} className="p-0">
                         <table className="w-full">
                           <tbody>
                             <tr style={{ background: "#0f172a", color: "white" }}>
-                              <td className="font-bold text-[13px] px-2 py-1" colSpan={10}>
+                              <td className="font-bold text-[13px] px-2 py-1" colSpan={8}>
                                 {pt} <span className="opacity-70">· {prows.length}</span>
                                 {/* The whole party's yarn movement, every count at
                                     once — the register the mill reads per party. */}
@@ -340,8 +339,6 @@ export async function CountsAccountsReport({
                             {prows.map((r) => (
                               <tr key={r.count}>
                                 <td className="text-[13px]"><span className="mono font-bold">{r.count}</span> — {r.desc || r.count}</td>
-                                <td className="mono text-right">{fmt(r.purLbs)}</td>
-                                <td className="mono text-right">{fmt(r.salLbs)}</td>
                                 <td className="mono text-right">{fmt(r.totalLbs)}</td>
                                 <td className="mono text-right">
                                   {r.bags !== 0 ? (
@@ -365,8 +362,6 @@ export async function CountsAccountsReport({
                             ))}
                             <tr style={{ borderTop: "1px solid #cbd5e1", fontWeight: 700 }}>
                               <td className="text-right pr-2">Party Total</td>
-                              <td className="mono text-right">{fmt(sub.purLbs)}</td>
-                              <td className="mono text-right">{fmt(sub.salLbs)}</td>
                               <td className="mono text-right">{fmt(sub.totalLbs)}</td>
                               <td className="mono text-right">
                                 {sub.bags !== 0 ? (
@@ -399,8 +394,6 @@ export async function CountsAccountsReport({
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
                   <td className="text-right pr-2">Grand Total</td>
-                  <td className="mono text-right">{fmt(grand.purLbs)}</td>
-                  <td className="mono text-right">{fmt(grand.salLbs)}</td>
                   <td className="mono text-right">{fmt(grand.totalLbs)}</td>
                   <td className="mono text-right">{fmt(grand.bags)}</td>
                   <td className="mono text-right">{fmt(grand.consumedLbs)}</td>
