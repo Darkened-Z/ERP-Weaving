@@ -52,38 +52,110 @@ export default async function YarnSaleRegisterPage({
     conds.push(eq(schema.extYarnSalVoucherLine.count, count));
   }
 
-  const joined = await db
+  // The register is the movement of yarn against a party, not the sale book on
+  // its own: a PURCHASE brings bags IN, a SALE takes them OUT. The mill's own
+  // report prints the sale line as a NEGATIVE bag figure and nets the column —
+  // in 500, out 100, total 400 — so that is what is built here. Bags are
+  // derived at 100 lbs to a bag; the stored bag column is blank on live rows.
+  const purConds = [
+    gte(schema.extYarnPurVoucher.vDate, from),
+    lte(schema.extYarnPurVoucher.vDate, to),
+  ];
+  if (party) {
+    const pat = `%${escLike(party)}%`;
+    purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\'`);
+  }
+  if (count) purConds.push(eq(schema.extYarnPurVoucherLine.count, count));
+
+  const salRaw = await db
     .select({
-      voucherId: schema.extYarnSalVoucher.id,
       vNo: schema.extYarnSalVoucher.vNo,
       vDate: schema.extYarnSalVoucher.vDate,
       party: schema.extYarnSalVoucher.party,
       count: schema.extYarnSalVoucherLine.count,
       brand: schema.extYarnSalVoucherLine.brand,
-      bag: schema.extYarnSalVoucherLine.bag,
+      loc: schema.extYarnSalVoucherLine.despatchParty,
+      doNo: schema.extYarnSalVoucherLine.doNo,
       lbs: schema.extYarnSalVoucherLine.lbs,
       rate: schema.extYarnSalVoucherLine.rate,
       amt: schema.extYarnSalVoucherLine.amt,
-      lineId: schema.extYarnSalVoucherLine.id,
     })
     .from(schema.extYarnSalVoucher)
     .innerJoin(
       schema.extYarnSalVoucherLine,
       eq(schema.extYarnSalVoucherLine.voucherId, schema.extYarnSalVoucher.id),
     )
-    .where(and(...conds))
-    .orderBy(schema.extYarnSalVoucher.vDate, schema.extYarnSalVoucher.vNo);
+    .where(and(...conds));
 
-  // Running total from the accumulator, not a variable outside the map.
-  const rows = joined.reduce<Array<(typeof joined)[number] & { amt: number; running: number }>>((acc, r) => {
-    const amt = r.amt ?? 0;
-    acc.push({ ...r, amt, running: (acc[acc.length - 1]?.running ?? 0) + amt });
+  const purRaw = await db
+    .select({
+      vNo: schema.extYarnPurVoucher.vNo,
+      vDate: schema.extYarnPurVoucher.vDate,
+      party: schema.extYarnPurVoucher.party,
+      count: schema.extYarnPurVoucherLine.count,
+      brand: schema.extYarnPurVoucherLine.brand,
+      loc: schema.extYarnPurVoucherLine.despatchParty,
+      doNo: schema.extYarnPurVoucherLine.doNo,
+      lbs: schema.extYarnPurVoucherLine.lbs,
+      rate: schema.extYarnPurVoucherLine.rate,
+    })
+    .from(schema.extYarnPurVoucher)
+    .innerJoin(
+      schema.extYarnPurVoucherLine,
+      eq(schema.extYarnPurVoucherLine.voucherId, schema.extYarnPurVoucher.id),
+    )
+    .where(and(...purConds));
+
+  type Move = {
+    vNo: string;
+    vDate: string;
+    party: string | null;
+    count: string | null;
+    brand: string | null;
+    loc: string | null;
+    doNo: string | null;
+    bag: number;
+    lbs: number;
+    rate: number;
+    amt: number;
+    dir: "IN" | "OUT";
+  };
+  const moves: Move[] = [
+    ...purRaw.map((r) => ({
+      vNo: `${r.vNo ?? ""}`,
+      vDate: r.vDate ?? "",
+      party: r.party, count: r.count, brand: r.brand, loc: r.loc, doNo: r.doNo,
+      bag: (r.lbs ?? 0) / 100,
+      lbs: r.lbs ?? 0,
+      rate: r.rate ?? 0,
+      amt: (r.lbs ?? 0) * (r.rate ?? 0),
+      dir: "IN" as const,
+    })),
+    ...salRaw.map((r) => ({
+      vNo: `${r.vNo ?? ""}`,
+      vDate: r.vDate ?? "",
+      party: r.party, count: r.count, brand: r.brand, loc: r.loc, doNo: r.doNo,
+      // Out, so it prints negative and the column nets.
+      bag: -((r.lbs ?? 0) / 100),
+      lbs: -(r.lbs ?? 0),
+      rate: r.rate ?? 0,
+      amt: -(r.amt ?? 0),
+      dir: "OUT" as const,
+    })),
+  ].sort((a, b) => a.vDate.localeCompare(b.vDate) || a.vNo.localeCompare(b.vNo));
+
+  const rows = moves.reduce<Array<Move & { running: number }>>((acc, r) => {
+    acc.push({ ...r, running: (acc[acc.length - 1]?.running ?? 0) + r.amt });
     return acc;
   }, []);
 
-  const totBags = rows.reduce((s, r) => s + (r.bag ?? 0), 0);
-  const totLbs = rows.reduce((s, r) => s + (r.lbs ?? 0), 0);
+  const totBags = rows.reduce((s, r) => s + r.bag, 0);
+  const totLbs = rows.reduce((s, r) => s + r.lbs, 0);
   const totAmt = rows.reduce((s, r) => s + r.amt, 0);
+  // Avg Rate is what the yarn came IN at, the same figure the mill prints.
+  const inLbs = rows.filter((r) => r.dir === "IN").reduce((s, r) => s + r.lbs, 0);
+  const inVal = rows.filter((r) => r.dir === "IN").reduce((s, r) => s + r.amt, 0);
+  const avgRate = inLbs > 0 ? inVal / inLbs : 0;
 
   const excelRows = rows.map((r) => ({
     vNo: r.vNo,
@@ -105,7 +177,8 @@ export default async function YarnSaleRegisterPage({
           <div>
             <h1 className="page-title">Yarn Sale Register</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {rows.length} lines &middot; {from} to {to}
+              {rows.length} lines &middot; {from} to {to} &middot; purchases in, sales out &middot; avg rate{" "}
+              {fmt2(avgRate)}
             </p>
           </div>
           <div className="flex gap-2 items-center">
@@ -208,16 +281,22 @@ export default async function YarnSaleRegisterPage({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="text-center text-[var(--muted)] py-8">
-                    No yarn sales in range
+                    No yarn movement in range
                   </td>
                 </tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.lineId}>
-                    <td className="mono font-bold">{r.vNo}</td>
+                rows.map((r, i) => (
+                  <tr key={`${r.dir}-${r.vNo}-${i}`} style={r.dir === "OUT" ? { color: "#1d4ed8" } : undefined}>
+                    <td className="mono font-bold">
+                      {r.vNo}
+                      <span className="text-[10px] ml-1 opacity-70">{r.dir}</span>
+                    </td>
                     <td className="mono">{r.vDate}</td>
                     <td>{r.party ?? "-"}</td>
-                    <td className="mono">{r.count ?? "-"}</td>
+                    <td className="mono">
+                      {r.count ?? "-"}
+                      {r.loc ? <div className="text-[10px] opacity-70">{r.loc}</div> : null}
+                    </td>
                     <td>{r.brand ?? "-"}</td>
                     <td className="mono text-right">{fmt(r.bag ?? 0)}</td>
                     <td className="mono text-right">{fmt2(r.lbs ?? 0)}</td>
