@@ -190,6 +190,7 @@ export default async function WeavingCountLedgerPage({
           grayRatePerMtr: schema.extGreyConvContract.grayRatePerMtr,
           rateMtr: schema.extGreyConvContract.rateMtr,
           qtyMtr: schema.extGreyConvContract.qtyMtr,
+          width: schema.extGreyConvContract.width,
         })
         .from(schema.extGreyConvContract)
         .where(inArray(schema.extGreyConvContract.contNo, contNos))
@@ -217,11 +218,15 @@ export default async function WeavingCountLedgerPage({
     const c = code ? constrByCode.get(code) : undefined;
     return c ? richConstruction(c, countLabels) : "";
   };
-  type ContInfo = { construction: string; wrpM: number | null; wftM: number | null; totM: number | null; convRate: number | null; qtyMtr: number | null };
+  // Width belongs on the CONV.C# header: the construction says reed x pick and
+  // the counts, but the cloth is not identified until its width is beside them,
+  // and the conversion contract is where that is agreed.
+  type ContInfo = { construction: string; width: number | null; wrpM: number | null; wftM: number | null; totM: number | null; convRate: number | null; qtyMtr: number | null };
   const contInfo = new Map<string, ContInfo>();
   for (const c of convContracts) {
     contInfo.set(c.contNo, {
       construction: richFull(c.grayQltyCode ?? c.grayCode),
+      width: c.width,
       wrpM: c.warpWtPerMtr, wftM: c.weftWtPerMtr, totM: c.wtPerMtr,
       convRate: c.convRatePerMtr ?? c.grayRatePerMtr ?? c.rateMtr,
       qtyMtr: c.qtyMtr,
@@ -231,13 +236,14 @@ export default async function WeavingCountLedgerPage({
     if (contInfo.has(c.contractNo)) continue;
     contInfo.set(c.contractNo, {
       construction: richFull(c.greyCode),
+      width: null,
       wrpM: null, wftM: null, totM: null,
       convRate: c.ratePerMtr, qtyMtr: c.quantityMtr,
     });
   }
 
   const contGroups = Array.from(byCont.entries()).map(([cont, rows]) => {
-    const base = contInfo.get(cont) ?? { construction: richFull(rows[0]?.quality), wrpM: null, wftM: null, totM: null, convRate: null, qtyMtr: null };
+    const base = contInfo.get(cont) ?? { construction: richFull(rows[0]?.quality), width: null, wrpM: null, wftM: null, totM: null, convRate: null, qtyMtr: null };
     // Ends / Lbs/M actuals come from the packi count rows (first row that has them);
     // the contract's wt-per-mtr is the fallback when the parchi rows carry none.
     const first = rows.find((r) => r.warpEnds || r.weftEnds) ?? rows[0];
@@ -331,6 +337,11 @@ export default async function WeavingCountLedgerPage({
                     <td colSpan={14} className="mono font-bold text-[12px] px-2 py-1">
                       <span>CONV.C# {g.cont}</span>
                       {g.info.construction && <span className="ml-3 font-normal">{g.info.construction}</span>}
+                      {g.info.width != null && (
+                        <span className="ml-3 font-normal">
+                          Width <span className="font-bold">{fmt2(g.info.width)}&quot;</span>
+                        </span>
+                      )}
                       {g.info.convRate != null && <span className="float-right font-normal">Conv Rate {fmt2(g.info.convRate)}</span>}
                     </td>
                   </tr>,
