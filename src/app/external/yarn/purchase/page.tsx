@@ -6,6 +6,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { RowErase } from "@/components/production-calc";
 import { RowReconcileFromPartyCount } from "@/components/row-reconcile";
+import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { FindingPicker } from "@/components/finding-picker";
@@ -212,6 +213,39 @@ export default async function YarnPurchaseVoucherPage({
   for (const yc of countList) {
     const label = [yc.description, yc.type].filter(Boolean).join(" ").trim();
     partyScopedCounts.push({ code: String(yc.code), description: label, party: "" });
+  }
+
+  // What each count has lying, for the In Stock strip: everything purchased
+  // minus everything sold. Yarn is measured in lbs; bags are derived at 100 lbs
+  // to a bag, the same conversion the counts-accounts summary uses. Rate is the
+  // purchase-weighted average, which is what the yarn actually cost.
+  const purStockRows = await db
+    .select({
+      count: schema.extYarnPurVoucherLine.count,
+      lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+      wrate: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+    })
+    .from(schema.extYarnPurVoucherLine)
+    .groupBy(schema.extYarnPurVoucherLine.count);
+  const salStockRows = await db
+    .select({
+      count: schema.extYarnSalVoucherLine.count,
+      lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
+    })
+    .from(schema.extYarnSalVoucherLine)
+    .groupBy(schema.extYarnSalVoucherLine.count);
+  const soldLbsByCount = new Map<string, number>();
+  for (const r of salStockRows) if (r.count) soldLbsByCount.set(String(r.count), r.lbs);
+  const stockByCount: Record<string, { lbs: number; rate: number | null; label: string }> = {};
+  for (const r of purStockRows) {
+    if (!r.count) continue;
+    const key = String(r.count);
+    const c = countList.find((x) => String(x.code) === key);
+    stockByCount[key] = {
+      lbs: round2(r.lbs - (soldLbsByCount.get(key) ?? 0)),
+      rate: r.lbs > 0 ? round2(r.wrate / r.lbs) : null,
+      label: [c?.description, c?.type].filter(Boolean).join(" ").trim() || key,
+    };
   }
 
   // Party Count column data: keyed by the yarn count code (the option value).
@@ -885,6 +919,45 @@ export default async function YarnPurchaseVoucherPage({
     if (s?.roleName !== "ADMIN") redirect("/external/yarn/purchase?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+
+    // Deleting the whole voucher is the same wound as cutting one line below
+    // what was sold, only bigger: the sale rows survive, keep subtracting, and
+    // the count goes negative — the -1000 lbs the client hit. Refused outright;
+    // the sale has to be removed or re-pointed first.
+    {
+      const batches = (
+        await db
+          .select({ batchNo: schema.extYarnPurVoucherLine.batchNo })
+          .from(schema.extYarnPurVoucherLine)
+          .where(eq(schema.extYarnPurVoucherLine.voucherId, id))
+      )
+        .map((r) => r.batchNo)
+        .filter(Boolean) as string[];
+      if (batches.length) {
+        const sold = await db
+          .select({
+            batchNo: schema.extYarnSalVoucherLine.batchNo,
+            vNo: schema.extYarnSalVoucher.vNo,
+            lbs: schema.extYarnSalVoucherLine.lbs,
+          })
+          .from(schema.extYarnSalVoucherLine)
+          .innerJoin(
+            schema.extYarnSalVoucher,
+            eq(schema.extYarnSalVoucherLine.voucherId, schema.extYarnSalVoucher.id)
+          )
+          .where(inArray(schema.extYarnSalVoucherLine.batchNo, batches));
+        const live = sold.filter((r) => (r.lbs ?? 0) > 0);
+        if (live.length) {
+          const on = Array.from(new Set(live.map((r) => r.vNo ?? ""))).filter(Boolean).join(", ");
+          redirect(
+            `/external/yarn/purchase?id=${id}&error=batch_sold&batch=${encodeURIComponent(
+              live[0].batchNo ?? ""
+            )}&why=voucher_delete&sold=${encodeURIComponent(on)}`
+          );
+        }
+      }
+    }
+
     const [existing] = await db
       .select({ lvNo: schema.extYarnPurVoucher.lvNo })
       .from(schema.extYarnPurVoucher)
@@ -1009,11 +1082,22 @@ export default async function YarnPurchaseVoucherPage({
         )}
         {params.error === "batch_sold" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Batch {params.batch ?? "?"} is already sold ({params.sold ?? "?"} lbs).{" "}
-            {params.why === "removed"
-              ? "It cannot be removed from this voucher."
-              : "This voucher cannot carry less than what has gone out on it."}{" "}
-            Correct the yarn sale first, then come back. Nothing was saved.
+            {params.why === "voucher_delete" ? (
+              <>
+                This voucher cannot be deleted — batch {params.batch ?? "?"} has already
+                been sold on {params.sold ?? "?"}. Deleting it would leave that sale
+                pointing at yarn that no longer exists and drive the count negative.
+                Remove or re-point the sale first. Nothing was deleted.
+              </>
+            ) : (
+              <>
+                Batch {params.batch ?? "?"} is already sold ({params.sold ?? "?"} lbs).{" "}
+                {params.why === "removed"
+                  ? "It cannot be removed from this voucher."
+                  : "This voucher cannot carry less than what has gone out on it."}{" "}
+                Correct the yarn sale first, then come back. Nothing was saved.
+              </>
+            )}
           </div>
         )}
         {params.error === "no_lines" && (
@@ -1430,6 +1514,14 @@ export default async function YarnPurchaseVoucherPage({
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
                   </div>
+                  {/* Same idea as the Packi Parchi quality strip — there the grey
+                      coming out of stock is in meters, here the yarn is in bags
+                      and lbs. Follows whichever row the operator picked a count in. */}
+                  <YarnStockStrip
+                    stock={stockByCount}
+                    watch="line_count"
+                    initialCode={lines[0]?.count ? String(lines[0].count) : ""}
+                  />
                   <div className="overflow-x-auto border border-black">
                     <table style={{ minWidth: "1700px" }}>
                       <thead>
@@ -1498,7 +1590,20 @@ export default async function YarnPurchaseVoucherPage({
                               {row?.batchNo ?? ""}
                               {locked && (
                                 <div className="text-[10px] mono" style={{ color: "#b45309" }}>
-                                  sold on {soldOn}
+                                  sold on{" "}
+                                  {bl!.sales.map((x, k) => (
+                                    <span key={x.id}>
+                                      {k > 0 && ", "}
+                                      <a
+                                        href={`/external/yarn/sale?id=${x.id}`}
+                                        className="underline"
+                                        style={{ color: "#b45309" }}
+                                        title="Open that sale — press EDIT there to free this line's quantity"
+                                      >
+                                        {x.vNo}
+                                      </a>
+                                    </span>
+                                  ))}
                                 </div>
                               )}
                               {openOn && (
@@ -1640,15 +1745,25 @@ export default async function YarnPurchaseVoucherPage({
                                 className="input-box mono text-[12px] cursor-pointer"
                               />
                             </td>
+                            {/* Rate stays open even on a locked line. A wrong rate
+                                (300 typed for 305) is the commonest correction and it
+                                moves no yarn — the guard that matters protects
+                                QUANTITY. Freezing it forced a pointless round trip
+                                through the sale. The sale keeps the rate it was made
+                                at; only this purchase's own cost re-posts. */}
                             <td>
                               <input
                                 name="line_rate"
                                 type="number"
                                 step="any"
-                                className={`input-box mono text-[12px] text-right${lockCls}`}
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.rate ?? ""}
                                 style={{ width: 80 }}
-                              {...ro}
+                                title={
+                                  locked
+                                    ? "Rate can be corrected even though this batch is sold — it changes this purchase's cost, not the sale"
+                                    : undefined
+                                }
                               />
                             </td>
                             <td>
