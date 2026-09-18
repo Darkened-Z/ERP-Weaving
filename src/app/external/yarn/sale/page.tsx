@@ -10,6 +10,7 @@ import { FindingPicker } from "@/components/finding-picker";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { YarnStockStrip } from "@/components/yarn-stock-strip";
+import { BatchHeaderFill } from "./batch-header-fill";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { acc } from "@/lib/gl-accounts";
@@ -485,6 +486,13 @@ export default async function YarnSaleVoucherPage({
         },
       };
     });
+  // Stock Bag/Con/Lbs + Rate PV in the header follow the picked batch.
+  const batchHeaderMap: Record<string, { lbs: number; con: number; rate: number }> = {};
+  for (const b of batchStock) {
+    if (b.lbs <= 0) continue;
+    batchHeaderMap[b.batchNo] = { lbs: b.lbs, con: b.con, rate: b.rate };
+  }
+
   // In Stock strip, keyed by batch — the same strip Packi Parchi carries for
   // grey, in the units yarn uses: bags (lbs/100), lbs and the batch's own rate.
   const stockByBatch: Record<string, { lbs: number; rate: number | null; label: string }> = {};
@@ -1533,6 +1541,7 @@ export default async function YarnSaleVoucherPage({
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
                   </div>
+                  <BatchHeaderFill map={batchHeaderMap} />
                   <YarnStockStrip
                     stock={stockByBatch}
                     watch="line_stock_key"
