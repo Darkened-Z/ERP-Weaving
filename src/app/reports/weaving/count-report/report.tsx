@@ -49,7 +49,9 @@ export async function CountsAccountsReport({
     .select({
       party: schema.extYarnSalVoucher.party,
       count: schema.extYarnSalVoucherLine.count,
-      bags: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+      // Bags DERIVED at 100 lbs to a bag. The stored bag column is blank on every
+      // live sale row, which is why this column read 0 all the way down.
+      bags: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0) / 100.0`,
       lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
       amt: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.amt}), 0)`,
     })
@@ -73,24 +75,65 @@ export async function CountsAccountsReport({
     .where(and(...consConds))
     .groupBy(schema.extPackiParchi.saleParty, schema.extPackiParchiCount.code);
 
-  type Row = { party: string; count: string; desc: string; totalLbs: number; bags: number; consumedLbs: number; balLbs: number; rate: number; amount: number };
+  // Yarn also reaches a party through the PURCHASE side — a return comes back
+  // that way — so the seed is both books added together, not the sale side
+  // alone. Kept as two visible columns so it is always clear which book a
+  // figure came out of.
+  const purConds = [gte(schema.extYarnPurVoucher.vDate, from), lte(schema.extYarnPurVoucher.vDate, to)];
+  if (party) { const pat = `%${escLike(party)}%`; purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\'`); }
+  if (count) purConds.push(eq(schema.extYarnPurVoucherLine.count, count));
+  const purAgg = await db
+    .select({
+      party: schema.extYarnPurVoucher.party,
+      count: schema.extYarnPurVoucherLine.count,
+      lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+      amt: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+    })
+    .from(schema.extYarnPurVoucherLine)
+    .innerJoin(schema.extYarnPurVoucher, eq(schema.extYarnPurVoucherLine.voucherId, schema.extYarnPurVoucher.id))
+    .where(and(...purConds))
+    .groupBy(schema.extYarnPurVoucher.party, schema.extYarnPurVoucherLine.count);
+
+  type Row = { party: string; count: string; desc: string; purLbs: number; salLbs: number; totalLbs: number; bags: number; consumedLbs: number; balLbs: number; rate: number; amount: number };
   const map = new Map<string, Row>();
   const key = (pt: string, c: string) => `${pt}||${c}`;
+  const blank = (pt: string, c: string): Row => ({
+    party: pt, count: c, desc: descByCode.get(c) ?? "",
+    purLbs: 0, salLbs: 0, totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, rate: 0, amount: 0,
+  });
+  let seedValue = 0;
+  const valueByKey = new Map<string, number>();
   for (const s of seedAgg) {
     const pt = s.party ?? "—", c = s.count ?? "—";
-    map.set(key(pt, c), {
-      party: pt, count: c, desc: descByCode.get(c) ?? "",
-      totalLbs: s.lbs, bags: s.bags, consumedLbs: 0, balLbs: 0,
-      rate: s.lbs > 0 ? s.amt / s.lbs : 0, amount: 0,
-    });
+    const k = key(pt, c);
+    const r = map.get(k) ?? blank(pt, c);
+    r.salLbs += s.lbs;
+    valueByKey.set(k, (valueByKey.get(k) ?? 0) + s.amt);
+    map.set(k, r);
+  }
+  for (const pu of purAgg) {
+    const pt = pu.party ?? "—", c = pu.count ?? "—";
+    const k = key(pt, c);
+    const r = map.get(k) ?? blank(pt, c);
+    r.purLbs += pu.lbs;
+    valueByKey.set(k, (valueByKey.get(k) ?? 0) + pu.amt);
+    map.set(k, r);
   }
   for (const cs of consAgg) {
     const pt = cs.party ?? "—", c = cs.count ?? "—";
     const k = key(pt, c);
-    const r = map.get(k) ?? { party: pt, count: c, desc: descByCode.get(c) ?? "", totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, rate: 0, amount: 0 };
+    const r = map.get(k) ?? blank(pt, c);
     r.consumedLbs += cs.lbs;
     map.set(k, r);
   }
+  for (const [k, r] of map) {
+    r.totalLbs = r.purLbs + r.salLbs;
+    r.bags = r.totalLbs / 100;
+    const val = valueByKey.get(k) ?? 0;
+    r.rate = r.totalLbs > 0 ? val / r.totalLbs : 0;
+    seedValue += val;
+  }
+  void seedValue;
   const rows = Array.from(map.values());
   for (const r of rows) {
     r.balLbs = r.totalLbs - r.consumedLbs;
@@ -103,8 +146,8 @@ export async function CountsAccountsReport({
   for (const r of rows) (byParty.get(r.party) ?? byParty.set(r.party, []).get(r.party)!).push(r);
 
   const grand = rows.reduce(
-    (t, r) => ({ totalLbs: t.totalLbs + r.totalLbs, bags: t.bags + r.bags, consumedLbs: t.consumedLbs + r.consumedLbs, balLbs: t.balLbs + r.balLbs, amount: t.amount + r.amount }),
-    { totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, amount: 0 }
+    (t, r) => ({ purLbs: t.purLbs + r.purLbs, salLbs: t.salLbs + r.salLbs, totalLbs: t.totalLbs + r.totalLbs, bags: t.bags + r.bags, consumedLbs: t.consumedLbs + r.consumedLbs, balLbs: t.balLbs + r.balLbs, amount: t.amount + r.amount }),
+    { purLbs: 0, salLbs: 0, totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, amount: 0 }
   );
 
   const ledgerHref = (pt: string, c: string) =>
@@ -125,6 +168,7 @@ export async function CountsAccountsReport({
             <ExcelExportButton
               rows={rows.map((r) => ({
                 party: r.party, count: r.count, description: r.desc,
+                purLbs: Math.round(r.purLbs), salLbs: Math.round(r.salLbs),
                 totalLbs: Math.round(r.totalLbs), bags: r.bags,
                 consumedLbs: Math.round(r.consumedLbs), balLbs: Math.round(r.balLbs),
                 rate: Number(r.rate.toFixed(2)), amount: Math.round(r.amount),
@@ -133,6 +177,8 @@ export async function CountsAccountsReport({
                 { key: "party", label: "Party" },
                 { key: "count", label: "Count" },
                 { key: "description", label: "Count Desc" },
+                { key: "purLbs", label: "Pur Lbs" },
+                { key: "salLbs", label: "Sale Lbs" },
                 { key: "totalLbs", label: "Total Lbs" },
                 { key: "bags", label: "Bags" },
                 { key: "consumedLbs", label: "Consumed Lbs" },
@@ -174,6 +220,8 @@ export async function CountsAccountsReport({
             <thead>
               <tr>
                 <th>Count Desc</th>
+                <th className="text-right">Pur Lbs</th>
+                <th className="text-right">Sale Lbs</th>
                 <th className="text-right">Total Lbs</th>
                 <th className="text-right">Bags</th>
                 <th className="text-right">Consumed Lbs</th>
@@ -185,24 +233,26 @@ export async function CountsAccountsReport({
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={8} className="text-center text-[var(--muted)] py-8">No count activity in period</td></tr>
+                <tr><td colSpan={10} className="text-center text-[var(--muted)] py-8">No count activity in period</td></tr>
               ) : (
                 Array.from(byParty.entries()).map(([pt, prows]) => {
                   const sub = prows.reduce(
-                    (t, r) => ({ totalLbs: t.totalLbs + r.totalLbs, bags: t.bags + r.bags, consumedLbs: t.consumedLbs + r.consumedLbs, balLbs: t.balLbs + r.balLbs, amount: t.amount + r.amount }),
-                    { totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, amount: 0 }
+                    (t, r) => ({ purLbs: t.purLbs + r.purLbs, salLbs: t.salLbs + r.salLbs, totalLbs: t.totalLbs + r.totalLbs, bags: t.bags + r.bags, consumedLbs: t.consumedLbs + r.consumedLbs, balLbs: t.balLbs + r.balLbs, amount: t.amount + r.amount }),
+                    { purLbs: 0, salLbs: 0, totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, amount: 0 }
                   );
                   return (
                     <tr key={pt} className="contents">
-                      <td colSpan={8} className="p-0">
+                      <td colSpan={10} className="p-0">
                         <table className="w-full">
                           <tbody>
                             <tr style={{ background: "#0f172a", color: "white" }}>
-                              <td className="font-bold text-[13px] px-2 py-1" colSpan={8}>{pt} <span className="opacity-70">· {prows.length}</span></td>
+                              <td className="font-bold text-[13px] px-2 py-1" colSpan={10}>{pt} <span className="opacity-70">· {prows.length}</span></td>
                             </tr>
                             {prows.map((r) => (
                               <tr key={r.count}>
                                 <td className="text-[13px]"><span className="mono font-bold">{r.count}</span> — {r.desc || r.count}</td>
+                                <td className="mono text-right">{fmt(r.purLbs)}</td>
+                                <td className="mono text-right">{fmt(r.salLbs)}</td>
                                 <td className="mono text-right">{fmt(r.totalLbs)}</td>
                                 <td className="mono text-right">{fmt(r.bags)}</td>
                                 <td className="mono text-right">{fmt(r.consumedLbs)}</td>
@@ -214,6 +264,8 @@ export async function CountsAccountsReport({
                             ))}
                             <tr style={{ borderTop: "1px solid #cbd5e1", fontWeight: 700 }}>
                               <td className="text-right pr-2">Party Total</td>
+                              <td className="mono text-right">{fmt(sub.purLbs)}</td>
+                              <td className="mono text-right">{fmt(sub.salLbs)}</td>
                               <td className="mono text-right">{fmt(sub.totalLbs)}</td>
                               <td className="mono text-right">{fmt(sub.bags)}</td>
                               <td className="mono text-right">{fmt(sub.consumedLbs)}</td>
@@ -234,6 +286,8 @@ export async function CountsAccountsReport({
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
                   <td className="text-right pr-2">Grand Total</td>
+                  <td className="mono text-right">{fmt(grand.purLbs)}</td>
+                  <td className="mono text-right">{fmt(grand.salLbs)}</td>
                   <td className="mono text-right">{fmt(grand.totalLbs)}</td>
                   <td className="mono text-right">{fmt(grand.bags)}</td>
                   <td className="mono text-right">{fmt(grand.consumedLbs)}</td>

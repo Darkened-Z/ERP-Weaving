@@ -48,7 +48,16 @@ function nextVNo(rows: { vNo: string }[], prefix: string): string {
 export default async function YarnSaleVoucherPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{
+    id?: string;
+    adding?: string;
+    error?: string;
+    find?: string;
+    thru?: string;
+    batch?: string;
+    avail?: string;
+    want?: string;
+  }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -715,6 +724,55 @@ export default async function YarnSaleVoucherPage({
       );
     }
 
+    // A sale can never take more out of a batch than is lying in it. Without
+    // this the count goes negative the moment someone fat-fingers a quantity,
+    // and monthly clearance is chasing yarn that was never there.
+    {
+      const wanted = new Map<string, number>();
+      for (const l of validLines) {
+        if (!l.batchNo) continue;
+        wanted.set(l.batchNo, (wanted.get(l.batchNo) ?? 0) + (l.lbs ?? 0));
+      }
+      if (wanted.size) {
+        const keys = Array.from(wanted.keys());
+        const purRows = await db
+          .select({
+            batchNo: schema.extYarnPurVoucherLine.batchNo,
+            lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+          })
+          .from(schema.extYarnPurVoucherLine)
+          .where(inArray(schema.extYarnPurVoucherLine.batchNo, keys))
+          .groupBy(schema.extYarnPurVoucherLine.batchNo);
+        const otherSales = await db
+          .select({
+            batchNo: schema.extYarnSalVoucherLine.batchNo,
+            lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
+          })
+          .from(schema.extYarnSalVoucherLine)
+          .where(
+            Number.isFinite(id) && id > 0
+              ? and(
+                  inArray(schema.extYarnSalVoucherLine.batchNo, keys),
+                  ne(schema.extYarnSalVoucherLine.voucherId, id),
+                )
+              : inArray(schema.extYarnSalVoucherLine.batchNo, keys),
+          )
+          .groupBy(schema.extYarnSalVoucherLine.batchNo);
+        const purBy = new Map(purRows.map((r) => [r.batchNo ?? "", r.lbs]));
+        const soldBy = new Map(otherSales.map((r) => [r.batchNo ?? "", r.lbs]));
+        for (const [batch, want] of wanted) {
+          const avail = round2((purBy.get(batch) ?? 0) - (soldBy.get(batch) ?? 0));
+          if (want > avail + 0.01) {
+            redirect(
+              `/external/yarn/sale?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}` +
+                `error=over_stock&batch=${encodeURIComponent(batch)}` +
+                `&avail=${avail}&want=${round2(want)}`,
+            );
+          }
+        }
+      }
+    }
+
     const nowIso = new Date().toISOString();
 
     const [company] = await db
@@ -735,7 +793,9 @@ export default async function YarnSaleVoucherPage({
       return codeByDescMap.get(s) ?? "";
     };
     const partyCoa = resolvePartyCoa(party);
-    // Ledger narration: "<count desc> (<bags>) bags (<lbs>) lbs @ <rate>" per line — not just the party name.
+    // Ledger narration: "<count desc> (<bags>) bags (<lbs>) lbs @ <rate>" per line — not just
+    // the party name. Bags are DERIVED at 100 lbs to a bag; the stored bag column
+    // is blank on every live row, which is why the ledger read "(0) bags".
     const countRowsSrv = await db
       .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
       .from(schema.yarnCounts);
@@ -747,7 +807,7 @@ export default async function YarnSaleVoucherPage({
         .filter((l) => (l.bag ?? 0) > 0 || (l.lbs ?? 0) > 0)
         .map((l) => {
           const lbl = l.count ? countLabelSrv.get(String(l.count)) || l.count : "";
-          return `${lbl} (${l.bag ?? 0}) bags (${l.lbs ?? 0}) lbs @ ${l.rate ?? 0}`;
+          return `${lbl} (${round2((l.lbs ?? 0) / 100)}) bags (${l.lbs ?? 0}) lbs @ ${l.rate ?? 0}`;
         })
         .join(", ") || `Cont#${cont ?? ""} ${party ?? ""}`.trim();
     const glTotal = round2(validLines.reduce((s, l) => s + (l.amt ?? 0), 0));
@@ -1103,6 +1163,13 @@ export default async function YarnSaleVoucherPage({
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Voucher number already exists. Try again.
+          </div>
+        )}
+        {params.error === "over_stock" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            ⚠ Batch {params.batch ?? "?"} only has {params.avail ?? "?"} lbs (
+            {params.avail ? (Number(params.avail) / 100).toFixed(2) : "?"} bag) left — this voucher
+            is trying to sell {params.want ?? "?"} lbs. Nothing was saved.
           </div>
         )}
         {params.error === "no_lines" && (

@@ -193,8 +193,8 @@ export default async function LedgerPage({
       <div className="animate-in">
         <div className="mb-8 flex flex-col sm:flex-row sm:items-baseline justify-between gap-4">
           <div>
-            <h1 className="page-title">General Ledger</h1>
-            <p className="text-[13px] text-[var(--muted)] mt-2">
+            <h1 className="page-title no-print">General Ledger</h1>
+            <p className="text-[13px] text-[var(--muted)] mt-2 no-print">
               Account-wise transaction details
               {currentFy ? ` · FY ${currentFy}` : ""}
             </p>
@@ -204,7 +204,9 @@ export default async function LedgerPage({
           </div>
         </div>
 
-        <div className="mb-8">
+        {/* A printed ledger is handed to the party, so the screen furniture —
+            the filter row and its View button — stays behind. */}
+        <div className="mb-8 no-print">
           <form method="GET" className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
             <div className="sm:col-span-5">
               <label className="label block mb-1">Account</label>
@@ -274,7 +276,7 @@ export default async function LedgerPage({
                     <th>Type</th>
                     <th>V.No</th>
                     <th>Narration</th>
-                    <th>Against / Mode</th>
+                    <th className="no-print">Against / Mode</th>
                     <th className="text-right">Debit</th>
                     <th className="text-right">Credit</th>
                     <th className="text-right">Balance</th>
@@ -291,7 +293,7 @@ export default async function LedgerPage({
                     </td>
                     <td className="mono">—</td>
                     <td className="text-[var(--muted)] italic">Opening Balance</td>
-                    <td></td>
+                    <td className="no-print"></td>
                     <td className="mono text-right">
                       {openingBalance > 0 ? formatNum(openingBalance) : ""}
                     </td>
@@ -316,7 +318,7 @@ export default async function LedgerPage({
                       </td>
                       <td className="mono">{entry.vno}</td>
                       <td className="text-[var(--muted)]">{entry.narration}</td>
-                      <td className="text-[11px]">
+                      <td className="text-[11px] no-print">
                         {(entry.splitCount ?? 0) > 1 ? (
                           <span className="mono">
                             <span className="border border-black px-1 font-bold">SPLIT</span>{" "}
@@ -343,19 +345,21 @@ export default async function LedgerPage({
                   {entries.length === 0 && (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={8}
                         className="text-center text-[13px] text-[var(--muted)] py-6"
                       >
                         No transactions in this date range.
                       </td>
+                      <td className="no-print"></td>
                     </tr>
                   )}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-black">
-                    <td colSpan={6} className="font-bold text-[13px] uppercase tracking-[0.05em]">
+                    <td colSpan={5} className="font-bold text-[13px] uppercase tracking-[0.05em]">
                       Closing Balance ({dateTo})
                     </td>
+                    <td className="no-print"></td>
                     <td className="mono text-right font-bold">{formatNum(totalDr)}</td>
                     <td className="mono text-right font-bold">{formatNum(totalCr)}</td>
                     <td className="mono text-right font-extrabold text-[15px]">
