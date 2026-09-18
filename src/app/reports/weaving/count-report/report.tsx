@@ -323,7 +323,19 @@ export async function CountsAccountsReport({
                         <table className="w-full">
                           <tbody>
                             <tr style={{ background: "#0f172a", color: "white" }}>
-                              <td className="font-bold text-[13px] px-2 py-1" colSpan={10}>{pt} <span className="opacity-70">· {prows.length}</span></td>
+                              <td className="font-bold text-[13px] px-2 py-1" colSpan={10}>
+                                {pt} <span className="opacity-70">· {prows.length}</span>
+                                {/* The whole party's yarn movement, every count at
+                                    once — the register the mill reads per party. */}
+                                <a
+                                  href={`/reports/yarn/sale-register?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
+                                  className="ml-3 underline text-[11px] font-normal no-print"
+                                  style={{ color: "#93c5fd" }}
+                                  title="Open this party's yarn register — purchases in, sales out, all counts"
+                                >
+                                  Yarn Register
+                                </a>
+                              </td>
                             </tr>
                             {prows.map((r) => (
                               <tr key={r.count}>
@@ -356,7 +368,19 @@ export async function CountsAccountsReport({
                               <td className="mono text-right">{fmt(sub.purLbs)}</td>
                               <td className="mono text-right">{fmt(sub.salLbs)}</td>
                               <td className="mono text-right">{fmt(sub.totalLbs)}</td>
-                              <td className="mono text-right">{fmt(sub.bags)}</td>
+                              <td className="mono text-right">
+                                {sub.bags !== 0 ? (
+                                  <a
+                                    href={`/reports/yarn/sale-register?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
+                                    className="underline"
+                                    title="Open this party's yarn register — all counts"
+                                  >
+                                    {fmt(sub.bags)}
+                                  </a>
+                                ) : (
+                                  fmt(sub.bags)
+                                )}
+                              </td>
                               <td className="mono text-right">{fmt(sub.consumedLbs)}</td>
                               <td className="mono text-right">{fmt(sub.balLbs)}</td>
                               <td></td>
