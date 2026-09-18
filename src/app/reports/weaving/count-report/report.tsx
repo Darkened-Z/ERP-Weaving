@@ -19,8 +19,19 @@ export async function CountsAccountsReport({
   searchParams,
   title = "Weaving Counts Accounts Report",
   navKey = "w-count-report",
+  partyScope = "activity",
 }: {
   searchParams: Promise<{ from?: string; to?: string; party?: string; count?: string }>;
+  /**
+   * Which parties the report is about.
+   *
+   * "activity" (default) lists whoever actually moved yarn in the period.
+   * "grey-sale-contract" is the Sale side as the mill defines it: the parties
+   * named on an EXTERNAL grey conversion contract of type SALE, each shown with
+   * every count they are set up with in Party Count — so a party the mill is
+   * committed to appears with zeros rather than not appearing at all.
+   */
+  partyScope?: "activity" | "grey-sale-contract";
   title?: string;
   navKey?: string;
 }) {
@@ -95,6 +106,45 @@ export async function CountsAccountsReport({
     .groupBy(schema.extYarnPurVoucher.party, schema.extYarnPurVoucherLine.count);
 
   type Row = { party: string; count: string; desc: string; purLbs: number; salLbs: number; totalLbs: number; bags: number; consumedLbs: number; balLbs: number; rate: number; amount: number };
+  // The Sale side starts from the commitment, not from the movement: every
+  // party on a SALE-type external grey conversion contract, crossed with every
+  // count that party is set up with in Party Count. Those rows exist whether or
+  // not any yarn has moved yet, which is the point — a party with nothing
+  // against it is exactly what the mill needs to see.
+  const scopedSeedRows: { party: string; count: string }[] = [];
+  let scopedParties: Set<string> | null = null;
+  if (partyScope === "grey-sale-contract") {
+    const saleContracts = await db
+      .select({ party: schema.extGreyConvContract.party })
+      .from(schema.extGreyConvContract)
+      .where(sql`upper(coalesce(${schema.extGreyConvContract.type}, '')) = 'SALE'`);
+    const contractParties = Array.from(
+      new Set(saleContracts.map((r) => (r.party ?? "").trim()).filter(Boolean)),
+    ).filter((pt) => !party || pt.toLowerCase().includes(party.toLowerCase()));
+    scopedParties = new Set(contractParties);
+    if (contractParties.length) {
+      const coa = await db
+        .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+        .from(schema.chartOfAccounts);
+      const codeByDesc = new Map(coa.map((a) => [(a.description ?? "").trim(), a.code]));
+      const pcRows = await db.select().from(schema.partyCounts);
+      // party_counts.count_code holds the yarn_counts PK on most rows and the
+      // visible code on a few, so both are tried — the same fallback the yarn
+      // vouchers use.
+      const codeById = new Map(allCounts.map((c) => [c.id, String(c.countCode)]));
+      for (const pt of contractParties) {
+        const partyCode = codeByDesc.get(pt);
+        if (!partyCode) continue;
+        for (const pc of pcRows) {
+          if (pc.partyCode !== partyCode) continue;
+          const cc = codeById.get(pc.countCode as unknown as number) ?? String(pc.countCode);
+          if (count && cc !== count) continue;
+          scopedSeedRows.push({ party: pt, count: cc });
+        }
+      }
+    }
+  }
+
   const map = new Map<string, Row>();
   const key = (pt: string, c: string) => `${pt}||${c}`;
   const blank = (pt: string, c: string): Row => ({
@@ -103,6 +153,7 @@ export async function CountsAccountsReport({
   });
   let seedValue = 0;
   const valueByKey = new Map<string, number>();
+  for (const sr of scopedSeedRows) map.set(key(sr.party, sr.count), blank(sr.party, sr.count));
   for (const s of seedAgg) {
     const pt = s.party ?? "—", c = s.count ?? "—";
     const k = key(pt, c);
@@ -134,7 +185,10 @@ export async function CountsAccountsReport({
     seedValue += val;
   }
   void seedValue;
-  const rows = Array.from(map.values());
+  // Outside the scope the mill asked for, a row is noise: the Sale report is
+  // about the parties committed on a SALE contract, not everyone who happened
+  // to move yarn.
+  const rows = Array.from(map.values()).filter((r) => !scopedParties || scopedParties.has(r.party));
   for (const r of rows) {
     r.balLbs = r.totalLbs - r.consumedLbs;
     r.amount = r.balLbs * r.rate;
@@ -233,7 +287,13 @@ export async function CountsAccountsReport({
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={10} className="text-center text-[var(--muted)] py-8">No count activity in period</td></tr>
+                <tr>
+                  <td colSpan={10} className="text-center text-[var(--muted)] py-8">
+                    {partyScope === "grey-sale-contract" && (scopedParties?.size ?? 0) === 0
+                      ? "No external grey conversion contract is set to type SALE, so there are no parties to report. Set a contract's type to SALE and its parties appear here with their Party Counts."
+                      : "No count activity in period"}
+                  </td>
+                </tr>
               ) : (
                 Array.from(byParty.entries()).map(([pt, prows]) => {
                   const sub = prows.reduce(
