@@ -196,7 +196,11 @@ export async function CountsAccountsReport({
   // Outside the scope the mill asked for, a row is noise: the Sale report is
   // about the parties committed on a SALE contract, not everyone who happened
   // to move yarn.
-  const rows = Array.from(map.values()).filter((r) => !scopedParties || scopedParties.has(r.party));
+  const rows = Array.from(map.values())
+    .filter((r) => !scopedParties || scopedParties.has(r.party))
+    // A Party Count row whose count code does not resolve shows as "— — —" with
+    // zeros the whole way across; it is a broken master row, not a figure.
+    .filter((r) => r.count && r.count !== "—");
   for (const r of rows) {
     r.balLbs = r.totalLbs - r.consumedLbs;
     r.amount = r.balLbs * r.rate;
@@ -212,6 +216,11 @@ export async function CountsAccountsReport({
     { purLbs: 0, salLbs: 0, totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, amount: 0 }
   );
 
+  // Bags open their own detail, the way L opens the count ledger: the yarn
+  // movement behind the figure — every purchase that brought bags in and every
+  // sale that took them out, for this party and count.
+  const bagsHref = (pt: string, c: string) =>
+    `/reports/yarn/sale-register?party=${encodeURIComponent(pt)}&count=${encodeURIComponent(c)}&from=${from}&to=${to}`;
   const ledgerHref = (pt: string, c: string) =>
     `/reports/weaving/count-report/ledger?party=${encodeURIComponent(pt)}&count=${encodeURIComponent(c)}&from=${from}&to=${to}`;
 
@@ -322,7 +331,19 @@ export async function CountsAccountsReport({
                                 <td className="mono text-right">{fmt(r.purLbs)}</td>
                                 <td className="mono text-right">{fmt(r.salLbs)}</td>
                                 <td className="mono text-right">{fmt(r.totalLbs)}</td>
-                                <td className="mono text-right">{fmt(r.bags)}</td>
+                                <td className="mono text-right">
+                                  {r.bags !== 0 ? (
+                                    <a
+                                      href={bagsHref(r.party, r.count)}
+                                      className="underline"
+                                      title="Open the bags detail — purchases in, sales out"
+                                    >
+                                      {fmt(r.bags)}
+                                    </a>
+                                  ) : (
+                                    fmt(r.bags)
+                                  )}
+                                </td>
                                 <td className="mono text-right">{fmt(r.consumedLbs)}</td>
                                 <td className="mono text-right font-bold">{fmt(r.balLbs)}</td>
                                 <td className="mono text-right">{fmt2(r.rate)}</td>
