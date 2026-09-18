@@ -161,6 +161,7 @@ const SECTIONS = [
           { href: "/external/reports/grey-stock", label: "Grey Stock", key: "ext-r-greystock" },
           { href: "/external/reports/yarn-register", label: "Yarn Register", key: "ext-r-yarnreg" },
           { href: "/external/reports/yarn-stock", label: "Yarn Stock", key: "ext-r-yarnstock" },
+          { href: "/external/reports/yarn-batch-profit", label: "Yarn Batch Profit", key: "ext-r-yarnbatch" },
           { href: "/external/reports/weaving-counts", label: "Weaving Counts Accounts", key: "ext-r-weaving" },
           { href: "/external/reports/weaving-counts-sale", label: "Weaving Counts Accounts — Sale", key: "ext-r-weaving-sale" },
           { href: "/external/reports/weaving-counts-partywise", label: "Weaving Counts Accounts — Party Wise", key: "ext-r-weaving-pp" },
