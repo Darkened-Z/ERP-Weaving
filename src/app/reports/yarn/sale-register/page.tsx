@@ -69,6 +69,7 @@ export default async function YarnSaleRegisterPage({
 
   const salRaw = await db
     .select({
+      id: schema.extYarnSalVoucher.id,
       vNo: schema.extYarnSalVoucher.vNo,
       vDate: schema.extYarnSalVoucher.vDate,
       party: schema.extYarnSalVoucher.party,
@@ -89,6 +90,7 @@ export default async function YarnSaleRegisterPage({
 
   const purRaw = await db
     .select({
+      id: schema.extYarnPurVoucher.id,
       vNo: schema.extYarnPurVoucher.vNo,
       vDate: schema.extYarnPurVoucher.vDate,
       party: schema.extYarnPurVoucher.party,
@@ -107,6 +109,7 @@ export default async function YarnSaleRegisterPage({
     .where(and(...purConds));
 
   type Move = {
+    id: number;
     vNo: string;
     vDate: string;
     party: string | null;
@@ -122,6 +125,7 @@ export default async function YarnSaleRegisterPage({
   };
   const moves: Move[] = [
     ...purRaw.map((r) => ({
+      id: r.id,
       vNo: `${r.vNo ?? ""}`,
       vDate: r.vDate ?? "",
       party: r.party, count: r.count, brand: r.brand, loc: r.loc, doNo: r.doNo,
@@ -132,6 +136,7 @@ export default async function YarnSaleRegisterPage({
       dir: "IN" as const,
     })),
     ...salRaw.map((r) => ({
+      id: r.id,
       vNo: `${r.vNo ?? ""}`,
       vDate: r.vDate ?? "",
       party: r.party, count: r.count, brand: r.brand, loc: r.loc, doNo: r.doNo,
@@ -287,8 +292,20 @@ export default async function YarnSaleRegisterPage({
               ) : (
                 rows.map((r, i) => (
                   <tr key={`${r.dir}-${r.vNo}-${i}`} style={r.dir === "OUT" ? { color: "#1d4ed8" } : undefined}>
+                    {/* The number opens the voucher it came from — the chain
+                        runs report -> bags -> register -> the entry itself. */}
                     <td className="mono font-bold">
-                      {r.vNo}
+                      <a
+                        href={
+                          r.dir === "IN"
+                            ? `/external/yarn/purchase?id=${r.id}`
+                            : `/external/yarn/sale?id=${r.id}`
+                        }
+                        className="underline"
+                        title={r.dir === "IN" ? "Open this yarn purchase voucher" : "Open this yarn sale voucher"}
+                      >
+                        {r.vNo}
+                      </a>
                       <span className="text-[10px] ml-1 opacity-70">{r.dir}</span>
                     </td>
                     <td className="mono">{r.vDate}</td>
