@@ -41,6 +41,7 @@ export async function loadChequeRegister(
       vdate: schema.transMain.vdate,
       trnType: schema.transMain.trnType,
       accCode: schema.transDetail.accCode,
+      partyCode: schema.transDetail.partyCode,
       debit: schema.transDetail.debit,
       credit: schema.transDetail.credit,
     })
@@ -96,7 +97,13 @@ export async function loadChequeRegister(
     reg.set(chq, {
       chqNo: chq,
       chqDate: (l.chqDate ?? l.vdate ?? "").trim(),
-      payee: descMap.get(l.accCode) ?? l.accCode,
+      // On an ADV issue the cheque sits on the CREDIT leg (the bank-advance
+      // account), so the account on the line is the advance, not who was paid.
+      // The payee is carried in partyCode there.
+      payee:
+        l.vtype === "ADV" && l.partyCode
+          ? descMap.get(l.partyCode) ?? l.partyCode
+          : descMap.get(l.accCode) ?? l.accCode,
       amount,
       vtype: l.vtype,
       derived,
