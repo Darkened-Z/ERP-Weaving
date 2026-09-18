@@ -1588,7 +1588,7 @@ export default async function YarnSaleVoucherPage({
                                 filterByField="party"
                               />
                             </td>
-                            <td>
+                            <td style={{ minWidth: 260 }}>
                               <FindingPicker
                                 name="line_stock_key"
                                 defaultValue={row?.batchNo ?? ""}
