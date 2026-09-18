@@ -8,7 +8,8 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PackiCalc } from "@/components/packi-calc";
 import { db, schema } from "@/db";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, ne, sql, desc } from "drizzle-orm";
+import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
@@ -31,7 +32,18 @@ const COUNT_ROWS = 4;
 export default async function PackiParchiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{
+    id?: string;
+    adding?: string;
+    error?: string;
+    find?: string;
+    thru?: string;
+    cont?: string;
+    kind?: string;
+    qty?: string;
+    left?: string;
+    want?: string;
+  }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -471,6 +483,66 @@ export default async function PackiParchiPage({
         ? null
         : Math.round((kpMeter - (elMeterC ?? 0) - mRe - fineMtr - (meterKam ?? 0)) * 100) / 100;
     if (meterNetC == null || meterNetC <= 0) redirect(errPath("meter_net"));
+
+    // A contract is for so many metres and no more. Every parchi written
+    // against one eats into that quantity, so before saving we add up what the
+    // OTHER parchis already took, add this one, and refuse the moment it passes
+    // what was agreed — on the conversion contract and on the grey sale
+    // contract alike. Without this a contract quietly over-despatches and the
+    // party is billed for cloth nobody committed to.
+    {
+      const idNow = Number.isFinite(id) && id > 0 ? id : 0;
+      const usedOn = async (col: AnySQLiteColumn, cont: string) => {
+        const rows = await db
+          .select({ used: sql<number>`coalesce(sum(${schema.extPackiParchi.meterNet}), 0)` })
+          .from(schema.extPackiParchi)
+          .where(
+            idNow > 0
+              ? and(eq(col, cont), ne(schema.extPackiParchi.id, idNow))
+              : eq(col, cont),
+          );
+        return rows[0]?.used ?? 0;
+      };
+      const checks: { cont: string; label: string; qty: number; used: number }[] = [];
+
+      for (const [cont, col, label] of [
+        [convContNo, schema.extPackiParchi.convContNo, "Conversion contract"],
+        [convContSale2, schema.extPackiParchi.convContSale2, "Conversion contract (sale)"],
+      ] as const) {
+        if (!cont) continue;
+        const [c] = await db
+          .select({ qty: schema.extGreyConvContract.qtyMtr })
+          .from(schema.extGreyConvContract)
+          .where(eq(schema.extGreyConvContract.contNo, cont));
+        if (!c?.qty || c.qty <= 0) continue;
+        checks.push({ cont, label, qty: c.qty, used: await usedOn(col, cont) });
+      }
+
+      if (convContNoSale) {
+        const [c] = await db
+          .select({ qty: schema.extGreySalContract.quantityMtr })
+          .from(schema.extGreySalContract)
+          .where(eq(schema.extGreySalContract.contractNo, convContNoSale));
+        if (c?.qty && c.qty > 0) {
+          checks.push({
+            cont: convContNoSale,
+            label: "Grey sale contract",
+            qty: c.qty,
+            used: await usedOn(schema.extPackiParchi.convContNoSale, convContNoSale),
+          });
+        }
+      }
+
+      for (const chk of checks) {
+        const left = rnd(chk.qty - chk.used);
+        if (meterNetC > left + 0.01) {
+          redirect(
+            `${errPath("over_contract")}&cont=${encodeURIComponent(chk.cont)}` +
+              `&kind=${encodeURIComponent(chk.label)}&qty=${chk.qty}&left=${left}&want=${meterNetC}`,
+          );
+        }
+      }
+    }
 
     const wkcBrkC =
       wkcBrk ??
@@ -947,6 +1019,13 @@ export default async function PackiParchiPage({
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             V.No already exists. Try again.
+          </div>
+        )}
+        {params.error === "over_contract" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            ⚠ {params.kind ?? "Contract"} {params.cont ?? ""} is for {params.qty ?? "?"} mtr and{" "}
+            {params.left ?? "?"} mtr are left on it — this parchi is despatching{" "}
+            {params.want ?? "?"} mtr. Nothing was saved.
           </div>
         )}
         {params.error === "meter_net" && (
