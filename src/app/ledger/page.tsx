@@ -55,9 +55,12 @@ export default async function LedgerPage({
 
   let entries: {
     vdate: string;
+    fyCode: string | null;
     vtype: string;
     vno: number;
     narration: string | null;
+    against?: string;
+    splitCount?: number;
     debit: number;
     credit: number;
     balance: number;
@@ -105,6 +108,7 @@ export default async function LedgerPage({
     const raw = await db
       .select({
         vdate: schema.transMain.vdate,
+        fyCode: schema.transDetail.fyCode,
         vtype: schema.transDetail.vtype,
         vno: schema.transDetail.vno,
         narration: schema.transDetail.narration,
@@ -123,10 +127,59 @@ export default async function LedgerPage({
       .where(and(...rangeConds))
       .orderBy(schema.transMain.vdate, schema.transDetail.vtype, schema.transDetail.vno);
 
+    // What each line sits against. One cheque paid to a party has a single
+    // contra and the ledger can name it; an advance paid as three cheques PLUS
+    // cash has several, and naming only the first would misstate how the money
+    // actually moved. Those read SPLIT, with every leg and its amount spelled
+    // out — which is what the client means by split mode.
+    const voucherKeys = Array.from(new Set(raw.map((r) => `${r.fyCode}|${r.vtype}|${r.vno}`)));
+    const contraByVoucher = new Map<string, { code: string; amount: number; side: "DR" | "CR" }[]>();
+    if (voucherKeys.length) {
+      const allLegs = await db
+        .select({
+          fyCode: schema.transDetail.fyCode,
+          vtype: schema.transDetail.vtype,
+          vno: schema.transDetail.vno,
+          accCode: schema.transDetail.accCode,
+          debit: schema.transDetail.debit,
+          credit: schema.transDetail.credit,
+        })
+        .from(schema.transDetail)
+        .where(
+          and(
+            gte(schema.transDetail.vno, Math.min(...raw.map((r) => r.vno))),
+            lte(schema.transDetail.vno, Math.max(...raw.map((r) => r.vno))),
+          ),
+        );
+      for (const l of allLegs) {
+        const k = `${l.fyCode}|${l.vtype}|${l.vno}`;
+        if (!voucherKeys.includes(k)) continue;
+        const arr = contraByVoucher.get(k) ?? [];
+        arr.push({
+          code: l.accCode ?? "",
+          amount: (l.debit ?? 0) + (l.credit ?? 0),
+          side: (l.debit ?? 0) > 0 ? "DR" : "CR",
+        });
+        contraByVoucher.set(k, arr);
+      }
+    }
+    const descByCode = new Map(accounts.map((a) => [a.code, a.description ?? a.code]));
+
     let running = openingBalance;
     entries = raw.map((r) => {
       running += r.debit - r.credit;
-      return { ...r, balance: running };
+      const mySide: "DR" | "CR" = r.debit > 0 ? "DR" : "CR";
+      const legs = (contraByVoucher.get(`${r.fyCode}|${r.vtype}|${r.vno}`) ?? [])
+        .filter((l) => l.side !== mySide && l.code !== selectedAccount && l.amount > 0);
+      const against =
+        legs.length === 0
+          ? ""
+          : legs.length === 1
+          ? descByCode.get(legs[0].code) ?? legs[0].code
+          : `SPLIT — ${legs
+              .map((l) => `${descByCode.get(l.code) ?? l.code} ${formatNum(l.amount)}`)
+              .join(" · ")}`;
+      return { ...r, balance: running, against, splitCount: legs.length };
     });
   }
 
@@ -222,6 +275,7 @@ export default async function LedgerPage({
                     <th>Type</th>
                     <th>V.No</th>
                     <th>Narration</th>
+                    <th>Against / Mode</th>
                     <th className="text-right">Debit</th>
                     <th className="text-right">Credit</th>
                     <th className="text-right">Balance</th>
@@ -238,6 +292,7 @@ export default async function LedgerPage({
                     </td>
                     <td className="mono">—</td>
                     <td className="text-[var(--muted)] italic">Opening Balance</td>
+                    <td></td>
                     <td className="mono text-right">
                       {openingBalance > 0 ? formatNum(openingBalance) : ""}
                     </td>
@@ -262,6 +317,16 @@ export default async function LedgerPage({
                       </td>
                       <td className="mono">{entry.vno}</td>
                       <td className="text-[var(--muted)]">{entry.narration}</td>
+                      <td className="text-[11px]">
+                        {(entry.splitCount ?? 0) > 1 ? (
+                          <span className="mono">
+                            <span className="border border-black px-1 font-bold">SPLIT</span>{" "}
+                            {entry.against?.replace("SPLIT — ", "")}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--muted)]">{entry.against}</span>
+                        )}
+                      </td>
                       <td className="mono text-right">
                         {entry.debit > 0 ? formatNum(entry.debit) : ""}
                       </td>
@@ -279,7 +344,7 @@ export default async function LedgerPage({
                   {entries.length === 0 && (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="text-center text-[13px] text-[var(--muted)] py-6"
                       >
                         No transactions in this date range.
@@ -289,7 +354,7 @@ export default async function LedgerPage({
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-black">
-                    <td colSpan={5} className="font-bold text-[13px] uppercase tracking-[0.05em]">
+                    <td colSpan={6} className="font-bold text-[13px] uppercase tracking-[0.05em]">
                       Closing Balance ({dateTo})
                     </td>
                     <td className="mono text-right font-bold">{formatNum(totalDr)}</td>

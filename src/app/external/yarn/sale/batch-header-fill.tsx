@@ -70,6 +70,28 @@ export function BatchHeaderFill({ map }: { map: Record<string, BatchHeader> }) {
       if (n === "line_rate" || n === "line_qty" || n === "line_lbs") recomputePl();
     };
 
+    // Re-derive the header from the LIVE batch whenever a saved voucher is
+    // opened. The purchase behind a sale gets corrected — a rate typed as 300
+    // that was really 305 — and these boxes were snapshots taken at pick time,
+    // so the sale would have gone on quoting the old cost and the old profit
+    // for ever. The batch is the one source of truth for what yarn cost; the
+    // sale's own rate (what it sold for) is never touched.
+    const reconcile = () => {
+      const rows = rowsWithBatch();
+      if (rows.length === 0) return;
+      const b = map[rows[rows.length - 1].batch];
+      if (b) {
+        set("stock_bag", n2(b.lbs / 100));
+        set("stock_con", n2(b.con));
+        set("stock_lbs", n2(b.lbs));
+        set("rate_pv", n2(b.rate));
+        set("amt_pv", n2(b.lbs * b.rate));
+        set("avg_rate", n2(b.rate));
+      }
+      recomputePl();
+    };
+    reconcile();
+
     document.addEventListener("change", onPick, true);
     document.addEventListener("combobox:change", onPick, true);
     document.addEventListener("input", onEdit, true);
