@@ -63,6 +63,7 @@ export default async function LedgerPage({
     vdate: string;
     fyCode: string | null;
     vtype: string;
+    img?: string | null;
     vno: number;
     narration: string | null;
     against?: string;
@@ -117,6 +118,7 @@ export default async function LedgerPage({
         fyCode: schema.transDetail.fyCode,
         vtype: schema.transDetail.vtype,
         vno: schema.transDetail.vno,
+        img: schema.transMain.img,
         narration: schema.transDetail.narration,
         debit: schema.transDetail.debit,
         credit: schema.transDetail.credit,
@@ -273,9 +275,9 @@ export default async function LedgerPage({
                   <tr>
                     <th style={{ width: 44 }}>SR#</th>
                     <th>Date</th>
-                    <th>Type</th>
                     <th>V.No</th>
                     <th>Narration</th>
+                    <th className="no-print">Img</th>
                     <th className="no-print">Against / Mode</th>
                     <th className="text-right">Debit</th>
                     <th className="text-right">Credit</th>
@@ -286,13 +288,9 @@ export default async function LedgerPage({
                   <tr className="bg-gray-50 font-semibold">
                     <td className="mono text-[12px] text-center text-[var(--muted)]">0</td>
                     <td className="mono text-[13px]">{dateFrom}</td>
-                    <td>
-                      <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase">
-                        OP
-                      </span>
-                    </td>
-                    <td className="mono">—</td>
+                    <td className="mono font-bold">OPN-0</td>
                     <td className="text-[var(--muted)] italic">Opening Balance</td>
+                    <td className="no-print"></td>
                     <td className="no-print"></td>
                     <td className="mono text-right">
                       {openingBalance > 0 ? formatNum(openingBalance) : ""}
@@ -311,13 +309,27 @@ export default async function LedgerPage({
                     <tr key={idx}>
                       <td className="mono text-[12px] text-center text-[var(--muted)]">{idx + 1}</td>
                       <td className="mono text-[13px]">{entry.vdate}</td>
-                      <td>
-                        <span className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase">
-                          {entry.vtype}
-                        </span>
+                      {/* One column, the way the mill's own ledger prints it:
+                          CP-986, JV-650, OPN-0 — type and number together. */}
+                      <td className="mono font-bold whitespace-nowrap">
+                        {entry.vtype}-{entry.vno}
                       </td>
-                      <td className="mono">{entry.vno}</td>
                       <td className="text-[var(--muted)]">{entry.narration}</td>
+                      <td className="text-center no-print">
+                        {entry.img ? (
+                          <a
+                            href={entry.img}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] underline"
+                            title="Open this voucher's image"
+                          >
+                            Img
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-[var(--muted)]">—</span>
+                        )}
+                      </td>
                       <td className="text-[11px] no-print">
                         {(entry.splitCount ?? 0) > 1 ? (
                           <span className="mono">
@@ -345,20 +357,22 @@ export default async function LedgerPage({
                   {entries.length === 0 && (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={7}
                         className="text-center text-[13px] text-[var(--muted)] py-6"
                       >
                         No transactions in this date range.
                       </td>
+                      <td className="no-print"></td>
                       <td className="no-print"></td>
                     </tr>
                   )}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-black">
-                    <td colSpan={5} className="font-bold text-[13px] uppercase tracking-[0.05em]">
+                    <td colSpan={4} className="font-bold text-[13px] uppercase tracking-[0.05em]">
                       Closing Balance ({dateTo})
                     </td>
+                    <td className="no-print"></td>
                     <td className="no-print"></td>
                     <td className="mono text-right font-bold">{formatNum(totalDr)}</td>
                     <td className="mono text-right font-bold">{formatNum(totalCr)}</td>
