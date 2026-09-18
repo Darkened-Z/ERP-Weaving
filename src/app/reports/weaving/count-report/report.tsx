@@ -91,7 +91,7 @@ export async function CountsAccountsReport({
   // alone. Kept as two visible columns so it is always clear which book a
   // figure came out of.
   const purConds = [gte(schema.extYarnPurVoucher.vDate, from), lte(schema.extYarnPurVoucher.vDate, to)];
-  if (party) { const pat = `%${escLike(party)}%`; purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\'`); }
+  if (party) { const pat = `%${escLike(party)}%`; purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\\'`); }
   if (count) purConds.push(eq(schema.extYarnPurVoucherLine.count, count));
   const purAgg = await db
     .select({

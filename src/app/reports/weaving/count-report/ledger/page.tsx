@@ -63,7 +63,7 @@ export default async function WeavingCountLedgerPage({
           .from(schema.extYarnPurVoucherLine)
           .innerJoin(schema.extYarnPurVoucher, eq(schema.extYarnPurVoucherLine.voucherId, schema.extYarnPurVoucher.id))
           .where(and(
-            sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\'`,
+            sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\\'`,
             eq(schema.extYarnPurVoucherLine.count, count),
             gte(schema.extYarnPurVoucher.vDate, from),
             lte(schema.extYarnPurVoucher.vDate, to),

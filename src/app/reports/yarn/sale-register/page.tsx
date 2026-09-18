@@ -63,7 +63,7 @@ export default async function YarnSaleRegisterPage({
   ];
   if (party) {
     const pat = `%${escLike(party)}%`;
-    purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\'`);
+    purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\\'`);
   }
   if (count) purConds.push(eq(schema.extYarnPurVoucherLine.count, count));
 
