@@ -674,7 +674,15 @@ export default async function PackiParchiPage({
           credit: commissionTotalC,
         },
       ];
-      const clearDiff = salAmtTot - commissionTotalC;
+      // The party is carried to what the income leg says, and the difference
+      // between the bill net and that figure settles here.
+      //
+      // This line used to be written as a NEGATIVE credit and with no narration
+      // at all, which is why it showed in the ledger as a blank row that moved
+      // the balance with nothing to explain it. A negative credit is not an
+      // entry anyone can read: when the difference goes the other way it is a
+      // DEBIT, so it is posted as one.
+      const clearDiff = Math.round((salAmtTot - commissionTotalC) * 100) / 100;
       if (Math.abs(clearDiff) >= 0.01) {
         details.push({
           fyCode,
@@ -683,8 +691,9 @@ export default async function PackiParchiPage({
           srno: details.length + 1,
           accCode: partyCoa,
           partyCode: partyCoa,
-          debit: 0,
-          credit: clearDiff,
+          narration: `${ppNarr} — bill adjustment`,
+          debit: clearDiff < 0 ? -clearDiff : 0,
+          credit: clearDiff > 0 ? clearDiff : 0,
         });
       }
       // Sale-side brokerage: DR brokerage expense, CR the broker (balanced pair,

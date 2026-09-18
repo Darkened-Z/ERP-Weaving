@@ -15,6 +15,7 @@ export default async function WeavingCountsSalePage({
       searchParams={searchParams}
       title="Weaving Counts Accounts Report — Sale"
       navKey="ext-r-weaving-sale"
+      partyScope="grey-sale-contract"
     />
   );
 }
