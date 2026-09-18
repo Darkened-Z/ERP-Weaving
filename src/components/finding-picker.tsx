@@ -150,11 +150,16 @@ export function FindingPicker({
   return (
     <div className="relative" ref={containerRef} data-finding-picker={name}>
       <input ref={hiddenRef} type="hidden" name={name} value={value} readOnly />
-      <div className="flex gap-1">
+      <div className="flex gap-1 items-center">
         <input
           readOnly
           data-lov-picker
           className={className}
+          // In a narrow grid cell the flex row used to crush this box down to a
+          // few pixels, leaving only the ✕ and F9 buttons visible. min-width:0
+          // lets it shrink below its content instead of fighting the buttons,
+          // and flex:1 makes it take whatever the cell actually has.
+          style={{ flex: "1 1 auto", minWidth: 0 }}
           // Name only. The client reads these boxes at a glance and the account
           // code in front of the name was just noise — the code is still on the
           // row in the finding list and in its footer.
@@ -173,7 +178,7 @@ export function FindingPicker({
             onClick={() => pickRow("")}
             title="Clear this selection"
             aria-label="Clear selection"
-            style={{ padding: "0 8px", fontSize: 12, color: "var(--danger)" }}
+            style={{ padding: "0 8px", fontSize: 12, color: "var(--danger)", flex: "0 0 auto" }}
           >
             ✕
           </button>
@@ -183,7 +188,7 @@ export function FindingPicker({
           className="btn btn-outline btn-sm"
           onClick={() => setOpen(true)}
           title="Open finding list (F9)"
-          style={{ padding: "0 8px", fontSize: 11 }}
+          style={{ padding: "0 8px", fontSize: 11, flex: "0 0 auto" }}
         >
           F9
         </button>
