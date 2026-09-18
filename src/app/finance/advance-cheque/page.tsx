@@ -72,36 +72,51 @@ async function issueCheques(formData: FormData) {
     const utCode = session?.userId ?? null;
     const vdate = txt(formData.get("v_date")) ?? today();
 
-    const parties = formData.getAll("line_party") as string[];
+    // One party per voucher. Three cheques of 3 lac plus 3 lac cash is ONE
+    // payment of 12 lac to one party, so it posts as one voucher: the party is
+    // debited the whole 12 lac on a single line and the ledger shows it as one
+    // recovery, split across each bank-advance account and cash.
+    const editId = intVal(formData.get("edit_id"));
+    const isEdit = editId !== null && editId > 0;
+    const party = (txt(formData.get("party")) ?? "").trim();
+    const cash = num(formData.get("cash_amt")) ?? 0;
+    const backTo = isEdit ? `&action=edit&id=${editId}` : "&adding=1";
+    if (!party) redirect(`${BASE}?error=invalid${backTo}`);
+
     const advs = formData.getAll("line_adv") as string[];
     const chqNos = formData.getAll("line_chq_no") as string[];
     const chqDates = formData.getAll("line_chq_date") as string[];
     const amounts = formData.getAll("line_amt") as string[];
-    const cashes = formData.getAll("line_cash") as string[];
     const narrs = formData.getAll("line_narr") as string[];
 
-    const rowCount = Math.max(parties.length, advs.length, amounts.length);
-    const lines: { party: string; adv: string; chqNo: string; chqDate: string | null; amount: number; cash: number; narration: string | null }[] = [];
+    const rowCount = Math.max(advs.length, chqNos.length, amounts.length);
+    const lines: { adv: string; chqNo: string; chqDate: string | null; amount: number; narration: string | null }[] = [];
     for (let i = 0; i < rowCount; i++) {
-      const party = (parties[i] ?? "").trim();
       const adv = (advs[i] ?? "").trim();
       const chqNo = (chqNos[i] ?? "").trim();
       const amount = num(amounts[i]);
-      const cash = num(cashes[i]) ?? 0;
       // Fully-empty row → skip.
-      if (!party && !adv && !chqNo && amount === null && cash <= 0) continue;
-      if (!party || !adv || !chqNo || amount === null || amount <= 0) {
-        redirect(`${BASE}?error=invalid&adding=1`);
+      if (!adv && !chqNo && amount === null) continue;
+      if (!adv || !chqNo || amount === null || amount <= 0) {
+        redirect(`${BASE}?error=invalid${backTo}`);
       }
-      lines.push({ party, adv, chqNo, chqDate: (chqDates[i] ?? "").trim() || null, amount: amount!, cash: cash > 0 ? cash : 0, narration: (narrs[i] ?? "").trim() || null });
+      lines.push({
+        adv,
+        chqNo,
+        chqDate: (chqDates[i] ?? "").trim() || null,
+        amount: amount!,
+        narration: (narrs[i] ?? "").trim() || null,
+      });
     }
-    if (!lines.length) redirect(`${BASE}?error=invalid&adding=1`);
+    // Cash on its own is a cash payment, not an advance cheque — at least one
+    // cheque has to be here.
+    if (!lines.length) redirect(`${BASE}?error=invalid${backTo}`);
 
     // A row may also hand over CASH with the cheque — the same voucher then debits
     // the party for cheque + cash and credits cash-in-hand separately, so both
     // show in one place. Resolve the cash account only when actually needed.
     let cashAcc: string | null = null;
-    if (lines.some((l) => l.cash > 0)) {
+    if (cash > 0) {
       const accs = await db
         .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description, descShort: schema.chartOfAccounts.descShort })
         .from(schema.chartOfAccounts)
@@ -110,20 +125,48 @@ async function issueCheques(formData: FormData) {
         (accs.find((a) => (a.descShort ?? "").trim().toUpperCase() === "CASH") ??
           accs.find((a) => (a.description ?? "").toUpperCase().includes("CASH IN HAND")) ??
           accs.find((a) => (a.description ?? "").toUpperCase().includes("CASH")))?.code ?? null;
-      if (!cashAcc) redirect(`${BASE}?error=no_cash&adding=1`);
+      if (!cashAcc) redirect(`${BASE}?error=no_cash${backTo}`);
     }
 
     await assertPeriodOpen(vdate, "FINANCE");
 
+    // Editing re-posts into the SAME voucher number, so the ledger keeps one
+    // entry rather than sprouting a second one beside the first. Refused once
+    // any cheque on it has cleared or bounced — the money has moved by then and
+    // that transition has to be undone first.
+    let editVno = 0;
+    let editFy = "";
+    if (isEdit) {
+      const [m] = await db
+        .select()
+        .from(schema.transMain)
+        .where(and(eq(schema.transMain.id, editId!), eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.trnType, "ISSUE")));
+      if (!m) redirect(`${BASE}?error=not_found`);
+      editVno = m!.vno;
+      editFy = m!.fyCode;
+      const existingChqs = (
+        await db
+          .select({ chqNo: schema.transDetail.chqNo })
+          .from(schema.transDetail)
+          .where(and(eq(schema.transDetail.fyCode, editFy), eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, editVno)))
+      )
+        .map((r) => (r.chqNo ?? "").trim())
+        .filter(Boolean);
+      for (const c of Array.from(new Set(existingChqs))) {
+        const t = await chequeTallies(c);
+        if (t.clears + t.bounces > 0) redirect(`${BASE}?error=settled_no_edit&id=${editId}`);
+      }
+    }
+
     // Duplicate cheque numbers within the batch.
     const seen = new Set<string>();
     for (const l of lines) {
-      if (seen.has(l.chqNo)) redirect(`${BASE}?error=dup_chq&adding=1`);
+      if (seen.has(l.chqNo)) redirect(`${BASE}?error=dup_chq${backTo}`);
       seen.add(l.chqNo);
     }
 
-    if (!(await validAccounts(lines.flatMap((l) => [l.party, l.adv])))) {
-      redirect(`${BASE}?error=bad_account&adding=1`);
+    if (!(await validAccounts([party, ...lines.map((l) => l.adv)]))) {
+      redirect(`${BASE}?error=bad_account${backTo}`);
     }
 
     // Cheque numbers already used on an existing ADV issue. A number whose every
@@ -154,39 +197,63 @@ async function issueCheques(formData: FormData) {
     for (const r of lifecycleRows) {
       const chq = (r.chqNo ?? "").trim();
       if (!chq) continue;
+      if (isEdit && r.vno === editVno) continue; // its own numbers are not a clash
       const m = r.trnType === "ISSUE" ? issueVnos : bounceVnos;
       (m.get(chq) ?? m.set(chq, new Set()).get(chq)!).add(r.vno);
     }
     const activeClash = Array.from(seen).some(
       (chq) => (issueVnos.get(chq)?.size ?? 0) > (bounceVnos.get(chq)?.size ?? 0),
     );
-    if (activeClash) redirect(`${BASE}?error=dup_chq&adding=1`);
+    if (activeClash) redirect(`${BASE}?error=dup_chq${backTo}`);
 
     const fyCode = await currentFy();
-    if (!fyCode) redirect(`${BASE}?error=no_fy&adding=1`);
+    if (!fyCode && !isEdit) redirect(`${BASE}?error=no_fy${backTo}`);
     const vtime = nowTime();
 
+    const chqTotal = lines.reduce((s2, l) => s2 + l.amount, 0);
+    const total = chqTotal + cash;
+    const narr =
+      `ADVANCE CHQ ISSUE ${lines.length > 1 ? `${lines.length} CHQ ` : ""}` +
+      `#${lines.map((l) => l.chqNo).join(", #")}` +
+      `${cash > 0 ? ` + CASH ${cash}` : ""}` +
+      `${lines.map((l) => l.narration).filter(Boolean).join("; ") ? ` — ${lines.map((l) => l.narration).filter(Boolean).join("; ")}` : ""}`;
+
     await db.transaction(async (tx) => {
-      let vno = await nextVno(tx, fyCode);
-      for (const l of lines) {
-        const narr = `ADVANCE CHQ ISSUE #${l.chqNo}${l.chqDate ? ` DT ${l.chqDate}` : ""}${l.cash > 0 ? ` + CASH ${l.cash}` : ""}${l.narration ? ` — ${l.narration}` : ""}`;
-        const total = l.amount + l.cash;
-        await tx.insert(schema.transMain).values({
-          fyCode, vtype: VTYPE, vno, vdate, vtime,
-          accCode: l.party, trnType: "ISSUE", narration: narr, balanceAmount: total, utCode,
-        });
-        const dets: (typeof schema.transDetail.$inferInsert)[] = [
-          // Party is debited for cheque + cash together; the cheque leg keeps the
-          // chqNo (lifecycle key) while the cash leg carries none.
-          { fyCode, vtype: VTYPE, vno, srno: 1, accCode: l.party, partyCode: l.adv, narration: narr, debit: total, credit: 0, chqNo: l.chqNo, chqDate: l.chqDate },
-          { fyCode, vtype: VTYPE, vno, srno: 2, accCode: l.adv, partyCode: l.party, narration: narr, debit: 0, credit: l.amount, chqNo: l.chqNo, chqDate: l.chqDate },
-        ];
-        if (l.cash > 0 && cashAcc) {
-          dets.push({ fyCode, vtype: VTYPE, vno, srno: 3, accCode: cashAcc, partyCode: l.party, narration: narr, debit: 0, credit: l.cash });
-        }
-        await tx.insert(schema.transDetail).values(dets);
-        vno++;
+      // Re-posting an edit: clear the old rows first, then write the voucher
+      // again at the same number. Same delete-before-post rule the rest of the
+      // system follows, so a correction can never leave half an entry behind.
+      if (isEdit) {
+        await tx.delete(schema.transDetail).where(
+          and(eq(schema.transDetail.fyCode, editFy), eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, editVno)),
+        );
+        await tx.delete(schema.transMain).where(
+          and(eq(schema.transMain.fyCode, editFy), eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, editVno)),
+        );
       }
+      const vno = isEdit ? editVno : await nextVno(tx, fyCode);
+      await tx.insert(schema.transMain).values({
+        fyCode: isEdit ? editFy : fyCode,
+        vtype: VTYPE, vno, vdate, vtime,
+        accCode: party, trnType: "ISSUE", narration: narr, balanceAmount: total, utCode,
+      });
+      const fy = isEdit ? editFy : fyCode;
+      const dets: (typeof schema.transDetail.$inferInsert)[] = [
+        // The party owes the WHOLE payment on one line — that is the recovery.
+        // It carries no cheque number because it is not one cheque; each cheque
+        // is a credit leg below, and the lifecycle keys off those.
+        { fyCode: fy, vtype: VTYPE, vno, srno: 1, accCode: party, partyCode: lines[0].adv, narration: narr, debit: total, credit: 0 },
+      ];
+      let srno = 2;
+      for (const l of lines) {
+        dets.push({
+          fyCode: fy, vtype: VTYPE, vno, srno: srno++, accCode: l.adv, partyCode: party,
+          narration: `${narr}`, debit: 0, credit: l.amount, chqNo: l.chqNo, chqDate: l.chqDate,
+        });
+      }
+      if (cash > 0 && cashAcc) {
+        dets.push({ fyCode: fy, vtype: VTYPE, vno, srno: srno++, accCode: cashAcc, partyCode: party, narration: narr, debit: 0, credit: cash });
+      }
+      await tx.insert(schema.transDetail).values(dets);
     });
     revalidatePath(BASE);
     redirect(BASE);
@@ -195,8 +262,8 @@ async function issueCheques(formData: FormData) {
   }
 }
 
-/** Load an ISSUE voucher's economics for a transition. */
-async function loadIssue(id: number) {
+/** Load ONE cheque of an ISSUE voucher, for a clear/bounce/re-issue. */
+async function loadIssue(id: number, wantChqNo?: string) {
   const [main] = await db
     .select()
     .from(schema.transMain)
@@ -208,19 +275,22 @@ async function loadIssue(id: number) {
     .where(and(eq(schema.transDetail.fyCode, main.fyCode), eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, main.vno)))
     .orderBy(schema.transDetail.srno);
   const drLine = lines.find((l) => (l.debit ?? 0) > 0);
-  // The bank-advance leg is the credit line CARRYING the chqNo — a cash-with-cheque
-  // issue has a second, chqNo-less credit to cash that must not drive the lifecycle.
-  const crLine =
-    lines.find((l) => (l.credit ?? 0) > 0 && (l.chqNo ?? "").trim()) ??
-    lines.find((l) => (l.credit ?? 0) > 0);
+  // A voucher can now hold several cheques (and a cash leg with no cheque number
+  // at all), so a transition has to say WHICH cheque it is about. Without a
+  // chqNo we take the first one, which is what a single-cheque voucher means.
+  const chqLegs = lines.filter((l) => (l.credit ?? 0) > 0 && (l.chqNo ?? "").trim());
+  const crLine = wantChqNo
+    ? chqLegs.find((l) => (l.chqNo ?? "").trim() === wantChqNo.trim())
+    : chqLegs[0];
   if (!drLine || !crLine) return null;
   return {
     main,
     party: drLine.accCode,
     bankAdv: crLine.accCode,
-    chqNo: drLine.chqNo ?? "",
-    chqDate: drLine.chqDate ?? "",
-    // Cheque amount only — clear/bounce reverse the advance leg, never the cash.
+    chqNo: (crLine.chqNo ?? "").trim(),
+    chqDate: crLine.chqDate ?? "",
+    // Cheque amount only — clear/bounce reverse that one advance leg, never the
+    // cash and never the other cheques on the same voucher.
     amount: crLine.credit ?? 0,
   };
 }
@@ -261,7 +331,7 @@ async function clearCheque(formData: FormData) {
     const clearDate = txt(formData.get("clear_date")) ?? today();
     if (id === null || !bankAcc) redirect(`${BASE}?error=invalid`);
 
-    const issue = await loadIssue(id!);
+    const issue = await loadIssue(id!, txt(formData.get("chq")) ?? undefined);
     if (!issue) redirect(`${BASE}?error=not_found`);
     await assertPeriodOpen(clearDate, "FINANCE");
     {
@@ -304,7 +374,7 @@ async function bounceCheque(formData: FormData) {
     const reason = txt(formData.get("reason"));
     if (id === null || !dishonour) redirect(`${BASE}?error=invalid`);
 
-    const issue = await loadIssue(id!);
+    const issue = await loadIssue(id!, txt(formData.get("chq")) ?? undefined);
     if (!issue) redirect(`${BASE}?error=not_found`);
     await assertPeriodOpen(bounceDate, "FINANCE");
     {
@@ -344,23 +414,34 @@ async function deleteCheque(formData: FormData) {
   if (session?.roleName !== "ADMIN") redirect(`${BASE}?error=forbidden&id=${id}`);
   const issue = await loadIssue(id);
   if (!issue) redirect(BASE);
-  const { fyCode } = issue.main;
-  const chqNo = issue.chqNo;
+  const { fyCode, vno: issueVno } = issue.main;
 
-  // vnos of this cheque's issue + any clear/bounce sharing the chq no.
-  const related = await db
-    .select({ vno: schema.transMain.vno })
-    .from(schema.transMain)
-    .innerJoin(
-      schema.transDetail,
-      and(
-        eq(schema.transDetail.fyCode, schema.transMain.fyCode),
-        eq(schema.transDetail.vtype, schema.transMain.vtype),
-        eq(schema.transDetail.vno, schema.transMain.vno),
-      ),
-    )
-    .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.fyCode, fyCode), eq(schema.transDetail.chqNo, chqNo)));
-  const vnos = Array.from(new Set(related.map((r) => r.vno)));
+  // A voucher can hold several cheques, so deleting it must take every
+  // clear/bounce raised against ANY of them — otherwise a reversal would be
+  // left behind pointing at an issue that no longer exists.
+  const ownChqs = (
+    await db
+      .select({ chqNo: schema.transDetail.chqNo })
+      .from(schema.transDetail)
+      .where(and(eq(schema.transDetail.fyCode, fyCode), eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, issueVno)))
+  )
+    .map((r) => (r.chqNo ?? "").trim())
+    .filter(Boolean);
+  const related = ownChqs.length
+    ? await db
+        .select({ vno: schema.transMain.vno })
+        .from(schema.transMain)
+        .innerJoin(
+          schema.transDetail,
+          and(
+            eq(schema.transDetail.fyCode, schema.transMain.fyCode),
+            eq(schema.transDetail.vtype, schema.transMain.vtype),
+            eq(schema.transDetail.vno, schema.transMain.vno),
+          ),
+        )
+        .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.fyCode, fyCode), inArray(schema.transDetail.chqNo, Array.from(new Set(ownChqs)))))
+    : [];
+  const vnos = Array.from(new Set([issueVno, ...related.map((r) => r.vno)]));
   if (!vnos.length) redirect(BASE);
   await db.transaction(async (tx) => {
     await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.fyCode, fyCode), eq(schema.transDetail.vtype, VTYPE), inArray(schema.transDetail.vno, vnos)));
@@ -380,6 +461,8 @@ type Chq = {
   bankAdv: string;
   amount: number;
   cash: number;
+  /** How many cheques share this voucher — >1 means the payment was split. */
+  chqCount?: number;
   status: "ISSUED" | "CLEARED" | "BOUNCED";
   clearBank?: string;
   clearDate?: string;
@@ -390,7 +473,7 @@ type Chq = {
 export default async function AdvanceChequePage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string }>;
 }) {
   const params = await searchParams;
   const session = await getSession();
@@ -403,6 +486,8 @@ export default async function AdvanceChequePage({
   const isReissue = action === "reissue" && hasId;
   const isClearForm = action === "clear" && hasId;
   const isBounceForm = action === "bounce" && hasId;
+  const isEditForm = action === "edit" && hasId;
+  const chqParam = params.chq?.trim() ?? "";
   const findFilter = params.find?.trim() ?? "";
 
   const accounts = await db
@@ -423,7 +508,6 @@ export default async function AdvanceChequePage({
   const advOpts = accounts.filter((a) => a.code.startsWith(ADV_PREFIX)).map(opt);
   const bankOpts = accounts.filter((a) => a.code.startsWith(BANK_PREFIX)).map(opt);
   const dishonourOpts = accounts.filter((a) => a.code.startsWith(DISHONOUR_PREFIX)).map(opt);
-  const partyTitleMap = Object.fromEntries(partyOpts.map((o) => [o.value, { line_party_title: o.desc }]));
   const advTitleMap = Object.fromEntries(advOpts.map((o) => [o.value, { line_adv_title: o.desc }]));
 
   // Load ADV vouchers + detail for the register.
@@ -446,11 +530,19 @@ export default async function AdvanceChequePage({
   const info = (vno: number) => {
     const ls = byVno.get(vno) ?? [];
     const dr = ls.find((l) => (l.debit ?? 0) > 0);
-    // Advance leg = credit WITH chqNo; a cash-with-cheque issue also credits cash
-    // (no chqNo) — reported separately so both show side by side.
-    const cr = ls.find((l) => (l.credit ?? 0) > 0 && (l.chqNo ?? "").trim()) ?? ls.find((l) => (l.credit ?? 0) > 0);
+    // Advance legs = credits WITH a chqNo. Cash comes over as a credit with no
+    // cheque number, so it is summed apart and reported beside the cheques.
+    const chqLegs = ls.filter((l) => (l.credit ?? 0) > 0 && (l.chqNo ?? "").trim());
+    const cr = chqLegs[0] ?? ls.find((l) => (l.credit ?? 0) > 0);
     const cash = ls.filter((l) => (l.credit ?? 0) > 0 && !(l.chqNo ?? "").trim()).reduce((s, l) => s + (l.credit ?? 0), 0);
-    return { dr, cr, chqNo: (dr?.chqNo ?? cr?.chqNo ?? "").trim(), amount: cr?.credit ?? dr?.debit ?? 0, cash };
+    return {
+      dr,
+      cr,
+      chqLegs,
+      chqNo: (cr?.chqNo ?? dr?.chqNo ?? "").trim(),
+      amount: cr?.credit ?? dr?.debit ?? 0,
+      cash,
+    };
   };
 
   const clearByChq = new Map<string, ReturnType<typeof info> & { vdate: string }>();
@@ -470,32 +562,41 @@ export default async function AdvanceChequePage({
   const cheques: Chq[] = mains
     .filter((m) => m.trnType === "ISSUE")
     .sort((a, b) => a.vno - b.vno)
-    .map((m) => {
+    // One row per CHEQUE, not per voucher: a 12-lac payment made of three
+    // cheques plus cash is one voucher but three cheques to chase, each with its
+    // own clear/bounce. The voucher's cash rides on its first row so the Cash
+    // and Total columns still add up down the page.
+    .flatMap((m) => {
       const it = info(m.vno);
-      const ord = issueOrdinal.get(it.chqNo) ?? 0;
-      issueOrdinal.set(it.chqNo, ord + 1);
-      const bounces = bounceVnosByChq.get(it.chqNo) ?? [];
-      const bo = ord < bounces.length ? bounces[ord] : undefined;
-      const cl = !bo ? clearByChq.get(it.chqNo) : undefined;
-      const status: Chq["status"] = bo ? "BOUNCED" : cl ? "CLEARED" : "ISSUED";
-      return {
-        issueId: m.id,
-        vno: m.vno,
-        vdate: m.vdate,
-        chqNo: it.chqNo,
-        chqDate: it.dr?.chqDate ?? "",
-        party: it.dr?.accCode ?? "",
-        bankAdv: it.cr?.accCode ?? "",
-        amount: it.amount,
-        cash: it.cash,
-        status,
-        clearBank: cl?.cr?.accCode,
-        clearDate: cl?.vdate,
-        dishonour: bo?.cr?.accCode,
-        bounceDate: bo?.vdate,
-      };
+      const legs = it.chqLegs.length ? it.chqLegs : it.cr ? [it.cr] : [];
+      return legs.map((leg, li) => {
+        const chqNo = (leg.chqNo ?? "").trim();
+        const ord = issueOrdinal.get(chqNo) ?? 0;
+        issueOrdinal.set(chqNo, ord + 1);
+        const bounces = bounceVnosByChq.get(chqNo) ?? [];
+        const bo = ord < bounces.length ? bounces[ord] : undefined;
+        const cl = !bo ? clearByChq.get(chqNo) : undefined;
+        const status: Chq["status"] = bo ? "BOUNCED" : cl ? "CLEARED" : "ISSUED";
+        return {
+          issueId: m.id,
+          vno: m.vno,
+          vdate: m.vdate,
+          chqNo,
+          chqDate: leg.chqDate ?? "",
+          party: it.dr?.accCode ?? "",
+          bankAdv: leg.accCode ?? "",
+          amount: leg.credit ?? 0,
+          cash: li === 0 ? it.cash : 0,
+          chqCount: legs.length,
+          status,
+          clearBank: cl?.cr?.accCode,
+          clearDate: cl?.vdate,
+          dishonour: bo?.cr?.accCode,
+          bounceDate: bo?.vdate,
+        };
+      });
     })
-    .sort((a, b) => b.vno - a.vno);
+    .sort((a, b) => b.vno - a.vno || a.chqNo.localeCompare(b.chqNo));
 
   const filtered = findFilter
     ? cheques.filter(
@@ -514,10 +615,17 @@ export default async function AdvanceChequePage({
   const outstanding = stats.issued.reduce((s, c) => s + c.amount, 0);
 
   // Prefill target for clear/bounce/reissue forms.
-  const target = hasId ? cheques.find((c) => c.issueId === idParam) ?? null : null;
+  const target = hasId
+    ? cheques.find((c) => c.issueId === idParam && (!chqParam || c.chqNo === chqParam)) ??
+      cheques.find((c) => c.issueId === idParam) ??
+      null
+    : null;
+  // Every cheque on the voucher being edited, so the grid can be refilled.
+  const editRows = isEditForm ? cheques.filter((c) => c.issueId === idParam) : [];
+  const editCash = editRows.reduce((a, c) => a + c.cash, 0);
 
   const ERR: Record<string, string> = {
-    invalid: "Each line needs a party, bank-advance account, cheque no. and a positive amount. Add at least one line.",
+    invalid: "Pick the party, then give every line a bank-advance account, cheque no. and a positive amount. At least one cheque is required.",
     bad_account: "One or more account codes are unknown or not a detail (level 4+) account.",
     dup_chq: "This cheque number has an active issue. A number can only be re-used after its cheque bounced back.",
     no_cash: "No CASH account found in the chart of accounts (descShort CASH / description containing CASH).",
@@ -525,6 +633,8 @@ export default async function AdvanceChequePage({
     not_found: "Cheque not found.",
     already_cleared: "This cheque is already cleared.",
     already_bounced: "This cheque is already bounced.",
+    settled_no_edit:
+      "A cheque on this voucher has already cleared or bounced. Undo that first — the money has moved, so the issue cannot be rewritten underneath it.",
     forbidden: "Only ADMIN can delete.",
     period_locked: "Period is locked. Cannot post for this date.",
   };
@@ -544,7 +654,7 @@ export default async function AdvanceChequePage({
     </span>
   );
 
-  const showIssueForm = isAdding || isReissue;
+  const showIssueForm = isAdding || isReissue || isEditForm;
 
   return (
     <Shell active="fin-advance-cheque">
@@ -595,15 +705,50 @@ export default async function AdvanceChequePage({
         {showIssueForm && (
           <div className="border border-black p-4 mb-6">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4">
-              {isReissue
+              {isEditForm
+                ? `Edit Advance Cheque — voucher ${target?.vno ?? ""} (re-posts in place, same voucher no.)`
+                : isReissue
                 ? "Re-issue Advance Cheque — prefilled from the bounced cheque, same cheque no. Change the no if the bank gave a new leaf."
-                : "New Advance Cheque — Issue (add multiple parties / cheques)"}
+                : "New Advance Cheque — Issue (one party, any number of cheques + cash)"}
             </div>
             <form action={issueCheques}>
+              {isEditForm && <input type="hidden" name="edit_id" value={idParam} />}
+              {/* One party for the whole voucher. Three cheques plus cash to the
+                  same party is ONE payment, so the party belongs up here with the
+                  date, not repeated down every row. */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform mb-4">
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Date</label>
-                  <DateBox name="v_date" className="input-box mono" defaultValue={today()} required />
+                  <DateBox
+                    name="v_date"
+                    className="input-box mono"
+                    defaultValue={isEditForm ? target?.vdate ?? today() : today()}
+                    required
+                  />
+                </div>
+                <div className="lg:col-span-5">
+                  <label className="label block mb-1">Party (Dr)</label>
+                  <input
+                    name="party"
+                    list="adv-party-accts"
+                    className="input-box mono"
+                    defaultValue={isEditForm || isReissue ? target?.party ?? "" : ""}
+                    placeholder="Party account…"
+                  />
+                </div>
+                <div className="lg:col-span-4">
+                  <label className="label block mb-1">
+                    Cash Paid <span className="text-[9px] text-[var(--muted)]">(with these cheques)</span>
+                  </label>
+                  <input
+                    name="cash_amt"
+                    type="number"
+                    step="any"
+                    min="0"
+                    className="input-box mono text-right"
+                    defaultValue={isEditForm && editCash > 0 ? editCash : ""}
+                    placeholder="0"
+                  />
                 </div>
               </div>
 
@@ -612,26 +757,23 @@ export default async function AdvanceChequePage({
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}>Sr#</th>
-                      <th style={{ width: 150 }}>Party (Dr)</th>
-                      <th style={{ width: 210 }}>Party Title</th>
-                      <th style={{ width: 150 }}>Bank Advance A/C (Cr)</th>
-                      <th style={{ width: 210 }}>Advance Title</th>
-                      <th style={{ width: 120 }}>Chq No</th>
-                      <th style={{ width: 140 }}>Chq Date</th>
-                      <th style={{ width: 120 }} className="text-right">Chq Amount</th>
-                      <th style={{ width: 110 }} className="text-right">Cash Amt</th>
-                      <th style={{ width: 170 }}>Narration</th>
+                      <th style={{ width: 170 }}>Bank Advance A/C (Cr)</th>
+                      <th style={{ width: 230 }}>Advance Title</th>
+                      <th style={{ width: 130 }}>Chq No</th>
+                      <th style={{ width: 150 }}>Chq Date</th>
+                      <th style={{ width: 130 }} className="text-right">Chq Amount</th>
+                      <th style={{ width: 220 }}>Narration</th>
                       <th style={{ width: 36 }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {Array.from({ length: LINE_ROWS }).map((_, i) => {
-                      const pf = i === 0 && isReissue ? target : null;
+                      // Edit refills every cheque on the voucher; re-issue only
+                      // seeds the first row from the bounced cheque.
+                      const pf = isEditForm ? editRows[i] ?? null : i === 0 && isReissue ? target : null;
                       return (
                         <tr key={i}>
                           <td className="text-[var(--muted)] text-center">{i + 1}</td>
-                          <td><input name="line_party" list="adv-party-accts" className="input-box mono text-[12px]" defaultValue={pf?.party ?? ""} /></td>
-                          <td><input name="line_party_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.party) ?? "" : ""} readOnly tabIndex={-1} /></td>
                           <td>
                             <select name="line_adv" className="input-box mono text-[12px]" defaultValue={pf?.bankAdv ?? ""}>
                               <option value="">— select —</option>
@@ -647,7 +789,6 @@ export default async function AdvanceChequePage({
                           <td><input name="line_chq_no" className="input-box mono text-[12px]" defaultValue={pf?.chqNo ?? ""} /></td>
                           <td><DateBox name="line_chq_date" className="input-box mono text-[12px]" defaultValue={pf?.chqDate ?? ""} /></td>
                           <td><input name="line_amt" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" defaultValue={pf?.amount ?? ""} /></td>
-                          <td><input name="line_cash" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" placeholder="0" title="Cash bhi saath diya to yahan — Dr party (chq+cash) / Cr cash alehda" /></td>
                           <td><input name="line_narr" className="input-box text-[12px]" /></td>
                           <td className="text-center"><RowClearButton /></td>
                         </tr>
@@ -658,13 +799,12 @@ export default async function AdvanceChequePage({
               </div>
 
               <div className="flex items-center gap-2 mt-4 no-print flex-wrap">
-                <button type="submit" className="btn btn-sm">{isReissue ? "Re-issue" : "Issue Cheque(s)"}</button>
+                <button type="submit" className="btn btn-sm">{isEditForm ? "Save Changes" : isReissue ? "Re-issue" : "Issue Cheque(s)"}</button>
                 <a href={BASE} className="btn btn-outline btn-sm">Cancel</a>
                 <span className="text-[11px] text-[var(--muted)] ml-2">Har line = ek cheque (Dr party / Cr bank-advance). Khali lines chhod dein.</span>
               </div>
 
-              <RowAutoFill watch="line_party" map={partyTitleMap} />
-              <RowAutoFill watch="line_adv" map={advTitleMap} />
+                            <RowAutoFill watch="line_adv" map={advTitleMap} />
               <datalist id="adv-party-accts">
                 {partyOpts.map((o) => (<option key={o.value} value={o.value}>{o.desc}</option>))}
               </datalist>
@@ -681,6 +821,7 @@ export default async function AdvanceChequePage({
             </div>
             <form action={clearCheque} className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end gform">
               <input type="hidden" name="id" value={target.issueId} />
+              <input type="hidden" name="chq" value={target.chqNo} />
               <div className="lg:col-span-6">
                 <label className="label block mb-1">Bank A/C (Cr — jahan se paisa gaya)</label>
                 <Combobox name="bank_acc" options={bankOpts} defaultValue="" placeholder="1.01.15.02.*" />
@@ -706,6 +847,7 @@ export default async function AdvanceChequePage({
             </div>
             <form action={bounceCheque} className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end gform">
               <input type="hidden" name="id" value={target.issueId} />
+              <input type="hidden" name="chq" value={target.chqNo} />
               <div className="lg:col-span-5">
                 <label className="label block mb-1">Cheque Dishonour A/C (Cr)</label>
                 <Combobox name="dishonour_acc" options={dishonourOpts} defaultValue="" placeholder="1.01.15.04.* — party CHQ FAILLED" />
@@ -755,7 +897,7 @@ export default async function AdvanceChequePage({
               </thead>
               <tbody>
                 {filtered.map((c) => (
-                  <tr key={c.issueId}>
+                  <tr key={`${c.issueId}-${c.chqNo}`}>
                     <td className="mono text-[13px] font-bold">{c.vno}</td>
                     <td className="mono text-[13px]">{c.chqNo}</td>
                     <td className="mono text-[12px]">{c.chqDate || c.vdate}</td>
@@ -778,12 +920,13 @@ export default async function AdvanceChequePage({
                     <td className="no-print text-right whitespace-nowrap">
                       {c.status === "ISSUED" && (
                         <>
-                          <a href={`${BASE}?action=clear&id=${c.issueId}`} className="btn btn-outline btn-sm mr-1">Clear</a>
-                          <a href={`${BASE}?action=bounce&id=${c.issueId}`} className="btn btn-outline btn-sm mr-1">Bounce</a>
+                          <a href={`${BASE}?action=edit&id=${c.issueId}`} className="btn btn-outline btn-sm mr-1" title="Edit this issue voucher — party, cheques, amounts, cash">Edit</a>
+                          <a href={`${BASE}?action=clear&id=${c.issueId}&chq=${encodeURIComponent(c.chqNo)}`} className="btn btn-outline btn-sm mr-1">Clear</a>
+                          <a href={`${BASE}?action=bounce&id=${c.issueId}&chq=${encodeURIComponent(c.chqNo)}`} className="btn btn-outline btn-sm mr-1">Bounce</a>
                         </>
                       )}
                       {c.status === "BOUNCED" && (
-                        <a href={`${BASE}?action=reissue&id=${c.issueId}`} className="btn btn-outline btn-sm mr-1">Re-issue</a>
+                        <a href={`${BASE}?action=reissue&id=${c.issueId}&chq=${encodeURIComponent(c.chqNo)}`} className="btn btn-outline btn-sm mr-1">Re-issue</a>
                       )}
                       {session?.roleName === "ADMIN" && (
                         <form action={deleteCheque} className="inline">
