@@ -4,6 +4,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, FieldCalc } from "@/components/auto-fill";
 import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
+import { ContractInfoPanel } from "@/components/contract-info-panel";
 import { getSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
@@ -67,18 +68,46 @@ export default async function InventoryOpeningPage({
     ...new Set([...extPurCont, ...intPurCont].map((c) => c.contNo).filter(Boolean)),
   ].sort();
 
-  const extConvCont = await db
-    .select({ contNo: schema.extGreyConvContract.contNo, convRate: schema.extGreyConvContract.convRatePerMtr, party: schema.extGreyConvContract.party })
-    .from(schema.extGreyConvContract);
-  const intConvCont = await db
-    .select({ contNo: schema.intGreyConversionContract.contNo, convRate: schema.intGreyConversionContract.convRatePerMtr, party: schema.intGreyConversionContract.party })
-    .from(schema.intGreyConversionContract);
+  const extConvCont = await db.select().from(schema.extGreyConvContract);
+  const intConvCont = await db.select().from(schema.intGreyConversionContract);
   // An opening lot is valued at the conversion rate of the contract it belongs
   // to, so picking the contract fills the rate rather than leaving it to memory.
   const convFillMap: Record<string, Record<string, string | number | null>> = {};
   for (const c of [...extConvCont, ...intConvCont]) {
     if (!c.contNo) continue;
-    convFillMap[c.contNo] = { rate: c.convRate ?? "", opn_party: c.party ?? "" };
+    convFillMap[c.contNo] = { rate: c.convRatePerMtr ?? "", opn_party: c.party ?? "" };
+  }
+
+  // The contract number alone tells the operator nothing about what they are
+  // opening against. Spell the contract out beside the picker — party, the full
+  // construction (reed x pick, both counts, per the house rule), rates, qty and
+  // date — so an opening lot can be checked against its contract on the spot.
+  const constructionByCode = new Map(
+    greyConstructions.map((g) => [String(g.code), fullConstruction(g, openingCountLabels) || g.description || String(g.code)])
+  );
+  const fmtNum = (n: number | null | undefined, d = 0) =>
+    n == null ? "" : new Intl.NumberFormat("en-PK", { maximumFractionDigits: d }).format(n);
+  const convContractInfo: Record<string, { label: string; value: string }[]> = {};
+  for (const c of [...extConvCont, ...intConvCont]) {
+    if (!c.contNo) continue;
+    const qCode = c.grayQltyCode ?? c.grayCode ?? "";
+    const constr = qCode ? constructionByCode.get(String(qCode)) ?? String(qCode) : "";
+    const rpw =
+      c.read != null && c.pick != null
+        ? `${fmtNum(c.read)} X ${fmtNum(c.pick)}${c.width != null ? ` / ${fmtNum(c.width)}"` : ""}`
+        : "";
+    convContractInfo[c.contNo] = [
+      { label: "Party", value: c.party ?? "" },
+      { label: "Quality", value: constr },
+      { label: "Read X Pick", value: rpw },
+      { label: "Conv Rate", value: fmtNum(c.convRatePerMtr, 2) },
+      { label: "Gray Rate", value: fmtNum(c.grayRatePerMtr, 2) },
+      { label: "Qty Mtr", value: fmtNum(c.qtyMtr) },
+      { label: "Loom Type", value: c.loomType ?? "" },
+      { label: "Design No", value: c.designNo ?? "" },
+      { label: "Date", value: c.contDate ?? "" },
+      { label: "Status", value: c.status ?? "" },
+    ].filter((r) => r.value !== "");
   }
   const convContOpts = [
     ...new Set([...extConvCont, ...intConvCont].map((c) => c.contNo).filter(Boolean)),
@@ -514,6 +543,13 @@ export default async function InventoryOpeningPage({
                     <Combobox name="conv_cont_no" options={convContOpts} defaultValue={formItem?.convContNo ?? ""} placeholder="Select conversion contract" className="input-box mono" />
                     <AutoFill watch="conv_cont_no" map={convFillMap} inputs={["rate"]} />
                   </div>
+                </div>
+                <div className="mb-3">
+                  <ContractInfoPanel
+                    watch="conv_cont_no"
+                    map={convContractInfo}
+                    title="CONV. CONTRACT — INFO"
+                  />
                 </div>
                 {/* Gray Width, Blend and Weave dropped at the client's request — the
                     construction above already states all three. Kept as hidden
