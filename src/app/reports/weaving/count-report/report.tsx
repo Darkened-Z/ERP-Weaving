@@ -357,7 +357,24 @@ export async function CountsAccountsReport({
                                 <td className="mono text-right font-bold">{fmt(r.balLbs)}</td>
                                 <td className="mono text-right">{fmt2(r.rate)}</td>
                                 <td className="mono text-right">{fmt(r.amount)}</td>
-                                <td className="no-print"><a href={ledgerHref(r.party, r.count)} className="btn btn-outline btn-xs">L</a></td>
+                                {/* L opens the count ledger; B opens the bags —
+                                    the purchase and sale vouchers behind them. */}
+                                <td className="no-print whitespace-nowrap">
+                                  <a
+                                    href={ledgerHref(r.party, r.count)}
+                                    className="btn btn-outline btn-xs"
+                                    title="Ledger — packi parchis, ends, summary"
+                                  >
+                                    L
+                                  </a>
+                                  <a
+                                    href={bagsHref(r.party, r.count)}
+                                    className="btn btn-outline btn-xs ml-1"
+                                    title="Bags — the yarn purchase and sale vouchers for this count"
+                                  >
+                                    B
+                                  </a>
+                                </td>
                               </tr>
                             ))}
                             <tr style={{ borderTop: "1px solid #cbd5e1", fontWeight: 700 }}>
