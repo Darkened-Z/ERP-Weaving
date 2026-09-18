@@ -2,13 +2,19 @@ import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, sql, inArray } from "drizzle-orm";
 import { today } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
 const yearStart = () => `${today().slice(0, 4)}-01-01`;
+
+// Module scope on purpose: the ledger builds its rows before the render block,
+// and a const declared down there is in its temporal dead zone up here — which
+// crashed every ledger that contained a split voucher.
+const formatNum = (n: number) =>
+  new Intl.NumberFormat("en-PK").format(Math.round(Math.abs(n)));
 
 export default async function LedgerPage({
   searchParams,
@@ -132,9 +138,9 @@ export default async function LedgerPage({
     // cash has several, and naming only the first would misstate how the money
     // actually moved. Those read SPLIT, with every leg and its amount spelled
     // out — which is what the client means by split mode.
-    const voucherKeys = Array.from(new Set(raw.map((r) => `${r.fyCode}|${r.vtype}|${r.vno}`)));
+    const voucherKeys = new Set(raw.map((r) => `${r.fyCode}|${r.vtype}|${r.vno}`));
     const contraByVoucher = new Map<string, { code: string; amount: number; side: "DR" | "CR" }[]>();
-    if (voucherKeys.length) {
+    if (voucherKeys.size) {
       const allLegs = await db
         .select({
           fyCode: schema.transDetail.fyCode,
@@ -145,15 +151,10 @@ export default async function LedgerPage({
           credit: schema.transDetail.credit,
         })
         .from(schema.transDetail)
-        .where(
-          and(
-            gte(schema.transDetail.vno, Math.min(...raw.map((r) => r.vno))),
-            lte(schema.transDetail.vno, Math.max(...raw.map((r) => r.vno))),
-          ),
-        );
+        .where(inArray(schema.transDetail.vno, Array.from(new Set(raw.map((r) => r.vno)))));
       for (const l of allLegs) {
         const k = `${l.fyCode}|${l.vtype}|${l.vno}`;
-        if (!voucherKeys.includes(k)) continue;
+        if (!voucherKeys.has(k)) continue;
         const arr = contraByVoucher.get(k) ?? [];
         arr.push({
           code: l.accCode ?? "",
@@ -183,8 +184,6 @@ export default async function LedgerPage({
     });
   }
 
-  const formatNum = (n: number) =>
-    new Intl.NumberFormat("en-PK").format(Math.round(Math.abs(n)));
   const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance : openingBalance;
   const totalDr = entries.reduce((s, e) => s + e.debit, 0);
   const totalCr = entries.reduce((s, e) => s + e.credit, 0);
