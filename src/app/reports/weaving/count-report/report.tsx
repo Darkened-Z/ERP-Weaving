@@ -152,6 +152,9 @@ export async function CountsAccountsReport({
     purLbs: 0, salLbs: 0, totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, rate: 0, amount: 0,
   });
   let seedValue = 0;
+  // Rate is what the BAGS WERE BOUGHT AT, so it is weighted over the purchase
+  // book alone — a sale is yarn going out, not a second purchase at a new price.
+  const purValueByKey = new Map<string, number>();
   const valueByKey = new Map<string, number>();
   for (const sr of scopedSeedRows) map.set(key(sr.party, sr.count), blank(sr.party, sr.count));
   for (const s of seedAgg) {
@@ -167,6 +170,7 @@ export async function CountsAccountsReport({
     const k = key(pt, c);
     const r = map.get(k) ?? blank(pt, c);
     r.purLbs += pu.lbs;
+    purValueByKey.set(k, (purValueByKey.get(k) ?? 0) + pu.amt);
     valueByKey.set(k, (valueByKey.get(k) ?? 0) + pu.amt);
     map.set(k, r);
   }
@@ -178,11 +182,15 @@ export async function CountsAccountsReport({
     map.set(k, r);
   }
   for (const [k, r] of map) {
-    r.totalLbs = r.purLbs + r.salLbs;
+    // Purchase brings yarn IN, sale takes it OUT — the mill's own register shows
+    // a sale as a negative bag figure and totals the two. In 500, out 100,
+    // total 400. Adding them would have doubled a return instead of cancelling
+    // the yarn it sent back.
+    r.totalLbs = r.purLbs - r.salLbs;
     r.bags = r.totalLbs / 100;
-    const val = valueByKey.get(k) ?? 0;
-    r.rate = r.totalLbs > 0 ? val / r.totalLbs : 0;
-    seedValue += val;
+    const purVal = purValueByKey.get(k) ?? 0;
+    r.rate = r.purLbs > 0 ? purVal / r.purLbs : 0;
+    seedValue += valueByKey.get(k) ?? 0;
   }
   void seedValue;
   // Outside the scope the mill asked for, a row is noise: the Sale report is
@@ -232,7 +240,7 @@ export async function CountsAccountsReport({
                 { key: "count", label: "Count" },
                 { key: "description", label: "Count Desc" },
                 { key: "purLbs", label: "Pur Lbs" },
-                { key: "salLbs", label: "Sale Lbs" },
+                { key: "salLbs", label: "Sale Lbs (out)" },
                 { key: "totalLbs", label: "Total Lbs" },
                 { key: "bags", label: "Bags" },
                 { key: "consumedLbs", label: "Consumed Lbs" },
@@ -275,7 +283,7 @@ export async function CountsAccountsReport({
               <tr>
                 <th>Count Desc</th>
                 <th className="text-right">Pur Lbs</th>
-                <th className="text-right">Sale Lbs</th>
+                <th className="text-right">Sale Lbs (out)</th>
                 <th className="text-right">Total Lbs</th>
                 <th className="text-right">Bags</th>
                 <th className="text-right">Consumed Lbs</th>

@@ -49,10 +49,36 @@ export default async function WeavingCountLedgerPage({
           ))
       )[0]
     : undefined;
-  const seedBags = seedRow?.bags ?? 0;
-  const seedLbs = seedRow?.lbs ?? 0;
-  const seedAmt = seedRow?.amt ?? 0;
-  const seedRate = seedLbs > 0 ? seedAmt / seedLbs : 0;
+  // Yarn reaches the party on the PURCHASE book too, and a sale takes it back
+  // out — the mill's own register prints the sale as a negative bag figure and
+  // nets the column. So Send is purchase minus sale, and the rate is what the
+  // bags were bought at.
+  const purRow = party
+    ? (
+        await db
+          .select({
+            lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+            amt: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+          })
+          .from(schema.extYarnPurVoucherLine)
+          .innerJoin(schema.extYarnPurVoucher, eq(schema.extYarnPurVoucherLine.voucherId, schema.extYarnPurVoucher.id))
+          .where(and(
+            sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\'`,
+            eq(schema.extYarnPurVoucherLine.count, count),
+            gte(schema.extYarnPurVoucher.vDate, from),
+            lte(schema.extYarnPurVoucher.vDate, to),
+          ))
+      )[0]
+    : undefined;
+  const purLbs = purRow?.lbs ?? 0;
+  const purAmt = purRow?.amt ?? 0;
+  const salLbs = seedRow?.lbs ?? 0;
+  const seedLbs = purLbs - salLbs;
+  // Bags DERIVED at 100 lbs to a bag — the stored bag column is blank on live rows,
+  // which is why Send read 0.00 bags next to a real lbs figure.
+  const seedBags = seedLbs / 100;
+  const seedRate = purLbs > 0 ? purAmt / purLbs : 0;
+  const seedAmt = seedLbs * seedRate;
 
   // Packi conversions of this party in period, then their count rows for this count.
   const packis = party
@@ -310,16 +336,42 @@ export default async function WeavingCountLedgerPage({
                   </tr>,
                   <tr key={`h2-${g.cont}`} style={{ background: "#e2e8f0" }}>
                     <td colSpan={14} className="mono text-[11px] px-2 py-1">
-                      Ends W/W/T{" "}
-                      <span className="font-bold">
-                        {fmt(g.info.warpEnds)} / {fmt(g.info.weftEnds)} / {fmt(g.info.warpEnds + g.info.weftEnds)}
-                      </span>
-                      {(g.info.wrpM != null || g.info.wftM != null) && (
-                        <span className="ml-4">
-                          Lbs/M Wrp <span className="font-bold">{fmt4(g.info.wrpM)}</span> / Wft{" "}
-                          <span className="font-bold">{fmt4(g.info.wftM)}</span>
-                        </span>
-                      )}
+                      {/* Warp and weft read as a pair with their own totals, the
+                          way the mill's sheet sets them out — ends beside the
+                          lbs each metre takes, totalled down both columns. */}
+                      <table
+                        className="inline-table align-middle border border-black mono text-[11px]"
+                        style={{ borderCollapse: "collapse" }}
+                      >
+                        <thead>
+                          <tr style={{ background: "#fde8d7" }}>
+                            <th className="px-2 py-0.5 border border-black"></th>
+                            <th className="px-2 py-0.5 border border-black text-right">Ends</th>
+                            <th className="px-2 py-0.5 border border-black text-right">Lbs / M</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="px-2 py-0.5 border border-black">Wrp</td>
+                            <td className="px-2 py-0.5 border border-black text-right font-bold">{fmt(g.info.warpEnds)}</td>
+                            <td className="px-2 py-0.5 border border-black text-right font-bold">{fmt4(g.info.wrpM)}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-2 py-0.5 border border-black">Wft</td>
+                            <td className="px-2 py-0.5 border border-black text-right font-bold">{fmt(g.info.weftEnds)}</td>
+                            <td className="px-2 py-0.5 border border-black text-right font-bold">{fmt4(g.info.wftM)}</td>
+                          </tr>
+                          <tr style={{ background: "#eef2ff" }}>
+                            <td className="px-2 py-0.5 border border-black font-bold">Total</td>
+                            <td className="px-2 py-0.5 border border-black text-right font-bold">
+                              {fmt(g.info.warpEnds + g.info.weftEnds)}
+                            </td>
+                            <td className="px-2 py-0.5 border border-black text-right font-bold">
+                              {fmt4((g.info.wrpM ?? 0) + (g.info.wftM ?? 0))}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                       {g.info.rateLbs > 0 && (
                         <span className="ml-4">Rate/Lbs <span className="font-bold">{fmt2(g.info.rateLbs)}</span></span>
                       )}
@@ -387,7 +439,13 @@ export default async function WeavingCountLedgerPage({
           <div className="border-2 border-black" style={{ minWidth: 420 }}>
             <div className="px-3 py-1.5 border-b border-black flex justify-between items-baseline">
               <span className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: "#b91c1c" }}>Summery Report</span>
-              <span className="mono text-[12px] font-bold">{count}{countMeta?.description ? ` ${countMeta.description}` : ""}</span>
+              {/* Count + description + BLEND — "21 36/s" alone does not say what
+                  the yarn is, and the blend is what tells them apart. */}
+              <span className="mono text-[12px] font-bold">
+                {count}
+                {countMeta?.description ? ` ${countMeta.description}` : ""}
+                {countMeta?.type ? ` ${countMeta.type}` : ""}
+              </span>
             </div>
             <table className="w-full">
               <thead>
