@@ -16,7 +16,7 @@ type Account = typeof schema.chartOfAccounts.$inferSelect;
 export default async function ChartOfAccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string; adding?: string; find?: string; error?: string }>;
+  searchParams: Promise<{ code?: string; adding?: string; find?: string; error?: string; saved?: string }>;
 }) {
   const params = await searchParams;
   const findFilter = params.find?.trim();
@@ -158,7 +158,9 @@ export default async function ChartOfAccountPage({
     }
     if (codeExists) redirect(`/accounts?error=code_exists&adding=1`);
     revalidatePath("/accounts");
-    redirect(`/accounts?code=${newCode}`);
+    // Straight back to a blank form. Accounts are entered in runs, and having to
+    // press NEW after every save was a keystroke for nothing.
+    redirect(`/accounts?adding=1&saved=${encodeURIComponent(newCode)}`);
   }
 
   async function deleteAccount(formData: FormData) {
@@ -211,6 +213,11 @@ export default async function ChartOfAccountPage({
         {params.error === "in_use" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Account cannot be deleted: it has child accounts or is used in transactions.
+          </div>
+        )}
+       {params.saved && (
+          <div className="border-2 border-black px-4 py-2 mb-4 text-[12px] font-semibold mono">
+            Saved {params.saved} — form is ready for the next account.
           </div>
         )}
         {params.error === "code_exists" && (
