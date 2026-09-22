@@ -193,6 +193,7 @@ const SECTIONS = [
       { href: "/reports/aging-cr", label: "Creditors Aging (Buckets)", key: "fin-aging-cr" },
       { href: "/reports/aging-db", label: "Debtors Aging (Buckets)", key: "fin-aging-db" },
       { href: "/reports/aging-db-date-wise", label: "Debtors Aging Date-wise", key: "fin-aging-db-dw" },
+      { href: "/reports/cash-book/day", label: "Cash Book (Day)", key: "fin-cashbook-day" },
       { href: "/reports/cash-book", label: "Cash & Bank Book", key: "fin-cashbook" },
       { href: "/reports/cheque-status", label: "Cheque Status", key: "fin-cheque" },
       { href: "/reports/pl-accounts", label: "Profit & Loss", key: "fin-pl" },
