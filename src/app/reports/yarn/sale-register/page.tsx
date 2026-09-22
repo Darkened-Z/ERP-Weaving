@@ -147,7 +147,12 @@ export default async function YarnSaleRegisterPage({
       amt: -(r.amt ?? 0),
       dir: "OUT" as const,
     })),
-  ].sort((a, b) => a.vDate.localeCompare(b.vDate) || a.vNo.localeCompare(b.vNo));
+  ]
+    // A voucher keeps its blank grid rows so the saved lines stay index-aligned.
+    // They are not movements and have no business on a register — without this
+    // one purchase printed as ten lines, eight of them zeros.
+    .filter((m) => m.lbs !== 0 || m.bag !== 0)
+    .sort((a, b) => a.vDate.localeCompare(b.vDate) || a.vNo.localeCompare(b.vNo));
 
   const rows = moves.reduce<Array<Move & { running: number }>>((acc, r) => {
     acc.push({ ...r, running: (acc[acc.length - 1]?.running ?? 0) + r.amt });
