@@ -811,7 +811,9 @@ export default async function YarnSaleVoucherPage({
         })
         .join(", ") || `Cont#${cont ?? ""} ${party ?? ""}`.trim();
     const glTotal = round2(validLines.reduce((s, l) => s + (l.amt ?? 0), 0));
-    const doGl = !!fyCode && !!partyCoa && glTotal > 0;
+    // POSTING = N keeps the voucher off the ledger. Prior rows are cleared
+    // first either way, so turning posting off takes the entry back out.
+    const doGl = posting === "Y" && !!fyCode && !!partyCoa && glTotal > 0;
     const yarnSaleIncomeCoa = doGl ? await acc("YARN_SALE_INCOME") : "";
 
     try {

@@ -710,7 +710,10 @@ export default async function YarnPurchaseVoucherPage({
         })
         .join(", ") || `Cont#${cont ?? ""} ${party ?? ""}`.trim();
     const total = round2(validLines.reduce((s, l) => s + (l.lbs ?? 0) * (l.rate ?? 0), 0));
-    const canPostGL = !!fyCode && !!partyCoa && total > 0;
+    // POSTING = N means the voucher is kept but stays off the ledger. The GL
+    // rows are still DELETED first, so switching a posted voucher to N removes
+    // what it put there rather than leaving it stranded.
+    const canPostGL = posting === "Y" && !!fyCode && !!partyCoa && total > 0;
     const yarnPurStockAcc = canPostGL ? await acc("YARN_PURCHASE_STOCK") : "";
 
     const assertBalanced = (details: (typeof schema.transDetail.$inferInsert)[]) => {
