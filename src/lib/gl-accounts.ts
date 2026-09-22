@@ -24,6 +24,7 @@ export type PostingKey =
   | "SARNING_EXP"
   | "MAROORI_EXP"
   | "ADVANCE_CLEARING"
+  | "CASH_IN_HAND"
   | "DEFAULT_DEBTOR";
 
 const ORACLE_DEFAULTS: Record<PostingKey, string> = {
@@ -48,6 +49,9 @@ const ORACLE_DEFAULTS: Record<PostingKey, string> = {
   KNOTTING_EXP: "7.01.06.01.0001",
   SARNING_EXP: "7.01.06.01.0002",
   MAROORI_EXP: "7.01.06.01.0003",
+  // Cash receipts and payments settle here. Configurable so moving the cash
+  // account is one screen, not a name match in several files.
+  CASH_IN_HAND: "1.01.11.01.0001",
   ADVANCE_CLEARING: "7.05.10.0001",
   DEFAULT_DEBTOR: "1.01.25.01.0001",
 };

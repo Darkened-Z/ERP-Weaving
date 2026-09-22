@@ -1,3 +1,4 @@
+import { acc } from "@/lib/gl-accounts";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -427,7 +428,12 @@ export default async function CashPaymentPage({
     accounts.map((a) => [a.code, { line_title: a.description }])
   );
   const ccCodeToDesc = new Map(costCenters.map((c) => [c.code, c.description]));
+  // The cash account is configured in Admin > Posting Accounts (CASH_IN_HAND),
+  // so moving it later is one screen rather than a name match in several files.
+  // The old name scan stays as the fallback for a chart that has not been set up.
+  const configuredCash = await acc("CASH_IN_HAND");
   const defaultCash =
+    (configuredCash ? accounts.find((a) => a.code === configuredCash) : undefined) ??
     accounts.find((a) => (a.descShort ?? "").trim().toUpperCase() === "CASH") ??
     accounts.find((a) => a.description.toUpperCase().includes("CASH")) ??
     null;

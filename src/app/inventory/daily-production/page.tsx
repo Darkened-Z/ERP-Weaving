@@ -1348,6 +1348,39 @@ export default async function DailyProductionPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/daily-production?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
+
+    // One than out on a despatch is enough to hold the whole voucher. Deleting
+    // it would leave that despatch pointing at production that no longer
+    // exists, and the than would be gone from folding stock while still sitting
+    // on someone's delivery. A voucher with nothing despatched deletes freely.
+    {
+      const serials = (
+        await db
+          .select({ than: schema.intDailyProductionSet.mmThanSrNo })
+          .from(schema.intDailyProductionSet)
+          .where(eq(schema.intDailyProductionSet.productionId, id))
+      )
+        .map((r) => (r.than ?? "").trim())
+        .filter(Boolean);
+      if (serials.length) {
+        const out = await db
+          .select({ than: schema.intGreyDespatchLine.tSrNo, dv: schema.intGreyDespatch.vNo })
+          .from(schema.intGreyDespatchLine)
+          .innerJoin(
+            schema.intGreyDespatch,
+            eq(schema.intGreyDespatch.id, schema.intGreyDespatchLine.despatchId),
+          )
+          .where(inArray(schema.intGreyDespatchLine.tSrNo, serials as unknown as number[]));
+        if (out.length) {
+          const dvs = Array.from(new Set(out.map((o) => o.dv ?? ""))).filter(Boolean).join(", ");
+          redirect(
+            `/inventory/daily-production?id=${id}&error=than_despatched` +
+              `&than=${encodeURIComponent(out[0].than ?? "")}&dv=${encodeURIComponent(dvs)}`,
+          );
+        }
+      }
+    }
+
     await db.transaction(async (tx) => {
       const oldSets = await tx
         .select({ beamNo: schema.intDailyProductionSet.beamNo })
@@ -1447,6 +1480,14 @@ export default async function DailyProductionPage({
               <> — locked through <span className="mono">{params.thru}</span></>
             )}
             .
+          </div>
+        )}
+        {params.error === "than_despatched" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            ⚠ This voucher cannot be deleted — than {params.than} has gone out on despatch{" "}
+            {params.dv}. Even one despatched than holds the whole voucher, because deleting it
+            would leave that despatch pointing at production that no longer exists. Remove the
+            than from despatch {params.dv} first. Nothing was deleted.
           </div>
         )}
         {params.error === "than_locked" && (
