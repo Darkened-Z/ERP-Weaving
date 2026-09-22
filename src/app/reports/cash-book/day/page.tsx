@@ -3,7 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { DateBox } from "@/components/date-box";
 import { acc } from "@/lib/gl-accounts";
 import { db, schema } from "@/db";
-import { and, eq, lt, inArray } from "drizzle-orm";
+import { and, eq, lt, gte, lte, inArray } from "drizzle-orm";
 import { today as todayIso } from "@/lib/time";
 import { requireSession } from "@/lib/auth";
 
@@ -23,11 +23,13 @@ const fmt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
 export default async function CashBookDayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; from?: string; to?: string }>;
 }) {
   await requireSession();
   const p = await searchParams;
-  const date = p.date?.trim() || todayIso();
+  // One day or several. `date` alone still works, so old links keep opening.
+  const from = p.from?.trim() || p.date?.trim() || todayIso();
+  const to = p.to?.trim() || p.date?.trim() || from;
 
   const accounts = await db
     .select({
@@ -76,7 +78,13 @@ export default async function CashBookDayPage({
             eq(schema.transDetail.vno, schema.transMain.vno),
           ),
         )
-        .where(and(inArray(schema.transDetail.accCode, codes), eq(schema.transMain.vdate, date)))
+        .where(
+          and(
+            inArray(schema.transDetail.accCode, codes),
+            gte(schema.transMain.vdate, from),
+            lte(schema.transMain.vdate, to),
+          ),
+        )
     : [];
 
   const openingRows = codes.length
@@ -95,7 +103,7 @@ export default async function CashBookDayPage({
             eq(schema.transDetail.vno, schema.transMain.vno),
           ),
         )
-        .where(and(inArray(schema.transDetail.accCode, codes), lt(schema.transMain.vdate, date)))
+        .where(and(inArray(schema.transDetail.accCode, codes), lt(schema.transMain.vdate, from)))
     : [];
   const openingByAcc = new Map<string, number>();
   for (const r of openingRows) {
@@ -131,31 +139,44 @@ export default async function CashBookDayPage({
     return `SPLIT — ${others.map((o) => descByCode.get(o.accCode) ?? o.accCode).join(" · ")}`;
   };
 
-  const blocks = cashBank
-    .map((a) => {
-      const mine = movements.filter((m) => m.accCode === a.code);
-      const receipts = mine
-        .filter((m) => (m.debit ?? 0) > 0)
-        .map((m) => ({ ...m, amount: m.debit ?? 0, desc: contraFor(m) }));
-      const payments = mine
-        .filter((m) => (m.credit ?? 0) > 0)
-        .map((m) => ({ ...m, amount: m.credit ?? 0, desc: contraFor(m) }));
-      const opening = openingByAcc.get(a.code) ?? 0;
-      const totRec = receipts.reduce((s, r) => s + r.amount, 0);
-      const totPay = payments.reduce((s, r) => s + r.amount, 0);
-      return {
-        code: a.code,
-        name: a.description ?? a.code,
-        opening,
-        receipts,
-        payments,
-        totRec,
-        totPay,
-        closing: opening + totRec - totPay,
-      };
-    })
-    // An account with nothing on the day and nothing behind it is not a page.
-    .filter((b) => b.receipts.length || b.payments.length || b.opening !== 0);
+  // Walk the days in order so each one opens where the last one closed. The
+  // 5th's closing is the 6th's opening, and so on — which is the whole point of
+  // reading several days at once rather than re-running the report per date.
+  const daysWithMovement = Array.from(new Set(movements.map((m) => m.vdate ?? ""))).filter(Boolean).sort();
+  const carried = new Map(cashBank.map((a) => [a.code, openingByAcc.get(a.code) ?? 0]));
+
+  const days = daysWithMovement.map((d) => {
+    const onDay = movements.filter((m) => m.vdate === d);
+    const blocks = cashBank
+      .map((a) => {
+        const mine = onDay.filter((m) => m.accCode === a.code);
+        const receipts = mine
+          .filter((m) => (m.debit ?? 0) > 0)
+          .map((m) => ({ ...m, amount: m.debit ?? 0, desc: contraFor(m) }));
+        const payments = mine
+          .filter((m) => (m.credit ?? 0) > 0)
+          .map((m) => ({ ...m, amount: m.credit ?? 0, desc: contraFor(m) }));
+        const opening = carried.get(a.code) ?? 0;
+        const totRec = receipts.reduce((s, r) => s + r.amount, 0);
+        const totPay = payments.reduce((s, r) => s + r.amount, 0);
+        const closing = opening + totRec - totPay;
+        carried.set(a.code, closing);
+        return {
+          code: a.code,
+          name: a.description ?? a.code,
+          opening,
+          receipts,
+          payments,
+          totRec,
+          totPay,
+          closing,
+        };
+      })
+      // An account that did nothing on THIS day is not a block on this day,
+      // even though it keeps its balance for the days that follow.
+      .filter((b) => b.receipts.length || b.payments.length);
+    return { date: d, blocks };
+  });
 
   return (
     <Shell active="fin-cashbook-day">
@@ -164,7 +185,8 @@ export default async function CashBookDayPage({
           <div>
             <h1 className="page-title">Cash Book</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              For the date {date} &middot; {blocks.length} account{blocks.length === 1 ? "" : "s"}
+              {from === to ? `For the date ${from}` : `${from} to ${to}`} &middot; {days.length} day
+              {days.length === 1 ? "" : "s"} with movement
             </p>
           </div>
           <div className="no-print">
@@ -172,20 +194,35 @@ export default async function CashBookDayPage({
           </div>
         </div>
 
-        <form method="GET" className="card p-4 mb-5 flex gap-3 items-end no-print">
+        <form method="GET" className="card p-4 mb-5 flex gap-3 items-end flex-wrap no-print">
           <div>
-            <label className="label block mb-1">For the date</label>
-            <DateBox name="date" className="input-box mono" defaultValue={date} />
+            <label className="label block mb-1">From</label>
+            <DateBox name="from" className="input-box mono" defaultValue={from} />
+          </div>
+          <div>
+            <label className="label block mb-1">To</label>
+            <DateBox name="to" className="input-box mono" defaultValue={to} />
           </div>
           <button type="submit" className="btn btn-sm">View</button>
+          <span className="text-[11px] text-[var(--muted)]">
+            Each day carries its own opening and closing — the 5th closes where the 6th opens.
+          </span>
         </form>
 
-        {blocks.length === 0 ? (
+        {days.length === 0 ? (
           <div className="card px-4 py-10 text-center text-[13px] text-[var(--muted)] italic">
-            No cash or bank movement on {date}.
+            No cash or bank movement {from === to ? `on ${from}` : `between ${from} and ${to}`}.
           </div>
         ) : (
-          blocks.map((b) => (
+          days.map((day) => (
+            <div key={day.date} className="mb-8">
+              <div
+                className="px-3 py-1.5 mb-3 border-2 border-black font-bold text-[13px] uppercase tracking-[0.08em]"
+                style={{ background: "#0f172a", color: "white" }}
+              >
+                For the date {day.date}
+              </div>
+              {day.blocks.map((b) => (
             <div key={b.code} className="card mb-6" style={{ breakInside: "avoid" }}>
               <div className="px-4 py-2 border-b-2 border-black flex flex-wrap items-baseline justify-between gap-3">
                 <span className="font-bold text-[14px] uppercase tracking-[0.06em]">{b.name}</span>
@@ -250,6 +287,8 @@ export default async function CashBookDayPage({
                 <span className="font-bold text-[12px] uppercase tracking-[0.06em]">Closing Balance</span>
                 <span className="mono text-[16px] font-bold">{fmt(b.closing)}</span>
               </div>
+            </div>
+              ))}
             </div>
           ))
         )}
