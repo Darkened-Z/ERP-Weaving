@@ -30,8 +30,9 @@ export async function CountsAccountsReport({
    * named on an EXTERNAL grey conversion contract of type SALE, each shown with
    * every count they are set up with in Party Count — so a party the mill is
    * committed to appears with zeros rather than not appearing at all.
+   * "grey-conv-contract" is the same thing for type CONV — the purchase side.
    */
-  partyScope?: "activity" | "grey-sale-contract";
+  partyScope?: "activity" | "grey-sale-contract" | "grey-conv-contract";
   title?: string;
   navKey?: string;
 }) {
@@ -115,13 +116,18 @@ export async function CountsAccountsReport({
   // count that party is set up with in Party Count. Those rows exist whether or
   // not any yarn has moved yet, which is the point — a party with nothing
   // against it is exactly what the mill needs to see.
+  // Sale reads the SALE contracts, purchase the CONV ones; everything below is
+  // identical, which is the point — one report, two scopes.
+  const contractType = partyScope === "grey-conv-contract" ? "CONV" : "SALE";
   const scopedSeedRows: { party: string; count: string }[] = [];
   let scopedParties: Set<string> | null = null;
-  if (partyScope === "grey-sale-contract") {
+  if (partyScope === "grey-sale-contract" || partyScope === "grey-conv-contract") {
     const saleContracts = await db
       .select({ party: schema.extGreyConvContract.party })
       .from(schema.extGreyConvContract)
-      .where(sql`upper(coalesce(${schema.extGreyConvContract.type}, '')) = 'SALE'`);
+      .where(
+        sql`upper(coalesce(${schema.extGreyConvContract.type}, '')) = ${contractType}`,
+      );
     const contractParties = Array.from(
       new Set(saleContracts.map((r) => (r.party ?? "").trim()).filter(Boolean)),
     ).filter((pt) => !party || pt.toLowerCase().includes(party.toLowerCase()));
@@ -305,8 +311,10 @@ export async function CountsAccountsReport({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center text-[var(--muted)] py-8">
-                    {partyScope === "grey-sale-contract" && (scopedParties?.size ?? 0) === 0
-                      ? "No external grey conversion contract is set to type SALE, so there are no parties to report. Set a contract's type to SALE and its parties appear here with their Party Counts."
+                    {partyScope !== "activity" && (scopedParties?.size ?? 0) === 0
+                      ? `No external grey conversion contract is set to type ${contractType}, so there are ` +
+                        `no parties to report. Set a contract's type to ${contractType} and its parties ` +
+                        `appear here with their Party Counts.`
                       : "No count activity in period"}
                   </td>
                 </tr>
