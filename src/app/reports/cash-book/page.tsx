@@ -3,6 +3,7 @@ import { Combobox } from "@/components/combobox";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { requireSession } from "@/lib/auth";
+import { acc } from "@/lib/gl-accounts";
 import { db, schema } from "@/db";
 import { and, eq, gte, lte, lt, sql } from "drizzle-orm";
 import { today } from "@/lib/time";
@@ -25,21 +26,28 @@ export default async function CashBookPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.code);
 
+  // Cash lives under 1.01.11. The old filter also swept in 1.01.01, which is
+  // TRADE DEBITORS — every customer account was being offered as a cash book.
+  const configuredCash = await acc("CASH_IN_HAND");
   const cashBankAccounts = accounts.filter((a) => {
     if ((a.level ?? 0) < 3) return false;
     const code = a.code ?? "";
     const short = (a.descShort ?? "").toUpperCase();
     const desc = (a.description ?? "").toUpperCase();
-    if (short === "CASH" || code.startsWith("1.01.01")) return true;
+    if (configuredCash && code === configuredCash) return true;
+    if (short === "CASH") return true;
     if (code.startsWith("1.01.11")) return true;
     if (code.startsWith("1.03")) return true;
     if (short.includes("BANK") || desc.includes("BANK")) return true;
     return false;
   });
 
+  // Which account the book opens on: the one configured in Admin > Posting
+  // Accounts, so renaming it in the chart cannot quietly change the report.
   const cashAccount =
+    (configuredCash ? cashBankAccounts.find((a) => a.code === configuredCash) : undefined) ||
     cashBankAccounts.find((a) => (a.descShort ?? "").toUpperCase() === "CASH") ||
-    cashBankAccounts.find((a) => (a.code ?? "").startsWith("1.01.01"));
+    cashBankAccounts.find((a) => (a.code ?? "").startsWith("1.01.11"));
 
   const dateFrom = params.from?.trim() || yearStart();
   const dateTo = params.to?.trim() || today();
