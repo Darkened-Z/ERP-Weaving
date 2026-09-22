@@ -4,6 +4,7 @@ import { RowClearButton } from "@/components/row-clear-button";
 import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { JvBalanceBar } from "./balance-bar";
+import { GrowRows } from "@/components/grow-rows";
 import { db, schema } from "@/db";
 import { eq, and, sql, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
@@ -20,7 +21,9 @@ const VTYPE = "JV";
 // The month-start / month-end expense vouchers run to a dozen-plus party lines
 // (the Oracle sheet shows 13 filled with spares below), so open with enough
 // rows to key one straight through without re-saving to get more.
-const LINE_ROWS = 20;
+// The grid can take a long voucher, but opens at two rows and grows as it is
+// filled (GrowRows) — twenty blank lines for a two-line entry is just scrolling.
+const LINE_ROWS = 50;
 
 const TRN_TYPES = [
   "",
@@ -808,6 +811,7 @@ export default async function JournalVoucherPage({
                   Voucher Lines — enter Dr and Cr on each line (must balance)
                 </div>
                 <div className="overflow-x-auto border border-black">
+                  <GrowRows tbodyId="jv-line-rows" initial={2} />
                   <table className="mono text-[12px]" style={{ minWidth: 1500 }}>
                     <thead>
                       <tr>
@@ -825,7 +829,7 @@ export default async function JournalVoucherPage({
                         <th style={{ width: 34 }}></th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="jv-line-rows">
                       {Array.from({ length: rowsToShow }).map((_, i) => {
                         const l = detailLines[i];
                         const acc = l ? accByCode.get(l.accCode) : undefined;
