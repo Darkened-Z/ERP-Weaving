@@ -210,7 +210,11 @@ export async function CountsAccountsReport({
     .filter((r) => !scopedParties || scopedParties.has(r.party))
     // A Party Count row whose count code does not resolve shows as "— — —" with
     // zeros the whole way across; it is a broken master row, not a figure.
-    .filter((r) => r.count && r.count !== "—");
+    .filter((r) => r.count && r.count !== "—")
+    // A count the party is set up with but has never moved is a master record,
+    // not activity. Listing every one of them buried the handful that matter
+    // under a page of zeros.
+    .filter((r) => r.totalLbs !== 0 || r.consumedLbs !== 0);
   for (const r of rows) {
     r.balLbs = r.totalLbs - r.consumedLbs;
     r.amount = r.balLbs * r.rate;
