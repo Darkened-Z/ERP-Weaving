@@ -46,6 +46,18 @@ export function GreyQualityPicker({
     return countLabels?.[t.toLowerCase()] ?? t;
   };
   const [value, setValue] = useState(defaultValue || "");
+  // useState reads defaultValue only on first mount, and saving re-renders this
+  // page from the server WITHOUT remounting — so the box went on showing what it
+  // held while the form was blank, and the construction looked like it had
+  // vanished even though it was saved. This is React's documented way to follow
+  // a prop: compare against the last one seen and adjust during render, which
+  // converges immediately because the guard stores the very value it compares.
+  const [lastDefault, setLastDefault] = useState(defaultValue);
+  if (defaultValue !== lastDefault) {
+    setLastDefault(defaultValue);
+    setValue(defaultValue || "");
+  }
+
   const [open, setOpen] = useState(false);
   const [read, setRead] = useState("");
   const [pick, setPick] = useState("");

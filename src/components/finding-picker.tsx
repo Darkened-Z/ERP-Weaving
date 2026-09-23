@@ -50,6 +50,14 @@ export function FindingPicker({
   columns?: Column[];
 }) {
   const [value, setValue] = useState(defaultValue || "");
+  // Same as the quality picker: a server re-render after save does not remount
+  // this, so state seeded once at mount would stay stale.
+  const [lastDefault, setLastDefault] = useState(defaultValue);
+  if (defaultValue !== lastDefault) {
+    setLastDefault(defaultValue);
+    setValue(defaultValue || "");
+  }
+
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [filterVal, setFilterVal] = useState("");
