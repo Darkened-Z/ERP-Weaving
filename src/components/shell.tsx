@@ -190,6 +190,8 @@ const SECTIONS = [
       { href: "/reports/trial-balance", label: "Trial Balance", key: "trial-balance" },
       { href: "/reports/daily-activity", label: "Daily Activity", key: "daily-activity" },
       { href: "/reports/aging", label: "Aging Analysis", key: "aging" },
+      { href: "/reports/aging-cr-detail", label: "Creditors Accounts Aging", key: "fin-aging-cr-detail" },
+      { href: "/reports/aging-db-detail", label: "Debtors Accounts Aging", key: "fin-aging-db-detail" },
       { href: "/reports/aging-cr", label: "Creditors Aging (Buckets)", key: "fin-aging-cr" },
       { href: "/reports/aging-db", label: "Debtors Aging (Buckets)", key: "fin-aging-db" },
       { href: "/reports/aging-db-date-wise", label: "Debtors Aging Date-wise", key: "fin-aging-db-dw" },
