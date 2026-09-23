@@ -4,6 +4,7 @@ import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
+import { AccountCodeHint } from "@/components/account-code-hint";
 import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { VoucherBalance } from "@/components/voucher-balance";
@@ -422,10 +423,12 @@ export default async function CashReceiptPage({
     .orderBy(schema.costCenters.code);
 
   const codeToAcc = new Map(accounts.map((a) => [a.code, a]));
+  // Name in the box, code underneath. Typing a code still finds the account —
+  // the picker searches the value as well as the label.
   const accOpts = accounts.map((a) => ({
     value: a.code,
-    label: `${a.code} — ${a.description}`,
-    desc: a.description,
+    label: a.description ?? a.code,
+    desc: a.code,
   }));
   const accDescMap = Object.fromEntries(
     accounts.map((a) => [a.code, { line_title: a.description }])
@@ -685,12 +688,12 @@ export default async function CashReceiptPage({
               </div>
               <RowAutoFill watch="line_acc" map={accDescMap} />
               <div className="overflow-x-auto border border-black">
-                <table className="mono text-[12px]" style={{ minWidth: 1400 }}>
+                <AccountCodeHint field="line_acc" />
+                  <table className="mono text-[12px]" style={{ minWidth: 1400 }}>
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}>Sr#</th>
                       <th style={{ width: 200 }}>Account (F9)</th>
-                      <th style={{ width: 240 }}>Tittle</th>
                       <th className="hidden" style={{ width: 34 }}>OK</th>
                       <th className="hidden" style={{ width: 110 }}>Yarn Count</th>
                       <th style={{ width: 220 }}>Narr</th>
@@ -704,7 +707,6 @@ export default async function CashReceiptPage({
                   <tbody>
                     {Array.from({ length: rowsToShow }).map((_, i) => {
                       const l = gridLines[i];
-                      const acc = l ? codeToAcc.get(l.accCode) : undefined;
                       return (
                         <tr key={i}>
                           <td className="text-center text-[var(--muted)]">{i + 1}</td>
@@ -713,16 +715,14 @@ export default async function CashReceiptPage({
                               name="line_acc"
                               options={accOpts}
                               defaultValue={l?.accCode ?? ""}
-                              className="input-box mono text-[12px]"
+                              className="input-box text-[12px]"
                             />
-                          </td>
-                          <td>
-                            <input
-                              className="input-box mono text-[12px] bg-gray-50"
-                              defaultValue={acc?.description ?? ""}
-                              readOnly
-                              tabIndex={-1}
-                            />
+                            <div
+                              data-code-hint
+                              className="mono text-[10px] text-[var(--muted)] mt-0.5 leading-none"
+                            >
+                              {l?.accCode ?? ""}
+                            </div>
                           </td>
                           <td className="hidden text-center text-[10px] text-[var(--muted)]">
                             {l?.statusOk === "OK" ? "OK" : ""}
