@@ -1,3 +1,4 @@
+import { GuardSubmit } from "@/components/guard-submit";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -581,6 +582,18 @@ export default async function GreyConvContractPage({
               <option key={b.name} value={b.name} />
             ))}
           </datalist>
+          {/* These four are checked on the server too, but a server rejection
+              redirects and the form comes back blank — which cost the operator
+              everything they had typed. Caught here, nothing is sent and
+              nothing is lost. */}
+          <GuardSubmit
+            rules={[
+              { any: ["rate_per_pick", "rate_mtr"], message: "Give a Rate per Pick or a Rate/Mtr." },
+              { field: "read", message: "Read must be greater than 0." },
+              { field: "pick", message: "Pick must be greater than 0." },
+              { field: "width", message: "Width must be greater than 0." },
+            ]}
+          />
           <form action={saveContract}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <GreyConvCalc />

@@ -1,7 +1,9 @@
+import { Combobox } from "@/components/combobox";
+import { AccountCodeHint } from "@/components/account-code-hint";
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { RowClearButton } from "@/components/row-clear-button";
-import { RowAutoFill } from "@/components/auto-fill";
+
 import { ConfirmButton } from "@/components/confirm-button";
 import { JvBalanceBar } from "./balance-bar";
 import { GrowRows } from "@/components/grow-rows";
@@ -550,6 +552,13 @@ export default async function JournalVoucherPage({
   const fmtInt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
 
   const roCls = "input-box mono bg-gray-100";
+  // Name in the box, code underneath — the same shape as the cash and bank
+  // forms, so every voucher screen is entered the same way.
+  const jvAccOpts = pickerAccounts.map((a) => ({
+    value: a.code,
+    label: a.description ?? a.code,
+    desc: a.code,
+  }));
   const cell = "input-box mono text-[12px]";
   const cellNum = "input-box mono text-[12px] text-right";
 
@@ -630,7 +639,6 @@ export default async function JournalVoucherPage({
             </option>
           ))}
         </datalist>
-        <RowAutoFill watch="short_name" map={titleMap} />
 
         <form
           id="jv-find-form"
@@ -812,11 +820,11 @@ export default async function JournalVoucherPage({
                 </div>
                 <div className="overflow-x-auto border border-black">
                   <GrowRows tbodyId="jv-line-rows" initial={2} />
+                  <AccountCodeHint field="title" />
                   <table className="mono text-[12px]" style={{ minWidth: 1500 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
-                        <th style={{ width: 140 }}>Short Name</th>
                         <th style={{ width: 240 }}>Tittle</th>
                         <th className="hidden" style={{ width: 34 }}>OK</th>
                         <th style={{ width: 200 }}>Narr</th>
@@ -832,30 +840,28 @@ export default async function JournalVoucherPage({
                     <tbody id="jv-line-rows">
                       {Array.from({ length: rowsToShow }).map((_, i) => {
                         const l = detailLines[i];
-                        const acc = l ? accByCode.get(l.accCode) : undefined;
                         return (
                           <tr key={l?.id ?? `r-${i}`}>
                             <td className="text-center text-[var(--muted)]">
                               {i + 1}
                             </td>
+                            {/* One column, not two. The picker shows the account
+                                NAME and submits its code — which resolveAcc
+                                accepts just as it accepts a short name — and the
+                                code sits underneath in small type. */}
                             <td>
-                              <input
-                                name="short_name"
-                                list="jv-acc-short"
-                                className={cell}
-                                defaultValue={acc?.descShort ?? ""}
-                              />
-                            </td>
-                            <td>
-                              <input
+                              <Combobox
                                 name="title"
-                                className={cell + " bg-gray-50"}
-                                defaultValue={
-                                  acc?.description ?? l?.accCode ?? ""
-                                }
-                                readOnly
-                                tabIndex={-1}
+                                options={jvAccOpts}
+                                defaultValue={l?.accCode ?? ""}
+                                className={cell}
                               />
+                              <div
+                                data-code-hint
+                                className="mono text-[10px] text-[var(--muted)] mt-0.5 leading-none"
+                              >
+                                {l?.accCode ?? ""}
+                              </div>
                             </td>
                             <td className="hidden text-center text-[10px] text-[var(--muted)]">
                               {l?.statusOk === "Y" ? "✓" : ""}
@@ -930,7 +936,7 @@ export default async function JournalVoucherPage({
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] mt-2">
-                  Short Name / Tittle map to the Chart of Accounts (F9). Empty
+                  Tittle maps to the Chart of Accounts (F9). Empty
                   lines are ignored. Any line with a Dr or Cr must name an
                   account.
                 </div>

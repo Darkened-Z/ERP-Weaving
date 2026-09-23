@@ -67,6 +67,18 @@ export default async function YarnSaleRegisterPage({
   }
   if (count) purConds.push(eq(schema.extYarnPurVoucherLine.count, count));
 
+  // "23" says nothing; "46/S PV 90:10" is what the yarn actually is.
+  const countRows = await db
+    .select({
+      code: schema.yarnCounts.countCode,
+      description: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
+    .from(schema.yarnCounts);
+  const countLabel = new Map(
+    countRows.map((c) => [String(c.code), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()]),
+  );
+
   const salRaw = await db
     .select({
       id: schema.extYarnSalVoucher.id,
@@ -258,7 +270,7 @@ export default async function YarnSaleRegisterPage({
             <div className="stat-label">Lines</div>
           </div>
           <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{fmt(totBags)}</div>
+            <div className="mono text-xl font-bold">{fmt2(totBags)}</div>
             <div className="stat-label">Bags</div>
           </div>
           <div className="bg-white p-4">
@@ -316,11 +328,11 @@ export default async function YarnSaleRegisterPage({
                     <td className="mono">{r.vDate}</td>
                     <td>{r.party ?? "-"}</td>
                     <td className="mono">
-                      {r.count ?? "-"}
+                      {countLabel.get(String(r.count ?? "")) || r.count || "-"}
                       {r.loc ? <div className="text-[10px] opacity-70">{r.loc}</div> : null}
                     </td>
                     <td>{r.brand ?? "-"}</td>
-                    <td className="mono text-right">{fmt(r.bag ?? 0)}</td>
+                    <td className="mono text-right">{fmt2(r.bag ?? 0)}</td>
                     <td className="mono text-right">{fmt2(r.lbs ?? 0)}</td>
                     <td className="mono text-right">{fmt2(r.rate ?? 0)}</td>
                     <td className="mono text-right">{fmt(r.amt)}</td>
@@ -333,7 +345,7 @@ export default async function YarnSaleRegisterPage({
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
                   <td colSpan={5}>Total</td>
-                  <td className="mono text-right">{fmt(totBags)}</td>
+                  <td className="mono text-right">{fmt2(totBags)}</td>
                   <td className="mono text-right">{fmt2(totLbs)}</td>
                   <td></td>
                   <td className="mono text-right">{fmt(totAmt)}</td>
