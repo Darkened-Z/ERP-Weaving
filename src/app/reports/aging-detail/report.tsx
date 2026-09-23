@@ -3,7 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { DateBox } from "@/components/date-box";
 import { db, schema } from "@/db";
-import { and, eq, lte, or } from "drizzle-orm";
+import { and, eq, lte, like } from "drizzle-orm";
 import { today as todayIso } from "@/lib/time";
 import { requireSession } from "@/lib/auth";
 
@@ -99,7 +99,10 @@ export async function AgingDetailReport({
         .where(
           and(
             lte(schema.transMain.vdate, asOf),
-            or(...partyCodes.map((c) => eq(schema.transDetail.accCode, c))),
+            // A prefix match, not one OR per account. Listing them out built a
+            // statement with a hundred-odd branches, which the database refused
+            // outright — both sides of this report were returning a 500.
+            like(schema.transDetail.accCode, `${prefix}%`),
           ),
         )
     : [];
