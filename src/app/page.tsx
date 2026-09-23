@@ -14,7 +14,6 @@ export default async function Dashboard() {
   const totalCredit = cRow?.total ?? 0;
 
   const [vRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.transMain);
-  const [accRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.chartOfAccounts);
   const [loomRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms);
   const [runningRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms).where(sql`status = 'RUNNING'`);
   const [contractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts);
@@ -64,10 +63,12 @@ export default async function Dashboard() {
   const formatNum = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
 
   const modules = [
+    // The three the mill opens every morning. Chart of accounts, vouchers and
+    // the ledger are still in the menu; they are not what the dashboard is for.
     { label: "Finance", items: [
-      { label: "Accounts", value: accRow?.count ?? 0, unit: "chart of accounts", href: "/accounts" },
-      { label: "Vouchers", value: vRow?.count ?? 0, unit: "journal entries", href: "/vouchers" },
-      { label: "Ledger", value: "View", unit: "account wise", href: "/ledger" },
+      { label: "Folding Stock", value: "View", unit: "daily folding stock", href: "/reports/weaving/folding-stock" },
+      { label: "Counts — Sale", value: "View", unit: "weaving counts accounts", href: "/external/reports/weaving-counts-sale" },
+      { label: "Counts — Purchase", value: "View", unit: "weaving counts accounts", href: "/external/reports/weaving-counts-purchase" },
     ]},
     { label: "Production", items: [
       { label: "Looms", value: `${runningRow?.count ?? 0}/${loomRow?.count ?? 0}`, unit: "running / total", href: "/weaving/looms" },
