@@ -1,9 +1,10 @@
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { and, eq, gte, inArray, lte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, like, lte, lt, sql } from "drizzle-orm";
 import { fmt, sixMonthsAgo, todayIso } from "../../_shared";
 import { loadConvContracts } from "@/lib/conv-contracts";
+import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,24 @@ export default async function FoldingStockPage({
   const withZero = p.zero === "1";
 
   const allContracts = await loadConvContracts();
-  const partyOpts = [...new Set(allContracts.map((c) => c.party).filter((x): x is string => !!x))].sort();
+  // The party list is the WVG head itself, not whoever happens to sit on a
+  // contract: every level-5 account under DEBITORS - CONVERSION WVG
+  // (1.01.01.01). Folding stock is the mill's own weaving, so the commercial
+  // conversion head next door (1.01.01.19) does not belong in this dropdown.
+  const partyOpts = (
+    await db
+      .select({ description: schema.chartOfAccounts.description })
+      .from(schema.chartOfAccounts)
+      .where(
+        and(
+          gte(schema.chartOfAccounts.level, 5),
+          like(schema.chartOfAccounts.code, `${WVG_CONVERSION_PREFIX}%`),
+        ),
+      )
+      .orderBy(schema.chartOfAccounts.code)
+  )
+    .map((a) => (a.description ?? "").trim())
+    .filter(Boolean);
   const contracts = allContracts
     .filter((c) => (partyQ ? c.party === partyQ : true))
     // No status picked = ALL, exactly as the Oracle form behaves.
