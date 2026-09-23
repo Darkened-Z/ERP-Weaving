@@ -37,7 +37,14 @@ export async function AgingDetailReport({
   title,
   navKey,
 }: {
-  searchParams: Promise<{ asof?: string; party?: string }>;
+  searchParams: Promise<{
+    asof?: string;
+    party?: string;
+    code?: string;
+    short?: string;
+    mode?: string;
+    summary?: string;
+  }>;
   side: "CR" | "DB";
   title: string;
   navKey: string;
@@ -46,11 +53,17 @@ export async function AgingDetailReport({
   const p = await searchParams;
   const asOf = p.asof?.trim() || todayIso();
   const partyFilter = p.party?.trim() ?? "";
+  const codeFilter = p.code?.trim() ?? "";
+  const shortFilter = p.short?.trim() ?? "";
+  // Summary drops the vouchers and leaves one line per account — the same
+  // switch the mill's own screen carries.
+  const summaryOnly = p.summary === "1";
 
   const accounts = await db
     .select({
       code: schema.chartOfAccounts.code,
       description: schema.chartOfAccounts.description,
+      descShort: schema.chartOfAccounts.descShort,
       level: schema.chartOfAccounts.level,
     })
     .from(schema.chartOfAccounts);
@@ -102,10 +115,14 @@ export async function AgingDetailReport({
     days: number;
   };
 
+  const shortByCode = new Map(accounts.map((a) => [a.code, (a.descShort ?? "").trim()]));
   const byParty = new Map<string, typeof rows>();
   for (const r of rows) {
     const name = nameByCode.get(r.accCode) ?? r.accCode;
     if (partyFilter && !name.toLowerCase().includes(partyFilter.toLowerCase())) continue;
+    if (codeFilter && !r.accCode.startsWith(codeFilter)) continue;
+    if (shortFilter && !(shortByCode.get(r.accCode) ?? "").toLowerCase().includes(shortFilter.toLowerCase()))
+      continue;
     (byParty.get(r.accCode) ?? byParty.set(r.accCode, []).get(r.accCode)!).push(r);
   }
 
@@ -188,17 +205,50 @@ export async function AgingDetailReport({
           </div>
         </div>
 
-        <form method="GET" className="card p-4 mb-5 flex gap-3 items-end flex-wrap no-print">
-          <div>
-            <label className="label block mb-1">Aging upto</label>
+        <form method="GET" className="card p-4 mb-5 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end no-print">
+          <div className="sm:col-span-3">
+            <label className="label block mb-1">Aging Upto Date</label>
             <DateBox name="asof" className="input-box mono" defaultValue={asOf} />
           </div>
-          <div>
-            <label className="label block mb-1">Account contains</label>
-            <input name="party" className="input-box mono" defaultValue={partyFilter} placeholder="any" />
+          <div className="sm:col-span-3">
+            <label className="label block mb-1">Tittle</label>
+            <input
+              name="party"
+              list="aging-parties"
+              className="input-box mono"
+              defaultValue={partyFilter}
+              placeholder="All parties"
+            />
           </div>
-          <button type="submit" className="btn btn-sm">View</button>
+          <div className="sm:col-span-2">
+            <label className="label block mb-1">Short Tittle</label>
+            <input name="short" className="input-box mono" defaultValue={shortFilter} placeholder="any" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label block mb-1">Code</label>
+            <input name="code" className="input-box mono" defaultValue={codeFilter} placeholder={prefix} />
+          </div>
+          <div className="sm:col-span-1 flex items-center gap-1 pb-1">
+            <input
+              type="checkbox"
+              id="aging-summary"
+              name="summary"
+              value="1"
+              defaultChecked={summaryOnly}
+            />
+            <label htmlFor="aging-summary" className="label">Summary</label>
+          </div>
+          <div className="sm:col-span-1">
+            <button type="submit" className="btn btn-sm w-full">View</button>
+          </div>
         </form>
+        <datalist id="aging-parties">
+          {Array.from(new Set(rows.map((r) => nameByCode.get(r.accCode) ?? r.accCode)))
+            .sort()
+            .map((n) => (
+              <option key={n} value={n} />
+            ))}
+        </datalist>
 
         {parties.length === 0 ? (
           <div className="card px-4 py-10 text-center text-[13px] text-[var(--muted)] italic">
@@ -211,6 +261,7 @@ export async function AgingDetailReport({
                 {pt.name}
                 <span className="ml-2 mono text-[11px] text-[var(--muted)]">{pt.code}</span>
               </div>
+              {summaryOnly ? null : (
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ minWidth: 900 }}>
                   <thead>
@@ -238,16 +289,23 @@ export async function AgingDetailReport({
                         <td className="mono text-right font-semibold">{l.days}</td>
                       </tr>
                     ))}
-                    <tr className="border-t-2 border-black">
-                      <td colSpan={6} className="font-bold text-[12px] uppercase tracking-[0.05em]">
-                        Closing Balance
-                      </td>
-                      <td className="mono text-right font-bold">{fmt(pt.closing)}</td>
-                      <td></td>
-                    </tr>
                   </tbody>
                 </table>
               </div>
+              )}
+              {/* The closing figure is the thing anyone wants to go behind, so
+                  it opens that account's full ledger rather than being a dead
+                  number at the foot of a list. */}
+              <a
+                href={`/ledger?account=${encodeURIComponent(pt.code)}&to=${asOf}`}
+                className="flex justify-between items-baseline px-3 py-2 border-t-2 border-black hover:bg-yellow-50"
+                title="Open this account's ledger"
+              >
+                <span className="font-bold text-[12px] uppercase tracking-[0.05em] underline">
+                  Closing Balance
+                </span>
+                <span className="mono text-[15px] font-bold">{fmt(pt.closing)}</span>
+              </a>
             </div>
           ))
         )}

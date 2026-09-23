@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -98,6 +99,36 @@ export default async function AgingDebtorsPage({
 
   const rows = [...byParty.values()].filter((r) => Math.abs(r.total) > 0.01).sort((a, b) => a.code.localeCompare(b.code));
 
+  // Parties read better under the head they belong to — CREDITORS - YARN
+  // PURCHASE, CREDITORS - SIZING — because that is how the mill thinks about
+  // who it owes. The head is the account code with its last part removed.
+  const headName = new Map(accounts.map((a) => [a.code, a.description ?? a.code]));
+  const headOf = (code: string) => code.split(".").slice(0, -1).join(".");
+  const groups = Array.from(
+    rows.reduce((m, r) => {
+      const h = headOf(r.code);
+      (m.get(h) ?? m.set(h, []).get(h)!).push(r);
+      return m;
+    }, new Map<string, Row[]>()),
+  )
+    .map(([head, list]) => ({
+      head,
+      name: headName.get(head) ?? head,
+      rows: list,
+      subtotal: list.reduce(
+        (acc, r) => ({
+          total: acc.total + r.total,
+          b0: acc.b0 + r.b0,
+          b1: acc.b1 + r.b1,
+          b2: acc.b2 + r.b2,
+          b3: acc.b3 + r.b3,
+          b4: acc.b4 + r.b4,
+        }),
+        { total: 0, b0: 0, b1: 0, b2: 0, b3: 0, b4: 0 },
+      ),
+    }))
+    .sort((a, b) => a.head.localeCompare(b.head));
+
   const fmt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(Math.abs(n)));
 
   const totals = rows.reduce(
@@ -192,20 +223,40 @@ export default async function AgingDebtorsPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.code}>
-                  <td className="mono">{r.code}</td>
-                  <td>{r.name}</td>
-                  {BUCKETS.map((b) => {
-                    const v = (r as unknown as Record<string, number>)[b.key];
-                    return (
+              {groups.map((g) => (
+                <Fragment key={g.head}>
+                  <tr style={{ background: "#0f172a", color: "white" }}>
+                    <td colSpan={8} className="font-bold text-[12px] px-2 py-1">
+                      <span className="mono opacity-70">{g.head}</span> {g.name}
+                    </td>
+                  </tr>
+                  {g.rows.map((r) => (
+                    <tr key={r.code}>
+                      <td className="mono">{r.code}</td>
+                      <td>{r.name}</td>
+                      {BUCKETS.map((b) => {
+                        const v = (r as unknown as Record<string, number>)[b.key];
+                        return (
+                          <td key={b.key} className="mono text-right">
+                            {Math.abs(v) > 0.01 ? fmt(v) : "-"}
+                          </td>
+                        );
+                      })}
+                      <td className="mono text-right font-semibold">{fmt(r.total)}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: "#f1f5f9", fontWeight: 700 }}>
+                    <td colSpan={2} className="text-[12px] uppercase tracking-[0.05em]">
+                      {g.name} total
+                    </td>
+                    {BUCKETS.map((b) => (
                       <td key={b.key} className="mono text-right">
-                        {Math.abs(v) > 0.01 ? fmt(v) : "-"}
+                        {fmt((g.subtotal as unknown as Record<string, number>)[b.key])}
                       </td>
-                    );
-                  })}
-                  <td className="mono text-right font-semibold">{fmt(r.total)}</td>
-                </tr>
+                    ))}
+                    <td className="mono text-right">{fmt(g.subtotal.total)}</td>
+                  </tr>
+                </Fragment>
               ))}
               {rows.length === 0 && (
                 <tr>
