@@ -188,6 +188,7 @@ const SECTIONS = [
       { href: "/vouchers", label: "All Vouchers", key: "vouchers" },
       { href: "/ledger", label: "General Ledger", key: "ledger" },
       { href: "/reports/trial-balance", label: "Trial Balance", key: "trial-balance" },
+      { href: "/reports/account-closing-balance", label: "Account Closing Balance", key: "fin-acc-closing" },
       { href: "/reports/daily-activity", label: "Daily Activity", key: "daily-activity" },
       { href: "/reports/aging", label: "Aging Analysis", key: "aging" },
       { href: "/reports/aging-cr-detail", label: "Creditors Accounts Aging", key: "fin-aging-cr-detail" },
