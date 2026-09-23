@@ -1,3 +1,4 @@
+import { AccountCodeHint } from "@/components/account-code-hint";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -394,6 +395,13 @@ export default async function BankReceiptPage({
     .orderBy(schema.chartOfAccounts.code);
   const descMap = new Map(accounts.map((a) => [a.code, a.description]));
   const pickerAccounts = accounts.filter((a) => a.level >= 4);
+  // Name in the box, code underneath — the code is there to confirm the right
+  // account was hit, not to be read. Typing a code still finds it.
+  const lineAccOpts = pickerAccounts.map((a) => ({
+    value: a.code,
+    label: a.description ?? a.code,
+    desc: a.code,
+  }));
   const bankOpts = pickerAccounts.map((a) => ({
     value: a.code,
     label: `${a.code} — ${a.description}`,
@@ -738,12 +746,12 @@ export default async function BankReceiptPage({
                   Line Items
                 </div>
                 <div className="overflow-x-auto border border-black">
+                  <AccountCodeHint field="line_acc" />
                   <table className="mono text-[12px]" style={{ minWidth: 1440 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 150 }}>Short Name</th>
-                        <th style={{ width: 220 }}>Tittle</th>
                         <th className="hidden" style={{ width: 34 }}>OK</th>
                         <th className="hidden" style={{ width: 150 }}>Yarn Count - (List - F9)</th>
                         <th style={{ width: 240 }}>Narr</th>
@@ -759,26 +767,23 @@ export default async function BankReceiptPage({
                     <tbody>
                       {Array.from({ length: rowsToShow }).map((_, i) => {
                         const l = gridDetail[i];
-                        const title = l?.accCode ? descMap.get(l.accCode) ?? "" : "";
                         const amt = l ? (IS_RECEIPT ? l.credit : l.debit) : null;
                         return (
                           <tr key={i}>
                             <td className="text-[var(--muted)] text-center">{i + 1}</td>
                             <td>
-                              <input
+                              <Combobox
                                 name="line_acc"
-                                list="fin-accts"
-                                className="input-box mono text-[12px]"
+                                options={lineAccOpts}
                                 defaultValue={l?.accCode ?? ""}
+                                className="input-box text-[12px]"
                               />
-                            </td>
-                            <td>
-                              <input
-                                className="input-box mono text-[12px] bg-gray-50"
-                                defaultValue={title}
-                                readOnly
-                                tabIndex={-1}
-                              />
+                              <div
+                                data-code-hint
+                                className="mono text-[10px] text-[var(--muted)] mt-0.5 leading-none"
+                              >
+                                {l?.accCode ?? ""}
+                              </div>
                             </td>
                             <td className="hidden text-center text-[10px] text-[var(--muted)]">
                               {l?.statusOk === "Y" ? "✓" : ""}
