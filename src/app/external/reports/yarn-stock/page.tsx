@@ -5,10 +5,12 @@ import { db, schema } from "@/db";
 import { and, gte, lte, or, sql } from "drizzle-orm";
 import { today as todayFn, monthsAgo } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
+import { requireSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 const fmt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
+const fmt2 = (n: number) => new Intl.NumberFormat("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 function escLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => "\\" + m);
@@ -25,9 +27,9 @@ type StockRow = {
   party: string | null;
   count: string | null;
   brand: string | null;
-  bags: number | null;
-  cons: number | null;
-  lbs: number | null;
+  bags: number;
+  cons: number;
+  lbs: number;
   rate: number | null;
   amount: number | null;
 };
@@ -37,6 +39,7 @@ export default async function YarnStockPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; code?: string; description?: string }>;
 }) {
+  await requireSession();
   const params = await searchParams;
 
   const today = todayFn();
@@ -74,7 +77,6 @@ export default async function YarnStockPage({
       cons: schema.extYarnPurVoucherLine.con,
       lbs: schema.extYarnPurVoucherLine.lbs,
       rate: schema.extYarnPurVoucherLine.rate,
-      qty: schema.extYarnPurVoucherLine.qty,
     })
     .from(schema.extYarnPurVoucher)
     .innerJoin(
@@ -84,9 +86,9 @@ export default async function YarnStockPage({
     .where(and(...conditions))
     .orderBy(sql`v_date DESC, ext_yarn_pur_voucher.id DESC`);
 
-  // ONE row per voucher (owner: the same voucher was repeating once per line, and
-  // empty junk lines made it worse). Lines are aggregated: first non-empty count /
-  // brand, Σ bags / cones / lbs, weighted-average rate, Σ amount.
+  // One row per voucher+count. A voucher with two different counts shows two
+  // rows — that is the whole point; the old code collapsed them to one and lost
+  // the second count's stock.
   type LineAgg = {
     id: number;
     vNo: string;
@@ -100,16 +102,19 @@ export default async function YarnStockPage({
     amount: number;
     hasRate: boolean;
   };
-  const byVoucher = new Map<number, LineAgg>();
+  const byKey = new Map<string, LineAgg>();
   for (const r of joined) {
-    let agg = byVoucher.get(r.voucherId);
+    const cnt = (r.count ?? "").trim();
+    if (!cnt && !r.lbs) continue;
+    const k = `${r.voucherId}::${cnt}`;
+    let agg = byKey.get(k);
     if (!agg) {
       agg = {
         id: r.voucherId,
         vNo: r.vNo,
         vDate: r.vDate,
         party: r.party,
-        count: "",
+        count: cnt,
         brand: "",
         bags: 0,
         con: 0,
@@ -117,9 +122,8 @@ export default async function YarnStockPage({
         amount: 0,
         hasRate: false,
       };
-      byVoucher.set(r.voucherId, agg);
+      byKey.set(k, agg);
     }
-    if (!agg.count && r.count) agg.count = r.count;
     if (!agg.brand && r.brand) agg.brand = r.brand;
     agg.bags += r.bags ?? 0;
     agg.con += r.cons ?? 0;
@@ -130,18 +134,23 @@ export default async function YarnStockPage({
     }
   }
 
-  const rateOf = (agg: LineAgg) => {
-    const weighted = agg.lbs > 0 && agg.hasRate ? agg.amount / agg.lbs : null;
-    if (weighted != null) return weighted;
-    // Fall back to the first line's own rate when no lbs were priced.
-    const first = joined.find((r) => r.voucherId === agg.id && r.rate != null);
-    return first?.rate ?? null;
-  };
+  const countMeta = await db
+    .select({
+      code: schema.yarnCounts.countCode,
+      description: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
+    .from(schema.yarnCounts);
+  const countDescMap = new Map(countMeta.map((c) => [c.code, c.description]));
+  const countBlendMap = new Map(countMeta.map((c) => [c.code, c.type]));
 
-  const rows: StockRow[] = Array.from(byVoucher.values())
+  const rows: StockRow[] = Array.from(byKey.values())
+    .filter((a) => a.lbs > 0 || a.bags > 0)
     .sort((a, b) => (a.vDate < b.vDate ? 1 : a.vDate > b.vDate ? -1 : b.id - a.id))
     .map((agg) => {
-      const rate = rateOf(agg);
+      const rate = agg.lbs > 0 && agg.hasRate ? agg.amount / agg.lbs : null;
+      // Bags = lbs / 100. The stored bag column is rarely populated.
+      const bags = agg.bags > 0 ? agg.bags : agg.lbs / 100;
       return {
         id: agg.id,
         vNo: agg.vNo,
@@ -149,7 +158,7 @@ export default async function YarnStockPage({
         party: agg.party,
         count: agg.count || null,
         brand: agg.brand || null,
-        bags: agg.bags,
+        bags,
         cons: agg.con,
         lbs: agg.lbs,
         rate,
@@ -157,15 +166,16 @@ export default async function YarnStockPage({
       };
     });
 
-  const uniqueVouchers = rows.length;
-  const totalBags = rows.reduce((s, r) => s + (r.bags ?? 0), 0);
-  const totalLbs = rows.reduce((s, r) => s + (r.lbs ?? 0), 0);
+  const uniqueVouchers = new Set(rows.map((r) => r.id)).size;
+  const totalBags = rows.reduce((s, r) => s + r.bags, 0);
+  const totalLbs = rows.reduce((s, r) => s + r.lbs, 0);
   const totalAmount = rows.reduce((s, r) => s + (r.amount ?? 0), 0);
 
   const excelRows = rows.map((r) => ({
     ...r,
     party: r.party ?? "",
     count: r.count ?? "",
+    blend: r.count ? (countBlendMap.get(r.count) ?? "") : "",
     brand: r.brand ?? "",
   }));
 
@@ -176,7 +186,7 @@ export default async function YarnStockPage({
           <div>
             <h1 className="page-title">Yarn Stock</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {rows.length} voucher{rows.length === 1 ? "" : "s"} &middot; {from} to {to}
+              {uniqueVouchers} voucher{uniqueVouchers === 1 ? "" : "s"} &middot; {from} to {to}
             </p>
           </div>
           <div className="flex gap-2">
@@ -188,6 +198,7 @@ export default async function YarnStockPage({
                 { key: "vDate", label: "V.Date" },
                 { key: "party", label: "Party" },
                 { key: "count", label: "Count" },
+                { key: "blend", label: "Blend" },
                 { key: "brand", label: "Brand" },
                 { key: "bags", label: "Bags" },
                 { key: "cons", label: "Cons" },
@@ -241,7 +252,7 @@ export default async function YarnStockPage({
             <div className="stat-label">Total Vouchers</div>
           </div>
           <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{fmt(totalBags)}</div>
+            <div className="mono text-xl font-bold">{fmt2(totalBags)}</div>
             <div className="stat-label">Total Bags</div>
           </div>
           <div className="bg-white p-4">
@@ -278,16 +289,24 @@ export default async function YarnStockPage({
                   </td>
                 </tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.id}>
+                rows.map((r, i) => (
+                  <tr key={`${r.id}-${r.count}-${i}`}>
                     <td className="mono text-[13px] font-bold">{r.vNo}</td>
                     <td className="mono text-[13px]">{r.vDate}</td>
                     <td className="text-[13px]">{r.party ?? "-"}</td>
-                    <td className="mono text-[13px]">{r.count ?? "-"}</td>
+                    <td className="mono text-[13px]">
+                      {r.count ?? "-"}
+                      {r.count && countDescMap.get(r.count) ? (
+                        <div className="text-[11px] text-[var(--muted)]">
+                          {countDescMap.get(r.count)}
+                          {countBlendMap.get(r.count) ? ` · ${countBlendMap.get(r.count)}` : ""}
+                        </div>
+                      ) : null}
+                    </td>
                     <td className="text-[13px]">{r.brand ?? "-"}</td>
-                    <td className="mono text-right">{r.bags != null ? fmt(r.bags) : "-"}</td>
-                    <td className="mono text-right">{r.cons != null ? fmt(r.cons) : "-"}</td>
-                    <td className="mono text-right">{r.lbs != null ? fmt(r.lbs) : "-"}</td>
+                    <td className="mono text-right">{fmt2(r.bags)}</td>
+                    <td className="mono text-right">{r.cons > 0 ? fmt(r.cons) : "-"}</td>
+                    <td className="mono text-right">{fmt2(r.lbs)}</td>
                     <td className="mono text-right">{r.rate != null ? fmt(r.rate) : "-"}</td>
                     <td className="mono text-right font-bold">{r.amount != null ? fmt(r.amount) : "-"}</td>
                   </tr>
@@ -302,8 +321,8 @@ export default async function YarnStockPage({
                   <td></td>
                   <td></td>
                   <td></td>
-                  <td className="mono text-right">{fmt(totalBags)}</td>
-                  <td className="mono text-right">{fmt(rows.reduce((s, r) => s + (r.cons ?? 0), 0))}</td>
+                  <td className="mono text-right">{fmt2(totalBags)}</td>
+                  <td className="mono text-right">{fmt(rows.reduce((s, r) => s + r.cons, 0))}</td>
                   <td className="mono text-right">{fmt(totalLbs)}</td>
                   <td className="mono text-right">{totalLbs > 0 && totalAmount > 0 ? fmt(totalAmount / totalLbs) : "-"}</td>
                   <td className="mono text-right font-bold">Rs {fmt(totalAmount)}</td>

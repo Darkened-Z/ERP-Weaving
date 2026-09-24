@@ -188,6 +188,7 @@ export default async function YarnSaleRegisterPage({
     party: r.party ?? "",
     count: r.count ?? "",
     brand: r.brand ?? "",
+    doNo: r.doNo ?? "",
     bag: r.bag ?? 0,
     lbs: r.lbs ?? 0,
     rate: r.rate ?? 0,
@@ -216,6 +217,7 @@ export default async function YarnSaleRegisterPage({
                 { key: "party", label: "Party" },
                 { key: "count", label: "Count" },
                 { key: "brand", label: "Brand" },
+                { key: "doNo", label: "DO#" },
                 { key: "bag", label: "Bags" },
                 { key: "lbs", label: "Lbs" },
                 { key: "rate", label: "Rate" },
@@ -295,6 +297,7 @@ export default async function YarnSaleRegisterPage({
                 <th>Party</th>
                 <th>Count</th>
                 <th>Brand</th>
+                <th>DO#</th>
                 <th className="text-right">Bags</th>
                 <th className="text-right">Lbs</th>
                 <th className="text-right">Rate</th>
@@ -305,7 +308,7 @@ export default async function YarnSaleRegisterPage({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center text-[var(--muted)] py-8">
+                  <td colSpan={11} className="text-center text-[var(--muted)] py-8">
                     No yarn movement in range
                   </td>
                 </tr>
@@ -335,9 +338,9 @@ export default async function YarnSaleRegisterPage({
                       {countBlend.get(String(r.count ?? "")) ? (
                         <div className="text-[10px] opacity-70">{countBlend.get(String(r.count ?? ""))}</div>
                       ) : null}
-                      {r.loc ? <div className="text-[10px] opacity-70">{r.loc}</div> : null}
                     </td>
                     <td>{r.brand ?? "-"}</td>
+                    <td className="mono text-[12px]">{r.doNo ?? "-"}</td>
                     <td className="mono text-right">{fmt2(r.bag ?? 0)}</td>
                     <td className="mono text-right">{fmt2(r.lbs ?? 0)}</td>
                     <td className="mono text-right">{fmt2(r.rate ?? 0)}</td>
@@ -350,7 +353,7 @@ export default async function YarnSaleRegisterPage({
             {rows.length > 0 && (
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
-                  <td colSpan={5}>Total</td>
+                  <td colSpan={6}>Total</td>
                   <td className="mono text-right">{fmt2(totBags)}</td>
                   <td className="mono text-right">{fmt2(totLbs)}</td>
                   <td></td>

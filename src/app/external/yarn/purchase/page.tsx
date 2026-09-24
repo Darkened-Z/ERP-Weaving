@@ -1504,7 +1504,7 @@ export default async function YarnPurchaseVoucherPage({
                   />
                   {/* Clearing one line must not cost the operator the whole voucher. */}
                   <RowErase tbodyId="ypv-line-rows" />
-                  <GrowRows tbodyId="ypv-line-rows" initial={3} />
+                  <GrowRows tbodyId="ypv-line-rows" initial={3} skip={["line_despatch_party"]} />
                   {/* A saved line can carry a Count and a Count Desc that disagree
                       with its Party Count — the three were written at different
                       times. The Party Count is the authority (it is the count the
