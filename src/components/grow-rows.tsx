@@ -15,19 +15,27 @@ import { useEffect } from "react";
 export function GrowRows({
   tbodyId,
   initial = 2,
+  skip,
 }: {
   tbodyId: string;
   /** How many rows to show on a blank form. */
   initial?: number;
+  /** Field names to ignore when deciding if a row is "filled". Auto-filled
+   *  fields (godown, unit) are always populated but are not something the
+   *  operator typed — counting them defeats the whole component. */
+  skip?: string[];
 }) {
   useEffect(() => {
     const body = document.getElementById(tbodyId) as HTMLTableSectionElement | null;
     if (!body) return;
+    const skipSet = new Set(skip ?? []);
 
     const filled = (tr: HTMLTableRowElement) =>
       Array.from(tr.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select")).some(
         (el) => {
           if (el instanceof HTMLInputElement && (el.type === "hidden" || el.type === "button")) return false;
+          if (el instanceof HTMLInputElement && el.readOnly) return false;
+          if (skipSet.has(el.name)) return false;
           return (el.value ?? "").trim() !== "";
         },
       );
@@ -55,7 +63,7 @@ export function GrowRows({
       document.removeEventListener("input", onChange, true);
       document.removeEventListener("change", onChange, true);
     };
-  }, [tbodyId, initial]);
+  }, [tbodyId, initial, skip]);
 
   return null;
 }
