@@ -5,6 +5,7 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { RowErase } from "@/components/production-calc";
+import { GrowRows } from "@/components/grow-rows";
 import { RowReconcileFromPartyCount } from "@/components/row-reconcile";
 import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
@@ -587,7 +588,11 @@ export default async function YarnPurchaseVoucherPage({
       const rt = num(rates[i]);
       const rs = num(rateSvs[i]);
 
-      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && !u && !dp && rt == null && rs == null) {
+      // A row is empty when nothing was ENTERED on it. The despatch party and
+      // the unit are auto-filled on every row of the grid, so counting them as
+      // data made every blank line look real: each save wrote them all and gave
+      // each one a batch letter, and the voucher grew by ten rows a time.
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && rt == null && rs == null) {
         continue;
       }
 
@@ -1499,6 +1504,7 @@ export default async function YarnPurchaseVoucherPage({
                   />
                   {/* Clearing one line must not cost the operator the whole voucher. */}
                   <RowErase tbodyId="ypv-line-rows" />
+                  <GrowRows tbodyId="ypv-line-rows" initial={3} />
                   {/* A saved line can carry a Count and a Count Desc that disagree
                       with its Party Count — the three were written at different
                       times. The Party Count is the authority (it is the count the

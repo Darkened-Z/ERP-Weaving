@@ -59,6 +59,7 @@ async function saveVoucher(formData: FormData) {
   const accs = formData.getAll("line_acc") as string[];
   const yarns = formData.getAll("line_yarn") as string[];
   const narrs = formData.getAll("line_narr") as string[];
+  const imgs = formData.getAll("line_img") as string[];
   const chqNos = formData.getAll("line_chq_no") as string[];
   const chqDates = formData.getAll("line_chq_date") as string[];
   const amounts = formData.getAll("line_amt") as string[];
@@ -72,6 +73,7 @@ async function saveVoucher(formData: FormData) {
     chqNo: string | null;
     chqDate: string | null;
     ccCode: number | null;
+    img: string | null;
     amount: number;
   }[] = [];
 
@@ -86,6 +88,7 @@ async function saveVoucher(formData: FormData) {
       chqNo: (chqNos[i] ?? "").trim() || null,
       chqDate: (chqDates[i] ?? "").trim() || null,
       ccCode: intVal(ccs[i]),
+      img: (imgs[i] ?? "").trim() || null,
       amount,
     });
   }
@@ -143,6 +146,7 @@ async function saveVoucher(formData: FormData) {
       accCode: l.accCode,
       partyCode: bankAcc,
       ccCode: l.ccCode,
+      img: l.img,
       narration: l.narration,
       debit: IS_RECEIPT ? 0 : l.amount,
       credit: IS_RECEIPT ? l.amount : 0,
@@ -787,6 +791,7 @@ export default async function BankPaymentPage({
                         <th className="hidden" style={{ width: 34 }}>OK</th>
                         <th className="hidden" style={{ width: 150 }}>Yarn Count - (List - F9)</th>
                         <th style={{ width: 240 }}>Narr</th>
+                        <th style={{ width: 70 }}>Img</th>
                         <th style={{ width: 120 }}>Chq.No</th>
                         <th style={{ width: 150 }}>Chq.Date</th>
                         <th style={{ width: 120 }} className="text-right">
@@ -834,6 +839,9 @@ export default async function BankPaymentPage({
                                 className="input-box text-[12px]"
                                 defaultValue={l?.narration ?? ""}
                               />
+                            </td>
+                            <td className="text-center">
+                              <ImageAttach name="line_img" defaultValue={l?.img ?? ""} compact />
                             </td>
                             <td>
                               <input

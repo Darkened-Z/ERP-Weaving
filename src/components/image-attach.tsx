@@ -48,12 +48,15 @@ export function ImageAttach({
   maxPx = 900,
   quality = 0.6,
   max = MAX_IMAGES,
+  compact = false,
 }: {
   name: string;
   defaultValue?: string | null;
   maxPx?: number;
   quality?: number;
   max?: number;
+  /** One small button instead of two — for a cell in a voucher grid. */
+  compact?: boolean;
 }) {
   const [images, setImages] = useState<string[]>(parseStored(defaultValue));
   const [busy, setBusy] = useState(false);
@@ -84,6 +87,32 @@ export function ImageAttach({
   return (
     <div>
       <input type="hidden" name={name} value={serialize(images)} readOnly />
+      {/* In a grid there is no room for two buttons and a counter. One small
+          control that says how many are attached does the same job. */}
+      {compact ? (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            className="btn btn-outline btn-xs"
+            disabled={busy}
+            title={images.length ? `${images.length} attached — add another` : "Attach a photo"}
+          >
+            {busy ? "…" : images.length ? `IMG ${images.length}` : "IMG"}
+          </button>
+          {images.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setImages([])}
+              className="text-[11px] cursor-pointer"
+              style={{ color: "var(--danger)" }}
+              title="Remove the photos on this line"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="flex items-center gap-2 flex-wrap">
         <button
           type="button"
@@ -118,8 +147,9 @@ export function ImageAttach({
           </button>
         )}
       </div>
+      )}
 
-      {images.length > 0 && (
+      {!compact && images.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap mt-2">
           {images.map((src, i) => (
             <span key={i} className="relative inline-block">

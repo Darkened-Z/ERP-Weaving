@@ -109,6 +109,7 @@ async function saveVoucher(formData: FormData) {
   const chqDates = formData.getAll("line_chq_date") as string[];
   const amounts = formData.getAll("line_amount") as string[];
   const ccIn = formData.getAll("line_cc") as string[];
+  const imgs = formData.getAll("line_img") as string[];
 
   const rowCount = Math.max(accs.length, titles.length, amounts.length);
   type Row = {
@@ -118,6 +119,7 @@ async function saveVoucher(formData: FormData) {
     chqDate: string | null;
     ccCode: number | null;
     yarn: string | null;
+    img: string | null;
     amount: number;
   };
   const rows: Row[] = [];
@@ -139,6 +141,7 @@ async function saveVoucher(formData: FormData) {
       chqDate: (chqDates[i] ?? "").trim() || null,
       ccCode: resolveCc(ccIn[i] ?? null),
       yarn: (yarns[i] ?? "").trim() || null,
+      img: (imgs[i] ?? "").trim() || null,
       amount,
     });
   }
@@ -166,6 +169,7 @@ async function saveVoucher(formData: FormData) {
         chqNo: r.chqNo,
         chqDate: r.chqDate,
         yarnCount: r.yarn,
+        img: r.img,
       });
     });
     rows.forEach((r, i) => {
@@ -690,6 +694,7 @@ export default async function CashPaymentPage({
                       <th className="hidden" style={{ width: 34 }}>OK</th>
                       <th className="hidden" style={{ width: 110 }}>Yarn Count</th>
                       <th style={{ width: 200 }}>Narr</th>
+                      <th style={{ width: 70 }}>Img</th>
                       <th style={{ width: 110 }}>Chq.No</th>
                       <th style={{ width: 130 }}>Chq.Date</th>
                       <th style={{ width: 120 }}>Dr</th>
@@ -733,6 +738,13 @@ export default async function CashPaymentPage({
                               name="line_narr"
                               className="input-box mono text-[12px]"
                               defaultValue={l?.narration ?? ""}
+                            />
+                          </td>
+                          <td className="text-center">
+                            <ImageAttach
+                              name="line_img"
+                              defaultValue={l?.img ?? ""}
+                              compact
                             />
                           </td>
                           <td>

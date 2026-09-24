@@ -1,5 +1,6 @@
 import { Combobox } from "@/components/combobox";
 import { AccountCodeHint } from "@/components/account-code-hint";
+import { ImageAttach } from "@/components/image-attach";
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { RowClearButton } from "@/components/row-clear-button";
@@ -45,6 +46,7 @@ type ParsedLine = {
   chqDate: string | null;
   contNo: string | null;
   ccCode: number | null;
+  img: string | null;
   debit: number;
   credit: number;
 };
@@ -135,6 +137,7 @@ async function saveVoucher(formData: FormData) {
   const shortNames = formData.getAll("short_name") as string[];
   const titles = formData.getAll("title") as string[];
   const narrs = formData.getAll("narr") as string[];
+  const imgs = formData.getAll("line_img") as string[];
   const chqNos = formData.getAll("chq_no") as string[];
   const chqDates = formData.getAll("chq_date") as string[];
   const contNos = formData.getAll("cont_no") as string[];
@@ -178,6 +181,7 @@ async function saveVoucher(formData: FormData) {
       chqDate: txt(chqDates[i]),
       contNo: txt(contNos[i]),
       ccCode: resolveCc((ccs[i] ?? "").trim()),
+      img: txt(imgs[i]),
       debit,
       credit,
     });
@@ -239,6 +243,7 @@ async function saveVoucher(formData: FormData) {
           chqNo: l.chqNo,
           chqDate: l.chqDate,
           contNo: l.contNo,
+          img: l.img,
         })),
       );
     });
@@ -289,6 +294,7 @@ async function saveVoucher(formData: FormData) {
           chqNo: l.chqNo,
           chqDate: l.chqDate,
           contNo: l.contNo,
+          img: l.img,
         })),
       );
       return insertedId;
@@ -828,6 +834,7 @@ export default async function JournalVoucherPage({
                         <th style={{ width: 240 }}>Tittle</th>
                         <th className="hidden" style={{ width: 34 }}>OK</th>
                         <th style={{ width: 200 }}>Narr</th>
+                        <th style={{ width: 70 }}>Img</th>
                         <th style={{ width: 100 }}>Chq.No</th>
                         <th style={{ width: 140 }}>Chq.Date</th>
                         <th style={{ width: 120 }}>Cont.No</th>
@@ -872,6 +879,9 @@ export default async function JournalVoucherPage({
                                 className={cell}
                                 defaultValue={l?.narration ?? ""}
                               />
+                            </td>
+                            <td className="text-center">
+                              <ImageAttach name="line_img" defaultValue={l?.img ?? ""} compact />
                             </td>
                             <td>
                               <input
