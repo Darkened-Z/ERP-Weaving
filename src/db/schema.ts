@@ -121,6 +121,9 @@ export const transDetail = sqliteTable("trans_detail", {
   credit: real("credit").notNull().default(0),
   chqNo: text("chq_no"),
   chqDate: text("chq_date"),
+  // A picture per line — the delivery slip or bill behind that one entry.
+  // trans_main already carries one for the voucher as a whole; this is finer.
+  img: text("img"),
   yarnCount: text("yarn_count"),
   contNo: text("cont_no"),
   statusOk: text("status_ok"),

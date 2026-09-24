@@ -684,7 +684,9 @@ export default async function YarnSaleVoucherPage({
       const rt = num(rates[i]);
       const rm = (rmks[i] || "").trim();
 
-      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && !u && !dp && rt == null && !rm) {
+      // Same as the purchase side: the godown and unit are auto-filled on every
+      // row, so treating them as data would persist every blank line.
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && rt == null && !rm) {
         continue;
       }
 
