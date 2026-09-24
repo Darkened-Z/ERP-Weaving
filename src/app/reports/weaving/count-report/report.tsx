@@ -47,10 +47,11 @@ export async function CountsAccountsReport({
     yarnCountOptions(),
     db.select().from(schema.yarnCounts),
   ]);
-  // "21 — 36/s" does not say what the yarn is. The blend belongs with it, so the
-  // label is description + fibre type, the same pairing every other screen uses.
   const descByCode = new Map(
-    allCounts.map((c) => [c.countCode, `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()]),
+    allCounts.map((c) => [c.countCode, c.description ?? ""]),
+  );
+  const blendByCode = new Map(
+    allCounts.map((c) => [c.countCode, c.type ?? ""]),
   );
 
   // Seed — yarn sold to the party, by party + count.
@@ -110,7 +111,7 @@ export async function CountsAccountsReport({
     .where(and(...purConds))
     .groupBy(schema.extYarnPurVoucher.party, schema.extYarnPurVoucherLine.count);
 
-  type Row = { party: string; count: string; desc: string; purLbs: number; salLbs: number; totalLbs: number; bags: number; consumedLbs: number; balLbs: number; rate: number; amount: number };
+  type Row = { party: string; count: string; desc: string; blend: string; purLbs: number; salLbs: number; totalLbs: number; bags: number; consumedLbs: number; balLbs: number; rate: number; amount: number };
   // The Sale side starts from the commitment, not from the movement: every
   // party on a SALE-type external grey conversion contract, crossed with every
   // count that party is set up with in Party Count. Those rows exist whether or
@@ -158,7 +159,7 @@ export async function CountsAccountsReport({
   const map = new Map<string, Row>();
   const key = (pt: string, c: string) => `${pt}||${c}`;
   const blank = (pt: string, c: string): Row => ({
-    party: pt, count: c, desc: descByCode.get(c) ?? "",
+    party: pt, count: c, desc: descByCode.get(c) ?? "", blend: blendByCode.get(c) ?? "",
     purLbs: 0, salLbs: 0, totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, rate: 0, amount: 0,
   });
   let seedValue = 0;
@@ -252,7 +253,7 @@ export async function CountsAccountsReport({
             <PrintButton />
             <ExcelExportButton
               rows={rows.map((r) => ({
-                party: r.party, count: r.count, description: r.desc,
+                party: r.party, count: r.count, description: r.desc, blend: r.blend,
                 totalLbs: Math.round(r.totalLbs), bags: r.bags,
                 consumedLbs: Math.round(r.consumedLbs), balLbs: Math.round(r.balLbs),
                 rate: Number(r.rate.toFixed(2)), amount: Math.round(r.amount),
@@ -261,6 +262,7 @@ export async function CountsAccountsReport({
                 { key: "party", label: "Party" },
                 { key: "count", label: "Count" },
                 { key: "description", label: "Count Desc" },
+                { key: "blend", label: "Blend" },
                 { key: "totalLbs", label: "Total Lbs" },
                 { key: "bags", label: "Bags" },
                 { key: "consumedLbs", label: "Consumed Lbs" },
@@ -301,7 +303,8 @@ export async function CountsAccountsReport({
           <table>
             <thead>
               <tr>
-                <th>Count Desc</th>
+                <th>Count</th>
+                <th>Blend</th>
                 <th className="text-right">Total Lbs</th>
                 <th className="text-right">Bags</th>
                 <th className="text-right">Consumed Lbs</th>
@@ -314,7 +317,7 @@ export async function CountsAccountsReport({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-[var(--muted)] py-8">
+                  <td colSpan={9} className="text-center text-[var(--muted)] py-8">
                     {partyScope !== "activity" && (scopedParties?.size ?? 0) === 0
                       ? `No external grey conversion contract is set to type ${contractType}, so there are ` +
                         `no parties to report. Set a contract's type to ${contractType} and its parties ` +
@@ -330,11 +333,11 @@ export async function CountsAccountsReport({
                   );
                   return (
                     <tr key={pt} className="contents">
-                      <td colSpan={8} className="p-0">
+                      <td colSpan={9} className="p-0">
                         <table className="w-full">
                           <tbody>
                             <tr style={{ background: "#0f172a", color: "white" }}>
-                              <td className="font-bold text-[13px] px-2 py-1" colSpan={8}>
+                              <td className="font-bold text-[13px] px-2 py-1" colSpan={9}>
                                 {pt} <span className="opacity-70">· {prows.length}</span>
                                 {/* The whole party's yarn movement, every count at
                                     once — the register the mill reads per party. */}
@@ -351,6 +354,7 @@ export async function CountsAccountsReport({
                             {prows.map((r) => (
                               <tr key={r.count}>
                                 <td className="text-[13px]"><span className="mono font-bold">{r.count}</span> — {r.desc || r.count}</td>
+                                <td className="text-[12px] text-[var(--muted)]">{r.blend || "-"}</td>
                                 <td className="mono text-right">{fmt(r.totalLbs)}</td>
                                 <td className="mono text-right">
                                   {r.bags !== 0 ? (
@@ -390,7 +394,7 @@ export async function CountsAccountsReport({
                               </tr>
                             ))}
                             <tr style={{ borderTop: "1px solid #cbd5e1", fontWeight: 700 }}>
-                              <td className="text-right pr-2">Party Total</td>
+                              <td className="text-right pr-2" colSpan={2}>Party Total</td>
                               <td className="mono text-right">{fmt(sub.totalLbs)}</td>
                               <td className="mono text-right">
                                 {sub.bags !== 0 ? (
@@ -422,7 +426,7 @@ export async function CountsAccountsReport({
             {rows.length > 0 && (
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
-                  <td className="text-right pr-2">Grand Total</td>
+                  <td className="text-right pr-2" colSpan={2}>Grand Total</td>
                   <td className="mono text-right">{fmt(grand.totalLbs)}</td>
                   <td className="mono text-right">{fmt(grand.bags)}</td>
                   <td className="mono text-right">{fmt(grand.consumedLbs)}</td>

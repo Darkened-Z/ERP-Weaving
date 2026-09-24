@@ -2,10 +2,12 @@ import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
 import { and, gte, lte, eq, sql } from "drizzle-orm";
 import { today as todayFn, monthsAgo } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
+import { requireSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +30,9 @@ const STATUS_OPTIONS = [
 ];
 
 const TYPE_OPTIONS = [
-  { value: "", label: "All" },
-  { value: "PUR", label: "PUR - Purchase" },
-  { value: "SAL", label: "SAL - Sale" },
+  { value: "", label: "All - Purchase & Sale" },
+  { value: "PUR", label: "PUR - Purchase only" },
+  { value: "SAL", label: "SAL - Sale only" },
 ];
 
 type Row = {
@@ -55,34 +57,78 @@ export default async function YarnRegisterPage({
   searchParams: Promise<{
     from?: string;
     to?: string;
-    shortTittle?: string;
-    tittle?: string;
-    code?: string;
+    party?: string;
+    count?: string;
+    brand?: string;
     type?: string;
     status?: string;
-    brand?: string;
-    reg2_code?: string;
-    reg2_desc?: string;
-    reg2_brand?: string;
-    pur_rate?: string;
+    rate?: string;
   }>;
 }) {
+  await requireSession();
   const params = await searchParams;
 
   const today = todayFn();
   const from = params.from?.trim() || sixMonthsAgo();
   const to = params.to?.trim() || today;
-  const shortTittle = params.shortTittle?.trim() ?? "";
-  const tittle = params.tittle?.trim() ?? "";
-  const code = params.code?.trim() ?? "";
+  const party = params.party?.trim() ?? "";
+  const count = params.count?.trim() ?? "";
+  const brand = params.brand?.trim() ?? "";
   const type = params.type?.trim() ?? "";
   const status = params.status?.trim() ?? "";
-  const brand = params.brand?.trim() ?? "";
-  const reg2Code = params.reg2_code?.trim() ?? "";
-  const reg2Desc = params.reg2_desc?.trim() ?? "";
-  const reg2Brand = params.reg2_brand?.trim() ?? "";
-  const purRateRaw = params.pur_rate?.trim() ?? "";
-  const purRate = purRateRaw !== "" && !Number.isNaN(Number(purRateRaw)) ? Number(purRateRaw) : null;
+  const rateRaw = params.rate?.trim() ?? "";
+  const rate = rateRaw !== "" && !Number.isNaN(Number(rateRaw)) ? Number(rateRaw) : null;
+
+  const accountRows = await db
+    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+    .from(schema.chartOfAccounts);
+  const partyDescByCode = new Map(accountRows.map((r) => [r.code, r.description]));
+  const countLookup = await db
+    .select({
+      countCode: schema.yarnCounts.countCode,
+      description: schema.yarnCounts.description,
+      type: schema.yarnCounts.type,
+    })
+    .from(schema.yarnCounts);
+  const countDescByCode = new Map(countLookup.map((r) => [r.countCode, r.description]));
+  const countBlendByCode = new Map(countLookup.map((r) => [r.countCode, r.type]));
+
+  const [purAll, salAll] = await Promise.all([
+    db
+      .select({
+        partyCode: schema.extYarnPurContract.partyCode,
+        countCode: schema.extYarnPurContract.countCode,
+        brand: schema.extYarnPurContract.brand,
+      })
+      .from(schema.extYarnPurContract)
+      .where(and(gte(schema.extYarnPurContract.contDate, from), lte(schema.extYarnPurContract.contDate, to))),
+    db
+      .select({
+        partyCode: schema.extYarnSalContract.partyCode,
+        countCode: schema.extYarnSalContract.countCode,
+        brand: schema.extYarnSalContract.brand,
+      })
+      .from(schema.extYarnSalContract)
+      .where(and(gte(schema.extYarnSalContract.contDate, from), lte(schema.extYarnSalContract.contDate, to))),
+  ]);
+  const optionRows = [...purAll, ...salAll];
+  const uniq = (xs: Array<string | null>) =>
+    Array.from(new Set(xs.map((x) => (x ?? "").trim()).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true }),
+    );
+
+  const partyOptions = uniq(optionRows.map((r) => r.partyCode)).map((c) => ({
+    value: c,
+    label: partyDescByCode.get(c) ?? c,
+    desc: c,
+  }));
+  const scoped = party ? optionRows.filter((r) => (r.partyCode ?? "") === party) : optionRows;
+  const countOptions = uniq(scoped.map((r) => r.countCode)).map((c) => ({
+    value: c,
+    label: countDescByCode.get(c) ? `${c} — ${countDescByCode.get(c)}` : c,
+    desc: countBlendByCode.get(c) ?? "",
+  }));
+  const brandOptions = uniq(scoped.map((r) => r.brand)).map((b) => ({ value: b, label: b }));
 
   const purConditions = [
     gte(schema.extYarnPurContract.contDate, from),
@@ -93,70 +139,52 @@ export default async function YarnRegisterPage({
     lte(schema.extYarnSalContract.contDate, to),
   ];
 
-  if (shortTittle) {
-    const pat = `%${escLike(shortTittle)}%`;
-    purConditions.push(sql`${schema.extYarnPurContract.countCode} LIKE ${pat} ESCAPE '\\'`);
-    salConditions.push(sql`${schema.extYarnSalContract.countCode} LIKE ${pat} ESCAPE '\\'`);
+  if (party) {
+    const pat = `%${escLike(party)}%`;
+    purConditions.push(sql`(
+      ${schema.extYarnPurContract.partyCode} = ${party}
+      OR ${schema.extYarnPurContract.partyCode} IN (
+        SELECT code FROM chart_of_accounts WHERE description LIKE ${pat} ESCAPE '\\'
+      )
+    )`);
+    salConditions.push(sql`(
+      ${schema.extYarnSalContract.partyCode} = ${party}
+      OR ${schema.extYarnSalContract.partyCode} IN (
+        SELECT code FROM chart_of_accounts WHERE description LIKE ${pat} ESCAPE '\\'
+      )
+    )`);
   }
-  if (tittle) {
-    const pat = `%${escLike(tittle)}%`;
-    purConditions.push(sql`${schema.extYarnPurContract.partyCode} LIKE ${pat} ESCAPE '\\'`);
-    salConditions.push(sql`${schema.extYarnSalContract.partyCode} LIKE ${pat} ESCAPE '\\'`);
-  }
-  if (code) {
-    const pat = `%${escLike(code)}%`;
-    purConditions.push(sql`${schema.extYarnPurContract.contNo} LIKE ${pat} ESCAPE '\\'`);
-    salConditions.push(sql`${schema.extYarnSalContract.contNo} LIKE ${pat} ESCAPE '\\'`);
-  }
-  if (status) {
-    purConditions.push(eq(schema.extYarnPurContract.status, status));
-    salConditions.push(eq(schema.extYarnSalContract.status, status));
+  if (count) {
+    const pat = `%${escLike(count)}%`;
+    purConditions.push(sql`(
+      ${schema.extYarnPurContract.countCode} = ${count}
+      OR ${schema.extYarnPurContract.countCode} IN (
+        SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\'
+      )
+    )`);
+    salConditions.push(sql`(
+      ${schema.extYarnSalContract.countCode} = ${count}
+      OR ${schema.extYarnSalContract.countCode} IN (
+        SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\'
+      )
+    )`);
   }
   if (brand) {
     const pat = `%${escLike(brand)}%`;
     purConditions.push(sql`${schema.extYarnPurContract.brand} LIKE ${pat} ESCAPE '\\'`);
     salConditions.push(sql`${schema.extYarnSalContract.brand} LIKE ${pat} ESCAPE '\\'`);
   }
-
-  if (reg2Code) {
-    const pat = `%${escLike(reg2Code)}%`;
-    purConditions.push(sql`${schema.extYarnPurContract.countCode} LIKE ${pat} ESCAPE '\\'`);
-    salConditions.push(sql`${schema.extYarnSalContract.countCode} LIKE ${pat} ESCAPE '\\'`);
+  if (status) {
+    purConditions.push(eq(schema.extYarnPurContract.status, status));
+    salConditions.push(eq(schema.extYarnSalContract.status, status));
   }
-  if (reg2Desc) {
-    const pat = `%${escLike(reg2Desc)}%`;
-    purConditions.push(sql`(
-      ${schema.extYarnPurContract.partyCode} IN (SELECT code FROM chart_of_accounts WHERE description LIKE ${pat} ESCAPE '\\')
-      OR ${schema.extYarnPurContract.countCode} IN (SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\')
-      OR ${schema.extYarnPurContract.partyCode} LIKE ${pat} ESCAPE '\\'
-    )`);
-    salConditions.push(sql`(
-      ${schema.extYarnSalContract.partyCode} IN (SELECT code FROM chart_of_accounts WHERE description LIKE ${pat} ESCAPE '\\')
-      OR ${schema.extYarnSalContract.countCode} IN (SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\')
-      OR ${schema.extYarnSalContract.partyCode} LIKE ${pat} ESCAPE '\\'
-    )`);
-  }
-  if (reg2Brand) {
-    const pat = `%${escLike(reg2Brand)}%`;
-    purConditions.push(sql`${schema.extYarnPurContract.brand} LIKE ${pat} ESCAPE '\\'`);
-    salConditions.push(sql`${schema.extYarnSalContract.brand} LIKE ${pat} ESCAPE '\\'`);
-  }
-  if (purRate !== null) {
-    purConditions.push(sql`ABS(COALESCE(${schema.extYarnPurContract.ratePerLbs}, 0) - ${purRate}) < 0.0001`);
-    salConditions.push(sql`ABS(COALESCE(${schema.extYarnSalContract.ratePerLbs}, 0) - ${purRate}) < 0.0001`);
+  if (rate !== null) {
+    purConditions.push(sql`ABS(COALESCE(${schema.extYarnPurContract.ratePerLbs}, 0) - ${rate}) < 0.0001`);
+    salConditions.push(sql`ABS(COALESCE(${schema.extYarnSalContract.ratePerLbs}, 0) - ${rate}) < 0.0001`);
   }
 
   const purRows = type === "SAL" ? [] : await db.select().from(schema.extYarnPurContract).where(and(...purConditions));
   const salRows = type === "PUR" ? [] : await db.select().from(schema.extYarnSalContract).where(and(...salConditions));
-
-  const accountRows = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
-    .from(schema.chartOfAccounts);
-  const partyDescByCode = new Map(accountRows.map((r) => [r.code, r.description]));
-  const countLookup = await db
-    .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description })
-    .from(schema.yarnCounts);
-  const countDescByCode = new Map(countLookup.map((r) => [r.countCode, r.description]));
 
   const combined: Row[] = [
     ...purRows.map((r) => ({
@@ -198,8 +226,9 @@ export default async function YarnRegisterPage({
 
   const excelRows = combined.map((r) => ({
     ...r,
-    party: r.party ?? "",
+    party: r.party ? (partyDescByCode.get(r.party) ?? r.party) : "",
     countCode: r.countCode ?? "",
+    blend: r.countCode ? (countBlendByCode.get(r.countCode) ?? "") : "",
     brand: r.brand ?? "",
     ratio: r.ratio ?? "",
   }));
@@ -222,27 +251,21 @@ export default async function YarnRegisterPage({
     );
   };
 
-  const filterParams: Record<string, string> = {};
-  if (from) filterParams.from = from;
-  if (to) filterParams.to = to;
-  if (shortTittle) filterParams.shortTittle = shortTittle;
-  if (tittle) filterParams.tittle = tittle;
-  if (code) filterParams.code = code;
-  if (type) filterParams.type = type;
-  if (status) filterParams.status = status;
-  if (brand) filterParams.brand = brand;
-  if (reg2Code) filterParams.code = reg2Code;
-  if (reg2Desc) filterParams.desc = reg2Desc;
-  if (reg2Brand) filterParams.brand = reg2Brand;
-  if (purRateRaw) filterParams.purRate = purRateRaw;
+  const activeBits = [
+    party ? `Party: ${partyDescByCode.get(party) ?? party}` : "All parties",
+    count ? `Count: ${countDescByCode.get(count) ? `${count} — ${countDescByCode.get(count)}` : count}` : "All counts",
+    brand ? `Brand: ${brand}` : null,
+    type === "PUR" ? "Purchase only" : type === "SAL" ? "Sale only" : "Purchase & sale",
+    status ? `Status ${status}` : null,
+  ].filter(Boolean);
 
   const buildHref = (base: string, extra: Record<string, string> = {}) => {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
-    if (reg2Code || shortTittle) qs.set("code", reg2Code || shortTittle);
-    if (reg2Brand || brand) qs.set("brand", reg2Brand || brand);
-    if (tittle) qs.set("party", tittle);
+    if (count) qs.set("code", count);
+    if (brand) qs.set("brand", brand);
+    if (party) qs.set("party", party);
     for (const [k, v] of Object.entries(extra)) if (v) qs.set(k, v);
     const q = qs.toString();
     return q ? `${base}?${q}` : base;
@@ -255,7 +278,7 @@ export default async function YarnRegisterPage({
           <div>
             <h1 className="page-title">Yarn Register</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {combined.length} contracts &middot; {from} to {to}
+              {combined.length} contracts &middot; {from} to {to} &middot; {activeBits.join(" · ")}
             </p>
           </div>
           <div className="flex gap-2">
@@ -267,7 +290,8 @@ export default async function YarnRegisterPage({
                 { key: "contNo", label: "Cont No" },
                 { key: "contDate", label: "Cont Date" },
                 { key: "party", label: "Party" },
-                { key: "countCode", label: "Count Code" },
+                { key: "countCode", label: "Count" },
+                { key: "blend", label: "Blend" },
                 { key: "brand", label: "Brand" },
                 { key: "ratio", label: "Ratio" },
                 { key: "qtyBags", label: "Qty Bags" },
@@ -285,90 +309,55 @@ export default async function YarnRegisterPage({
         <div className="hidden print:block mb-6">
           <h1 className="page-title">Yarn Register</h1>
           <div className="mono text-[12px] mt-2">
-            Period: {from} to {to}
+            Period: {from} to {to} &middot; {activeBits.join(" · ")}
           </div>
         </div>
 
-        <form
-          method="GET"
-          action=""
-          className="border border-black mb-6 no-print"
-        >
-          <div className="p-4 border-b border-black">
-            <div className="label mb-3">Section 1 &mdash; Date Range</div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="label block mb-1">Date From</label>
-                <DateBox name="from" defaultValue={from} className="input-box mono" />
-              </div>
-              <div>
-                <label className="label block mb-1">Date To</label>
-                <DateBox name="to" defaultValue={to} className="input-box mono" />
-              </div>
+        <form method="GET" action="" className="border border-black p-4 mb-6 no-print">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div>
+              <label className="label block mb-1">Date From</label>
+              <DateBox name="from" defaultValue={from} className="input-box mono" />
             </div>
-          </div>
-
-          <div className="p-4 border-b border-black">
-            <div className="label mb-3">Section 2 &mdash; Title Filters</div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="label block mb-1">Short Tittle</label>
-                <input type="text" name="shortTittle" defaultValue={shortTittle} className="input-box mono" placeholder="Count Code" />
-              </div>
-              <div>
-                <label className="label block mb-1">Tittle</label>
-                <input type="text" name="tittle" defaultValue={tittle} className="input-box" placeholder="Party" />
-              </div>
-              <div>
-                <label className="label block mb-1">Code</label>
-                <input type="text" name="code" defaultValue={code} className="input-box mono" placeholder="Contract No" />
-              </div>
+            <div>
+              <label className="label block mb-1">Date To</label>
+              <DateBox name="to" defaultValue={to} className="input-box mono" />
             </div>
-          </div>
-
-          <div className="p-4">
-            <div className="label mb-3">Section 3 &mdash; Advanced Filters</div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="label block mb-1">Code</label>
-                <input type="text" name="reg2_code" defaultValue={reg2Code} className="input-box mono" placeholder="Count Code" />
-              </div>
-              <div>
-                <label className="label block mb-1">Description</label>
-                <input type="text" name="reg2_desc" defaultValue={reg2Desc} className="input-box" placeholder="Party / Count Desc" />
-              </div>
-              <div>
-                <label className="label block mb-1">Brand</label>
-                <input type="text" name="reg2_brand" defaultValue={reg2Brand} className="input-box" />
-              </div>
-              <div>
-                <label className="label block mb-1">Pur Rate</label>
-                <input type="number" step="0.01" name="pur_rate" defaultValue={purRateRaw} className="input-box mono" placeholder="Rate/Lbs" />
-              </div>
-              <div>
-                <label className="label block mb-1">Type</label>
-                <select name="type" defaultValue={type} className="input-box">
-                  {TYPE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label block mb-1">Status</label>
-                <select name="status" defaultValue={status} className="input-box">
-                  {STATUS_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label block mb-1">Brand (Sec 2)</label>
-                <input type="text" name="brand" defaultValue={brand} className="input-box" />
-              </div>
-              <div className="flex items-end gap-2">
-                <button type="submit" className="btn btn-sm">Apply</button>
-                <a href="/external/reports/yarn-register" className="btn btn-outline btn-sm">Clear</a>
-              </div>
+            <div className="sm:col-span-2">
+              <label className="label block mb-1">Party</label>
+              <Combobox name="party" options={partyOptions} defaultValue={party} placeholder="All parties" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label block mb-1">Count</label>
+              <Combobox name="count" options={countOptions} defaultValue={count} placeholder="All counts" />
+            </div>
+            <div>
+              <label className="label block mb-1">Brand</label>
+              <Combobox name="brand" options={brandOptions} defaultValue={brand} placeholder="All brands" />
+            </div>
+            <div>
+              <label className="label block mb-1">Rate/Lbs</label>
+              <input type="number" step="0.01" name="rate" defaultValue={rateRaw} className="input-box mono" placeholder="Any rate" />
+            </div>
+            <div>
+              <label className="label block mb-1">Type</label>
+              <select name="type" defaultValue={type} className="input-box">
+                {TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label block mb-1">Status</label>
+              <select name="status" defaultValue={status} className="input-box">
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end gap-2 sm:col-span-2">
+              <button type="submit" className="btn btn-sm">Apply</button>
+              <a href="/external/reports/yarn-register" className="btn btn-outline btn-sm">Clear</a>
             </div>
           </div>
         </form>
@@ -433,7 +422,8 @@ export default async function YarnRegisterPage({
                 <th>Cont No</th>
                 <th>Cont Date</th>
                 <th>Party</th>
-                <th>Count Code</th>
+                <th>Count</th>
+                <th>Blend</th>
                 <th>Brand</th>
                 <th>Ratio</th>
                 <th className="text-right">Qty Bags</th>
@@ -446,8 +436,8 @@ export default async function YarnRegisterPage({
             <tbody>
               {combined.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="text-center text-[var(--muted)] py-8">
-                    No records found
+                  <td colSpan={13} className="text-center text-[var(--muted)] py-8">
+                    No contracts match these filters
                   </td>
                 </tr>
               ) : (
@@ -457,9 +447,9 @@ export default async function YarnRegisterPage({
                     <td className="mono text-[13px] font-bold">{r.contNo}</td>
                     <td className="mono text-[13px]">{r.contDate}</td>
                     <td className="text-[13px]">
-                      {r.party ?? "-"}
+                      {r.party ? (partyDescByCode.get(r.party) ?? r.party) : "-"}
                       {r.party && partyDescByCode.get(r.party) ? (
-                        <div className="text-[11px] text-[var(--muted)]">{partyDescByCode.get(r.party)}</div>
+                        <div className="text-[11px] text-[var(--muted)] mono">{r.party}</div>
                       ) : null}
                     </td>
                     <td className="mono text-[13px]">
@@ -467,6 +457,9 @@ export default async function YarnRegisterPage({
                       {r.countCode && countDescByCode.get(r.countCode) ? (
                         <div className="text-[11px] text-[var(--muted)]">{countDescByCode.get(r.countCode)}</div>
                       ) : null}
+                    </td>
+                    <td className="mono text-[12px]">
+                      {(r.countCode && countBlendByCode.get(r.countCode)) || "-"}
                     </td>
                     <td className="text-[13px]">{r.brand ?? "-"}</td>
                     <td className="mono text-[13px]">{r.ratio ?? "-"}</td>

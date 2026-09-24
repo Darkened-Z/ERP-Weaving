@@ -75,8 +75,11 @@ export default async function YarnSaleRegisterPage({
       type: schema.yarnCounts.type,
     })
     .from(schema.yarnCounts);
-  const countLabel = new Map(
-    countRows.map((c) => [String(c.code), `${c.description ?? ""}${c.type ? ` ${c.type}` : ""}`.trim()]),
+  const countDesc = new Map(
+    countRows.map((c) => [String(c.code), c.description ?? ""]),
+  );
+  const countBlend = new Map(
+    countRows.map((c) => [String(c.code), c.type ?? ""]),
   );
 
   const salRaw = await db
@@ -328,7 +331,10 @@ export default async function YarnSaleRegisterPage({
                     <td className="mono">{r.vDate}</td>
                     <td>{r.party ?? "-"}</td>
                     <td className="mono">
-                      {countLabel.get(String(r.count ?? "")) || r.count || "-"}
+                      {countDesc.get(String(r.count ?? "")) || r.count || "-"}
+                      {countBlend.get(String(r.count ?? "")) ? (
+                        <div className="text-[10px] opacity-70">{countBlend.get(String(r.count ?? ""))}</div>
+                      ) : null}
                       {r.loc ? <div className="text-[10px] opacity-70">{r.loc}</div> : null}
                     </td>
                     <td>{r.brand ?? "-"}</td>
