@@ -99,7 +99,6 @@ const SECTIONS = [
           { href: "/reports/yarn/count-balance", label: "Yarn Count Balance", key: "rpt-yarn-count-balance" },
           { href: "/reports/yarn/count-avg-rate", label: "Yarn Count Avg Rate", key: "rpt-yarn-count-avg-rate" },
           { href: "/reports/yarn/pur-contract-history", label: "Purchase Contract History", key: "rpt-yarn-pur-cont-history" },
-          { href: "/reports/yarn/sale-register", label: "Yarn Sale Register", key: "rpt-yarn-sale-register" },
         ],
       },
       {
@@ -161,6 +160,7 @@ const SECTIONS = [
           { href: "/external/reports/grey-register/sale-ledger", label: "Grey Register — Sale Ledger", key: "ext-r-grey-sale-ledger" },
           { href: "/external/reports/grey-stock", label: "Grey Stock", key: "ext-r-greystock" },
           { href: "/external/reports/yarn-register", label: "Yarn Register", key: "ext-r-yarnreg" },
+          { href: "/reports/yarn/sale-register", label: "Yarn Sale Register", key: "rpt-yarn-sale-register" },
           { href: "/external/reports/yarn-stock", label: "Yarn Stock", key: "ext-r-yarnstock" },
           { href: "/external/reports/yarn-batch-profit", label: "Yarn Batch Profit", key: "ext-r-yarnbatch" },
           { href: "/external/reports/weaving-counts-purchase", label: "Weaving Counts Accounts — Purchase", key: "ext-r-weaving-purchase" },
