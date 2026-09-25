@@ -47,12 +47,6 @@ const SECTIONS = [
     ],
   },
   {
-    label: "Calculator",
-    items: [
-      { href: "/inventory/contracts/conversion-calc", label: "Grey Conversion Calculator", key: "calc-conv" },
-    ],
-  },
-  {
     label: "Inventory",
     subsections: [
       {
@@ -60,9 +54,8 @@ const SECTIONS = [
         items: [
           { href: "/inventory/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "int-c-ypc" },
           { href: "/inventory/contracts/beam-ext-ws", label: "Beam Contract External Warping/Sizing", key: "int-c-bews" },
-          { href: "/inventory/contracts/grey-conversion", label: "Grey Conversion Contract", key: "int-c-gcc" },
+          { href: "/inventory/contracts/grey-conversion", label: "Grey Conversion Contract", key: "int-c-gcc", bg: "#dcfce7" },
           { href: "/inventory/contracts/knotting", label: "Knotting/Sarning/Maroori Contract", key: "int-c-knt" },
-          { href: "/inventory/contracts/conversion-calc", label: "Grey Conversion Calculator", key: "int-c-calc" },
         ],
       },
       {

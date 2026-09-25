@@ -278,6 +278,7 @@ export default async function GreyConvContractPage({
         reed: g.reed as number | null,
         pick: g.pick as number | null,
         width: g.width as number | null,
+        description: g.description ?? "",
         warpCounts: [g.warpCount, g.warp2, g.warp3, g.warp4, g.warp5, g.warp6, g.warp7, g.warp8].map((x) => resolveCount((x ?? "") as string)),
         weftCounts: [g.weftCount, g.weft2, g.weft3, g.weft4, g.weft5, g.weft6, g.weft7, g.weft8].map((x) => resolveCount((x ?? "") as string)),
       },
