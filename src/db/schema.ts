@@ -743,6 +743,7 @@ export const inventoryOpening = sqliteTable("inventory_opening", {
   wrpCont: text("wrp_cont"),
   warpSizingParty: text("warp_sizing_party"),
   convParty: text("conv_party"),
+  dlvStatus: text("dlv_status"),
 }, (t) => ({
   ixItemType: index("ix_inv_opening_item_type").on(t.itemType),
   ixFyCode: index("ix_inv_opening_fy_code").on(t.fyCode),

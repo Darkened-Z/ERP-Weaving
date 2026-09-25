@@ -517,6 +517,9 @@ export default async function GreyDespatchPage({
     } (GREY DESPATCH)`.trim();
 
     const inputThanSerials = inLines.map((l) => l.tSrNo).filter((s): s is string => !!s);
+    const prodSerials = inputThanSerials.filter((s) => !s.startsWith("OPN-"));
+    const opnSerials = inputThanSerials.filter((s) => s.startsWith("OPN-"));
+    const opnIds = opnSerials.map((s) => parseInt(s.replace("OPN-", ""), 10)).filter((n) => !isNaN(n));
     const seenSerials = new Set<string>();
     for (const s of inputThanSerials) {
       if (seenSerials.has(s)) {
@@ -538,15 +541,29 @@ export default async function GreyDespatchPage({
         .map((r) => (r.tSrNo as unknown as string | null))
         .filter((s): s is string => !!s);
     }
-    if (inputThanSerials.length) {
+    if (prodSerials.length) {
       const existing = await db
         .select({ mm: schema.intDailyProductionSet.mmThanSrNo, dlv: schema.intDailyProductionSet.dlvStatus })
         .from(schema.intDailyProductionSet)
-        .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputThanSerials));
+        .where(inArray(schema.intDailyProductionSet.mmThanSrNo, prodSerials));
       for (const row of existing) {
         if (!row.mm) continue;
         const isDelivered = row.dlv === "Y";
         const ours = previouslyConsumed.includes(row.mm);
+        if (isDelivered && !ours) {
+          const q = isUpdate ? `?id=${id}&error=than_used` : `?adding=1&error=than_used`;
+          redirect("/inventory/grey-despatch" + q);
+        }
+      }
+    }
+    if (opnIds.length) {
+      const existing = await db
+        .select({ id: schema.inventoryOpening.id, dlv: schema.inventoryOpening.dlvStatus })
+        .from(schema.inventoryOpening)
+        .where(inArray(schema.inventoryOpening.id, opnIds));
+      for (const row of existing) {
+        const isDelivered = row.dlv === "Y";
+        const ours = previouslyConsumed.includes(`OPN-${row.id}`);
         if (isDelivered && !ours) {
           const q = isUpdate ? `?id=${id}&error=than_used` : `?adding=1&error=than_used`;
           redirect("/inventory/grey-despatch" + q);
@@ -606,12 +623,21 @@ export default async function GreyDespatchPage({
           data.lNo = vno;
           await tx.update(schema.intGreyDespatch).set(data).where(eq(schema.intGreyDespatch.id, id));
           did = id;
-          // Reset dlvStatus for serials this voucher previously consumed before rewriting.
           if (previouslyConsumed.length) {
-            await tx
-              .update(schema.intDailyProductionSet)
-              .set({ dlvStatus: null })
-              .where(inArray(schema.intDailyProductionSet.mmThanSrNo, previouslyConsumed));
+            const prevProd = previouslyConsumed.filter((s) => !s.startsWith("OPN-"));
+            const prevOpnIds = previouslyConsumed.filter((s) => s.startsWith("OPN-")).map((s) => parseInt(s.replace("OPN-", ""), 10)).filter((n) => !isNaN(n));
+            if (prevProd.length) {
+              await tx
+                .update(schema.intDailyProductionSet)
+                .set({ dlvStatus: null })
+                .where(inArray(schema.intDailyProductionSet.mmThanSrNo, prevProd));
+            }
+            if (prevOpnIds.length) {
+              await tx
+                .update(schema.inventoryOpening)
+                .set({ dlvStatus: null })
+                .where(inArray(schema.inventoryOpening.id, prevOpnIds));
+            }
           }
           await tx.delete(schema.intGreyDespatchLine).where(eq(schema.intGreyDespatchLine.despatchId, did));
           await tx.delete(schema.intGreyDespatchUpdateCount).where(eq(schema.intGreyDespatchUpdateCount.despatchId, did));
@@ -656,12 +682,17 @@ export default async function GreyDespatchPage({
         }
         if (lineValues.length) await tx.insert(schema.intGreyDespatchLine).values(lineValues);
 
-        // Mark than serials as delivered.
-        if (inputThanSerials.length) {
+        if (prodSerials.length) {
           await tx
             .update(schema.intDailyProductionSet)
             .set({ dlvStatus: "Y" })
-            .where(inArray(schema.intDailyProductionSet.mmThanSrNo, inputThanSerials));
+            .where(inArray(schema.intDailyProductionSet.mmThanSrNo, prodSerials));
+        }
+        if (opnIds.length) {
+          await tx
+            .update(schema.inventoryOpening)
+            .set({ dlvStatus: "Y" })
+            .where(inArray(schema.inventoryOpening.id, opnIds));
         }
 
         const countValues: (typeof schema.intGreyDespatchUpdateCount.$inferInsert)[] = [];
@@ -889,11 +920,19 @@ export default async function GreyDespatchPage({
       const serials = oldLines
         .map((r) => (r.tSrNo as unknown as string | null))
         .filter((s): s is string => !!s);
-      if (serials.length) {
+      const delProd = serials.filter((s) => !s.startsWith("OPN-"));
+      const delOpnIds = serials.filter((s) => s.startsWith("OPN-")).map((s) => parseInt(s.replace("OPN-", ""), 10)).filter((n) => !isNaN(n));
+      if (delProd.length) {
         await tx
           .update(schema.intDailyProductionSet)
           .set({ dlvStatus: null })
-          .where(inArray(schema.intDailyProductionSet.mmThanSrNo, serials));
+          .where(inArray(schema.intDailyProductionSet.mmThanSrNo, delProd));
+      }
+      if (delOpnIds.length) {
+        await tx
+          .update(schema.inventoryOpening)
+          .set({ dlvStatus: null })
+          .where(inArray(schema.inventoryOpening.id, delOpnIds));
       }
       await tx.delete(schema.intGreyDespatchLine).where(eq(schema.intGreyDespatchLine.despatchId, id));
       await tx.delete(schema.intGreyDespatchUpdateCount).where(eq(schema.intGreyDespatchUpdateCount.despatchId, id));
