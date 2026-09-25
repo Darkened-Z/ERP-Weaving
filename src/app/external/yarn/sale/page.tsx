@@ -795,9 +795,6 @@ export default async function YarnSaleVoucherPage({
       return codeByDescMap.get(s) ?? "";
     };
     const partyCoa = resolvePartyCoa(party);
-    // Ledger narration: "<count desc> (<bags>) bags (<lbs>) lbs @ <rate>" per line — not just
-    // the party name. Bags are DERIVED at 100 lbs to a bag; the stored bag column
-    // is blank on every live row, which is why the ledger read "(0) bags".
     const countRowsSrv = await db
       .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
       .from(schema.yarnCounts);
@@ -809,7 +806,8 @@ export default async function YarnSaleVoucherPage({
         .filter((l) => (l.bag ?? 0) > 0 || (l.lbs ?? 0) > 0)
         .map((l) => {
           const lbl = l.count ? countLabelSrv.get(String(l.count)) || l.count : "";
-          return `${lbl} (${round2((l.lbs ?? 0) / 100)}) bags (${l.lbs ?? 0}) lbs @ ${l.rate ?? 0}`;
+          const bags = round2((l.lbs ?? 0) / 100);
+          return `@ ${l.rate ?? 0}, ${l.count ?? ""} ${lbl} Bags ${bags} Lbs ${l.lbs ?? 0}`;
         })
         .join(", ") || `Cont#${cont ?? ""} ${party ?? ""}`.trim();
     const glTotal = round2(validLines.reduce((s, l) => s + (l.amt ?? 0), 0));
