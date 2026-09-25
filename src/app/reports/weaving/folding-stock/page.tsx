@@ -107,15 +107,12 @@ export default async function FoldingStockPage({
     loomsByContract.set(b.contractNo, arr);
   }
 
-  const [prodOpen, prodPer, despOpen, despPer, rejPer, invOpen] = await Promise.all([
+  const [prodOpen, prodPer, despOpen, despPer, rejPer, invOpen, invThanOpen, despThanOpen, despThanPer] = await Promise.all([
     prodSum(true),
     prodSum(false),
     despSum(true),
     despSum(false),
     rejSum(),
-    // Manually-entered opening lots (Inventory Opening → Grey Lots Open Stock)
-    // are keyed to a conversion contract via conv_cont_no; sum their qty for the
-    // OPENING column so what the operator seeds shows up straight away.
     db
       .select({
         cont: schema.inventoryOpening.convContNo,
@@ -124,6 +121,30 @@ export default async function FoldingStockPage({
       .from(schema.inventoryOpening)
       .where(and(eq(schema.inventoryOpening.itemType, "GREY"), eq(schema.inventoryOpening.status, "A")))
       .groupBy(schema.inventoryOpening.convContNo),
+    db
+      .select({
+        cont: schema.inventoryOpening.convContNo,
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.inventoryOpening.than},0)),0)`,
+      })
+      .from(schema.inventoryOpening)
+      .where(and(eq(schema.inventoryOpening.itemType, "GREY"), eq(schema.inventoryOpening.status, "A")))
+      .groupBy(schema.inventoryOpening.convContNo),
+    db
+      .select({
+        cont: schema.intGreyDespatch.convContNo,
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.intGreyDespatch.thanQty},0)),0)`,
+      })
+      .from(schema.intGreyDespatch)
+      .where(lt(schema.intGreyDespatch.vDate, from))
+      .groupBy(schema.intGreyDespatch.convContNo),
+    db
+      .select({
+        cont: schema.intGreyDespatch.convContNo,
+        s: sql<number>`COALESCE(SUM(COALESCE(${schema.intGreyDespatch.thanQty},0)),0)`,
+      })
+      .from(schema.intGreyDespatch)
+      .where(and(gte(schema.intGreyDespatch.vDate, from), lte(schema.intGreyDespatch.vDate, to)))
+      .groupBy(schema.intGreyDespatch.convContNo),
   ]);
   const toMap = (rows: { cont: string | null; s: number }[]) => {
     const m = new Map<string, number>();
@@ -132,8 +153,9 @@ export default async function FoldingStockPage({
   };
   const prodOpenM = toMap(prodOpen), prodPerM = toMap(prodPer), despOpenM = toMap(despOpen), despPerM = toMap(despPer), rejPerM = toMap(rejPer);
   const invOpenM = toMap(invOpen);
+  const invThanM = toMap(invThanOpen), despThanOpenM = toMap(despThanOpen), despThanPerM = toMap(despThanPer);
 
-  type Row = { contNo: string; party: string; quality: string; designNo: string; opening: number; production: number; rejection: number; despatch: number; total: number; balance: number; looms: string[] };
+  type Row = { contNo: string; party: string; quality: string; designNo: string; opening: number; production: number; rejection: number; despatch: number; total: number; balance: number; thanOpen: number; thanDesp: number; thanBal: number; looms: string[] };
   const rows: Row[] = contracts
     .map((c) => {
       const opening = (invOpenM.get(c.contNo) ?? 0) + (prodOpenM.get(c.contNo) ?? 0) - (despOpenM.get(c.contNo) ?? 0);
@@ -141,6 +163,9 @@ export default async function FoldingStockPage({
       const rejection = rejPerM.get(c.contNo) ?? 0;
       const despatch = despPerM.get(c.contNo) ?? 0;
       const total = opening + production;
+      const thanOpen = (invThanM.get(c.contNo) ?? 0) - (despThanOpenM.get(c.contNo) ?? 0);
+      const thanDesp = despThanPerM.get(c.contNo) ?? 0;
+      const thanBal = thanOpen - thanDesp;
       return {
         contNo: c.contNo,
         party: c.party ?? "—",
@@ -148,6 +173,7 @@ export default async function FoldingStockPage({
         designNo: c.designNo ?? "—",
         looms: loomsByContract.get(c.contNo) ?? [],
         opening, production, rejection, despatch, total, balance: total - despatch,
+        thanOpen, thanDesp, thanBal,
       };
     })
     // W.O.Z keeps every contract; W.Z (the default, matching the Oracle button
@@ -159,8 +185,8 @@ export default async function FoldingStockPage({
   const groups = Array.from(byParty.entries());
 
   const grand = rows.reduce(
-    (a, r) => ({ opening: a.opening + r.opening, production: a.production + r.production, rejection: a.rejection + r.rejection, despatch: a.despatch + r.despatch, balance: a.balance + r.balance }),
-    { opening: 0, production: 0, rejection: 0, despatch: 0, balance: 0 },
+    (a, r) => ({ opening: a.opening + r.opening, production: a.production + r.production, rejection: a.rejection + r.rejection, despatch: a.despatch + r.despatch, balance: a.balance + r.balance, thanOpen: a.thanOpen + r.thanOpen, thanDesp: a.thanDesp + r.thanDesp, thanBal: a.thanBal + r.thanBal }),
+    { opening: 0, production: 0, rejection: 0, despatch: 0, balance: 0, thanOpen: 0, thanDesp: 0, thanBal: 0 },
   );
 
   return (
@@ -218,7 +244,7 @@ export default async function FoldingStockPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 960 }}>
+          <table style={{ minWidth: 1200 }}>
             <thead>
               <tr>
                 <th>Quality</th>
@@ -230,6 +256,9 @@ export default async function FoldingStockPage({
                 <th className="text-right">Total</th>
                 <th className="text-right">Despatch</th>
                 <th className="text-right">Balance</th>
+                <th className="text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>Op.Than</th>
+                <th className="text-right">Desp.Than</th>
+                <th className="text-right">Bal.Than</th>
                 <th className="text-right">Tot.Lm</th>
                 <th>Loom#</th>
                 <th className="no-print"></th>
@@ -237,16 +266,16 @@ export default async function FoldingStockPage({
             </thead>
             <tbody>
               {groups.length === 0 ? (
-                <tr><td colSpan={12} className="text-center text-[var(--muted)] py-8">No folding stock movement in this period.</td></tr>
+                <tr><td colSpan={15} className="text-center text-[var(--muted)] py-8">No folding stock movement in this period.</td></tr>
               ) : (
                 groups.flatMap(([party, prs]) => {
                   const sub = prs.reduce(
-                    (a, r) => ({ opening: a.opening + r.opening, production: a.production + r.production, rejection: a.rejection + r.rejection, despatch: a.despatch + r.despatch, total: a.total + r.total, balance: a.balance + r.balance }),
-                    { opening: 0, production: 0, rejection: 0, despatch: 0, total: 0, balance: 0 },
+                    (a, r) => ({ opening: a.opening + r.opening, production: a.production + r.production, rejection: a.rejection + r.rejection, despatch: a.despatch + r.despatch, total: a.total + r.total, balance: a.balance + r.balance, thanOpen: a.thanOpen + r.thanOpen, thanDesp: a.thanDesp + r.thanDesp, thanBal: a.thanBal + r.thanBal }),
+                    { opening: 0, production: 0, rejection: 0, despatch: 0, total: 0, balance: 0, thanOpen: 0, thanDesp: 0, thanBal: 0 },
                   );
                   return [
                     <tr key={`h-${party}`} style={{ background: "#0f172a", color: "white" }}>
-                      <td colSpan={12} className="mono font-bold text-[12px] px-2 py-1">{party}</td>
+                      <td colSpan={15} className="mono font-bold text-[12px] px-2 py-1">{party}</td>
                     </tr>,
                     ...prs.map((r) => (
                       <tr key={`${party}-${r.contNo}`}>
@@ -259,6 +288,9 @@ export default async function FoldingStockPage({
                         <td className="mono text-right">{fmt(r.total)}</td>
                         <td className="mono text-right">{fmt(r.despatch)}</td>
                         <td className="mono text-right font-bold">{fmt(r.balance)}</td>
+                        <td className="mono text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(r.thanOpen)}</td>
+                        <td className="mono text-right">{fmt(r.thanDesp)}</td>
+                        <td className="mono text-right font-bold">{fmt(r.thanBal)}</td>
                         <td className="mono text-right">{r.looms.length || ""}</td>
                         <td className="text-[10px] mono">
                           {r.looms.map((l) => (
@@ -278,6 +310,9 @@ export default async function FoldingStockPage({
                       <td className="mono text-right">{fmt(sub.total)}</td>
                       <td className="mono text-right">{fmt(sub.despatch)}</td>
                       <td className="mono text-right">{fmt(sub.balance)}</td>
+                      <td className="mono text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(sub.thanOpen)}</td>
+                      <td className="mono text-right">{fmt(sub.thanDesp)}</td>
+                      <td className="mono text-right">{fmt(sub.thanBal)}</td>
                       <td></td>
                       <td></td>
                       <td className="no-print"></td>
@@ -296,6 +331,9 @@ export default async function FoldingStockPage({
                   <td className="mono text-right">{fmt(grand.opening + grand.production)}</td>
                   <td className="mono text-right">{fmt(grand.despatch)}</td>
                   <td className="mono text-right">{fmt(grand.balance)}</td>
+                  <td className="mono text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(grand.thanOpen)}</td>
+                  <td className="mono text-right">{fmt(grand.thanDesp)}</td>
+                  <td className="mono text-right">{fmt(grand.thanBal)}</td>
                   <td></td>
                   <td></td>
                   <td className="no-print"></td>
