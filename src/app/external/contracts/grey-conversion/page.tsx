@@ -42,14 +42,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   admin_only: "Only ADMIN can delete contracts.",
 };
 
-const LOOM_TYPES = ["RAPIER", "AIR_JET", "WATER_JET", "PROJECTILE", "SHUTTLE", "SULZER", "TSUDAKOMA"];
+const LOOM_TYPES = ["SULZER", "AIRJET"];
 const SELV_TYPES = ["LENO", "PLAIN", "TAPE", "CATCH", "TUCK-IN"];
 const SEASON_TYPES = ["SUMMER", "WINTER", "ALL SEASON", "SPRING", "AUTUMN"];
 
 export default async function GreyConvContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; fparty?: string; fgrey?: string; fstatus?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; fparty?: string; fgrey?: string; fstatus?: string; floom?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -164,6 +164,7 @@ export default async function GreyConvContractPage({
   const fParty = (params.fparty ?? "").trim();
   const fGrey = (params.fgrey ?? "").trim();
   const fStatus = (params.fstatus ?? "").trim();
+  const fLoom = (params.floom ?? "").trim();
   const findL = (findFilter ?? "").toLowerCase();
   const allContracts = await db
     .select()
@@ -185,6 +186,7 @@ export default async function GreyConvContractPage({
     if (fParty && c.party !== fParty) return false;
     if (fGrey && c.grayCode !== fGrey && c.grayQltyCode !== fGrey) return false;
     if (fStatus && c.status !== fStatus) return false;
+    if (fLoom && c.loomType !== fLoom) return false;
     if (findL) {
       const hay = `${c.contNo ?? ""} ${c.party ?? ""} ${c.grayCode ?? ""} ${c.productName ?? ""}`.toLowerCase();
       if (!hay.includes(findL)) return false;
@@ -551,10 +553,10 @@ export default async function GreyConvContractPage({
 
   return (
     <Shell active="ext-gcc">
-      <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4">
+      <div className="animate-in" style={{ borderTop: "4px solid #b45309" }}>
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-6 gap-4 pt-4">
           <h1 className="page-title">
-            GREY CONVERSION CONTRACT EXT{" "}
+            GREY CONVERSION CONTRACT <span style={{ color: "#b45309" }}>EXT</span>{" "}
             <span className="text-[var(--muted)] text-lg font-normal">({contracts.length})</span>
           </h1>
           <ExcelExportButton
@@ -1037,8 +1039,15 @@ export default async function GreyConvContractPage({
                 <option value="F">Finishing</option>
               </select>
             </div>
+            <div>
+              <label className="label block mb-1">Loom Type</label>
+              <select name="floom" defaultValue={fLoom} className="input-box mono text-[13px]" style={{ minWidth: 110 }}>
+                <option value="">All</option>
+                {LOOM_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
             <button type="submit" className="btn btn-outline btn-sm">Search</button>
-            {(findFilter || fParty || fGrey || fStatus) && <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
+            {(findFilter || fParty || fGrey || fStatus || fLoom) && <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
           </form>
           {selected && (() => {
             const selCode = selected.grayQltyCode ?? selected.grayCode ?? null;
