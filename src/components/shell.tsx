@@ -122,7 +122,7 @@ const SECTIONS = [
       {
         label: "Contracts",
         items: [
-          { href: "/external/contracts/grey-conversion", label: "Grey Conversion Contract", key: "ext-gcc" },
+          { href: "/external/contracts/grey-conversion", label: "Grey Conversion Contract (EXT)", key: "ext-gcc", bg: "#fef3c7" },
           { href: "/external/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "ext-ypc" },
           { href: "/external/contracts/yarn-sales", label: "Yarn Sales Contract", key: "ext-ysc" },
           { href: "/external/contracts/grey-purchase", label: "Grey Purchase Contract", key: "ext-gpc" },
