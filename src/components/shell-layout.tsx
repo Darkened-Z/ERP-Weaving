@@ -5,7 +5,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { FormKeyboard } from "./form-keyboard";
 
-type NavItem = { href: string; label: string; key: string };
+type NavItem = { href: string; label: string; key: string; bg?: string };
 type SubSection = { label: string; items: NavItem[] };
 type Section = { label: string | null; items?: NavItem[]; subsections?: SubSection[] };
 

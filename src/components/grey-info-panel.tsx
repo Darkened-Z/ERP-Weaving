@@ -6,19 +6,11 @@ type GreyInfo = {
   reed: number | null;
   pick: number | null;
   width: number | null;
+  description?: string;
   warpCounts: string[];
   weftCounts: string[];
 };
 
-/**
- * Compact "As information" panel next to the Gray Qlty Code picker.
- * Shows the picked construction's Reed × Pick and each warp / weft pair
- * from the master, so the operator can eyeball the spec instead of
- * navigating to Grey Construction master.
- *
- * The underlying form still submits read / pick / width / warp_count_N /
- * weft_count_N via hidden inputs (populated by <AutoFill>).
- */
 export function GreyInfoPanel({
   watch,
   map,
@@ -30,14 +22,9 @@ export function GreyInfoPanel({
 
   useEffect(() => {
     const el = document.querySelector<HTMLInputElement>(`input[name="${watch}"]`);
-    // Seeding from a server-rendered field on mount. The DOM does not exist
-    // during render, so this genuinely cannot be derived there — without it an
-    // edit screen shows an empty panel beside a field that already has a value.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (el?.value) setKey(el.value);
     const onChange = (e: Event) => {
       const t = e.target as HTMLInputElement | null;
-      // Combobox dispatches custom event with detail.value
       const detail = (e as CustomEvent).detail as { value?: string } | undefined;
       const nameMatches = t?.name === watch || t?.getAttribute?.("name") === watch;
       if (nameMatches) {
@@ -62,24 +49,68 @@ export function GreyInfoPanel({
       </div>
     );
   }
-  const pairs = Math.max(info.warpCounts.filter(Boolean).length, info.weftCounts.filter(Boolean).length);
+
+  const warpFiltered = info.warpCounts.filter(Boolean);
+  const weftFiltered = info.weftCounts.filter(Boolean);
+
   return (
-    <div className="border border-black bg-[#fdf3f5] mono text-[11px]">
-      <div className="grid grid-cols-[100px_1fr_1fr] border-b border-black bg-[#f3d4d9]">
-        <div className="px-2 py-1 font-bold uppercase">Gray Code</div>
-        <div className="px-2 py-1 text-right font-bold">{key}</div>
-        <div className="px-2 py-1 text-right font-bold">{info.reed ?? "-"} <span className="opacity-60">×</span> {info.pick ?? "-"}</div>
+    <div className="border border-black mono text-[11px]">
+      <div className="grid grid-cols-4 border-b border-black bg-[#f3d4d9]">
+        <div className="px-2 py-1">
+          <span className="opacity-60 text-[10px]">CODE</span>
+          <span className="ml-1 font-bold">{key}</span>
+        </div>
+        <div className="px-2 py-1">
+          <span className="opacity-60 text-[10px]">READ</span>
+          <span className="ml-1 font-bold">{info.reed ?? "-"}</span>
+        </div>
+        <div className="px-2 py-1">
+          <span className="opacity-60 text-[10px]">PICK</span>
+          <span className="ml-1 font-bold">{info.pick ?? "-"}</span>
+        </div>
+        <div className="px-2 py-1">
+          <span className="opacity-60 text-[10px]">WIDTH</span>
+          <span className="ml-1 font-bold">{info.width ? `${info.width}"` : "-"}</span>
+        </div>
       </div>
-      {pairs === 0 ? (
-        <div className="px-2 py-2 text-[var(--muted)] italic">No warp/weft rows in this construction</div>
-      ) : (
-        Array.from({ length: pairs }).map((_, i) => (
-          <div key={i} className="grid grid-cols-[1fr_auto_1fr] border-b border-black last:border-b-0 hover:bg-white">
-            <div className="px-2 py-1">{info.warpCounts[i] ?? ""}</div>
-            <div className="px-2 py-1 opacity-60">×</div>
-            <div className="px-2 py-1 text-right">{info.weftCounts[i] ?? ""}</div>
+
+      {info.description && (
+        <div className="px-2 py-1 border-b border-black bg-[#fdf3f5] text-[11px]">
+          {info.description}
+        </div>
+      )}
+
+      {(warpFiltered.length > 0 || weftFiltered.length > 0) && (
+        <div className="grid grid-cols-2">
+          <div className="border-r border-black">
+            <div className="px-2 py-0.5 bg-green-100 border-b border-black text-[10px] font-bold uppercase tracking-wider">Warp</div>
+            {warpFiltered.length === 0 ? (
+              <div className="px-2 py-1 text-[var(--muted)] italic">—</div>
+            ) : (
+              warpFiltered.map((w, i) => (
+                <div key={i} className="px-2 py-0.5 border-b border-[var(--border-light)] last:border-b-0 bg-[#fdf3f5]">
+                  {w}
+                </div>
+              ))
+            )}
           </div>
-        ))
+          <div>
+            <div className="px-2 py-0.5 bg-green-100 border-b border-black text-[10px] font-bold uppercase tracking-wider">Weft</div>
+            {weftFiltered.length === 0 ? (
+              <div className="px-2 py-1 text-[var(--muted)] italic">—</div>
+            ) : (
+              weftFiltered.map((w, i) => (
+                <div key={i} className="px-2 py-0.5 border-b border-[var(--border-light)] last:border-b-0 bg-[#fdf3f5]">
+                  {w}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {warpFiltered.length === 0 && weftFiltered.length === 0 && (
+        <div className="px-2 py-2 text-[var(--muted)] italic bg-[#fdf3f5]">No warp/weft rows in this construction</div>
       )}
     </div>
   );
