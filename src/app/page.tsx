@@ -45,6 +45,11 @@ export default async function Dashboard() {
   const [yarnRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.yarnCounts);
   const [partsRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.chartParts);
   const [beamRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.beams);
+  const [extGccRow] = await db.select({
+    running: sql<number>`count(case when status = 'R' then 1 end)`,
+    total: sql<number>`count(*)`,
+    production: sql<number>`coalesce(sum(case when status = 'R' then qty_mtr else 0 end), 0)`,
+  }).from(schema.extGreyConvContract);
   const [prodRow] = await db.select({ total: sql<number>`coalesce(sum(meters), 0)` }).from(schema.dailyProduction);
   const [userRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.users);
 
@@ -77,7 +82,7 @@ export default async function Dashboard() {
     ]},
     { label: "Supply Chain", items: [
       { label: "Contracts", value: `${contractsActive}/${contractsTotal}`, unit: "active / total", href: "/contracts" },
-      { label: "Fabric Prod & Stock", value: "View", unit: "ext grey conv report", href: "/external/reports/fabric-production-stock" },
+      { label: "Fabric Prod & Stock", value: `${extGccRow?.running ?? 0}`, unit: `running · ${formatNum(extGccRow?.production ?? 0)} mtr`, href: "/external/reports/fabric-production-stock" },
       { label: "Yarn", value: yarnRow?.count ?? 0, unit: "yarn counts", href: "/define/yarn-counts" },
       { label: "Beams", value: beamRow?.count ?? 0, unit: "tracked beams", href: "/weaving/beams" },
     ]},
