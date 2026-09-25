@@ -152,6 +152,7 @@ const SECTIONS = [
       {
         label: "Reports",
         items: [
+          { href: "/external/reports/fabric-production-stock", label: "Fabric Production & Stock", key: "ext-r-fabric-prod" },
           { href: "/external/reports/kora-pending", label: "Kora Pending Lots", key: "ext-r-kora" },
           { href: "/external/reports/cloth-register", label: "Cloth Purchase Sale Register", key: "ext-r-cloth" },
           { href: "/external/reports/grey-register", label: "Grey Register", key: "ext-r-greyreg" },
