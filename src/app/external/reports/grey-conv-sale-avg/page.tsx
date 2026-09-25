@@ -54,6 +54,16 @@ export default async function GreyConvSaleAvgPage({
     .orderBy(schema.chartOfAccounts.description);
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
+  const despatchRows = await db
+    .select({
+      contNo: schema.extPackiParchi.convContNo,
+      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
+    })
+    .from(schema.extPackiParchi)
+    .where(sql`conv_cont_no is not null and conv_cont_no != ''`)
+    .groupBy(schema.extPackiParchi.convContNo);
+  const despatchByContNo = new Map(despatchRows.map((d) => [d.contNo, d.totalMeter]));
+
   const usedParties = [...new Set(allContracts.map((c) => c.party).filter(Boolean))].sort() as string[];
 
   const contracts = allContracts.filter((c) => {
@@ -83,6 +93,8 @@ export default async function GreyConvSaleAvgPage({
     const sRate = c.grayRatePerMtr ?? 0;
     const totalAmt = round2(qty * sRate);
     const mainDesc = c.productName ? productMainDesc.get(c.productName) ?? "" : "";
+    const despatch = despatchByContNo.get(c.contNo ?? "") ?? 0;
+    const balance = round2(qty - despatch);
     return {
       id: c.id,
       contNo: c.contNo ?? "",
@@ -94,6 +106,8 @@ export default async function GreyConvSaleAvgPage({
       constrCode,
       designNo: c.designNo ?? "",
       production: qty,
+      despatch,
+      balance,
       pick: pickVal,
       rPick,
       rateMtr,
@@ -107,6 +121,8 @@ export default async function GreyConvSaleAvgPage({
 
   const n = rows.length;
   const totProduction = round2(rows.reduce((s, r) => s + r.production, 0));
+  const totDespatch = round2(rows.reduce((s, r) => s + r.despatch, 0));
+  const totBalance = round2(rows.reduce((s, r) => s + r.balance, 0));
   const totAmount = round2(rows.reduce((s, r) => s + r.amount, 0));
   const totTotalAmt = round2(rows.reduce((s, r) => s + r.totalAmt, 0));
   const avgPick = n ? round2(rows.reduce((s, r) => s + r.pick, 0) / n) : 0;
@@ -126,6 +142,8 @@ export default async function GreyConvSaleAvgPage({
     quality: r.quality,
     designNo: r.designNo,
     production: r.production,
+    despatch: r.despatch,
+    balance: r.balance,
     pick: r.pick,
     rPick: r.rPick,
     rateMtr: r.rateMtr,
@@ -164,6 +182,8 @@ export default async function GreyConvSaleAvgPage({
                 { key: "quality", label: "Quality" },
                 { key: "designNo", label: "Design #" },
                 { key: "production", label: "Production" },
+                { key: "despatch", label: "Despatch" },
+                { key: "balance", label: "Balance" },
                 { key: "pick", label: "Pick" },
                 { key: "rPick", label: "R/Pick" },
                 { key: "rateMtr", label: "Rate/Mtr" },
@@ -249,6 +269,8 @@ export default async function GreyConvSaleAvgPage({
                   <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 180 }}>Quality</th>
                   <th className="px-2 py-2 text-left border-r border-blue-900/30">Design #</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Production</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Despatch</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Balance</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Pick</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">R/Pick</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Rate/Mtr</th>
@@ -278,6 +300,8 @@ export default async function GreyConvSaleAvgPage({
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono">{r.designNo || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.production)}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.despatch)}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold">{fmt2(r.balance)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.pick || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rPick || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rateMtr ? fmt2(r.rateMtr) : "-"}</td>
@@ -296,7 +320,7 @@ export default async function GreyConvSaleAvgPage({
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={13} className="text-center text-[var(--muted)] py-8 text-[13px]">
+                    <td colSpan={15} className="text-center text-[var(--muted)] py-8 text-[13px]">
                       No contracts match the selected filters.
                     </td>
                   </tr>
@@ -307,6 +331,8 @@ export default async function GreyConvSaleAvgPage({
                   <tr style={{ backgroundColor: "#1e3a5f", color: "white" }} className="font-bold">
                     <td className="px-2 py-2 border-r border-blue-900/30" colSpan={4}>Total</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totProduction)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totDespatch)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totBalance)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgPick)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRPick)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRateMtr)}</td>
