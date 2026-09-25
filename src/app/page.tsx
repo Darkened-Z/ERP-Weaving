@@ -81,8 +81,8 @@ export default async function Dashboard() {
       { label: "Grey Specs", value: greyRow?.count ?? 0, unit: "construction types", href: "/define/grey-construction" },
     ]},
     { label: "Supply Chain", items: [
-      { label: "Contracts", value: `${contractsActive}/${contractsTotal}`, unit: "active / total", href: "/contracts" },
-      { label: "Grey Conv Sale Avg", value: `${extGccRow?.running ?? 0}`, unit: `running · ${formatNum(extGccRow?.production ?? 0)} mtr`, href: "/external/reports/fabric-production-stock" },
+      { label: "Contracts", value: `${contractsActive}/${contractsTotal}`, unit: "active / total", href: "/external/contracts/grey-conversion" },
+      { label: "Grey Conv Sale Avg", value: `${extGccRow?.running ?? 0}`, unit: `running · ${formatNum(extGccRow?.production ?? 0)} mtr`, href: "/external/reports/grey-conv-sale-avg" },
       { label: "Yarn", value: yarnRow?.count ?? 0, unit: "yarn counts", href: "/define/yarn-counts" },
       { label: "Beams", value: beamRow?.count ?? 0, unit: "tracked beams", href: "/weaving/beams" },
     ]},
