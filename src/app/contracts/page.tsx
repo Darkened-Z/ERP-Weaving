@@ -1,4 +1,6 @@
 import { Shell } from "@/components/shell";
+import { ExcelExportButton } from "@/components/excel-export-button";
+import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { sql } from "drizzle-orm";
 import Link from "next/link";
@@ -55,26 +57,98 @@ export default async function ContractsPage({
   });
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
-  const activeCount = contracts.filter((c) => c.status === "R").length;
   const totalValue = round2(contracts.reduce((s, c) => s + (c.qtyMtr ?? 0) * (c.convRatePerMtr ?? 0), 0));
-  const fmt = (n: number) => n.toLocaleString("en-US");
-  const fmt2 = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (n: number) => n ? n.toLocaleString("en-US") : "";
+  const fmt2 = (n: number) => n ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+
+  const rows = contracts.map((c) => {
+    const constrCode = c.grayQltyCode ?? c.grayCode ?? null;
+    const gInfo = constrCode ? greyReedPick.get(constrCode) : null;
+    const quality = gInfo?.reed && gInfo?.pick ? `${gInfo.reed}×${gInfo.pick}` : "";
+    const mainDesc = c.productName ? productMainDesc.get(c.productName) ?? "" : "";
+    const qty = c.qtyMtr ?? 0;
+    const rateMtr = c.convRatePerMtr ?? 0;
+    const amount = round2(qty * rateMtr);
+    return {
+      id: c.id,
+      contNo: c.contNo ?? "",
+      party: c.party ?? "-",
+      partyCode: c.party ? partyCodeByDesc.get(c.party) ?? "" : "",
+      productName: c.productName ?? "-",
+      mainDesc,
+      quality,
+      constrCode,
+      qtyMtr: qty,
+      pick: c.pick ?? 0,
+      rPick: c.ratePerPick ?? 0,
+      rateMtr,
+      amount,
+      loomType: c.loomType ?? "-",
+      status: c.status,
+    };
+  });
+
+  const n = rows.length;
+  const totQty = round2(rows.reduce((s, r) => s + r.qtyMtr, 0));
+  const totAmount = round2(rows.reduce((s, r) => s + r.amount, 0));
+  const avgPick = n ? round2(rows.reduce((s, r) => s + r.pick, 0) / n) : 0;
+  const avgRPick = n ? round2(rows.reduce((s, r) => s + r.rPick, 0) / n) : 0;
+  const avgRateMtr = n ? round2(rows.reduce((s, r) => s + r.rateMtr, 0) / n) : 0;
+
+  const excelRows = rows.map((r) => ({
+    contNo: r.contNo,
+    party: r.party,
+    product: r.productName,
+    mainDesc: r.mainDesc,
+    quality: r.quality,
+    qtyMtr: r.qtyMtr,
+    pick: r.pick,
+    rPick: r.rPick,
+    rateMtr: r.rateMtr,
+    amount: r.amount,
+    loom: r.loomType,
+    status: r.status === "R" ? "Running" : r.status === "C" ? "Closed" : r.status,
+  }));
 
   return (
     <Shell>
       <div className="animate-in">
-        <div className="mb-6">
-          <h1 className="page-title">Grey Conv Ext — Contracts</h1>
-          <p className="text-[13px] text-[var(--muted)] mt-1">
-            {contracts.length} contract{contracts.length !== 1 ? "s" : ""} &middot; Total value{" "}
-            <span className="mono">{fmt(totalValue)}</span>
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-4 gap-4">
+          <div>
+            <h1 className="page-title">GREY CONV EXT — CONTRACTS</h1>
+            <p className="text-[13px] text-[var(--muted)] mt-1">
+              {n} contract{n !== 1 ? "s" : ""} &middot; Total value{" "}
+              <span className="mono">{fmt(totalValue)}</span>
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <ExcelExportButton
+              rows={excelRows}
+              columns={[
+                { key: "contNo", label: "Cont No" },
+                { key: "party", label: "Party" },
+                { key: "product", label: "Product" },
+                { key: "mainDesc", label: "Main Desc" },
+                { key: "quality", label: "Quality" },
+                { key: "qtyMtr", label: "Qty Mtr" },
+                { key: "pick", label: "Pick" },
+                { key: "rPick", label: "R/Pick" },
+                { key: "rateMtr", label: "Rate/Mtr" },
+                { key: "amount", label: "Amount" },
+                { key: "loom", label: "Loom" },
+                { key: "status", label: "Status" },
+              ]}
+              filename="grey-conv-ext-contracts"
+              sheetName="GreyConvExtContracts"
+            />
+            <PrintButton />
+          </div>
         </div>
 
         <form
           action="/contracts"
           method="get"
-          className="flex gap-3 items-end flex-wrap border border-black p-3 bg-gray-50 mb-6"
+          className="flex gap-3 items-end flex-wrap border border-black p-3 bg-gray-50 mb-4"
         >
           <div>
             <label className="label block mb-1">Find</label>
@@ -118,91 +192,84 @@ export default async function ContractsPage({
           )}
         </form>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-8">
-          <div className="bg-white p-5">
-            <div className="stat-value">{contracts.length}</div>
-            <div className="stat-label">Grey Conv Ext Contracts</div>
-          </div>
-          <div className="bg-white p-5">
-            <div className="stat-value">{activeCount}</div>
-            <div className="stat-label">Running</div>
-          </div>
-          <div className="bg-white p-5">
-            <div className="stat-value">{fmt(totalValue)}</div>
-            <div className="stat-label">Total Value</div>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Cont No</th>
-                <th>Party</th>
-                <th>Product</th>
-                <th style={{ minWidth: 220 }}>Quality</th>
-                <th className="text-right">Qty Mtr</th>
-                <th className="text-right">Pick</th>
-                <th className="text-right">R/Pick</th>
-                <th className="text-right">Rate/Mtr</th>
-                <th className="text-right">Amount</th>
-                <th>Loom</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contracts.map((c) => {
-                const constrCode = c.grayQltyCode ?? c.grayCode ?? null;
-                const gInfo = constrCode ? greyReedPick.get(constrCode) : null;
-                const quality = gInfo?.reed && gInfo?.pick ? `${gInfo.reed}×${gInfo.pick}` : "";
-                const mainDesc = c.productName ? productMainDesc.get(c.productName) ?? "" : "";
-                const qty = c.qtyMtr ?? 0;
-                const rateMtr = c.convRatePerMtr ?? 0;
-                const amount = round2(qty * rateMtr);
-                return (
-                  <tr key={c.id}>
-                    <td className="mono font-bold">
-                      <Link href={`/external/contracts/grey-conversion?id=${c.id}`} className="no-underline" style={{ color: "inherit" }}>
-                        {c.contNo}
+        <div className="border border-black">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr style={{ backgroundColor: "#1e3a5f", color: "white" }}>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Cont No</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 160 }}>Party</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Product</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 180 }}>Quality</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Qty Mtr</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Pick</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">R/Pick</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Rate/Mtr</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Amount</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Loom</th>
+                  <th className="px-2 py-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono font-bold">
+                      <Link href={`/external/contracts/grey-conversion?id=${r.id}`} className="no-underline" style={{ color: "inherit" }}>
+                        {r.contNo}
                       </Link>
                     </td>
-                    <td className="text-[13px]">
-                      {c.party ?? "-"}
-                      {c.party && partyCodeByDesc.get(c.party) && (
-                        <span className="block text-[11px] text-[var(--muted)]">{partyCodeByDesc.get(c.party)}</span>
-                      )}
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)]">
+                      <div className="text-[13px]">{r.party}</div>
+                      {r.partyCode && <div className="text-[11px] text-[var(--muted)]">{r.partyCode}</div>}
                     </td>
-                    <td className="text-[13px] mono">{c.productName ?? "-"}</td>
-                    <td className="text-[13px]">
-                      {quality && <span className="font-bold">{quality}</span>}
-                      {mainDesc && <span className="block text-[11px] text-[var(--muted)]">{mainDesc}</span>}
-                      {!quality && !mainDesc && (constrCode ?? "-")}
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-[13px]">{r.productName}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)]">
+                      {r.quality && <span className="font-bold">{r.quality}</span>}
+                      {r.mainDesc && <span className="block text-[11px] text-[var(--muted)]">{r.mainDesc}</span>}
+                      {!r.quality && !r.mainDesc && (r.constrCode ?? "-")}
                     </td>
-                    <td className="mono text-right">{qty ? fmt2(qty) : "-"}</td>
-                    <td className="mono text-right">{c.pick ?? "-"}</td>
-                    <td className="mono text-right">{c.ratePerPick ?? "-"}</td>
-                    <td className="mono text-right">{rateMtr ? fmt2(rateMtr) : "-"}</td>
-                    <td className="mono text-right">{amount ? fmt(amount) : "-"}</td>
-                    <td className="text-[12px]">{c.loomType ?? "-"}</td>
-                    <td>
-                      {c.status === "R" ? (
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.qtyMtr ? fmt2(r.qtyMtr) : "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.pick || "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rPick || "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rateMtr ? fmt2(r.rateMtr) : "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.amount ? fmt(r.amount) : "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] text-[12px]">{r.loomType}</td>
+                    <td className="px-2 py-1.5">
+                      {r.status === "R" ? (
                         <span className="inline-block text-[11px] px-2 py-0.5 uppercase bg-black text-white" style={{ letterSpacing: "0.05em" }}>RUNNING</span>
                       ) : (
-                        <span className="inline-block text-[11px] px-2 py-0.5 uppercase border border-black" style={{ letterSpacing: "0.05em", color: "var(--muted)" }}>{c.status === "C" ? "CLOSED" : c.status}</span>
+                        <span className="inline-block text-[11px] px-2 py-0.5 uppercase border border-black" style={{ letterSpacing: "0.05em", color: "var(--muted)" }}>{r.status === "C" ? "CLOSED" : r.status}</span>
                       )}
                     </td>
                   </tr>
-                );
-              })}
-              {contracts.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="text-center text-[var(--muted)] py-6">
-                    No contracts match the selected filters.
-                  </td>
-                </tr>
+                ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={11} className="text-center text-[var(--muted)] py-8 text-[13px]">
+                      No contracts match the selected filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <tr style={{ backgroundColor: "#1e3a5f", color: "white" }} className="font-bold">
+                    <td className="px-2 py-2 border-r border-blue-900/30" colSpan={4}>Total</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totQty)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgPick)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRPick)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRateMtr)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt(totAmount)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30" colSpan={2}></td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-          </table>
+            </table>
+          </div>
+        </div>
+
+        <div className="mt-2 text-[11px] text-[var(--muted)]">
+          {n} contract{n !== 1 ? "s" : ""}
         </div>
       </div>
     </Shell>
