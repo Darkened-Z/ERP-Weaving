@@ -49,7 +49,7 @@ const SEASON_TYPES = ["SUMMER", "WINTER", "ALL SEASON", "SPRING", "AUTUMN"];
 export default async function GreyConvContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; fparty?: string; fgrey?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; fparty?: string; fgrey?: string; fstatus?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -161,18 +161,30 @@ export default async function GreyConvContractPage({
   }));
   const partyCodeByDescObj: Record<string, string> = Object.fromEntries(parties.map((p) => [p.description, p.code]));
 
-  // Finding: text find + party-wise + grey-construction-wise. Fetch then filter
-  // in JS so the three filters compose cleanly (contract volume is modest).
   const fParty = (params.fparty ?? "").trim();
   const fGrey = (params.fgrey ?? "").trim();
+  const fStatus = (params.fstatus ?? "").trim();
   const findL = (findFilter ?? "").toLowerCase();
   const allContracts = await db
     .select()
     .from(schema.extGreyConvContract)
     .orderBy(sql`cont_date desc`);
+
+  const usedParties = [...new Set(allContracts.map((c) => c.party).filter(Boolean))].sort() as string[];
+  const usedGreyCodes = [...new Set(allContracts.flatMap((c) => [c.grayQltyCode, c.grayCode]).filter(Boolean))].sort() as string[];
+  const contractPartyOpts = usedParties.map((p) => {
+    const coa = parties.find((x) => x.description === p);
+    return { value: p, code: coa?.code ?? "", description: p };
+  });
+  const contractGreyOpts = usedGreyCodes.map((code) => {
+    const g = greyList.find((x) => x.code === code);
+    return { code, reed: (g?.reed ?? null) as number | null, pick: (g?.pick ?? null) as number | null, description: g?.description ?? "" };
+  });
+
   const contracts = allContracts.filter((c) => {
     if (fParty && c.party !== fParty) return false;
     if (fGrey && c.grayCode !== fGrey && c.grayQltyCode !== fGrey) return false;
+    if (fStatus && c.status !== fStatus) return false;
     if (findL) {
       const hay = `${c.contNo ?? ""} ${c.party ?? ""} ${c.grayCode ?? ""} ${c.productName ?? ""}`.toLowerCase();
       if (!hay.includes(findL)) return false;
@@ -1002,8 +1014,8 @@ export default async function GreyConvContractPage({
               <label className="label block mb-1">Party wise</label>
               <select name="fparty" defaultValue={fParty} className="input-box mono text-[13px]" style={{ maxWidth: 240 }}>
                 <option value="">— All parties —</option>
-                {partyFindRows.map((p) => (
-                  <option key={p.value} value={p.value}>{p.code} — {p.description}</option>
+                {contractPartyOpts.map((p) => (
+                  <option key={p.value} value={p.value}>{p.code ? `${p.code} — ` : ""}{p.description}</option>
                 ))}
               </select>
             </div>
@@ -1011,20 +1023,61 @@ export default async function GreyConvContractPage({
               <label className="label block mb-1">Grey construction wise</label>
               <select name="fgrey" defaultValue={fGrey} className="input-box mono text-[13px]" style={{ maxWidth: 240 }}>
                 <option value="">— All qualities —</option>
-                {greyPickerRows.map((g) => (
+                {contractGreyOpts.map((g) => (
                   <option key={g.code} value={g.code}>{g.code}{g.reed && g.pick ? ` — R${g.reed} P${g.pick}` : ""} {g.description}</option>
                 ))}
               </select>
             </div>
+            <div>
+              <label className="label block mb-1">Status</label>
+              <select name="fstatus" defaultValue={fStatus} className="input-box mono text-[13px]" style={{ minWidth: 110 }}>
+                <option value="">All</option>
+                <option value="R">Running</option>
+                <option value="C">Closed</option>
+                <option value="F">Finishing</option>
+              </select>
+            </div>
             <button type="submit" className="btn btn-outline btn-sm">Search</button>
-            {(findFilter || fParty || fGrey) && <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
+            {(findFilter || fParty || fGrey || fStatus) && <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Clear</a>}
           </form>
+          {selected && (() => {
+            const selCode = selected.grayQltyCode ?? selected.grayCode ?? null;
+            const selInfo = selCode ? greyInfoMap[selCode] : null;
+            if (!selInfo) return null;
+            const wf = selInfo.warpCounts.filter(Boolean);
+            const wt = selInfo.weftCounts.filter(Boolean);
+            return (
+              <div className="border-b border-black mono text-[11px]">
+                <div className="grid grid-cols-5 bg-[#f3d4d9]">
+                  <div className="px-2 py-1"><span className="opacity-60 text-[10px]">CODE</span> <span className="font-bold">{selCode}</span></div>
+                  <div className="px-2 py-1"><span className="opacity-60 text-[10px]">READ</span> <span className="font-bold">{selInfo.reed ?? "-"}</span></div>
+                  <div className="px-2 py-1"><span className="opacity-60 text-[10px]">PICK</span> <span className="font-bold">{selInfo.pick ?? "-"}</span></div>
+                  <div className="px-2 py-1"><span className="opacity-60 text-[10px]">WIDTH</span> <span className="font-bold">{selInfo.width ? `${selInfo.width}"` : "-"}</span></div>
+                  <div className="px-2 py-1"><span className="opacity-60 text-[10px]">PRODUCT</span> <span className="font-bold">{selected.productName ?? "-"}</span></div>
+                </div>
+                {selInfo.description && <div className="px-2 py-1 bg-[#fdf3f5] border-t border-black text-[11px]">{selInfo.description}</div>}
+                {(wf.length > 0 || wt.length > 0) && (
+                  <div className="grid grid-cols-2 border-t border-black">
+                    <div className="border-r border-black">
+                      <div className="px-2 py-0.5 bg-green-100 border-b border-black text-[10px] font-bold uppercase tracking-wider">Warp</div>
+                      {wf.map((w, i) => <div key={i} className="px-2 py-0.5 border-b border-[var(--border-light)] last:border-b-0 bg-[#fdf3f5]">{w}</div>)}
+                    </div>
+                    <div>
+                      <div className="px-2 py-0.5 bg-green-100 border-b border-black text-[10px] font-bold uppercase tracking-wider">Weft</div>
+                      {wt.map((w, i) => <div key={i} className="px-2 py-0.5 border-b border-[var(--border-light)] last:border-b-0 bg-[#fdf3f5]">{w}</div>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
                   <th>Cont No</th>
                   <th>Party</th>
+                  <th>Product</th>
                   <th style={{ minWidth: 280 }}>Prd. Desc</th>
                   <th className="text-right">Qty Mtr</th>
                   <th className="text-right">Conv Rate</th>
@@ -1051,6 +1104,7 @@ export default async function GreyConvContractPage({
                           )}
                         </a>
                       </td>
+                      <td className="text-[13px] mono"><a href={href} className="no-underline block" style={linkStyle}>{c.productName ?? "-"}</a></td>
                       <td className="text-[13px]" style={{ minWidth: 280 }}>
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {constrDesc ?? constrCode ?? "-"}
@@ -1069,7 +1123,7 @@ export default async function GreyConvContractPage({
                 })}
                 {contracts.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-[var(--muted)] py-6 text-[13px]">
+                    <td colSpan={9} className="text-center text-[var(--muted)] py-6 text-[13px]">
                       No contracts. Click New to add one.
                     </td>
                   </tr>
