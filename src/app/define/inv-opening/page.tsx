@@ -68,6 +68,12 @@ export default async function InventoryOpeningPage({
     ...new Set([...extPurCont, ...intPurCont].map((c) => c.contNo).filter(Boolean)),
   ].sort();
 
+  const productList = await db
+    .select({ code: schema.products.code, description: schema.products.description })
+    .from(schema.products)
+    .orderBy(schema.products.description);
+  const productOpts = productList.map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }));
+
   const extConvCont = await db.select().from(schema.extGreyConvContract);
   const intConvCont = await db.select().from(schema.intGreyConversionContract);
   // An opening lot is valued at the conversion rate of the contract it belongs
@@ -516,7 +522,7 @@ export default async function InventoryOpeningPage({
                 <div className="grid grid-cols-4 gap-x-4 gform">
                   <div className="col-span-2">
                     <label className="label block mb-1">Product Name</label>
-                    <input name="description" className="input-box" defaultValue={formItem?.description ?? ""} required />
+                    <Combobox name="description" options={productOpts} defaultValue={formItem?.description ?? ""} placeholder="Select product" className="input-box mono" />
                   </div>
                   <div className="col-span-2">
                     <label className="label block mb-1">Gray Construction</label>
