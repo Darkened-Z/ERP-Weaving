@@ -48,10 +48,10 @@ const SECTIONS = [
   },
   {
     label: "Inventory",
-    itemBg: "#dcfce7",
     subsections: [
       {
         label: "Contracts",
+        itemBg: "#dbeafe",
         items: [
           { href: "/inventory/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "int-c-ypc" },
           { href: "/inventory/contracts/beam-ext-ws", label: "Beam Contract External Warping/Sizing", key: "int-c-bews" },
@@ -61,6 +61,7 @@ const SECTIONS = [
       },
       {
         label: "Main",
+        itemBg: "#dcfce7",
         items: [
           { href: "/inventory/yarn-receipt", label: "Yarn Receipt / Return", key: "yarn-receipt" },
           { href: "/inventory/yarn-transfer", label: "Yarn Internal Transfer", key: "yarn-transfer" },
@@ -74,6 +75,7 @@ const SECTIONS = [
       },
       {
         label: "Grey Reports",
+        itemBg: "#e2e8f0",
         items: [
           { href: "/reports/grey/stock-ledger", label: "Grey Stock Ledger", key: "rpt-grey-stock-ledger" },
           { href: "/reports/grey/shrinkage", label: "Grey Shrinkage", key: "rpt-grey-shrinkage" },
@@ -87,6 +89,7 @@ const SECTIONS = [
       },
       {
         label: "Yarn Reports",
+        itemBg: "#fef3c7",
         items: [
           { href: "/reports/yarn/stock", label: "Yarn Stock (Count)", key: "rpt-yarn-stock" },
           { href: "/reports/yarn/stock-ledger-godown", label: "Yarn Stock Ledger by Godown", key: "rpt-yarn-stock-godown" },
@@ -97,6 +100,7 @@ const SECTIONS = [
       },
       {
         label: "Weaving Reports",
+        itemBg: "#ede9fe",
         items: [
           { href: "/reports/weaving/counts-accounts", label: "Counts Accounts", key: "w-counts" },
           { href: "/reports/weaving/counts-accounts-design", label: "Counts Accounts by Design", key: "w-counts-design" },

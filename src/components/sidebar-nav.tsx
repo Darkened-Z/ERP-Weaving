@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 type NavItem = { href: string; label: string; key: string; bg?: string };
-type SubSection = { label: string; items: NavItem[] };
+type SubSection = { label: string; items: NavItem[]; itemBg?: string };
 type Section = {
   label: string | null;
   items?: NavItem[];
@@ -174,7 +174,7 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                       >
                         {sub.items.map((item, idx) => {
                           const isActive = active === item.key;
-                          const bg = item.bg ?? section.itemBg;
+                          const bg = item.bg ?? sub.itemBg ?? section.itemBg;
                           return (
                             <Link
                               key={item.key}
