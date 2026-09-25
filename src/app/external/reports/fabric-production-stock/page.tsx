@@ -127,7 +127,7 @@ export default async function FabricProductionStockPage({
     <Shell active="ext-r-fabric-prod">
       <div className="animate-in">
         <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-4 gap-4">
-          <h1 className="page-title">FABRIC PRODUCTION &amp; STOCK</h1>
+          <h1 className="page-title">GREY CONV SALE AVG REPORT</h1>
           <div className="flex gap-2">
             <ExcelExportButton
               rows={excelRows}
@@ -145,8 +145,8 @@ export default async function FabricProductionStockPage({
                 { key: "sRate", label: "S.Rate" },
                 { key: "totalAmt", label: "Total Amt" },
               ]}
-              filename="fabric-production-stock"
-              sheetName="FabricProdStock"
+              filename="grey-conv-sale-avg"
+              sheetName="GreyConvSaleAvg"
             />
             <PrintButton />
           </div>
