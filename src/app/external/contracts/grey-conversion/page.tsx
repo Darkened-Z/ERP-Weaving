@@ -311,6 +311,7 @@ export default async function GreyConvContractPage({
   }));
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
   const greyDescByCode = new Map(greyList.map((g) => [g.code, g.description]));
+  const greyReedPickByCode = new Map(greyList.map((g) => [g.code, g.reed && g.pick ? `${g.reed}×${g.pick}` : ""]));
   const productDescInfo = new Map(productList.map((p) => [p.description, { mainDesc: p.mainDesc ?? "", subDesc: p.subDesc ?? "" }]));
   const curProdInfo = formItem?.productName ? productDescInfo.get(formItem.productName) : undefined;
 
@@ -1101,7 +1102,8 @@ export default async function GreyConvContractPage({
                   const linkStyle = { color: isSel ? "white" : "inherit" } as const;
                   const href = `/external/contracts/grey-conversion?id=${c.id}`;
                   const constrCode = c.grayQltyCode ?? c.grayCode ?? null;
-                  const constrDesc = (constrCode && greyDescByCode.get(constrCode)) || c.productQuality || c.productName || null;
+                  const quality = constrCode ? greyReedPickByCode.get(constrCode) ?? "" : "";
+                  const prdMainDesc = c.productName ? productDescInfo.get(c.productName)?.mainDesc ?? "" : "";
                   return (
                     <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{c.contNo}</a></td>
@@ -1116,10 +1118,9 @@ export default async function GreyConvContractPage({
                       <td className="text-[13px] mono"><a href={href} className="no-underline block" style={linkStyle}>{c.productName ?? "-"}</a></td>
                       <td className="text-[13px]" style={{ minWidth: 280 }}>
                         <a href={href} className="no-underline block" style={linkStyle}>
-                          {constrDesc ?? constrCode ?? "-"}
-                          {constrDesc && constrCode && (
-                            <span className="block text-[11px] opacity-70 mono">{constrCode}</span>
-                          )}
+                          {quality && <span className="font-bold">{quality}</span>}
+                          {prdMainDesc && <span className="block text-[11px] opacity-80">{prdMainDesc}</span>}
+                          {!quality && !prdMainDesc && (constrCode ?? "-")}
                         </a>
                       </td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.qtyMtr) || "-"}</a></td>
