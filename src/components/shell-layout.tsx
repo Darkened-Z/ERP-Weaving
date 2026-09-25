@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SidebarNav } from "./sidebar-nav";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { FormKeyboard } from "./form-keyboard";
+import { FormPersist } from "./form-persist";
 
 type NavItem = { href: string; label: string; key: string; bg?: string };
 type SubSection = { label: string; items: NavItem[]; itemBg?: string };
@@ -99,6 +100,7 @@ export function ShellLayout({
 
       <CommandPalette sections={sections} />
       <FormKeyboard />
+      <FormPersist />
     </div>
   );
 }
