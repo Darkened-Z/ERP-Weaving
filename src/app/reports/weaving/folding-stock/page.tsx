@@ -28,6 +28,10 @@ export default async function FoldingStockPage({
   const withZero = p.zero === "1";
 
   const allContracts = await loadConvContracts();
+  const productRows = await db
+    .select({ description: schema.products.description, mainDesc: schema.products.mainDesc })
+    .from(schema.products);
+  const productMainDesc = new Map(productRows.map((p) => [p.description, p.mainDesc]));
   // The party list is the WVG head itself, not whoever happens to sit on a
   // contract: every level-5 account under DEBITORS - CONVERSION WVG
   // (1.01.01.01). Folding stock is the mill's own weaving, so the commercial
@@ -155,7 +159,7 @@ export default async function FoldingStockPage({
   const invOpenM = toMap(invOpen);
   const invThanM = toMap(invThanOpen), despThanOpenM = toMap(despThanOpen), despThanPerM = toMap(despThanPer);
 
-  type Row = { contNo: string; party: string; quality: string; designNo: string; opening: number; production: number; rejection: number; despatch: number; total: number; balance: number; thanOpen: number; thanDesp: number; thanBal: number; looms: string[] };
+  type Row = { contNo: string; party: string; quality: string; mainDesc: string; designNo: string; opening: number; production: number; rejection: number; despatch: number; total: number; balance: number; thanOpen: number; thanDesp: number; thanBal: number; looms: string[] };
   const rows: Row[] = contracts
     .map((c) => {
       const opening = (invOpenM.get(c.contNo) ?? 0) + (prodOpenM.get(c.contNo) ?? 0) - (despOpenM.get(c.contNo) ?? 0);
@@ -170,6 +174,7 @@ export default async function FoldingStockPage({
         contNo: c.contNo,
         party: c.party ?? "—",
         quality: c.quality ?? c.productName ?? "—",
+        mainDesc: productMainDesc.get(c.productName ?? "") ?? "",
         designNo: c.designNo ?? "—",
         looms: loomsByContract.get(c.contNo) ?? [],
         opening, production, rejection, despatch, total, balance: total - despatch,
@@ -279,7 +284,10 @@ export default async function FoldingStockPage({
                     </tr>,
                     ...prs.map((r) => (
                       <tr key={`${party}-${r.contNo}`}>
-                        <td className="text-[12px]">{r.quality}</td>
+                        <td className="text-[12px]">
+                          <div>{r.quality}</div>
+                          {r.mainDesc && <div className="text-[10px] text-[var(--muted)]">{r.mainDesc}</div>}
+                        </td>
                         <td className="mono text-[12px] font-bold">{r.contNo}</td>
                         <td className="mono text-[12px]">{r.designNo}</td>
                         <td className="mono text-right">{fmt(r.opening)}</td>
