@@ -205,16 +205,16 @@ export default async function FabricProductionStockPage({
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
-                <tr style={{ backgroundColor: "#1a6b1a", color: "white" }}>
-                  <th className="px-2 py-2 text-left border-r border-green-800" style={{ minWidth: 200 }}>Quality</th>
-                  <th className="px-2 py-2 text-left border-r border-green-800">Contract</th>
-                  <th className="px-2 py-2 text-left border-r border-green-800">Design #</th>
-                  <th className="px-2 py-2 text-right border-r border-green-800">Production</th>
-                  <th className="px-2 py-2 text-right border-r border-green-800">Pick</th>
-                  <th className="px-2 py-2 text-right border-r border-green-800">R/Pick</th>
-                  <th className="px-2 py-2 text-right border-r border-green-800">Rate/Mtr</th>
-                  <th className="px-2 py-2 text-right border-r border-green-800">Amount</th>
-                  <th className="px-2 py-2 text-right border-r border-green-800">S.Rate</th>
+                <tr style={{ backgroundColor: "#1e3a5f", color: "white" }}>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 200 }}>Quality</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Contract</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Design #</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Production</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Pick</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">R/Pick</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Rate/Mtr</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Amount</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">S.Rate</th>
                   <th className="px-2 py-2 text-right">Total Amt</th>
                 </tr>
               </thead>
@@ -247,14 +247,14 @@ export default async function FabricProductionStockPage({
               </tbody>
               {rows.length > 0 && (
                 <tfoot>
-                  <tr style={{ backgroundColor: "#1a6b1a", color: "white" }} className="font-bold">
-                    <td className="px-2 py-2 border-r border-green-800" colSpan={3}>Total</td>
-                    <td className="px-2 py-2 border-r border-green-800 mono text-right">{fmt2(totProduction)}</td>
-                    <td className="px-2 py-2 border-r border-green-800 mono text-right">{fmt2(avgPick)}</td>
-                    <td className="px-2 py-2 border-r border-green-800 mono text-right">{fmt2(avgRPick)}</td>
-                    <td className="px-2 py-2 border-r border-green-800 mono text-right">{fmt2(avgRateMtr)}</td>
-                    <td className="px-2 py-2 border-r border-green-800 mono text-right">{fmt(totAmount)}</td>
-                    <td className="px-2 py-2 border-r border-green-800 mono text-right">{fmt2(avgSRate)}</td>
+                  <tr style={{ backgroundColor: "#1e3a5f", color: "white" }} className="font-bold">
+                    <td className="px-2 py-2 border-r border-blue-900/30" colSpan={3}>Total</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totProduction)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgPick)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRPick)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRateMtr)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt(totAmount)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgSRate)}</td>
                     <td className="px-2 py-2 mono text-right">{fmt(totTotalAmt)}</td>
                   </tr>
                 </tfoot>
