@@ -77,6 +77,7 @@ export default async function Dashboard() {
     ]},
     { label: "Supply Chain", items: [
       { label: "Contracts", value: `${contractsActive}/${contractsTotal}`, unit: "active / total", href: "/contracts" },
+      { label: "Fabric Prod & Stock", value: "View", unit: "ext grey conv report", href: "/external/reports/fabric-production-stock" },
       { label: "Yarn", value: yarnRow?.count ?? 0, unit: "yarn counts", href: "/define/yarn-counts" },
       { label: "Beams", value: beamRow?.count ?? 0, unit: "tracked beams", href: "/weaving/beams" },
     ]},
