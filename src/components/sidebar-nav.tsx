@@ -9,6 +9,7 @@ type Section = {
   label: string | null;
   items?: NavItem[];
   subsections?: SubSection[];
+  itemBg?: string;
 };
 
 function totalItems(section: Section): number {
@@ -173,16 +174,17 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                       >
                         {sub.items.map((item, idx) => {
                           const isActive = active === item.key;
+                          const bg = item.bg ?? section.itemBg;
                           return (
                             <Link
                               key={item.key}
                               href={item.href}
                               onClick={onNavigate}
-                              style={item.bg && !isActive ? { backgroundColor: item.bg } : undefined}
+                              style={bg && !isActive ? { backgroundColor: bg } : undefined}
                               className={`flex items-center gap-3 pl-11 pr-5 py-1.5 text-[12px] transition-colors ${
                                 isActive
                                   ? "bg-[var(--sidebar-active-bg)] text-[var(--sidebar-active-fg)] font-semibold"
-                                  : item.bg
+                                  : bg
                                     ? "text-[var(--sidebar-fg)] font-medium"
                                     : "text-[var(--sidebar-muted)] hover:text-[var(--sidebar-fg)] hover:bg-[var(--sidebar-hover-bg)]"
                               }`}
@@ -205,15 +207,19 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
               ) : (
                 section.items?.map((item, idx) => {
                   const isActive = active === item.key;
+                  const bg = item.bg ?? section.itemBg;
                   return (
                     <Link
                       key={item.key}
                       href={item.href}
                       onClick={onNavigate}
+                      style={bg && !isActive ? { backgroundColor: bg } : undefined}
                       className={`flex items-center gap-3 px-5 py-1.5 text-[12px] transition-colors ${
                         isActive
                           ? "bg-[var(--sidebar-active-bg)] text-[var(--sidebar-active-fg)] font-semibold"
-                          : "text-[var(--sidebar-muted)] hover:text-[var(--sidebar-fg)] hover:bg-[var(--sidebar-hover-bg)]"
+                          : bg
+                            ? "text-[var(--sidebar-fg)] font-medium"
+                            : "text-[var(--sidebar-muted)] hover:text-[var(--sidebar-fg)] hover:bg-[var(--sidebar-hover-bg)]"
                       }`}
                     >
                       <span

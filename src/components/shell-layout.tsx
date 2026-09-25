@@ -7,7 +7,7 @@ import { FormKeyboard } from "./form-keyboard";
 
 type NavItem = { href: string; label: string; key: string; bg?: string };
 type SubSection = { label: string; items: NavItem[] };
-type Section = { label: string | null; items?: NavItem[]; subsections?: SubSection[] };
+type Section = { label: string | null; items?: NavItem[]; subsections?: SubSection[]; itemBg?: string };
 
 export function ShellLayout({
   children,

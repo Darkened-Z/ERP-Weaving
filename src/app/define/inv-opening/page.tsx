@@ -744,7 +744,7 @@ export default async function InventoryOpeningPage({
                   <th>Date</th><th>DO/Bilty</th><th>Count Desc</th><th className="text-right">Qty Lbs</th><th className="text-right">Rate</th><th className="text-right">Amount</th><th>Location</th>
                 </>)}
                 {tab === "grey" && (<>
-                  <th>Date</th><th>Lot No</th><th>Product</th><th className="text-right">Qty</th><th className="text-right">Rate</th><th className="text-right">Amount</th><th>Location</th>
+                  <th>Date</th><th>Lot No</th><th>Product</th><th className="text-right">Than</th><th className="text-right">Qty</th><th className="text-right">Net Mtr</th><th className="text-right">Rate</th><th className="text-right">Amount</th><th>Location</th>
                 </>)}
                 {tab === "beam" && (<>
                   <th>Date</th><th>V. No</th><th>Description</th><th className="text-right">B. Length</th><th className="text-right">Rate</th><th className="text-right">Amount</th><th>Location</th>
@@ -767,9 +767,19 @@ export default async function InventoryOpeningPage({
                     <td className="text-[13px]">
                       <a href={href} className="no-underline block" style={linkStyle}>{r.description}</a>
                     </td>
+                    {tab === "grey" && (
+                      <td className="text-right mono">
+                        <a href={href} className="no-underline block" style={linkStyle}>{r.than != null ? formatNum(r.than) : "-"}</a>
+                      </td>
+                    )}
                     <td className="text-right mono">
                       <a href={href} className="no-underline block" style={linkStyle}>{formatNum(r.openingQty)}</a>
                     </td>
+                    {tab === "grey" && (
+                      <td className="text-right mono">
+                        <a href={href} className="no-underline block" style={linkStyle}>{r.netMtr != null ? formatNum(r.netMtr) : "-"}</a>
+                      </td>
+                    )}
                     <td className="text-right mono">
                       <a href={href} className="no-underline block" style={linkStyle}>{formatNum(r.openingRate)}</a>
                     </td>

@@ -48,13 +48,14 @@ const SECTIONS = [
   },
   {
     label: "Inventory",
+    itemBg: "#dcfce7",
     subsections: [
       {
         label: "Contracts",
         items: [
           { href: "/inventory/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "int-c-ypc" },
           { href: "/inventory/contracts/beam-ext-ws", label: "Beam Contract External Warping/Sizing", key: "int-c-bews" },
-          { href: "/inventory/contracts/grey-conversion", label: "Grey Conversion Contract", key: "int-c-gcc", bg: "#dcfce7" },
+          { href: "/inventory/contracts/grey-conversion", label: "Grey Conversion Contract", key: "int-c-gcc" },
           { href: "/inventory/contracts/knotting", label: "Knotting/Sarning/Maroori Contract", key: "int-c-knt" },
         ],
       },
