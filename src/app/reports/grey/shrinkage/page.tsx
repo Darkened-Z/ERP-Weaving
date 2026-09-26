@@ -180,6 +180,17 @@ export default async function GreyShrinkagePage({
 
   const filtered = raw.filter((r) => (r.totalCount ?? 0) > 0);
 
+  // Rows without a beam_no inherit from sibling rows in the same voucher
+  const beamByVno = new Map<string, string>();
+  for (const r of filtered) {
+    if (r.beamNo && r.vNo) beamByVno.set(r.vNo, r.beamNo);
+  }
+  for (const r of filtered) {
+    if (!r.beamNo && r.vNo && beamByVno.has(r.vNo)) {
+      (r as typeof r & { beamNo: string }).beamNo = beamByVno.get(r.vNo)!;
+    }
+  }
+
   type Line = {
     vNo: string;
     vDate: string;
