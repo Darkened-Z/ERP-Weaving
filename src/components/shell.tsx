@@ -41,9 +41,9 @@ const SECTIONS = [
       { href: "/define/do-parties", label: "DO Party Chart", key: "do-parties" },
       { href: "/define/products", label: "Products Coding", key: "products" },
       { href: "/define/yarn-fibers", label: "Yarn Fiber", key: "yarn-fibers" },
-      { href: "/define/inv-opening", label: "Inventory Opening", key: "inv-opening" },
       { href: "/define/branch-opening", label: "New Branch Opening", key: "branch-opening" },
       { href: "/define/chart-define", label: "Chart Define", key: "chart-define" },
+      { href: "/define/inv-opening", label: "Inventory Opening", key: "inv-opening" },
     ],
   },
   {
@@ -153,6 +153,8 @@ const SECTIONS = [
         label: "Reports",
         items: [
           { href: "/external/reports/grey-conv-sale-avg", label: "Grey Conv Sale Avg", key: "ext-r-gcsa" },
+          { href: "/external/reports/grey-sale-avg", label: "Grey Sale Contract", key: "ext-r-gsa" },
+          { href: "/external/reports/yarn-purchase-avg", label: "Yarn Purchase Contract", key: "ext-r-ypa" },
           { href: "/external/reports/kora-pending", label: "Kora Pending Lots", key: "ext-r-kora" },
           { href: "/external/reports/cloth-register", label: "Cloth Purchase Sale Register", key: "ext-r-cloth" },
           { href: "/external/reports/grey-register", label: "Grey Register", key: "ext-r-greyreg" },
