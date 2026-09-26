@@ -226,7 +226,7 @@ export default async function GreyShrinkagePage({
           meter: m,
           rate,
           amount: m * rate,
-          status: r.dlvStatus ?? r.beamStatus ?? "",
+          status: r.beamStatus ?? "",
           wastWtKg: r.wastWtKg ?? 0,
           loomNo: r.loomNo ?? 0,
         };
@@ -294,6 +294,7 @@ export default async function GreyShrinkagePage({
         rate: l.rate,
         amount: Math.round(l.amount),
         status: l.status,
+        wastWtKg: l.wastWtKg,
         loomNo: l.loomNo,
       })),
     ),
@@ -332,6 +333,7 @@ export default async function GreyShrinkagePage({
                 { key: "rate", label: "Rate" },
                 { key: "amount", label: "Amount" },
                 { key: "status", label: "Status" },
+                { key: "wastWtKg", label: "Wst Wt Kg" },
                 { key: "loomNo", label: "Loom" },
               ]}
               filename="shrinkage-report"
@@ -511,6 +513,7 @@ export default async function GreyShrinkagePage({
                       <th className="text-right">Rate</th>
                       <th className="text-right">Amt</th>
                       <th>Status</th>
+                      <th className="text-right">Wst Wt Kg</th>
                       <th className="text-right">Loom</th>
                     </tr>
                   </thead>
@@ -540,6 +543,9 @@ export default async function GreyShrinkagePage({
                             {l.status || "-"}
                           </td>
                           <td className="mono text-right">
+                            {l.wastWtKg > 0 ? fmt2(l.wastWtKg) : "-"}
+                          </td>
+                          <td className="mono text-right">
                             {l.loomNo || "-"}
                           </td>
                         </tr>
@@ -563,7 +569,7 @@ export default async function GreyShrinkagePage({
                           <td className="mono text-right">
                             {fmt(d.totalAmt)}
                           </td>
-                          <td colSpan={2}></td>
+                          <td colSpan={3}></td>
                         </tr>
                       ) : null,
                     ])}
@@ -585,7 +591,7 @@ export default async function GreyShrinkagePage({
                       <td className="mono text-right">
                         {fmt(b.totalAmt)}
                       </td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                     <tr className="text-[13px]">
                       <td colSpan={5}>Shrinkage</td>
@@ -593,7 +599,7 @@ export default async function GreyShrinkagePage({
                         {fmt2(b.balMtr)}
                       </td>
                       <td colSpan={2}></td>
-                      <td className="mono font-bold" colSpan={2}>
+                      <td className="mono font-bold" colSpan={3}>
                         {fmt2(b.shrinkPct)}%
                       </td>
                     </tr>
