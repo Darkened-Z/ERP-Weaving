@@ -556,7 +556,6 @@ type CountRow = {
  * Triggered by a combobox:change on `conv_cont_no`.
  */
 type ThanRow = {
-  /** int_daily_production_set.id — the only unique key: one voucher's thans share a serial. */
   id: number;
   mm: string | null;
   totalCount: number | null;
@@ -569,6 +568,9 @@ type ThanRow = {
   beamSetNo: string | null;
   vNo: string | null;
   vDate: string | null;
+  source?: "OPN";
+  description?: string;
+  thanCount?: number;
 };
 
 function fillLineGrid(selected: ThanRow[], maxRows: number) {
@@ -722,38 +724,76 @@ export function DesignThansFill({
             </tr>
           </thead>
           <tbody>
-            {thans.map((t) => {
-              const isRemoved = removed.has(t.id);
+            {(() => {
+              const openThans = thans.filter((t) => t.source === "OPN");
+              const prodThans = thans.filter((t) => t.source !== "OPN");
+              const renderRow = (t: ThanRow, bg?: string) => {
+                const isRemoved = removed.has(t.id);
+                return (
+                  <tr key={t.id} style={{ opacity: isRemoved ? 0.35 : 1, background: isRemoved ? "#fee2e2" : bg }}>
+                    <td style={{ padding: "1px 6px" }}>
+                      <input
+                        type="checkbox"
+                        checked={!isRemoved}
+                        onChange={() => {
+                          setRemoved((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
+                            return next;
+                          });
+                        }}
+                        title={isRemoved ? "Include this than" : "Leave this than out"}
+                        style={{ cursor: "pointer", width: 13, height: 13 }}
+                      />
+                    </td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace", fontWeight: 700 }}>
+                      {t.mm}
+                      {t.source === "OPN" && t.description && (
+                        <div style={{ fontSize: 9, fontWeight: 400, color: "#475569", fontFamily: "sans-serif" }}>{t.description}</div>
+                      )}
+                    </td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>
+                      {t.totalCount ?? "-"}
+                      {t.source === "OPN" && t.thanCount && t.thanCount > 1 && (
+                        <div style={{ fontSize: 9, color: "#475569" }}>{t.thanCount} than</div>
+                      )}
+                    </td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.aCount || ""}</td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.bCount || ""}</td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.cCount || ""}</td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.cpCount || ""}</td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.rejCount || ""}</td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.beamNo ?? "-"}</td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.beamSetNo ?? "-"}</td>
+                    <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.vNo}</td>
+                  </tr>
+                );
+              };
               return (
-                <tr key={t.id} style={{ opacity: isRemoved ? 0.35 : 1, background: isRemoved ? "#fee2e2" : undefined }}>
-                  <td style={{ padding: "1px 6px" }}>
-                    <input
-                      type="checkbox"
-                      checked={!isRemoved}
-                      onChange={() => {
-                        setRemoved((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
-                          return next;
-                        });
-                      }}
-                      title={isRemoved ? "Include this than" : "Leave this than out"}
-                      style={{ cursor: "pointer", width: 13, height: 13 }}
-                    />
-                  </td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace", fontWeight: 700 }}>{t.mm}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.totalCount ?? "-"}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.aCount || ""}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.bCount || ""}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.cCount || ""}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.cpCount || ""}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace", textAlign: "right" }}>{t.rejCount || ""}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.beamNo ?? "-"}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.beamSetNo ?? "-"}</td>
-                  <td style={{ padding: "1px 6px", fontFamily: "monospace" }}>{t.vNo}</td>
-                </tr>
+                <>
+                  {openThans.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan={11} style={{ padding: "3px 6px", background: "#1e3a5f", color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                          Opening Stock
+                        </td>
+                      </tr>
+                      {openThans.map((t) => renderRow(t, "#eff6ff"))}
+                    </>
+                  )}
+                  {prodThans.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan={11} style={{ padding: "3px 6px", background: "#374151", color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                          Production
+                        </td>
+                      </tr>
+                      {prodThans.map((t) => renderRow(t))}
+                    </>
+                  )}
+                </>
               );
-            })}
+            })()}
           </tbody>
           <tfoot>
             <tr style={{ background: "#0f172a", color: "#fff", fontWeight: 700 }}>
