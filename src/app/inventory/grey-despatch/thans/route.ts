@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
         voucherNo: schema.inventoryOpening.voucherNo,
         entryDate: schema.inventoryOpening.entryDate,
         dlvStatus: schema.inventoryOpening.dlvStatus,
+        description: schema.inventoryOpening.description,
+        than: schema.inventoryOpening.than,
       })
       .from(schema.inventoryOpening)
       .where(
@@ -100,8 +102,11 @@ export async function GET(req: NextRequest) {
     rejCount: null,
     beamNo: r.beamNo ?? null,
     beamSetNo: r.beamSetNo ?? null,
-    vNo: r.voucherNo ?? "OPENING",
+    vNo: r.voucherNo || `OPN-${r.id}`,
     vDate: r.entryDate ?? null,
+    source: "OPN" as const,
+    description: r.description ?? "",
+    thanCount: r.than ?? 1,
   }));
 
   return NextResponse.json([...openMapped, ...mapped]);
