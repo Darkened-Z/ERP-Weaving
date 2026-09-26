@@ -227,7 +227,8 @@ export function Combobox({
       </span>
       {open && (
         <div
-          className="absolute z-30 left-0 right-0 mt-0.5 max-h-56 overflow-y-auto bg-white border border-[var(--border)] shadow-lg"
+          className="absolute z-30 left-0 mt-0.5 max-h-56 overflow-y-auto bg-white border border-[var(--border)] shadow-lg"
+          style={{ minWidth: "100%", width: "max-content", maxWidth: "min(500px, 90vw)" }}
           role="listbox"
         >
           {filtered.length > 0 ? (
