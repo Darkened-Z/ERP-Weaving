@@ -26,7 +26,6 @@ export default async function GreyShrinkagePage({
     party?: string;
     set?: string;
     beam?: string;
-    view?: string;
     loom?: string;
     shed?: string;
   }>;
@@ -38,11 +37,10 @@ export default async function GreyShrinkagePage({
   const party = p.party?.trim() ?? "";
   const setFilter = p.set?.trim() ?? "";
   const beamFilter = p.beam?.trim() ?? "";
-  const viewMode = p.view?.trim() ?? "";
   const loomFilter = p.loom?.trim() ?? "";
   const shedFilter = p.shed?.trim() ?? "";
 
-  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw] =
+  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw, allSetBeams] =
     await Promise.all([
       partyByNameOptions(),
       db
@@ -82,6 +80,25 @@ export default async function GreyShrinkagePage({
         })
         .from(schema.looms)
         .orderBy(schema.looms.loomNo),
+      db
+        .select({
+          beamNo: schema.beams.beamNo,
+          setNo: schema.beams.setNo,
+          beamSetNo: schema.beams.beamSetNo,
+          length: schema.beams.length,
+          ends: schema.beams.ends,
+          shed: schema.beams.shed,
+          loomNo: schema.beams.loomNo,
+          statusWrk: schema.beams.statusWrk,
+          szgParty: schema.beams.szgParty,
+          brVno: schema.beams.brVno,
+          brDate: schema.beams.brDate,
+          knVno: schema.beams.knVno,
+          knDate: schema.beams.knDate,
+          yarnCount: schema.beams.yarnCount,
+        })
+        .from(schema.beams)
+        .where(sql`${schema.beams.setNo} IS NOT NULL AND ${schema.beams.setNo} != ''`),
     ]);
 
   const greyDesc = new Map(greys.map((g) => [g.code, g.desc ?? ""]));
@@ -245,7 +262,7 @@ export default async function GreyShrinkagePage({
 
   const blocks: Block[] = [];
   for (const [beamNo, rows] of beamMap) {
-    const f = rows[0];
+    const f = rows.find((r) => r.bLen != null) ?? rows[0];
     const ends = f.lineEnds ?? f.bEnds ?? 0;
     const beamLength = f.lineBLen ?? f.bLen ?? 0;
     const szg = f.bSzg ?? f.szgParty ?? "";
@@ -320,6 +337,41 @@ export default async function GreyShrinkagePage({
       totalLines,
       balMtr,
       shrinkPct: beamLength > 0 ? (balMtr / beamLength) * 100 : 0,
+    });
+  }
+
+  // Add beams that belong to a set but have no production data yet
+  const existingBeams = new Set(blocks.map((b) => b.beamNo));
+  for (const ab of allSetBeams) {
+    if (!ab.beamNo || existingBeams.has(ab.beamNo)) continue;
+    if (setFilter && ab.setNo !== setFilter) continue;
+    if (shedFilter && ab.shed !== shedFilter) continue;
+    if (loomFilter && ab.loomNo !== parseInt(loomFilter, 10)) continue;
+    const bLen = ab.length ?? 0;
+    blocks.push({
+      beamNo: ab.beamNo,
+      beamSetNo: ab.beamSetNo ?? "",
+      setNo: ab.setNo ?? "",
+      ends: ab.ends ?? 0,
+      beamLength: bLen,
+      shed: ab.shed ?? "",
+      loomNo: ab.loomNo ?? 0,
+      szgParty: ab.szgParty ?? "",
+      szgName: nameByCode.get(ab.szgParty ?? "") ?? ab.szgParty ?? "",
+      brVno: ab.brVno ?? "",
+      brDate: ab.brDate ?? "",
+      knVno: ab.knVno ?? "",
+      knDate: ab.knDate ?? "",
+      lastDate: "",
+      warpInfo: ab.yarnCount ?? "",
+      rCut: ab.statusWrk ?? "",
+      totalRej: 0,
+      designs: [],
+      totalMtr: 0,
+      totalAmt: 0,
+      totalLines: 0,
+      balMtr: bLen,
+      shrinkPct: 0,
     });
   }
 
@@ -472,8 +524,7 @@ export default async function GreyShrinkagePage({
               placeholder="All sheds"
             />
           </div>
-          <input type="hidden" name="view" value={viewMode || "beam"} />
-          <div className="sm:col-span-7 flex gap-2 items-center">
+          <div className="sm:col-span-7 flex gap-2">
             <button type="submit" className="btn btn-sm">
               Apply
             </button>
@@ -483,20 +534,6 @@ export default async function GreyShrinkagePage({
             >
               Clear
             </a>
-            <span className="ml-auto flex gap-1">
-              <a
-                href={`?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${party ? `&party=${encodeURIComponent(party)}` : ""}${setFilter ? `&set=${encodeURIComponent(setFilter)}` : ""}${beamFilter ? `&beam=${encodeURIComponent(beamFilter)}` : ""}${loomFilter ? `&loom=${encodeURIComponent(loomFilter)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}&view=set`}
-                className={`btn btn-sm ${viewMode === "set" ? "" : "btn-outline"}`}
-              >
-                Set Wise
-              </a>
-              <a
-                href={`?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${party ? `&party=${encodeURIComponent(party)}` : ""}${setFilter ? `&set=${encodeURIComponent(setFilter)}` : ""}${beamFilter ? `&beam=${encodeURIComponent(beamFilter)}` : ""}${loomFilter ? `&loom=${encodeURIComponent(loomFilter)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}&view=beam`}
-                className={`btn btn-sm ${viewMode !== "set" ? "" : "btn-outline"}`}
-              >
-                Beam Wise
-              </a>
-            </span>
           </div>
         </form>
 
@@ -529,7 +566,7 @@ export default async function GreyShrinkagePage({
           <div className="text-center text-[var(--muted)] py-12">
             No beams in selected range
           </div>
-        ) : viewMode === "set" ? (
+        ) : !beamFilter ? (
           (() => {
             const setGroups = new Map<string, Block[]>();
             for (const b of blocks) {
@@ -588,7 +625,7 @@ export default async function GreyShrinkagePage({
                             <td className="text-[12px]">{b.rCut || "-"}</td>
                             <td className="no-print">
                               <a
-                                href={`?${qs}&beam=${encodeURIComponent(b.beamNo)}&view=beam`}
+                                href={`?${qs}&beam=${encodeURIComponent(b.beamNo)}`}
                                 className="btn btn-sm btn-outline"
                                 style={{ padding: "1px 8px", fontSize: 11 }}
                                 title="Show serial details for this beam"
