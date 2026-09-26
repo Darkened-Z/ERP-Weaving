@@ -26,6 +26,9 @@ export default async function GreyShrinkagePage({
     party?: string;
     set?: string;
     beam?: string;
+    view?: string;
+    loom?: string;
+    shed?: string;
   }>;
 }) {
   await requireSession();
@@ -35,6 +38,9 @@ export default async function GreyShrinkagePage({
   const party = p.party?.trim() ?? "";
   const setFilter = p.set?.trim() ?? "";
   const beamFilter = p.beam?.trim() ?? "";
+  const viewMode = p.view?.trim() ?? "";
+  const loomFilter = p.loom?.trim() ?? "";
+  const shedFilter = p.shed?.trim() ?? "";
 
   const [partyOpts, greys, accounts, setRaw, intContracts, extContracts] =
     await Promise.all([
@@ -100,6 +106,8 @@ export default async function GreyShrinkagePage({
       sql`${schema.intDailyProductionSet.beamNo} LIKE ${pat} ESCAPE '\\'`,
     );
   }
+  if (loomFilter) conds.push(eq(schema.intDailyProductionSet.loomNo, parseInt(loomFilter, 10)));
+  if (shedFilter) conds.push(eq(schema.beams.shed, shedFilter));
 
   const raw = await db
     .select({
@@ -113,6 +121,7 @@ export default async function GreyShrinkagePage({
       dlvStatus: schema.intDailyProductionSet.dlvStatus,
       beamStatus: schema.intDailyProductionSet.beamStatus,
       wastWtKg: schema.intDailyProductionSet.wastWtKg,
+      rejCount: schema.intDailyProductionSet.rejCount,
       vNo: schema.intDailyProduction.vNo,
       vDate: schema.intDailyProduction.vDate,
       designNo: schema.intDailyProduction.designNo,
@@ -131,6 +140,8 @@ export default async function GreyShrinkagePage({
       bShed: schema.beams.shed,
       bSetNo: schema.beams.setNo,
       bBeamSetNo: schema.beams.beamSetNo,
+      bYarnCount: schema.beams.yarnCount,
+      bStatusWrk: schema.beams.statusWrk,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(
@@ -179,12 +190,17 @@ export default async function GreyShrinkagePage({
     ends: number;
     beamLength: number;
     shed: string;
+    loomNo: number;
     szgParty: string;
     szgName: string;
     brVno: string;
     brDate: string;
     knVno: string;
     knDate: string;
+    lastDate: string;
+    warpInfo: string;
+    rCut: string;
+    totalRej: number;
     designs: DesignGrp[];
     totalMtr: number;
     totalAmt: number;
@@ -245,7 +261,13 @@ export default async function GreyShrinkagePage({
     const totalMtr = designs.reduce((s, d) => s + d.totalMtr, 0);
     const totalAmt = designs.reduce((s, d) => s + d.totalAmt, 0);
     const totalLines = designs.reduce((s, d) => s + d.lines.length, 0);
+    const totalRej = rows.reduce((s, r) => s + (r.rejCount ?? 0), 0);
     const balMtr = beamLength - totalMtr;
+    const loomNo = f.loomNo ?? 0;
+    const dates = rows.map((r) => r.vDate ?? "").filter(Boolean);
+    const lastDate = dates.length ? dates.sort().pop()! : "";
+    const lastStatus = rows[rows.length - 1]?.beamStatus ?? "";
+    const rCut = (f.bStatusWrk ?? "").toUpperCase() === "EMPTY" ? "L-ROLL" : lastStatus;
 
     blocks.push({
       beamNo,
@@ -254,12 +276,17 @@ export default async function GreyShrinkagePage({
       ends,
       beamLength,
       shed: f.bShed ?? f.shedNo ?? "",
+      loomNo,
       szgParty: szg,
       szgName: nameByCode.get(szg) ?? szg,
       brVno: f.brVno ?? "",
       brDate: f.brDate ?? "",
       knVno: f.knVno ?? "",
       knDate: f.knDate ?? "",
+      lastDate,
+      warpInfo: f.bYarnCount ?? "",
+      rCut,
+      totalRej,
       designs,
       totalMtr,
       totalAmt,
@@ -354,7 +381,7 @@ export default async function GreyShrinkagePage({
         <form
           method="GET"
           action=""
-          className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-5 gap-4 no-print"
+          className="border border-black p-4 mb-6 grid grid-cols-2 sm:grid-cols-7 gap-4 no-print"
         >
           <div>
             <label className="label block mb-1">Date From</label>
@@ -400,7 +427,28 @@ export default async function GreyShrinkagePage({
               placeholder="All parties"
             />
           </div>
-          <div className="sm:col-span-5 flex gap-2">
+          <div>
+            <label className="label block mb-1">Loom #</label>
+            <input
+              type="text"
+              name="loom"
+              defaultValue={loomFilter}
+              className="input-box mono"
+              placeholder="Loom #"
+            />
+          </div>
+          <div>
+            <label className="label block mb-1">Shed</label>
+            <input
+              type="text"
+              name="shed"
+              defaultValue={shedFilter}
+              className="input-box mono"
+              placeholder="Shed"
+            />
+          </div>
+          <input type="hidden" name="view" value={viewMode || "beam"} />
+          <div className="sm:col-span-7 flex gap-2 items-center">
             <button type="submit" className="btn btn-sm">
               Apply
             </button>
@@ -410,6 +458,20 @@ export default async function GreyShrinkagePage({
             >
               Clear
             </a>
+            <span className="ml-auto flex gap-1">
+              <a
+                href={`?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${party ? `&party=${encodeURIComponent(party)}` : ""}${setFilter ? `&set=${encodeURIComponent(setFilter)}` : ""}${beamFilter ? `&beam=${encodeURIComponent(beamFilter)}` : ""}${loomFilter ? `&loom=${encodeURIComponent(loomFilter)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}&view=set`}
+                className={`btn btn-sm ${viewMode === "set" ? "" : "btn-outline"}`}
+              >
+                Set Wise
+              </a>
+              <a
+                href={`?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${party ? `&party=${encodeURIComponent(party)}` : ""}${setFilter ? `&set=${encodeURIComponent(setFilter)}` : ""}${beamFilter ? `&beam=${encodeURIComponent(beamFilter)}` : ""}${loomFilter ? `&loom=${encodeURIComponent(loomFilter)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}&view=beam`}
+                className={`btn btn-sm ${viewMode !== "set" ? "" : "btn-outline"}`}
+              >
+                Beam Wise
+              </a>
+            </span>
           </div>
         </form>
 
@@ -442,6 +504,93 @@ export default async function GreyShrinkagePage({
           <div className="text-center text-[var(--muted)] py-12">
             No beams in selected range
           </div>
+        ) : viewMode === "set" ? (
+          (() => {
+            const setGroups = new Map<string, Block[]>();
+            for (const b of blocks) {
+              const k = b.setNo || "—";
+              if (!setGroups.has(k)) setGroups.set(k, []);
+              setGroups.get(k)!.push(b);
+            }
+            const qs = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${party ? `&party=${encodeURIComponent(party)}` : ""}${loomFilter ? `&loom=${encodeURIComponent(loomFilter)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}`;
+            return Array.from(setGroups.entries()).map(([sNo, sBlocks]) => {
+              const sMtr = sBlocks.reduce((s, b) => s + b.totalMtr, 0);
+              const sLen = sBlocks.reduce((s, b) => s + b.beamLength, 0);
+              const sBal = sLen - sMtr;
+              const sRej = sBlocks.reduce((s, b) => s + b.totalRej, 0);
+              const sShr = sLen > 0 ? (sBal / sLen) * 100 : 0;
+              return (
+                <div key={sNo} className="mb-8 break-inside-avoid">
+                  <div className="border-2 border-black bg-[#f5f5f5] px-4 py-2 flex items-center justify-between">
+                    <span className="font-bold text-[14px]">Set # {sNo}</span>
+                    <span className="mono text-[12px] text-[var(--muted)]">{sBlocks.length} beam{sBlocks.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="overflow-x-auto border-x-2 border-b-2 border-black">
+                    <table className="w-full">
+                      <thead>
+                        <tr>
+                          <th>L#</th>
+                          <th>Shed</th>
+                          <th>BmSet#</th>
+                          <th>Beam#</th>
+                          <th className="text-right">B.Length</th>
+                          <th className="text-right">Meter</th>
+                          <th className="text-right">Rej</th>
+                          <th className="text-right">Diff.Mtr</th>
+                          <th className="text-right">Shr%</th>
+                          <th>Knt.Date</th>
+                          <th>L-R Date</th>
+                          <th>Wrp Cont</th>
+                          <th>Status</th>
+                          <th className="no-print" style={{ width: 40 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sBlocks.map((b) => (
+                          <tr key={b.beamNo}>
+                            <td className="mono">{b.loomNo || "-"}</td>
+                            <td className="mono">{b.shed || "-"}</td>
+                            <td className="mono">{b.beamSetNo || "-"}</td>
+                            <td className="mono font-bold">{b.beamNo}</td>
+                            <td className="mono text-right">{fmt(b.beamLength)}</td>
+                            <td className="mono text-right">{fmt2(b.totalMtr)}</td>
+                            <td className="mono text-right">{b.totalRej || "-"}</td>
+                            <td className="mono text-right">{fmt2(b.balMtr)}</td>
+                            <td className="mono text-right">{fmt2(b.shrinkPct)}%</td>
+                            <td className="mono text-[12px]">{b.knDate || "-"}</td>
+                            <td className="mono text-[12px]">{b.lastDate || "-"}</td>
+                            <td className="text-[12px]">{b.warpInfo || "-"}</td>
+                            <td className="text-[12px]">{b.rCut || "-"}</td>
+                            <td className="no-print">
+                              <a
+                                href={`?${qs}&beam=${encodeURIComponent(b.beamNo)}&view=beam`}
+                                className="btn btn-sm btn-outline"
+                                style={{ padding: "1px 8px", fontSize: 11 }}
+                                title="Show serial details for this beam"
+                              >
+                                S
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
+                          <td colSpan={4}>Set Total ({sBlocks.length})</td>
+                          <td className="mono text-right">{fmt(sLen)}</td>
+                          <td className="mono text-right">{fmt2(sMtr)}</td>
+                          <td className="mono text-right">{sRej || "-"}</td>
+                          <td className="mono text-right">{fmt2(sBal)}</td>
+                          <td className="mono text-right">{fmt2(sShr)}%</td>
+                          <td colSpan={5}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              );
+            });
+          })()
         ) : (
           blocks.map((b) => (
             <div key={b.beamNo} className="mb-10 break-inside-avoid">
