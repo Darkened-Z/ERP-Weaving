@@ -178,7 +178,7 @@ export default async function GreyShrinkagePage({
       schema.intDailyProduction.vDate,
     );
 
-  const filtered = raw.filter((r) => r.beamNo && (r.totalCount ?? 0) > 0);
+  const filtered = raw.filter((r) => (r.totalCount ?? 0) > 0);
 
   type Line = {
     vNo: string;
@@ -227,7 +227,7 @@ export default async function GreyShrinkagePage({
 
   const beamMap = new Map<string, typeof filtered>();
   for (const r of filtered) {
-    const k = r.beamNo!;
+    const k = r.beamNo || "(No Beam)";
     if (!beamMap.has(k)) beamMap.set(k, []);
     beamMap.get(k)!.push(r);
   }
