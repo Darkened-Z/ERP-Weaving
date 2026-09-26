@@ -10,6 +10,7 @@ import { loadConvContracts } from "@/lib/conv-contracts";
 import { thanLetter } from "@/lib/than-serial";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { ConfirmButton } from "@/components/confirm-button";
+import { SaveForm, type SaveError } from "@/components/save-form";
 import { db, schema } from "@/db";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
@@ -267,9 +268,7 @@ export default async function DailyProductionPage({
       bLength: b.length ?? null,
       beamSetNo: b.beamSetNo ?? null,
       setHash: b.setNo ?? null,
-      // Beam picked into production → its status moves to PRODUCTION on save
-      // (the grid's Beam Status is applied to the beam; operator can override).
-      beamStatus: "RUNNING",
+      beamStatus: (b.statusWrk ?? "").toUpperCase() === "KNOTTING" ? "F-ROLL" : "RUNNING",
       contNo: b.contractNo ?? null,
     };
   }
@@ -421,7 +420,7 @@ export default async function DailyProductionPage({
         beamNo: b.beamNo ?? null,
         beamSetNo: b.beamSetNo ?? null,
         setHash: b.setNo ?? null,
-        beamStatus: "RUNNING",
+        beamStatus: (b.statusWrk ?? "").toUpperCase() === "KNOTTING" ? "F-ROLL" : "RUNNING",
         ends: b.ends ?? null,
         bLength: b.length ?? null,
         contNo: b.contractNo ?? null,
@@ -640,7 +639,7 @@ export default async function DailyProductionPage({
     }
   }
 
-  async function saveAction(formData: FormData) {
+  async function saveAction(_prev: SaveError, formData: FormData): Promise<SaveError> {
     "use server";
     try {
     const idRaw = formData.get("id") as string | null;
@@ -755,7 +754,7 @@ export default async function DailyProductionPage({
       // Loom moved to the header (owner) — rows no longer carry a loom cell; the
       // beam's loom stays whatever the knotting mount stamped on the beam.
       const ln: number | null = null;
-      const cn = (contNoArr[i] || "").trim() || headerContract;
+      const cn = headerContract || (contNoArr[i] || "").trim();
       const en = intVal(endsArr[i]);
       const bl = num(bLengthArr[i]);
       const rm = num(rcvdMtrArr[i]);
@@ -834,15 +833,9 @@ export default async function DailyProductionPage({
 
     // ---- validations ----
     const hasBeam = validSets.some((s) => (s.beamNo ?? "").trim().length > 0);
-    if (!hasBeam) {
-      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=no_beam` : `?adding=1&error=no_beam`;
-      redirect(`/inventory/daily-production${q}`);
-    }
+    if (!hasBeam) return { error: "no_beam" };
     const totalGrade = validSets.reduce((a, s) => a + (s.totalCount ?? 0), 0);
-    if (totalGrade <= 0) {
-      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=no_grade` : `?adding=1&error=no_grade`;
-      redirect(`/inventory/daily-production${q}`);
-    }
+    if (totalGrade <= 0) return { error: "no_grade" };
 
     const formVNo = ((formData.get("vNo") as string) || "").trim();
 
@@ -873,14 +866,11 @@ export default async function DailyProductionPage({
     const rowParties = new Set([...partyByCont.values()].filter(Boolean));
     const headerConvParty = (header.convContParty ?? "").trim();
     if (rowParties.size > 1 || (headerConvParty && [...rowParties].some((p) => p !== headerConvParty))) {
-      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=party_cross` : `?adding=1&error=party_cross`;
-      redirect(`/inventory/daily-production${q}`);
+      return { error: "party_cross" };
     }
-    // Beam party must match conv party when both are set.
     const beamPartyHeader = (header.beamContParty ?? "").trim();
     if (headerConvParty && beamPartyHeader && headerConvParty !== beamPartyHeader) {
-      const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=party_mismatch` : `?adding=1&error=party_mismatch`;
-      redirect(`/inventory/daily-production${q}`);
+      return { error: "party_mismatch" };
     }
     const foldingAmount =
       Math.round(
@@ -1317,19 +1307,12 @@ export default async function DailyProductionPage({
       const msg = (e as { message?: string })?.message ?? "unknown";
       if (msg.startsWith("THAN_LOCKED:")) {
         const [, than, vno] = msg.split(":");
-        const q = Number.isFinite(id) && id > 0 ? `?id=${id}` : `?adding=1`;
-        redirect(`/inventory/daily-production${q}&error=than_locked&than=${encodeURIComponent(than)}&dv=${encodeURIComponent(vno ?? "")}`);
+        return { error: "than_locked", than, dv: vno ?? "" };
       }
-      if (msg === "DUP_THAN") {
-        const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
-        redirect(`/inventory/daily-production${q}`);
-      }
+      if (msg === "DUP_THAN") return { error: "dup_than" };
       if (/UNIQUE|constraint/i.test(msg)) {
-        if (/mm_than_sr_no|mmThanSrNo/i.test(msg)) {
-          const q = Number.isFinite(id) && id > 0 ? `?id=${id}&error=dup_than` : `?adding=1&error=dup_than`;
-          redirect(`/inventory/daily-production${q}`);
-        }
-        redirect(`/inventory/daily-production?error=code_exists`);
+        if (/mm_than_sr_no|mmThanSrNo/i.test(msg)) return { error: "dup_than" };
+        return { error: "code_exists" };
       }
       throw e;
     }
@@ -1337,9 +1320,10 @@ export default async function DailyProductionPage({
       const err = e as { message?: string; digest?: string };
       if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
       const thru = parseLockedThroughFromError(err.message ?? "");
-      if (thru) redirect(`/inventory/daily-production?error=period_locked&thru=${thru}`);
+      if (thru) return { error: "period_locked", thru };
       throw e;
     }
+    return null;
   }
 
   async function deleteAction(formData: FormData) {
@@ -1468,57 +1452,12 @@ export default async function DailyProductionPage({
           />
         </div>
 
-        {params.error === "code_exists" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Voucher number already exists. Try again.
-          </div>
-        )}
-        {params.error === "period_locked" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Period is locked. Cannot save vouchers for this date
-            {params.thru && (
-              <> — locked through <span className="mono">{params.thru}</span></>
-            )}
-            .
-          </div>
-        )}
         {params.error === "than_despatched" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            ⚠ This voucher cannot be deleted — than {params.than} has gone out on despatch{" "}
+            This voucher cannot be deleted — than {params.than} has gone out on despatch{" "}
             {params.dv}. Even one despatched than holds the whole voucher, because deleting it
             would leave that despatch pointing at production that no longer exists. Remove the
             than from despatch {params.dv} first. Nothing was deleted.
-          </div>
-        )}
-        {params.error === "than_locked" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Than {params.than} has already gone out on despatch {params.dv} — it cannot be changed or removed here.
-            Edit despatch {params.dv} first if the cloth really did not leave.
-          </div>
-        )}
-        {params.error === "dup_than" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Duplicate mm/Than Sr No — already used by another production entry.
-          </div>
-        )}
-        {params.error === "no_beam" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            At least one row must have a Beam # (fill it in BEAM DETAILS below, or pick a header Loom#).
-          </div>
-        )}
-        {params.error === "party_cross" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Party cross — every beam&apos;s contract must belong to the same conversion party. Fix the loom/contract selection.
-          </div>
-        )}
-        {params.error === "party_mismatch" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Party mismatch — Conv Contract Party and Beam Cost Party must be the same. Check the Parties section before saving.
-          </div>
-        )}
-        {params.error === "no_grade" && (
-          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Total grade production must be greater than 0.
           </div>
         )}
         {params.error === "admin_only" && (
@@ -1559,7 +1498,7 @@ export default async function DailyProductionPage({
           </div>
 
           {showForm && (
-            <form id="idp-save-form" action={saveAction}>
+            <SaveForm action={saveAction} formId="idp-save-form">
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <ProductionSetCalc beamStats={beamStats} />
               {/* Blank rows auto-hide — only rows in use stay visible (min 1) */}
@@ -1972,7 +1911,7 @@ export default async function DailyProductionPage({
                   </div>
                 </div>
               </div>
-            </form>
+            </SaveForm>
           )}
         </div>
 
