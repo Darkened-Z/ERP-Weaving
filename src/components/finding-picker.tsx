@@ -61,6 +61,8 @@ export function FindingPicker({
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [filterVal, setFilterVal] = useState("");
+  const [focusIdx, setFocusIdx] = useState(-1);
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
   // Instance-scoped refs so multiple pickers with the SAME name (e.g. one per
   // grid row) stay independent — F9 opens only the focused one, and picking
   // writes to this row's own hidden input, not the first match in the DOM.
@@ -141,6 +143,14 @@ export function FindingPicker({
     });
   }, [rows, q, filterByField, filterVal]);
 
+  useEffect(() => { setFocusIdx(-1); }, [q, open]);
+
+  useEffect(() => {
+    if (focusIdx < 0) return;
+    const row = tbodyRef.current?.children[focusIdx] as HTMLElement | undefined;
+    row?.scrollIntoView({ block: "nearest" });
+  }, [focusIdx]);
+
   const pickRow = (v: string) => {
     setValue(v);
     setOpen(false);
@@ -150,6 +160,16 @@ export function FindingPicker({
       hidden.dispatchEvent(new Event("input", { bubbles: true }));
       hidden.dispatchEvent(new Event("change", { bubbles: true }));
       hidden.dispatchEvent(new CustomEvent("combobox:change", { bubbles: true, detail: { value: v, name } }));
+    }
+  };
+
+  const onSearchKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (focusIdx >= 0 && focusIdx < filtered.length) pickRow(filtered[focusIdx].value);
+      else if (filtered.length === 1) pickRow(filtered[0].value);
     }
   };
 
@@ -222,7 +242,7 @@ export function FindingPicker({
                   className="input-box mono w-full"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && filtered.length === 1) pickRow(filtered[0].value); }}
+                  onKeyDown={onSearchKey}
                   placeholder="Type code or description…"
                 />
               </div>
@@ -253,7 +273,7 @@ export function FindingPicker({
                     </tr>
                   )}
                 </thead>
-                <tbody>
+                <tbody ref={tbodyRef}>
                   {filtered.length === 0 ? (
                     <tr>
                       <td colSpan={columns ? columns.length : extraLabel ? 3 : 2} className="px-4 py-8 text-center text-[var(--muted)] italic">
@@ -262,12 +282,12 @@ export function FindingPicker({
                           : "No matches"}
                       </td>
                     </tr>
-                  ) : filtered.map((r) => (
+                  ) : filtered.map((r, ri) => (
                     <tr
                       key={r.value}
                       className="border-b border-[var(--border-light)] cursor-pointer hover:bg-yellow-50"
                       onClick={() => pickRow(r.value)}
-                      style={value === r.value ? { background: "#0f172a", color: "white" } : undefined}
+                      style={ri === focusIdx ? { background: "#1e40af", color: "white" } : value === r.value ? { background: "#0f172a", color: "white" } : undefined}
                     >
                       {columns ? (
                         columns.map((c, ci) => (
@@ -292,7 +312,7 @@ export function FindingPicker({
             </div>
 
             <div className="border-t border-black px-4 py-2 text-[10px] text-[var(--muted)] mono flex justify-between">
-              <span>Click a row to pick · Esc to close · Enter picks a single result</span>
+              <span>Arrow keys to move · Enter to pick · Esc to close</span>
               <span>{selected ? `Current: ${selected.code}` : "None selected"}</span>
             </div>
           </div>
