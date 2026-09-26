@@ -364,7 +364,7 @@ export default async function DailyProductionPage({
       value: `${lm.shed ?? ""}|${lm.loomNo}`,
       // Reads "Shed 1 — Loom 24"; the value still carries the composite.
       code: `Shed ${lm.shed ?? ""}`,
-      description: `Loom ${lm.loomNo}`,
+      description: `Loom ${lm.loomNo} - Shed ${lm.shed ?? "?"}`,
       filterKey: lm.shed ?? "",
       cells: { loomNo: lm.loomNo, shed: lm.shed ?? "", rpm: lm.rpm ?? "", status: lm.statusWrk ?? "", beamNo: b?.beamNo ?? "", contNo: (lm.currentContract ?? b?.contractNo) ?? "" },
     };

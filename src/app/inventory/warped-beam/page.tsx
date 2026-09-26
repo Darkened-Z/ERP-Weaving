@@ -49,6 +49,21 @@ export default async function WarpedBeamReceivingPage({
         .orderBy(desc(schema.intWarpedBeamReceiving.id))
     : await db.select().from(schema.intWarpedBeamReceiving).orderBy(desc(schema.intWarpedBeamReceiving.id));
 
+  const setByReceivingId = new Map<number, string>();
+  if (list.length) {
+    const setRows = await db
+      .selectDistinct({
+        rid: schema.intWarpedBeamReceivingLine.receivingId,
+        setNo: schema.intWarpedBeamReceivingLine.setNo,
+      })
+      .from(schema.intWarpedBeamReceivingLine)
+      .where(sql`${schema.intWarpedBeamReceivingLine.setNo} IS NOT NULL AND ${schema.intWarpedBeamReceivingLine.setNo} != ''`);
+    for (const s of setRows) {
+      const prev = setByReceivingId.get(s.rid);
+      setByReceivingId.set(s.rid, prev ? `${prev}, ${s.setNo}` : s.setNo!);
+    }
+  }
+
   const selected = isEditing ? list.find((r) => r.id === idParam) ?? null : null;
   const editing = isAdding ? null : selected;
 
@@ -1226,7 +1241,10 @@ export default async function WarpedBeamReceivingPage({
                   const style = { color: isSel ? "white" : "inherit" } as const;
                   return (
                     <tr key={r.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                      <td className="mono text-[13px]"><a href={href} className="no-underline block" style={style}>{r.vNo}</a></td>
+                      <td className="mono text-[13px]"><a href={href} className="no-underline block" style={style}>
+                        {r.vNo}
+                        {setByReceivingId.get(r.id) && <div className="text-[11px]" style={{ color: isSel ? "#aaa" : "var(--accent)" }}>SET-{setByReceivingId.get(r.id)}</div>}
+                      </a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.vDate}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.type}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.gpNo ?? "-"}</a></td>
