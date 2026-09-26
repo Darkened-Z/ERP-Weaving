@@ -42,7 +42,7 @@ export default async function GreyShrinkagePage({
   const loomFilter = p.loom?.trim() ?? "";
   const shedFilter = p.shed?.trim() ?? "";
 
-  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts] =
+  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw] =
     await Promise.all([
       partyByNameOptions(),
       db
@@ -73,6 +73,15 @@ export default async function GreyShrinkagePage({
           rate: schema.extGreyConvContract.convRatePerMtr,
         })
         .from(schema.extGreyConvContract),
+      db
+        .select({
+          loomNo: schema.looms.loomNo,
+          shed: schema.looms.shed,
+          rpm: schema.looms.rpm,
+          status: schema.looms.statusWrk,
+        })
+        .from(schema.looms)
+        .orderBy(schema.looms.loomNo),
     ]);
 
   const greyDesc = new Map(greys.map((g) => [g.code, g.desc ?? ""]));
@@ -87,6 +96,13 @@ export default async function GreyShrinkagePage({
     .filter((r) => r.setNo)
     .map((r) => ({ value: r.setNo!, label: r.setNo! }))
     .sort((a, b) => (Number(a.value) || 0) - (Number(b.value) || 0));
+
+  const loomOpts = loomRaw.map((l) => ({
+    value: String(l.loomNo),
+    label: `${l.loomNo} — Shed ${l.shed}`,
+  }));
+  const shedSet = new Set(loomRaw.map((l) => l.shed).filter(Boolean));
+  const shedOpts = [...shedSet].sort().map((s) => ({ value: s, label: s }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const conds: any[] = [
@@ -429,22 +445,20 @@ export default async function GreyShrinkagePage({
           </div>
           <div>
             <label className="label block mb-1">Loom #</label>
-            <input
-              type="text"
+            <Combobox
               name="loom"
+              options={loomOpts}
               defaultValue={loomFilter}
-              className="input-box mono"
-              placeholder="Loom #"
+              placeholder="All looms"
             />
           </div>
           <div>
             <label className="label block mb-1">Shed</label>
-            <input
-              type="text"
+            <Combobox
               name="shed"
+              options={shedOpts}
               defaultValue={shedFilter}
-              className="input-box mono"
-              placeholder="Shed"
+              placeholder="All sheds"
             />
           </div>
           <input type="hidden" name="view" value={viewMode || "beam"} />
