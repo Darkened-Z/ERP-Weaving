@@ -591,8 +591,7 @@ export default async function GreyShrinkagePage({
                     <table className="w-full">
                       <thead>
                         <tr>
-                          <th>L#</th>
-                          <th>Shed</th>
+                          <th>Loom</th>
                           <th>BmSet#</th>
                           <th>Beam#</th>
                           <th className="text-right">B.Length</th>
@@ -610,8 +609,7 @@ export default async function GreyShrinkagePage({
                       <tbody>
                         {sBlocks.map((b) => (
                           <tr key={b.beamNo}>
-                            <td className="mono">{b.loomNo || "-"}</td>
-                            <td className="mono">{b.shed || "-"}</td>
+                            <td className="mono">{b.loomNo ? `S${b.shed || "?"}.L${b.loomNo}` : "-"}</td>
                             <td className="mono">{b.beamSetNo || "-"}</td>
                             <td className="mono font-bold">{b.beamNo}</td>
                             <td className="mono text-right">{fmt(b.beamLength)}</td>
@@ -638,7 +636,7 @@ export default async function GreyShrinkagePage({
                       </tbody>
                       <tfoot>
                         <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
-                          <td colSpan={4}>Set Total ({sBlocks.length})</td>
+                          <td colSpan={3}>Set Total ({sBlocks.length})</td>
                           <td className="mono text-right">{fmt(sLen)}</td>
                           <td className="mono text-right">{fmt2(sMtr)}</td>
                           <td className="mono text-right">{sRej || "-"}</td>
@@ -689,8 +687,8 @@ export default async function GreyShrinkagePage({
                     <span className="mono">{b.knDate || "-"}</span>
                   </div>
                   <div>
-                    <span className="font-bold">Shed</span>{" "}
-                    <span className="mono">{b.shed || "-"}</span>
+                    <span className="font-bold">Loom</span>{" "}
+                    <span className="mono">{b.loomNo ? `S${b.shed || "?"}.L${b.loomNo}` : b.shed || "-"}</span>
                   </div>
                   <div>
                     <span className="font-bold">BR.V.NO</span>{" "}
@@ -757,7 +755,7 @@ export default async function GreyShrinkagePage({
                             {l.wastWtKg > 0 ? fmt2(l.wastWtKg) : "-"}
                           </td>
                           <td className="mono text-right">
-                            {l.loomNo || "-"}
+                            {l.loomNo ? `S${b.shed || "?"}.L${l.loomNo}` : "-"}
                           </td>
                         </tr>
                       )),

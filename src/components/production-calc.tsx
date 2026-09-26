@@ -190,6 +190,12 @@ export function LoomBeamsFill({
       const d = (e as CustomEvent).detail as { name?: string; value?: string };
       if (d?.name !== "headerLoom") return;
       const beams = map[d.value ?? ""] ?? [];
+      const [shed] = (d.value ?? "").split("|");
+      const shedInput = document.querySelector<HTMLInputElement>('[name="shedNo"]');
+      if (shedInput && shedInput.value !== shed) {
+        shedInput.value = shed;
+        shedInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
       const rows = beamRows();
       // Always sweep to maxRows: fill from the loom's knotted beams, CLEAR
       // everything else — switching looms must never leave the previous loom's

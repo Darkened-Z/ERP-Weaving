@@ -1582,8 +1582,8 @@ export default async function DailyProductionPage({
                       tabIndex={-1}
                     />
                   </div>
-                  <div className="md:col-span-4">
-                    <label className="label block mb-1">Loom# (F9) <span className="text-[9px] text-[var(--muted)]">(mounted beams auto-fill below)</span></label>
+                  <div className="md:col-span-3">
+                    <label className="label block mb-1">Loom# (F9) <span className="text-[9px] text-[var(--muted)]">(beams auto-fill below)</span></label>
                     <FindingPicker
                       name="headerLoom"
                       defaultValue={editingLoom}
@@ -1594,6 +1594,10 @@ export default async function DailyProductionPage({
                       placeholder="F9 loom — fills its beams below"
                       className="input-box mono cursor-pointer"
                     />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="label block mb-1">Shed</label>
+                    <input name="shedNo" className="input-box mono bg-gray-100" defaultValue={editing?.shedNo ?? ""} readOnly tabIndex={-1} />
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Design#</label>
@@ -1623,7 +1627,6 @@ export default async function DailyProductionPage({
                   {/* Owner: Shed No, Bill No/Date/Status and the SHIFT INCHARGE +
                       CODES sections are off the form. Kept as hidden inputs so a
                       saved voucher does not lose them on an edit. */}
-                  <input type="hidden" name="shedNo" defaultValue={editing?.shedNo ?? ""} />
                   <input type="hidden" name="billNo" defaultValue={editing?.billNo ?? ""} />
                   <input type="hidden" name="billDate" defaultValue={editing?.billDate ?? ""} />
                   <input type="hidden" name="billingStatus" defaultValue={editing?.billingStatus ?? ""} />
