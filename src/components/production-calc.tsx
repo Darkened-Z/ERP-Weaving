@@ -218,19 +218,7 @@ export function LoomBeamsFill({
           setEl(tr, "contNo", null);
         }
       }
-      // First beam's contract → fill header conv_contract so AutoFill picks up party/quality/brand.
-      const contNo = beams[0]?.contNo ?? null;
-      document.dispatchEvent(
-        new CustomEvent("combobox:set", { detail: { name: "conv_contract", value: contNo ?? "" } })
-      );
-      if (contNo) {
-        document.dispatchEvent(
-          new CustomEvent("combobox:change", { detail: { name: "conv_contract", value: contNo } })
-        );
-      }
-      // First beam's parties → fill header Beam Cost Party + Szg Party. The
-      // change event follows the set so the yarn-spec auto-fill sees the party
-      // (combobox:set alone is silent).
+      // Beam parties → fill header Beam Cost Party + Szg Party.
       const beamParty = beams[0]?.partyTrade ?? "";
       document.dispatchEvent(
         new CustomEvent("combobox:set", { detail: { name: "beamContParty", value: beamParty } })
@@ -239,18 +227,12 @@ export function LoomBeamsFill({
         document.dispatchEvent(
           new CustomEvent("combobox:change", { detail: { name: "beamContParty", value: beamParty } })
         );
-        // With no contract on the beam nothing reaches Yarn Cost Party, and the
-        // save guard only accepts it equal to Beam Cost Party. When the beam DOES
-        // carry a contract, the conv_contract fill above already set it from that
-        // contract's own party, so don't overwrite it here.
-        if (!contNo) {
-          document.dispatchEvent(
-            new CustomEvent("combobox:set", { detail: { name: "convContParty", value: beamParty } })
-          );
-          document.dispatchEvent(
-            new CustomEvent("combobox:change", { detail: { name: "convContParty", value: beamParty } })
-          );
-        }
+        document.dispatchEvent(
+          new CustomEvent("combobox:set", { detail: { name: "convContParty", value: beamParty } })
+        );
+        document.dispatchEvent(
+          new CustomEvent("combobox:change", { detail: { name: "convContParty", value: beamParty } })
+        );
       }
       const szg = beams[0]?.szgParty ?? null;
       if (szg) {
