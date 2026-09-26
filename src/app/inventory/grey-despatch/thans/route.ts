@@ -87,27 +87,38 @@ export async function GET(req: NextRequest) {
   const keepSet = new Set(keep);
   const filteredOpen = openRows.filter((r) => {
     if (r.dlvStatus !== "Y") return true;
-    return keepSet.has(`OPN-${r.id}`);
+    const prefix = `OPN-${r.id}`;
+    return keepSet.has(prefix) || keep.some((k) => k.startsWith(`${prefix}-`));
   });
 
-  const openMapped = filteredOpen.map((r) => ({
-    id: -(r.id),
-    productionId: 0,
-    mm: `OPN-${r.id}`,
-    totalCount: r.netMtr ?? r.openingQty ?? 0,
-    aCount: null,
-    bCount: null,
-    cCount: null,
-    cpCount: null,
-    rejCount: null,
-    beamNo: r.beamNo ?? null,
-    beamSetNo: r.beamSetNo ?? null,
-    vNo: r.voucherNo || `OPN-${r.id}`,
-    vDate: r.entryDate ?? null,
-    source: "OPN" as const,
-    description: r.description ?? "",
-    thanCount: r.than ?? 1,
-  }));
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const openMapped: Record<string, unknown>[] = [];
+  for (const r of filteredOpen) {
+    const thanCount = Math.max(r.than ?? 1, 1);
+    const totalMtrs = r.netMtr ?? r.openingQty ?? 0;
+    const perThan = thanCount > 1 ? round2(totalMtrs / thanCount) : totalMtrs;
+    for (let i = 1; i <= thanCount; i++) {
+      const mtrs = i < thanCount ? perThan : round2(totalMtrs - perThan * (thanCount - 1));
+      openMapped.push({
+        id: -(r.id * 1000 + i),
+        productionId: 0,
+        mm: `OPN-${r.id}-${i}`,
+        totalCount: mtrs,
+        aCount: null,
+        bCount: null,
+        cCount: null,
+        cpCount: null,
+        rejCount: null,
+        beamNo: r.beamNo ?? null,
+        beamSetNo: r.beamSetNo ?? null,
+        vNo: r.voucherNo || `OPN-${r.id}`,
+        vDate: r.entryDate ?? "",
+        source: "OPN" as const,
+        description: r.description ?? "",
+        thanCount: 0,
+      });
+    }
+  }
 
   return NextResponse.json([...openMapped, ...mapped]);
 }
