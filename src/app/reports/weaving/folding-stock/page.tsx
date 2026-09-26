@@ -277,11 +277,11 @@ export default async function FoldingStockPage({
                 <th className="text-right">Total</th>
                 <th className="text-right">Despatch</th>
                 <th className="text-right">Balance</th>
-                <th className="text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>Op.Than</th>
-                <th className="text-right">Desp.Than</th>
-                <th className="text-right">Bal.Than</th>
-                <th className="text-right">Tot.Lm</th>
-                <th>Loom#</th>
+                <th className="text-right no-print" style={{ borderLeft: "2px solid #cbd5e1" }}>Op.Than</th>
+                <th className="text-right no-print">Desp.Than</th>
+                <th className="text-right no-print">Bal.Than</th>
+                <th className="text-right no-print">Tot.Lm</th>
+                <th className="no-print">Loom#</th>
                 <th className="no-print"></th>
               </tr>
             </thead>
@@ -317,11 +317,11 @@ export default async function FoldingStockPage({
                         <td className="mono text-right">{fmt(r.total)}</td>
                         <td className="mono text-right">{fmt(r.despatch)}</td>
                         <td className="mono text-right font-bold">{fmt(r.balance)}</td>
-                        <td className="mono text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(r.thanOpen)}</td>
-                        <td className="mono text-right">{fmt(r.thanDesp)}</td>
-                        <td className="mono text-right font-bold">{fmt(r.thanBal)}</td>
-                        <td className="mono text-right">{r.looms.length || ""}</td>
-                        <td className="text-[10px] mono">
+                        <td className="mono text-right no-print" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(r.thanOpen)}</td>
+                        <td className="mono text-right no-print">{fmt(r.thanDesp)}</td>
+                        <td className="mono text-right font-bold no-print">{fmt(r.thanBal)}</td>
+                        <td className="mono text-right no-print">{r.looms.length || ""}</td>
+                        <td className="text-[10px] mono no-print">
                           {r.looms.map((l) => (
                             <span key={l} style={{ display: "inline-block", border: "1px solid #aaa", borderRadius: 2, padding: "0 3px", margin: "1px", background: "#f8fafc" }}>{l}</span>
                           ))}
@@ -339,11 +339,11 @@ export default async function FoldingStockPage({
                       <td className="mono text-right">{fmt(sub.total)}</td>
                       <td className="mono text-right">{fmt(sub.despatch)}</td>
                       <td className="mono text-right">{fmt(sub.balance)}</td>
-                      <td className="mono text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(sub.thanOpen)}</td>
-                      <td className="mono text-right">{fmt(sub.thanDesp)}</td>
-                      <td className="mono text-right">{fmt(sub.thanBal)}</td>
-                      <td></td>
-                      <td></td>
+                      <td className="mono text-right no-print" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(sub.thanOpen)}</td>
+                      <td className="mono text-right no-print">{fmt(sub.thanDesp)}</td>
+                      <td className="mono text-right no-print">{fmt(sub.thanBal)}</td>
+                      <td className="no-print"></td>
+                      <td className="no-print"></td>
                       <td className="no-print"></td>
                     </tr>,
                   ];
@@ -360,11 +360,11 @@ export default async function FoldingStockPage({
                   <td className="mono text-right">{fmt(grand.opening + grand.production)}</td>
                   <td className="mono text-right">{fmt(grand.despatch)}</td>
                   <td className="mono text-right">{fmt(grand.balance)}</td>
-                  <td className="mono text-right" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(grand.thanOpen)}</td>
-                  <td className="mono text-right">{fmt(grand.thanDesp)}</td>
-                  <td className="mono text-right">{fmt(grand.thanBal)}</td>
-                  <td></td>
-                  <td></td>
+                  <td className="mono text-right no-print" style={{ borderLeft: "2px solid #cbd5e1" }}>{fmt(grand.thanOpen)}</td>
+                  <td className="mono text-right no-print">{fmt(grand.thanDesp)}</td>
+                  <td className="mono text-right no-print">{fmt(grand.thanBal)}</td>
+                  <td className="no-print"></td>
+                  <td className="no-print"></td>
                   <td className="no-print"></td>
                 </tr>
               </tfoot>
