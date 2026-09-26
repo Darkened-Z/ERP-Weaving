@@ -50,6 +50,14 @@ export default async function Dashboard() {
     total: sql<number>`count(*)`,
     production: sql<number>`coalesce(sum(case when status = 'R' then qty_mtr else 0 end), 0)`,
   }).from(schema.extGreyConvContract);
+  const [extGscRow] = await db.select({
+    running: sql<number>`count(case when status = 'R' then 1 end)`,
+    total: sql<number>`count(*)`,
+  }).from(schema.extGreySalContract);
+  const [extYpcRow] = await db.select({
+    running: sql<number>`count(case when status = 'R' then 1 end)`,
+    totalBags: sql<number>`coalesce(sum(case when status = 'R' then qty_bags else 0 end), 0)`,
+  }).from(schema.extYarnPurContract);
   const [prodRow] = await db.select({ total: sql<number>`coalesce(sum(meters), 0)` }).from(schema.dailyProduction);
   const [userRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.users);
 
@@ -81,9 +89,9 @@ export default async function Dashboard() {
       { label: "Grey Specs", value: greyRow?.count ?? 0, unit: "construction types", href: "/define/grey-construction" },
     ]},
     { label: "Supply Chain", items: [
-      { label: "Contracts", value: `${contractsActive}/${contractsTotal}`, unit: "active / total", href: "/external/contracts/grey-conversion" },
       { label: "Grey Conv Sale Avg", value: `${extGccRow?.running ?? 0}`, unit: `running · ${formatNum(extGccRow?.production ?? 0)} mtr`, href: "/external/reports/grey-conv-sale-avg" },
-      { label: "Yarn", value: yarnRow?.count ?? 0, unit: "yarn counts", href: "/define/yarn-counts" },
+      { label: "Grey Sale Contract", value: `${extGscRow?.running ?? 0}`, unit: `running / ${extGscRow?.total ?? 0}`, href: "/external/reports/grey-sale-avg" },
+      { label: "Yarn Purchase Contract", value: `${extYpcRow?.running ?? 0}`, unit: `running · ${formatNum(extYpcRow?.totalBags ?? 0)} bags`, href: "/external/reports/yarn-purchase-avg" },
       { label: "Beams", value: beamRow?.count ?? 0, unit: "tracked beams", href: "/weaving/beams" },
     ]},
     { label: "Operations", items: [
