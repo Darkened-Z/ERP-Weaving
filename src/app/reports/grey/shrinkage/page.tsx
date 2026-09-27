@@ -427,7 +427,6 @@ export default async function GreyShrinkagePage({
   }
 
   const grandMtr = blocks.reduce((s, b) => s + b.totalMtr, 0);
-  const grandAmt = blocks.reduce((s, b) => s + b.totalAmt, 0);
   const grandBLen = blocks.reduce((s, b) => s + b.beamLength, 0);
   const grandBal = grandBLen - grandMtr;
   const grandShrink = grandBLen > 0 ? (grandBal / grandBLen) * 100 : 0;
@@ -866,26 +865,6 @@ export default async function GreyShrinkagePage({
           ))
         )}
 
-        {blocks.length > 1 && (
-          <div className="border-2 border-black p-4">
-            <table className="w-full">
-              <tbody>
-                <tr style={{ fontWeight: 700 }}>
-                  <td className="w-1/2">Grand Total</td>
-                  <td className="mono text-right">{fmt2(grandMtr)} mtr</td>
-                  <td className="mono text-right">{fmt(grandAmt)}</td>
-                </tr>
-                <tr className="text-[13px]">
-                  <td>Shrinkage</td>
-                  <td className="mono text-right">{fmt2(grandBal)} mtr</td>
-                  <td className="mono font-bold text-right">
-                    {fmt2(grandShrink)}%
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </Shell>
   );
