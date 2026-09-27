@@ -218,9 +218,11 @@ export default async function WarpedBeamReceivingPage({
       // when a contract carries no converter, and to always-shown when neither.
       filterKey: c.converterParty
         ? codeByDesc.get(c.converterParty) ?? ""
-        : c.sizingParty
-          ? codeByDesc.get(c.sizingParty) ?? ""
-          : "",
+        : c.party
+          ? codeByDesc.get(c.party) ?? ""
+          : c.sizingParty
+            ? codeByDesc.get(c.sizingParty) ?? ""
+            : "",
     };
   });
   const sizingContractMap = Object.fromEntries(
