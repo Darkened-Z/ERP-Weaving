@@ -1043,11 +1043,11 @@ export default async function WarpedBeamReceivingPage({
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Rate/Mtr <span className="text-[9px] text-[var(--muted)]">(→ grid)</span></label>
-                  <input name="sizingRate" type="number" step="any" className="input-box mono text-right" defaultValue="" />
+                  <input name="sizingRate" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.sizingContNo ? (sizingContractMap[editing.sizingContNo]?.sizingRate ?? "") : ""} />
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Rate/Kg</label>
-                  <input name="sizingRateKg" type="number" step="any" className="input-box mono text-right" defaultValue="" />
+                  <input name="sizingRateKg" type="number" step="any" className="input-box mono text-right" defaultValue={editing?.sizingContNo ? (sizingContractMap[editing.sizingContNo]?.sizingRateKg ?? "") : ""} />
                 </div>
                 <div className="lg:col-span-12">
                   <div className="text-[11px] mono text-[var(--muted)] border border-dashed border-[var(--border-light)] px-3 py-1 bg-gray-50">
