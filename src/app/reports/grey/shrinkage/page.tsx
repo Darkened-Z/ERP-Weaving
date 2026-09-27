@@ -337,6 +337,11 @@ export default async function GreyShrinkagePage({
           loomNo: r.loomNo ?? 0,
         };
       });
+      lines.sort((a, b) => {
+        const af = a.status.toUpperCase() === "F-ROLL" ? 0 : 1;
+        const bf = b.status.toUpperCase() === "F-ROLL" ? 0 : 1;
+        return af - bf;
+      });
       designs.push({
         designNo: dNo,
         brand: df.productBrand ?? "",
