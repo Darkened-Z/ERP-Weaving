@@ -1,7 +1,6 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
-import { WhatsAppModal } from "@/components/whatsapp-modal";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
@@ -88,15 +87,6 @@ export default async function GreyDespatchPage({
   // guards check the grid against.
   const savedQtyMtrs = lineRows.length ? round2(lineRows.reduce((s, l) => s + (l.lengthMtrs ?? 0), 0)) : "";
   const countGrid = Array.from({ length: Math.max(COUNT_ROWS, countRows.length) }, (_, i) => countRows[i] ?? null);
-
-  const meterSums = await db
-    .select({
-      despatchId: schema.intGreyDespatchLine.despatchId,
-      meters: sql<number>`coalesce(sum(${schema.intGreyDespatchLine.lengthMtrs}), 0)`,
-    })
-    .from(schema.intGreyDespatchLine)
-    .groupBy(schema.intGreyDespatchLine.despatchId);
-  const metersById = new Map(meterSums.map((m) => [m.despatchId, m.meters]));
 
   const upcomingVNo = nextVNoFromRows(despatches, "IGD");
 
@@ -1592,7 +1582,6 @@ export default async function GreyDespatchPage({
                   <th>Bill Status</th>
                   <th>Vehicle</th>
                   <th className="text-right">Voucher</th>
-                  <th className="text-right">Notify</th>
                 </tr>
               </thead>
               <tbody>
@@ -1626,22 +1615,12 @@ export default async function GreyDespatchPage({
                           Chalan
                         </a>
                       </td>
-                      <td className="text-right">
-                        <WhatsAppModal
-                          party={d.party ?? d.doParty ?? "-"}
-                          despatchNo={d.vNo}
-                          date={d.vDate}
-                          vehicleNo={d.vehicleNo}
-                          meters={metersById.get(d.id) ?? null}
-                          rolls={d.thanQty}
-                        />
-                      </td>
                     </tr>
                   );
                 })}
                 {despatches.length === 0 && (
                   <tr>
-                    <td colSpan={13} className="text-center text-[13px] text-[var(--muted)] py-6">
+                    <td colSpan={11} className="text-center text-[13px] text-[var(--muted)] py-6">
                       No despatches. Click <b>New</b> to create one.
                     </td>
                   </tr>
