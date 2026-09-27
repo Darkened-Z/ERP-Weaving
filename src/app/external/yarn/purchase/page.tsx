@@ -269,9 +269,25 @@ export default async function YarnPurchaseVoucherPage({
     seenPartyCount.add(sc.code);
     partyCountOptions.push({ code: sc.code, description: sc.description });
   }
+  const savedPartyCode = formVoucher?.party
+    ? partyAccounts.find((p) => p.description === formVoucher.party)?.code
+    : undefined;
+  const partyRate = new Map<string, number>();
+  if (savedPartyCode) {
+    for (const pc of partyCountsRows) {
+      if (String(pc.partyCode) !== String(savedPartyCode)) continue;
+      if (pc.ratePerLbs == null) continue;
+      const yc =
+        countList.find((c) => c.id === pc.countCode) ??
+        countList.find((c) => String(c.code) === String(pc.countCode));
+      if (!yc) continue;
+      partyRate.set(String(yc.code), pc.ratePerLbs);
+    }
+  }
   const partyCountFillMap: Record<string, Record<string, string | number>> = {};
   for (const opt of partyCountOptions) {
-    const rate = partyCountInfo[opt.code]?.rate;
+    const pRate = partyRate.get(opt.code);
+    const rate = pRate != null ? String(pRate) : partyCountInfo[opt.code]?.rate;
     partyCountFillMap[opt.code] = {
       line_count: opt.code,
       line_count_desc: opt.description,
@@ -479,9 +495,6 @@ export default async function YarnPurchaseVoucherPage({
   }
   // Party-specific rates — when the voucher's party has partyCounts entries,
   // picking a count code auto-fills the negotiated rate for that party+count.
-  const savedPartyCode = formVoucher?.party
-    ? partyAccounts.find((p) => p.description === formVoucher.party)?.code
-    : undefined;
   if (savedPartyCode) {
     const pcRows = await db
       .select()
