@@ -1684,6 +1684,7 @@ export const intBeamContractExtWs = sqliteTable("int_beam_contract_ext_ws", {
   ends: real("ends"),
   wtPerMtr: real("wt_per_mtr"),
   ratePerBeam: real("rate_per_beam"),
+  ratePerKg: real("rate_per_kg"),
   terms: text("terms"),
   remarks: text("remarks"),
   status: text("status").notNull().default("R"),
