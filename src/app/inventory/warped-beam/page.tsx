@@ -169,6 +169,7 @@ export default async function WarpedBeamReceivingPage({
     .select({
       id: schema.intBeamContractExtWs.id,
       contNo: schema.intBeamContractExtWs.contNo,
+      party: schema.intBeamContractExtWs.party,
       sizingParty: schema.intBeamContractExtWs.sizingParty,
       converterParty: schema.intBeamContractExtWs.converterParty,
       ratePerBeam: schema.intBeamContractExtWs.ratePerBeam,
