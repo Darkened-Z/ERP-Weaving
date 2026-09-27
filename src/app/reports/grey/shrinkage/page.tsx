@@ -550,80 +550,93 @@ export default async function GreyShrinkagePage({
               if (!setGroups.has(k)) setGroups.set(k, []);
               setGroups.get(k)!.push(b);
             }
-            const qs = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${party ? `&party=${encodeURIComponent(party)}` : ""}${loomFilter ? `&loom=${encodeURIComponent(loomFilter)}` : ""}${shedFilter ? `&shed=${encodeURIComponent(shedFilter)}` : ""}`;
             return Array.from(setGroups.entries()).map(([sNo, sBlocks]) => {
               const sMtr = sBlocks.reduce((s, b) => s + b.totalMtr, 0);
               const sLen = sBlocks.reduce((s, b) => s + b.beamLength, 0);
               const sBal = sLen - sMtr;
-              const sRej = sBlocks.reduce((s, b) => s + b.totalRej, 0);
               const sShr = sLen > 0 ? (sBal / sLen) * 100 : 0;
+              const sFirst = sBlocks[0];
+              const sDate = sFirst?.brDate || sFirst?.knDate || "";
+              const sSzg = sFirst?.szgName || "";
+              const sCount = sFirst?.warpInfo || "";
+              const sEnds = sFirst?.ends ?? 0;
               return (
-                <div key={sNo} className="mb-8 break-inside-avoid">
-                  <div className="border-2 border-black bg-[#f5f5f5] px-4 py-2 flex items-center justify-between">
+                <details key={sNo} className="mb-4 border-2 border-black group">
+                  <summary className="cursor-pointer bg-[#f5f5f5] px-4 py-2 flex items-center gap-4 flex-wrap text-[13px] select-none list-none [&::-webkit-details-marker]:hidden">
                     <span className="font-bold text-[14px]">Set # {sNo}</span>
-                    <span className="mono text-[12px] text-[var(--muted)]">{sBlocks.length} beam{sBlocks.length !== 1 ? "s" : ""}</span>
+                    {sDate && <span className="mono text-[12px]">{sDate}</span>}
+                    {sSzg && <span className="text-[12px] truncate" style={{ maxWidth: 180 }}>{sSzg}</span>}
+                    {sCount && <span className="mono text-[12px]">{sCount}</span>}
+                    <span className="mono text-[12px]">{sBlocks.length} beam{sBlocks.length !== 1 ? "s" : ""}</span>
+                    {sEnds > 0 && <span className="mono text-[12px]">Ends {fmt(sEnds)}</span>}
+                    <span className="mono text-[12px]">Len {fmt(sLen)}</span>
+                    <span className="mono text-[12px] ml-auto">{fmt2(sShr)}%</span>
+                  </summary>
+                  <div className="border-t-2 border-black">
+                    {sBlocks.map((b) => (
+                      <details key={b.beamNo} className="border-b border-gray-300 last:border-b-0">
+                        <summary className="cursor-pointer px-3 py-1.5 flex items-center gap-3 flex-wrap text-[12px] mono select-none list-none [&::-webkit-details-marker]:hidden hover:bg-gray-50">
+                          <span className="font-bold">{b.beamNo}</span>
+                          <span>{b.loomNo ? `S${b.shed || "?"}.L${b.loomNo}` : "-"}</span>
+                          <span>{b.beamSetNo || "-"}</span>
+                          <span>Len {fmt(b.beamLength)}</span>
+                          <span>Mtr {fmt2(b.totalMtr)}</span>
+                          <span>Diff {fmt2(b.balMtr)}</span>
+                          <span>{fmt2(b.shrinkPct)}%</span>
+                          {b.knDate && <span>{b.knDate}</span>}
+                          <span className="text-[11px]" style={{ fontFamily: "inherit" }}>{b.rCut || "-"}</span>
+                        </summary>
+                        {b.designs.length > 0 ? (
+                          <div className="overflow-x-auto bg-white border-t border-gray-200">
+                            <table className="w-full text-[12px]">
+                              <thead>
+                                <tr className="bg-gray-100">
+                                  <th>Design</th>
+                                  <th>Brand</th>
+                                  <th>Quality</th>
+                                  <th>Date</th>
+                                  <th>V.#</th>
+                                  <th className="text-right">Mtr</th>
+                                  <th className="text-right">Rate</th>
+                                  <th className="text-right">Amt</th>
+                                  <th>Status</th>
+                                  <th className="text-right">Loom</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {b.designs.flatMap((d) =>
+                                  d.lines.map((l, i) => (
+                                    <tr key={`${d.designNo}-${i}`}>
+                                      <td className="mono font-bold">{d.designNo}</td>
+                                      <td>{d.brand || "-"}</td>
+                                      <td>{d.qualityDesc || d.quality || "-"}</td>
+                                      <td className="mono">{l.vDate}</td>
+                                      <td className="mono">{l.vNo}</td>
+                                      <td className="mono text-right">{fmt2(l.meter)}</td>
+                                      <td className="mono text-right">{l.rate ? fmt2(l.rate) : "-"}</td>
+                                      <td className="mono text-right">{l.amount ? fmt(Math.round(l.amount)) : "-"}</td>
+                                      <td>{l.status || "-"}</td>
+                                      <td className="mono text-right">{l.loomNo ? `S${b.shed || "?"}.L${l.loomNo}` : "-"}</td>
+                                    </tr>
+                                  )),
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="px-4 py-2 text-[12px] text-[var(--muted)] border-t border-gray-200">No production data</div>
+                        )}
+                      </details>
+                    ))}
+                    <div className="px-4 py-2 bg-black text-white flex items-center gap-4 text-[12px] mono font-bold">
+                      <span>Set Total ({sBlocks.length})</span>
+                      <span>Len {fmt(sLen)}</span>
+                      <span>Mtr {fmt2(sMtr)}</span>
+                      <span>Diff {fmt2(sBal)}</span>
+                      <span>{fmt2(sShr)}%</span>
+                    </div>
                   </div>
-                  <div className="overflow-x-auto border-x-2 border-b-2 border-black">
-                    <table className="w-full">
-                      <thead>
-                        <tr>
-                          <th>Loom</th>
-                          <th>BmSet#</th>
-                          <th>Beam#</th>
-                          <th className="text-right">B.Length</th>
-                          <th className="text-right">Meter</th>
-                          <th className="text-right">Rej</th>
-                          <th className="text-right">Diff.Mtr</th>
-                          <th className="text-right">Shr%</th>
-                          <th>Knt.Date</th>
-                          <th>L-R Date</th>
-                          <th>Wrp Cont</th>
-                          <th>Status</th>
-                          <th className="no-print" style={{ width: 40 }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sBlocks.map((b) => (
-                          <tr key={b.beamNo}>
-                            <td className="mono">{b.loomNo ? `S${b.shed || "?"}.L${b.loomNo}` : "-"}</td>
-                            <td className="mono">{b.beamSetNo || "-"}</td>
-                            <td className="mono font-bold">{b.beamNo}</td>
-                            <td className="mono text-right">{fmt(b.beamLength)}</td>
-                            <td className="mono text-right">{fmt2(b.totalMtr)}</td>
-                            <td className="mono text-right">{b.totalRej || "-"}</td>
-                            <td className="mono text-right">{fmt2(b.balMtr)}</td>
-                            <td className="mono text-right">{fmt2(b.shrinkPct)}%</td>
-                            <td className="mono text-[12px]">{b.knDate || "-"}</td>
-                            <td className="mono text-[12px]">{b.lastDate || "-"}</td>
-                            <td className="text-[12px]">{b.warpInfo || "-"}</td>
-                            <td className="text-[12px]">{b.rCut || "-"}</td>
-                            <td className="no-print">
-                              <a
-                                href={`?${qs}&beam=${encodeURIComponent(b.beamNo)}`}
-                                className="btn btn-sm btn-outline"
-                                style={{ padding: "1px 8px", fontSize: 11 }}
-                                title="Show serial details for this beam"
-                              >
-                                S
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
-                          <td colSpan={3}>Set Total ({sBlocks.length})</td>
-                          <td className="mono text-right">{fmt(sLen)}</td>
-                          <td className="mono text-right">{fmt2(sMtr)}</td>
-                          <td className="mono text-right">{sRej || "-"}</td>
-                          <td className="mono text-right">{fmt2(sBal)}</td>
-                          <td className="mono text-right">{fmt2(sShr)}%</td>
-                          <td colSpan={5}></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
+                </details>
               );
             });
           })()
