@@ -65,12 +65,16 @@ export default async function GreyShrinkagePage({
         .select({
           contNo: schema.intGreyConversionContract.contNo,
           rate: schema.intGreyConversionContract.convRatePerMtr,
+          grayQltyCode: schema.intGreyConversionContract.grayQltyCode,
+          productName: schema.intGreyConversionContract.productName,
         })
         .from(schema.intGreyConversionContract),
       db
         .select({
           contNo: schema.extGreyConvContract.contNo,
           rate: schema.extGreyConvContract.convRatePerMtr,
+          grayQltyCode: schema.extGreyConvContract.grayQltyCode,
+          productName: schema.extGreyConvContract.productName,
         })
         .from(schema.extGreyConvContract),
       db
@@ -98,6 +102,7 @@ export default async function GreyShrinkagePage({
           knVno: schema.beams.knVno,
           knDate: schema.beams.knDate,
           yarnCount: schema.beams.yarnCount,
+          contractNo: schema.beams.contractNo,
         })
         .from(schema.beams)
         .where(sql`${schema.beams.setNo} IS NOT NULL AND ${schema.beams.setNo} != ''`),
@@ -117,10 +122,20 @@ export default async function GreyShrinkagePage({
   );
   const nameByCode = new Map(accounts.map((a) => [a.code, a.desc ?? ""]));
   const rateByContNo = new Map<string, number>();
-  for (const c of intContracts)
-    if (c.contNo) rateByContNo.set(c.contNo, c.rate ?? 0);
-  for (const c of extContracts)
-    if (c.contNo) rateByContNo.set(c.contNo, c.rate ?? 0);
+  const contGrey = new Map<string, string>();
+  const contBrand = new Map<string, string>();
+  for (const c of intContracts) {
+    if (!c.contNo) continue;
+    rateByContNo.set(c.contNo, c.rate ?? 0);
+    if (c.grayQltyCode) contGrey.set(c.contNo, c.grayQltyCode);
+    if (c.productName) contBrand.set(c.contNo, c.productName);
+  }
+  for (const c of extContracts) {
+    if (!c.contNo) continue;
+    rateByContNo.set(c.contNo, c.rate ?? 0);
+    if (c.grayQltyCode) contGrey.set(c.contNo, c.grayQltyCode);
+    if (c.productName) contBrand.set(c.contNo, c.productName);
+  }
 
   const setOpts = setRaw
     .filter((r) => r.setNo)
@@ -188,6 +203,7 @@ export default async function GreyShrinkagePage({
       bBeamSetNo: schema.beams.beamSetNo,
       bYarnCount: schema.beams.yarnCount,
       bStatusWrk: schema.beams.statusWrk,
+      bContractNo: schema.beams.contractNo,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(
@@ -328,13 +344,14 @@ export default async function GreyShrinkagePage({
     const lastStatus = rows[rows.length - 1]?.beamStatus ?? "";
     const rCut = (f.bStatusWrk ?? "").toUpperCase() === "EMPTY" ? "L-ROLL" : lastStatus;
 
-    const qualCode = designs[0]?.quality ?? "";
-    const gc = greyByCode.get(qualCode);
+    const bContNo = f.bContractNo ?? rows[0]?.contNo ?? "";
+    const gcCode = contGrey.get(bContNo) ?? "";
+    const gc = greyByCode.get(gcCode);
     const qParts: string[] = [];
     if (gc?.reed) qParts.push(String(gc.reed));
     if (gc?.warpCount) qParts.push(yarnCountLabel.get(gc.warpCount) ?? gc.warpCount);
     const qualityLabel = qParts.join(" ");
-    const brand = designs[0]?.brand ?? "";
+    const brand = contBrand.get(bContNo) ?? designs[0]?.brand ?? "";
 
     blocks.push({
       beamNo,
@@ -374,6 +391,12 @@ export default async function GreyShrinkagePage({
     if (shedFilter && ab.shed !== shedFilter) continue;
     if (loomFilter && ab.loomNo !== parseInt(loomFilter, 10)) continue;
     const bLen = ab.length ?? 0;
+    const abCont = ab.contractNo ?? "";
+    const abGcCode = contGrey.get(abCont) ?? "";
+    const abGc = greyByCode.get(abGcCode);
+    const abQ: string[] = [];
+    if (abGc?.reed) abQ.push(String(abGc.reed));
+    if (abGc?.warpCount) abQ.push(yarnCountLabel.get(abGc.warpCount) ?? abGc.warpCount);
     blocks.push({
       beamNo: ab.beamNo,
       beamSetNo: ab.beamSetNo ?? "",
@@ -398,8 +421,8 @@ export default async function GreyShrinkagePage({
       totalLines: 0,
       balMtr: bLen,
       shrinkPct: 0,
-      qualityLabel: "",
-      brand: "",
+      qualityLabel: abQ.join(" "),
+      brand: contBrand.get(abCont) ?? "",
     });
   }
 
