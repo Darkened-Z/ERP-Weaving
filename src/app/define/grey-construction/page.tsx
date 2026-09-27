@@ -3,7 +3,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num } from "@/lib/form";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function GreyConstructionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; reed?: string; pick?: string; q?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; dup_code?: string; reed?: string; pick?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const rows = await db.select().from(schema.greyConstruction).orderBy(schema.greyConstruction.code);
@@ -99,6 +99,23 @@ export default async function GreyConstructionPage({
       weftCount, weft2, weft3, weft4, weft5,
       blend, status,
     };
+
+    const dupConditions = [
+      reed != null ? eq(schema.greyConstruction.reed, reed) : isNull(schema.greyConstruction.reed),
+      pick != null ? eq(schema.greyConstruction.pick, pick) : isNull(schema.greyConstruction.pick),
+      warpCount ? eq(schema.greyConstruction.warpCount, warpCount) : isNull(schema.greyConstruction.warpCount),
+      weftCount ? eq(schema.greyConstruction.weftCount, weftCount) : isNull(schema.greyConstruction.weftCount),
+    ];
+    if (id) dupConditions.push(sql`${schema.greyConstruction.id} != ${parseInt(id, 10)}`);
+    const [dupRow] = await db
+      .select({ code: schema.greyConstruction.code })
+      .from(schema.greyConstruction)
+      .where(and(...dupConditions))
+      .limit(1);
+    if (dupRow) {
+      const q = id ? `?id=${id}&error=dup_quality&dup_code=${encodeURIComponent(dupRow.code)}` : `?adding=1&error=dup_quality&dup_code=${encodeURIComponent(dupRow.code)}`;
+      redirect("/define/grey-construction" + q);
+    }
 
     let insertedId: number | null = null;
     let uniqueError = false;
@@ -240,6 +257,11 @@ export default async function GreyConstructionPage({
         </div>
 
         <div className="border border-black p-6 mb-8">
+          {params.error === "dup_quality" && params.dup_code && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              This quality already exists as <strong>{params.dup_code}</strong>. Duplicate not saved.
+            </div>
+          )}
           {params.error === "code_exists" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               Gray Code already exists. Choose a different code.
