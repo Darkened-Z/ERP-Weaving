@@ -30,6 +30,8 @@ const STATUS_OPTIONS = [
   { value: "X", label: "X - Cancelled" },
 ];
 
+const LOOM_TYPES = ["SULZER", "AIRJET"];
+
 const DELIVERY_PARSE_MAX = 50;
 const DELIVERY_EMPTY_MIN = 4;
 
@@ -330,6 +332,7 @@ export default async function GreySalesContractPage({
     const paymentTerm = (formData.get("payment_term") as string)?.trim() || null;
     const deliveryTerm = (formData.get("delivery_term") as string)?.trim() || null;
     const remarks = (formData.get("remarks") as string)?.trim() || null;
+    const loomType = (formData.get("loom_type") as string)?.trim() || null;
     const status = (formData.get("status") as string)?.trim() || "R";
     const nowIso = new Date().toISOString();
 
@@ -365,6 +368,7 @@ export default async function GreySalesContractPage({
       extDate,
       gstRate,
       img,
+      loomType,
       status,
       modifiedDate: nowIso,
     };
@@ -666,6 +670,16 @@ export default async function GreySalesContractPage({
                 <div>
                   <label className="label block mb-1">Exp. Date</label>
                   <DateBox name="exp_date" className="input-box mono" defaultValue={formItem?.expDate ?? ""} />
+                </div>
+                <div>
+                  <label className="label block mb-1">Loom Type</label>
+                  <select name="loom_type" className="input-box" defaultValue={formItem?.loomType ?? ""}>
+                    <option value="">--</option>
+                    {LOOM_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {formItem?.loomType && !LOOM_TYPES.includes(formItem.loomType) && (
+                      <option value={formItem.loomType}>{formItem.loomType}</option>
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className="label block mb-1">Status</label>

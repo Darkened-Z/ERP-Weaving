@@ -1000,6 +1000,7 @@ export const extGreySalContract = sqliteTable("ext_grey_sal_contract", {
   extDate: text("ext_date"),
   gstRate: real("gst_rate"),
   img: text("img"),
+  loomType: text("loom_type"),
   status: text("status").notNull().default("R"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
