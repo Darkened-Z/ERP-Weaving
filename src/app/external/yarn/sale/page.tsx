@@ -465,7 +465,25 @@ export default async function YarnSaleVoucherPage({
     { key: "blend", label: "Blend", width: 80 },
     { key: "batch", label: "Batch", width: 90 },
   ];
+  // When editing, the saved lines' batches are already consumed — subtract them
+  // from the popup balance so fully-used batches don't reappear.
+  const selfUsed = new Map<string, { lbs: number; con: number }>();
+  for (const ln of lines) {
+    if (!ln.batchNo) continue;
+    const prev = selfUsed.get(ln.batchNo) ?? { lbs: 0, con: 0 };
+    selfUsed.set(ln.batchNo, {
+      lbs: prev.lbs + round2(ln.lbs ?? 0),
+      con: prev.con + round2(ln.cons ?? 0),
+    });
+  }
   const batchLovRows = batchStock
+    .map((b) => {
+      const used = selfUsed.get(b.batchNo) ?? { lbs: 0, con: 0 };
+      const adjLbs = round2(b.lbs - used.lbs);
+      const adjCon = round2(b.con - used.con);
+      return { ...b, lbs: adjLbs, bag: bagsOf(adjLbs), con: adjCon,
+        salLbs: round2(b.salLbs + used.lbs), salCon: round2(b.salCon + used.con) };
+    })
     .filter((b) => b.lbs > 0)
     .sort((a, b) => a.count.localeCompare(b.count) || a.batchNo.localeCompare(b.batchNo))
     .map((b) => {
