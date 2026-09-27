@@ -40,7 +40,7 @@ export default async function GreyShrinkagePage({
   const loomFilter = p.loom?.trim() ?? "";
   const shedFilter = p.shed?.trim() ?? "";
 
-  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw, allSetBeams, yarnCountRows] =
+  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw, allSetBeams, yarnCountRows, iwbVouchers, sizingContractsRaw] =
     await Promise.all([
       partyByNameOptions(),
       db
@@ -65,7 +65,6 @@ export default async function GreyShrinkagePage({
         .select({
           contNo: schema.intGreyConversionContract.contNo,
           rate: schema.intGreyConversionContract.convRatePerMtr,
-          grayQltyCode: schema.intGreyConversionContract.grayQltyCode,
           productName: schema.intGreyConversionContract.productName,
         })
         .from(schema.intGreyConversionContract),
@@ -73,7 +72,6 @@ export default async function GreyShrinkagePage({
         .select({
           contNo: schema.extGreyConvContract.contNo,
           rate: schema.extGreyConvContract.convRatePerMtr,
-          grayQltyCode: schema.extGreyConvContract.grayQltyCode,
           productName: schema.extGreyConvContract.productName,
         })
         .from(schema.extGreyConvContract),
@@ -113,6 +111,18 @@ export default async function GreyShrinkagePage({
           type: schema.yarnCounts.type,
         })
         .from(schema.yarnCounts),
+      db
+        .select({
+          vNo: schema.intWarpedBeamReceiving.vNo,
+          sizingContNo: schema.intWarpedBeamReceiving.sizingContNo,
+        })
+        .from(schema.intWarpedBeamReceiving),
+      db
+        .select({
+          contNo: schema.intBeamContractExtWs.contNo,
+          wrpCode: schema.intBeamContractExtWs.wrpCode,
+        })
+        .from(schema.intBeamContractExtWs),
     ]);
 
   const greyDesc = new Map(greys.map((g) => [g.code, g.desc ?? ""]));
@@ -121,19 +131,24 @@ export default async function GreyShrinkagePage({
     yarnCountRows.map((y) => [y.code, [y.desc, y.type].filter(Boolean).join(" ").trim()]),
   );
   const nameByCode = new Map(accounts.map((a) => [a.code, a.desc ?? ""]));
+  const iwbSizingCont = new Map<string, string>();
+  for (const r of iwbVouchers) {
+    if (r.vNo && r.sizingContNo) iwbSizingCont.set(r.vNo, r.sizingContNo);
+  }
+  const sizingWrpCode = new Map<string, string>();
+  for (const r of sizingContractsRaw) {
+    if (r.contNo && r.wrpCode) sizingWrpCode.set(r.contNo, r.wrpCode);
+  }
   const rateByContNo = new Map<string, number>();
-  const contGrey = new Map<string, string>();
   const contBrand = new Map<string, string>();
   for (const c of intContracts) {
     if (!c.contNo) continue;
     rateByContNo.set(c.contNo, c.rate ?? 0);
-    if (c.grayQltyCode) contGrey.set(c.contNo, c.grayQltyCode);
     if (c.productName) contBrand.set(c.contNo, c.productName);
   }
   for (const c of extContracts) {
     if (!c.contNo) continue;
     rateByContNo.set(c.contNo, c.rate ?? 0);
-    if (c.grayQltyCode) contGrey.set(c.contNo, c.grayQltyCode);
     if (c.productName) contBrand.set(c.contNo, c.productName);
   }
 
@@ -345,7 +360,8 @@ export default async function GreyShrinkagePage({
     const rCut = (f.bStatusWrk ?? "").toUpperCase() === "EMPTY" ? "L-ROLL" : lastStatus;
 
     const bContNo = f.bContractNo ?? rows[0]?.contNo ?? "";
-    const gcCode = contGrey.get(bContNo) ?? "";
+    const sizCont = iwbSizingCont.get(f.brVno ?? "") ?? "";
+    const gcCode = sizingWrpCode.get(sizCont) ?? "";
     const gc = greyByCode.get(gcCode);
     const qParts: string[] = [];
     if (gc?.reed) qParts.push(String(gc.reed));
@@ -392,7 +408,8 @@ export default async function GreyShrinkagePage({
     if (loomFilter && ab.loomNo !== parseInt(loomFilter, 10)) continue;
     const bLen = ab.length ?? 0;
     const abCont = ab.contractNo ?? "";
-    const abGcCode = contGrey.get(abCont) ?? "";
+    const abSizCont = iwbSizingCont.get(ab.brVno ?? "") ?? "";
+    const abGcCode = sizingWrpCode.get(abSizCont) ?? "";
     const abGc = greyByCode.get(abGcCode);
     const abQ: string[] = [];
     if (abGc?.reed) abQ.push(String(abGc.reed));
