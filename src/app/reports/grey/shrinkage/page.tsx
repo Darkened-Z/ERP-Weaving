@@ -617,9 +617,13 @@ export default async function GreyShrinkagePage({
                       <span className="font-bold text-[15px]">Set # {sNo}</span>
                       {sDate && <span className="mono text-[12px]">{sDate}</span>}
                       {sSzg && <span className="text-[12px] truncate" style={{ maxWidth: 200 }}>{sSzg}</span>}
-                      {sQuality && <span className="mono text-[12px] font-semibold">{sQuality}</span>}
-                      {sBrand && <span className="text-[12px]">{sBrand}</span>}
                     </div>
+                    {(sQuality || sBrand) && (
+                      <div className="flex items-center gap-4 flex-wrap text-[12px] mt-1">
+                        {sQuality && <span><span className="font-bold">Quality</span> <span className="mono font-semibold">{sQuality}</span></span>}
+                        {sBrand && <span><span className="font-bold">Brand</span> <span className="mono">{sBrand}</span></span>}
+                      </div>
+                    )}
                     <div className="flex items-center gap-4 flex-wrap mono text-[12px] mt-1">
                       <span>{sBlocks.length} beam{sBlocks.length !== 1 ? "s" : ""}</span>
                       {sEnds > 0 && <span>Ends {fmt(sEnds)}</span>}
