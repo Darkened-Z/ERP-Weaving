@@ -110,22 +110,13 @@ export default async function WarpedBeamReceivingPage({
   const sizingPartyOpts = optsUnder(sizingPrefix);
   const convPrefix = await headByLike("%CONVERSION%WVG%");
   const convPartyOpts = optsUnder(convPrefix);
-  // Bm Sale Party = the DEBIT party the beam is sold to. Scoped to CONVERSION
-  // WVG it offered exactly one account, so every other debtor the mill sells a
-  // beam to was unreachable. It now lists every level-5 account under DEBTORS —
-  // conversion (WVG and commercial), grey sale, yarn sale, waste, sundry — which
-  // is a superset that still includes the conversion party Daily Production uses
-  // for Beam Cost Party.
-  // The chart spells it both ways - "TRADE DEBITORS" (1.01.01, the one that
-  // holds the party accounts) and "TRADER DEBTORS (WVG)" (1.01.03) - so match
-  // either and take the lowest code, which is the trade-debtors group.
-  const [debtorsHead] = await db
+  const [weavingExpHead] = await db
     .select({ code: schema.chartOfAccounts.code })
     .from(schema.chartOfAccounts)
-    .where(sql`${schema.chartOfAccounts.level} = 3 AND (upper(${schema.chartOfAccounts.description}) LIKE '%DEBITOR%' OR upper(${schema.chartOfAccounts.description}) LIKE '%DEBTOR%')`)
-    .orderBy(schema.chartOfAccounts.code)
+    .where(sql`${schema.chartOfAccounts.level} IN (2, 3) AND upper(${schema.chartOfAccounts.description}) LIKE '%WEAVING%EXPENSE%'`)
+    .orderBy(schema.chartOfAccounts.level)
     .limit(1);
-  const bmSalePartyOpts = optsUnder(debtorsHead?.code ? `${debtorsHead.code}.` : null);
+  const bmSalePartyOpts = optsUnder(weavingExpHead?.code ? `${weavingExpHead.code}.` : null);
   // Beam Stock-Loaded = the loaded-beam godown, defaulted + locked.
   const beamLoadedGodown =
     parties.find((p) => /godown/i.test(p.description) && /(loaded\s*beam|beam\s*(loaded|stock))/i.test(p.description))?.description ?? "";
@@ -425,9 +416,8 @@ export default async function WarpedBeamReceivingPage({
     const glGst = Math.max(0, Math.round((glTotalGross - glNet) * 100) / 100);
     const glFurther = 0;
     const glTotal = Math.round((glNet + glGst + glFurther) * 100) / 100;
-    const shouldPostGl = !!partyCoa && glTotal > 0;
-
-    const warpingSizingCoa = shouldPostGl ? await acc("WARPING_SIZING_EXP") : "";
+    const warpingSizingCoa = header.bmSaleParty?.trim() ?? "";
+    const shouldPostGl = !!partyCoa && !!warpingSizingCoa && glTotal > 0;
     const gstOutputCoa = shouldPostGl && glGst > 0 ? await acc("GST_OUTPUT") : "";
     const furtherTaxCoa = shouldPostGl && glFurther > 0 ? await acc("FURTHER_TAX") : "";
 
@@ -1036,18 +1026,17 @@ export default async function WarpedBeamReceivingPage({
                   <input name="resultCountSzg" className="input-box mono" defaultValue={editing?.resultCountSzg ?? ""} />
                 </div>
                 <div className="lg:col-span-3">
-                  <label className="label block mb-1">Bm Sale Party <span className="text-[9px] text-[var(--muted)]">(converting — DEBITORS CONV WVG)</span></label>
+                  <label className="label block mb-1">Bm Sale Party <span className="text-[9px] text-[var(--muted)]">(debit — WEAVING EXPENSES)</span></label>
                   <Combobox name="bmSaleParty" options={bmSalePartyOpts} defaultValue={editing?.bmSaleParty ?? ""} placeholder="Select debit party" />
                 </div>
 
                 <div className="lg:col-span-4">
-                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(Bm Sale Party&apos;s — inventory contracts)</span></label>
+                  <label className="label block mb-1">Sizing Contract <span className="text-[9px] text-[var(--muted)]">(inventory contracts)</span></label>
                   <Combobox
                     name="sizingContNo"
                     options={sizingContractOpts}
                     defaultValue={editing?.sizingContNo ?? ""}
                     placeholder="Sizing contract…"
-                    filterByField="bmSaleParty"
                   />
                   <AutoFill watch="sizingContNo" map={sizingContractMap} inputs={["sizingRate"]} />
                 </div>
