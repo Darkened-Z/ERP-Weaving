@@ -727,10 +727,26 @@ export default async function WarpedBeamReceivingPage({
     if (id === null) return;
 
     const head = await db
-      .select({ lvNo: schema.intWarpedBeamReceiving.lvNo })
+      .select({ lvNo: schema.intWarpedBeamReceiving.lvNo, vNo: schema.intWarpedBeamReceiving.vNo })
       .from(schema.intWarpedBeamReceiving)
       .where(eq(schema.intWarpedBeamReceiving.id, id));
     const lvNo = head[0]?.lvNo ?? 0;
+
+    const wbrLines = await db
+      .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })
+      .from(schema.intWarpedBeamReceivingLine)
+      .where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
+    const wbrBeams = wbrLines.map((r) => r.beamNo).filter((b): b is string => !!b);
+    if (wbrBeams.length) {
+      const usedInProd = await db
+        .select({ beamNo: schema.intDailyProductionSet.beamNo })
+        .from(schema.intDailyProductionSet)
+        .where(sql`${schema.intDailyProductionSet.beamNo} IN (${sql.join(wbrBeams.map((b) => sql`${b}`), sql`, `)})`)
+        .limit(1);
+      if (usedInProd.length > 0) {
+        redirect(`/inventory/warped-beam?id=${id}&error=has_production`);
+      }
+    }
 
     await db.transaction(async (tx) => {
       if (lvNo > 0) {
@@ -853,6 +869,11 @@ export default async function WarpedBeamReceivingPage({
         {params.error === "admin_only" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Only ADMIN can delete vouchers.
+          </div>
+        )}
+        {params.error === "has_production" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Cannot delete — beams from this voucher have daily production entries. Delete the production entries first.
           </div>
         )}
 
