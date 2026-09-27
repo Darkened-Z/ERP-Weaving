@@ -253,6 +253,7 @@ export default async function PartyCountsPage({
                     <th>Pc Party Code</th>
                     <th>Count Code</th>
                     <th>Count Desc</th>
+                    <th>Blend</th>
                     <th>Trn. Type</th>
                     <th>Party Desc</th>
                     <th className="text-right">Warp Cal Count</th>
@@ -265,7 +266,9 @@ export default async function PartyCountsPage({
                     const isSel = c.id === selected?.id;
                     const rowHref = `/define/party-counts?id=${c.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
                     const linkStyle = { color: isSel ? "white" : "inherit" };
-                    const cDesc = yarnCounts.find((y) => y.id === c.countCode)?.description ?? "";
+                    const yc = yarnCounts.find((y) => y.id === c.countCode);
+                    const cDesc = yc?.description ?? "";
+                    const cBlend = yc?.type ?? "";
                     const pDesc = accounts.find((a) => a.code === c.partyCode)?.description ?? "";
                     return (
                       <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
@@ -282,6 +285,11 @@ export default async function PartyCountsPage({
                         <td className="text-[13px] p-0">
                           <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
                             {cDesc}
+                          </a>
+                        </td>
+                        <td className="text-[13px] p-0">
+                          <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
+                            {cBlend || "-"}
                           </a>
                         </td>
                         <td className="p-0">
