@@ -70,6 +70,30 @@ export default async function GreySalesContractPage({
     return true;
   });
 
+  const contractIds = contracts.map((c) => c.id);
+  const allWarpRows = contractIds.length
+    ? await db
+        .select({ contractId: schema.extGreySalContractWarp.contractId, descr: schema.extGreySalContractWarp.descr })
+        .from(schema.extGreySalContractWarp)
+        .where(sql`${schema.extGreySalContractWarp.contractId} IN (${sql.join(contractIds.map((id) => sql`${id}`), sql`, `)})`)
+        .orderBy(schema.extGreySalContractWarp.srNo)
+    : [];
+  const allWeftRows = contractIds.length
+    ? await db
+        .select({ contractId: schema.extGreySalContractWeft.contractId, descr: schema.extGreySalContractWeft.descr })
+        .from(schema.extGreySalContractWeft)
+        .where(sql`${schema.extGreySalContractWeft.contractId} IN (${sql.join(contractIds.map((id) => sql`${id}`), sql`, `)})`)
+        .orderBy(schema.extGreySalContractWeft.srNo)
+    : [];
+  const warpByContract = new Map<number, string[]>();
+  for (const r of allWarpRows) {
+    if (r.descr) (warpByContract.get(r.contractId) ?? (warpByContract.set(r.contractId, []), warpByContract.get(r.contractId)!)).push(r.descr);
+  }
+  const weftByContract = new Map<number, string[]>();
+  for (const r of allWeftRows) {
+    if (r.descr) (weftByContract.get(r.contractId) ?? (weftByContract.set(r.contractId, []), weftByContract.get(r.contractId)!)).push(r.descr);
+  }
+
   const selectedId = params.id ? parseInt(params.id, 10) : NaN;
   const selected = Number.isFinite(selectedId)
     ? contracts.find((c) => c.id === selectedId) ?? null
@@ -1107,6 +1131,10 @@ export default async function GreySalesContractPage({
                 <th>Contract No</th>
                 <th>Party</th>
                 <th style={{ minWidth: 280 }}>Prd. Desc</th>
+                <th className="text-right">Read</th>
+                <th className="text-right">Pick</th>
+                <th>Warp</th>
+                <th>Weft</th>
                 <th className="text-right">Qty</th>
                 <th className="text-right">Rate</th>
                 <th>Term</th>
@@ -1142,6 +1170,18 @@ export default async function GreySalesContractPage({
                         )}
                       </a>
                     </td>
+                    <td className="text-right mono text-[13px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>{c.read ?? "-"}</a>
+                    </td>
+                    <td className="text-right mono text-[13px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>{c.pick ?? "-"}</a>
+                    </td>
+                    <td className="text-[12px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>{warpByContract.get(c.id)?.join(", ") || "-"}</a>
+                    </td>
+                    <td className="text-[12px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>{weftByContract.get(c.id)?.join(", ") || "-"}</a>
+                    </td>
                     <td className="text-right mono">
                       <a href={href} className="no-underline block" style={linkStyle}>
                         {c.quantityMtr != null ? fmt(c.quantityMtr) : "-"}
@@ -1166,7 +1206,7 @@ export default async function GreySalesContractPage({
               })}
               {contracts.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-[var(--muted)]">No contracts found</td>
+                  <td colSpan={12} className="text-center text-[var(--muted)]">No contracts found</td>
                 </tr>
               )}
             </tbody>
