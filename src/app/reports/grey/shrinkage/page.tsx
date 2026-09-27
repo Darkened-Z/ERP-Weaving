@@ -538,31 +538,6 @@ export default async function GreyShrinkagePage({
           </div>
         </form>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-black border-2 border-black mb-8 no-print">
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{blocks.length}</div>
-            <div className="stat-label">Beams</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{fmt2(grandMtr)}</div>
-            <div className="stat-label">Total Meter</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{fmt(grandAmt)}</div>
-            <div className="stat-label">Total Amount</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{fmt2(grandBal)}</div>
-            <div className="stat-label">Balance Mtr</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">
-              {fmt2(grandShrink)}%
-            </div>
-            <div className="stat-label">Avg Shrinkage</div>
-          </div>
-        </div>
-
         {blocks.length === 0 ? (
           <div className="text-center text-[var(--muted)] py-12">
             No beams in selected range

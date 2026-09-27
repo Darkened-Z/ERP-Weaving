@@ -16,12 +16,14 @@ export default async function GreySaleAvgPage({
     to?: string;
     fparty?: string;
     fstatus?: string;
+    floom?: string;
     find?: string;
   }>;
 }) {
   const params = await searchParams;
   const fParty = (params.fparty ?? "").trim();
   const fStatus = (params.fstatus ?? "R").trim();
+  const fLoom = (params.floom ?? "").trim();
   const from = (params.from ?? "").trim();
   const to = (params.to ?? "").trim();
   const findFilter = (params.find ?? "").trim();
@@ -55,11 +57,36 @@ export default async function GreySaleAvgPage({
     .groupBy(schema.extPackiParchi.convContNoSale);
   const despatchByContNo = new Map(despatchRows.map((d) => [d.contNo, d.totalMeter]));
 
+  const allIds = allContracts.map((c) => c.id);
+  const allWarpRows = allIds.length
+    ? await db
+        .select({ contractId: schema.extGreySalContractWarp.contractId, descr: schema.extGreySalContractWarp.descr })
+        .from(schema.extGreySalContractWarp)
+        .where(sql`${schema.extGreySalContractWarp.contractId} IN (${sql.join(allIds.map((id) => sql`${id}`), sql`, `)})`)
+        .orderBy(schema.extGreySalContractWarp.srNo)
+    : [];
+  const allWeftRows = allIds.length
+    ? await db
+        .select({ contractId: schema.extGreySalContractWeft.contractId, descr: schema.extGreySalContractWeft.descr })
+        .from(schema.extGreySalContractWeft)
+        .where(sql`${schema.extGreySalContractWeft.contractId} IN (${sql.join(allIds.map((id) => sql`${id}`), sql`, `)})`)
+        .orderBy(schema.extGreySalContractWeft.srNo)
+    : [];
+  const warpByContract = new Map<number, string[]>();
+  for (const r of allWarpRows) {
+    if (r.descr) (warpByContract.get(r.contractId) ?? (warpByContract.set(r.contractId, []), warpByContract.get(r.contractId)!)).push(r.descr);
+  }
+  const weftByContract = new Map<number, string[]>();
+  for (const r of allWeftRows) {
+    if (r.descr) (weftByContract.get(r.contractId) ?? (weftByContract.set(r.contractId, []), weftByContract.get(r.contractId)!)).push(r.descr);
+  }
+
   const usedParties = [...new Set(allContracts.map((c) => c.party).filter(Boolean))].sort() as string[];
 
   const contracts = allContracts.filter((c) => {
     if (fStatus && c.status !== fStatus) return false;
     if (fParty && c.party !== fParty) return false;
+    if (fLoom && (c.loomType ?? "") !== fLoom) return false;
     if (from && (c.contractDate ?? "") < from) return false;
     if (to && (c.contractDate ?? "") > to) return false;
     if (findL) {
@@ -90,12 +117,15 @@ export default async function GreySaleAvgPage({
       greyCode: constrCode,
       reed: c.read ?? 0,
       pick: c.pick ?? 0,
+      warp: warpByContract.get(c.id)?.join(", ") || "-",
+      weft: weftByContract.get(c.id)?.join(", ") || "-",
       width: c.width ?? 0,
       production: qty,
       despatch,
       balance,
       rateMtr,
       amount,
+      loomType: c.loomType ?? "",
       broker: c.broker ?? "",
       status: c.status,
     };
@@ -121,6 +151,8 @@ export default async function GreySaleAvgPage({
     balance: r.balance,
     reed: r.reed,
     pick: r.pick,
+    warp: r.warp,
+    weft: r.weft,
     width: r.width,
     rateMtr: r.rateMtr,
     amount: r.amount,
@@ -154,6 +186,8 @@ export default async function GreySaleAvgPage({
                 { key: "balance", label: "Balance" },
                 { key: "reed", label: "Reed" },
                 { key: "pick", label: "Pick" },
+                { key: "warp", label: "Warp" },
+                { key: "weft", label: "Weft" },
                 { key: "width", label: "Width" },
                 { key: "rateMtr", label: "Rate/Mtr" },
                 { key: "amount", label: "Amount" },
@@ -196,8 +230,16 @@ export default async function GreySaleAvgPage({
               ))}
             </select>
           </div>
+          <div>
+            <label className="label block mb-1">Loom Type</label>
+            <select name="floom" defaultValue={fLoom} className="input-box mono text-[13px]" style={{ minWidth: 120 }}>
+              <option value="">All</option>
+              <option value="SULZER">SULZER</option>
+              <option value="AIRJET">AIRJET</option>
+            </select>
+          </div>
           <button type="submit" className="btn btn-outline btn-sm">Search</button>
-          {(findFilter || from || to || fParty || fStatus !== "R") && (
+          {(findFilter || from || to || fParty || fLoom || fStatus !== "R") && (
             <a href={reportUrl} className="btn btn-outline btn-sm">Clear</a>
           )}
         </form>
@@ -214,6 +256,8 @@ export default async function GreySaleAvgPage({
                   <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 160 }}>Construction</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Reed</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Pick</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Warp</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Weft</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Width</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Qty Mtr</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Despatch</th>
@@ -241,6 +285,8 @@ export default async function GreySaleAvgPage({
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.reed || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.pick || "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] text-[12px]">{r.warp}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] text-[12px]">{r.weft}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.width || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.production)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.despatch)}</td>
@@ -257,13 +303,13 @@ export default async function GreySaleAvgPage({
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={12} className="text-center text-[var(--muted)] py-8 text-[13px]">No contracts match the selected filters.</td></tr>
+                  <tr><td colSpan={14} className="text-center text-[var(--muted)] py-8 text-[13px]">No contracts match the selected filters.</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (
                 <tfoot>
                   <tr style={{ backgroundColor: "#1e3a5f", color: "white" }} className="font-bold">
-                    <td className="px-2 py-2 border-r border-blue-900/30" colSpan={6}>Total</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30" colSpan={8}>Total</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totProduction)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totDespatch)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totBalance)}</td>
