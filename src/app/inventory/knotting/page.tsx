@@ -536,6 +536,23 @@ async function deleteKnotting(formData: FormData) {
     .from(schema.intKnottingSarning)
     .where(eq(schema.intKnottingSarning.id, id));
   const vno = existing?.lvNo ?? 0;
+
+  const knLines = await db
+    .select({ beamNo: schema.intKnottingSarningLine.beamNo })
+    .from(schema.intKnottingSarningLine)
+    .where(eq(schema.intKnottingSarningLine.knottingId, id));
+  const knBeams = knLines.map((r) => r.beamNo).filter((b): b is string => !!b);
+  if (knBeams.length) {
+    const usedInProd = await db
+      .select({ beamNo: schema.intDailyProductionSet.beamNo })
+      .from(schema.intDailyProductionSet)
+      .where(sql`${schema.intDailyProductionSet.beamNo} IN (${sql.join(knBeams.map((b) => sql`${b}`), sql`, `)})`)
+      .limit(1);
+    if (usedInProd.length > 0) {
+      redirect(`/inventory/knotting?id=${id}&error=has_production`);
+    }
+  }
+
   await db.transaction(async (tx) => {
     if (vno > 0) {
       await tx
@@ -951,6 +968,11 @@ export default async function KnottingPage({
         {params.error === "admin_only" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Only ADMIN can delete vouchers.
+          </div>
+        )}
+        {params.error === "has_production" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Cannot delete — beams from this voucher have daily production entries. Delete the production entries first.
           </div>
         )}
 
