@@ -344,6 +344,7 @@ export default async function GreyShrinkagePage({
   const existingBeams = new Set(blocks.map((b) => b.beamNo));
   for (const ab of allSetBeams) {
     if (!ab.beamNo || existingBeams.has(ab.beamNo)) continue;
+    if (ab.beamSetNo && ab.setNo && !ab.beamSetNo.startsWith(`${ab.setNo}-`)) continue;
     if (setFilter && ab.setNo !== setFilter) continue;
     if (shedFilter && ab.shed !== shedFilter) continue;
     if (loomFilter && ab.loomNo !== parseInt(loomFilter, 10)) continue;
