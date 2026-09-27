@@ -40,13 +40,15 @@ export default async function GreyShrinkagePage({
   const loomFilter = p.loom?.trim() ?? "";
   const shedFilter = p.shed?.trim() ?? "";
 
-  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw, allSetBeams] =
+  const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw, allSetBeams, yarnCountRows] =
     await Promise.all([
       partyByNameOptions(),
       db
         .select({
           code: schema.greyConstruction.code,
           desc: schema.greyConstruction.description,
+          reed: schema.greyConstruction.reed,
+          warpCount: schema.greyConstruction.warpCount,
         })
         .from(schema.greyConstruction),
       db
@@ -99,9 +101,20 @@ export default async function GreyShrinkagePage({
         })
         .from(schema.beams)
         .where(sql`${schema.beams.setNo} IS NOT NULL AND ${schema.beams.setNo} != ''`),
+      db
+        .select({
+          code: schema.yarnCounts.countCode,
+          desc: schema.yarnCounts.description,
+          type: schema.yarnCounts.type,
+        })
+        .from(schema.yarnCounts),
     ]);
 
   const greyDesc = new Map(greys.map((g) => [g.code, g.desc ?? ""]));
+  const greyByCode = new Map(greys.map((g) => [g.code, g]));
+  const yarnCountLabel = new Map(
+    yarnCountRows.map((y) => [y.code, [y.desc, y.type].filter(Boolean).join(" ").trim()]),
+  );
   const nameByCode = new Map(accounts.map((a) => [a.code, a.desc ?? ""]));
   const rateByContNo = new Map<string, number>();
   for (const c of intContracts)
@@ -251,6 +264,8 @@ export default async function GreyShrinkagePage({
     totalLines: number;
     balMtr: number;
     shrinkPct: number;
+    qualityLabel: string;
+    brand: string;
   };
 
   const beamMap = new Map<string, typeof filtered>();
@@ -313,6 +328,14 @@ export default async function GreyShrinkagePage({
     const lastStatus = rows[rows.length - 1]?.beamStatus ?? "";
     const rCut = (f.bStatusWrk ?? "").toUpperCase() === "EMPTY" ? "L-ROLL" : lastStatus;
 
+    const qualCode = designs[0]?.quality ?? "";
+    const gc = greyByCode.get(qualCode);
+    const qParts: string[] = [];
+    if (gc?.reed) qParts.push(String(gc.reed));
+    if (gc?.warpCount) qParts.push(yarnCountLabel.get(gc.warpCount) ?? gc.warpCount);
+    const qualityLabel = qParts.join(" ");
+    const brand = designs[0]?.brand ?? "";
+
     blocks.push({
       beamNo,
       beamSetNo: f.pBeamSetNo ?? f.bBeamSetNo ?? "",
@@ -337,6 +360,8 @@ export default async function GreyShrinkagePage({
       totalLines,
       balMtr,
       shrinkPct: beamLength > 0 ? (balMtr / beamLength) * 100 : 0,
+      qualityLabel,
+      brand,
     });
   }
 
@@ -373,6 +398,8 @@ export default async function GreyShrinkagePage({
       totalLines: 0,
       balMtr: bLen,
       shrinkPct: 0,
+      qualityLabel: "",
+      brand: "",
     });
   }
 
@@ -558,19 +585,27 @@ export default async function GreyShrinkagePage({
               const sFirst = sBlocks[0];
               const sDate = sFirst?.brDate || sFirst?.knDate || "";
               const sSzg = sFirst?.szgName || "";
-              const sCount = sFirst?.warpInfo || "";
+              const sQuality = sFirst?.qualityLabel || "";
+              const sBrand = sFirst?.brand || "";
               const sEnds = sFirst?.ends ?? 0;
               return (
                 <details key={sNo} className="mb-4 border-2 border-black group">
-                  <summary className="cursor-pointer bg-[#f5f5f5] px-4 py-2 flex items-center gap-4 flex-wrap text-[13px] select-none list-none [&::-webkit-details-marker]:hidden">
-                    <span className="font-bold text-[14px]">Set # {sNo}</span>
-                    {sDate && <span className="mono text-[12px]">{sDate}</span>}
-                    {sSzg && <span className="text-[12px] truncate" style={{ maxWidth: 180 }}>{sSzg}</span>}
-                    {sCount && <span className="mono text-[12px]">{sCount}</span>}
-                    <span className="mono text-[12px]">{sBlocks.length} beam{sBlocks.length !== 1 ? "s" : ""}</span>
-                    {sEnds > 0 && <span className="mono text-[12px]">Ends {fmt(sEnds)}</span>}
-                    <span className="mono text-[12px]">Len {fmt(sLen)}</span>
-                    <span className="mono text-[12px] ml-auto">{fmt2(sShr)}%</span>
+                  <summary className="cursor-pointer bg-[#f5f5f5] px-4 py-3 select-none list-none [&::-webkit-details-marker]:hidden">
+                    <div className="flex items-center gap-4 flex-wrap text-[13px]">
+                      <span className="font-bold text-[15px]">Set # {sNo}</span>
+                      {sDate && <span className="mono text-[12px]">{sDate}</span>}
+                      {sSzg && <span className="text-[12px] truncate" style={{ maxWidth: 200 }}>{sSzg}</span>}
+                      {sQuality && <span className="mono text-[12px] font-semibold">{sQuality}</span>}
+                      {sBrand && <span className="text-[12px]">{sBrand}</span>}
+                    </div>
+                    <div className="flex items-center gap-4 flex-wrap mono text-[12px] mt-1">
+                      <span>{sBlocks.length} beam{sBlocks.length !== 1 ? "s" : ""}</span>
+                      {sEnds > 0 && <span>Ends {fmt(sEnds)}</span>}
+                      <span>Len {fmt(sLen)}</span>
+                      <span>Mtr {fmt2(sMtr)}</span>
+                      <span>Diff {fmt2(sBal)}</span>
+                      <span className="ml-auto font-bold">{fmt2(sShr)}%</span>
+                    </div>
                   </summary>
                   <div className="border-t-2 border-black">
                     {sBlocks.map((b) => (
