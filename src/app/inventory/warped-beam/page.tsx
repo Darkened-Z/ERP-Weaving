@@ -164,6 +164,7 @@ export default async function WarpedBeamReceivingPage({
       sizingParty: schema.intBeamContractExtWs.sizingParty,
       converterParty: schema.intBeamContractExtWs.converterParty,
       ratePerBeam: schema.intBeamContractExtWs.ratePerBeam,
+      ratePerKg: schema.intBeamContractExtWs.ratePerKg,
       status: schema.intBeamContractExtWs.status,
       wrpCode: schema.intBeamContractExtWs.wrpCode,
       ends: schema.intBeamContractExtWs.ends,
@@ -218,7 +219,7 @@ export default async function WarpedBeamReceivingPage({
     };
   });
   const sizingContractMap = Object.fromEntries(
-    sizingContracts.map((c) => [c.contNo, { sizingRate: c.ratePerBeam ?? "" }]),
+    sizingContracts.map((c) => [c.contNo, { sizingRate: c.ratePerBeam ?? "", sizingRateKg: c.ratePerKg ?? "" }]),
   );
 
   const beamRows = await db
@@ -1038,11 +1039,15 @@ export default async function WarpedBeamReceivingPage({
                     defaultValue={editing?.sizingContNo ?? ""}
                     placeholder="Sizing contract…"
                   />
-                  <AutoFill watch="sizingContNo" map={sizingContractMap} inputs={["sizingRate"]} />
+                  <AutoFill watch="sizingContNo" map={sizingContractMap} inputs={["sizingRate", "sizingRateKg"]} />
                 </div>
                 <div className="lg:col-span-2">
-                  <label className="label block mb-1">Sizing Rate <span className="text-[9px] text-[var(--muted)]">(→ grid)</span></label>
+                  <label className="label block mb-1">Rate/Mtr <span className="text-[9px] text-[var(--muted)]">(→ grid)</span></label>
                   <input name="sizingRate" type="number" step="any" className="input-box mono text-right" defaultValue="" />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">Rate/Kg</label>
+                  <input name="sizingRateKg" type="number" step="any" className="input-box mono text-right" defaultValue="" />
                 </div>
                 <div className="lg:col-span-12">
                   <div className="text-[11px] mono text-[var(--muted)] border border-dashed border-[var(--border-light)] px-3 py-1 bg-gray-50">

@@ -222,6 +222,7 @@ export default async function BeamContractExtWsPage({
     const prdCode = txt(formData.get("prd_code"));
     const vtype = txt(formData.get("vtype"));
     const ratePerBeam = num(formData.get("rate_per_beam"));
+    const ratePerKg = num(formData.get("rate_per_kg"));
     const terms = txt(formData.get("terms"));
     const remarks = txt(formData.get("remarks"));
     const status = txt(formData.get("status")) ?? "R";
@@ -279,6 +280,7 @@ export default async function BeamContractExtWsPage({
       ends: headerEnds || null,
       wtPerMtr: headerWtPerMtr || null,
       ratePerBeam,
+      ratePerKg,
       terms,
       remarks,
       status,
@@ -414,6 +416,7 @@ export default async function BeamContractExtWsPage({
               ends: c.ends,
               wtPerMtr: c.wtPerMtr,
               ratePerBeam: c.ratePerBeam,
+              ratePerKg: c.ratePerKg,
               status: c.status,
             }))}
             columns={[
@@ -428,7 +431,8 @@ export default async function BeamContractExtWsPage({
               { key: "noOfWidth", label: "No.Width" },
               { key: "ends", label: "Ends" },
               { key: "wtPerMtr", label: "WT/Mtr" },
-              { key: "ratePerBeam", label: "Rate/Beam" },
+              { key: "ratePerBeam", label: "Rate/Mtr" },
+              { key: "ratePerKg", label: "Rate/Kg" },
               { key: "status", label: "Status" },
             ]}
             filename="int-beam-contract-ext-ws"
@@ -646,8 +650,8 @@ export default async function BeamContractExtWsPage({
                   />
                 </div>
 
-                <div className="lg:col-span-4">
-                  <label className="label block mb-1">Rate Per Beam</label>
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Rate Per Mtr</label>
                   <input
                     name="rate_per_beam"
                     type="number"
@@ -656,7 +660,17 @@ export default async function BeamContractExtWsPage({
                     defaultValue={formContract?.ratePerBeam ?? ""}
                   />
                 </div>
-                <div className="lg:col-span-4">
+                <div className="lg:col-span-3">
+                  <label className="label block mb-1">Rate Per Kg</label>
+                  <input
+                    name="rate_per_kg"
+                    type="number"
+                    step="any"
+                    className="input-box mono text-right"
+                    defaultValue={formContract?.ratePerKg ?? ""}
+                  />
+                </div>
+                <div className="lg:col-span-3">
                   <label className="label block mb-1">Status</label>
                   <select
                     name="status"
@@ -861,7 +875,8 @@ export default async function BeamContractExtWsPage({
                   <th>Converter</th>
                   <th className="text-right">Ends</th>
                   <th className="text-right">WT/Mtr</th>
-                  <th className="text-right">Rate/Beam</th>
+                  <th className="text-right">Rate/Mtr</th>
+                  <th className="text-right">Rate/Kg</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -935,6 +950,11 @@ export default async function BeamContractExtWsPage({
                       <td className="text-right mono text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {formatNum(c.ratePerBeam)}
+                        </a>
+                      </td>
+                      <td className="text-right mono text-[13px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>
+                          {formatNum(c.ratePerKg)}
                         </a>
                       </td>
                       <td className="mono text-[12px]">
