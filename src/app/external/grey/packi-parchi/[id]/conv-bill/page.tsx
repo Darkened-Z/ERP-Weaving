@@ -179,7 +179,11 @@ export default async function PackiConvBillPage({
       .from(schema.transDetail)
       .innerJoin(
         schema.transMain,
-        and(eq(schema.transMain.vtype, schema.transDetail.vtype), eq(schema.transMain.vno, schema.transDetail.vno)),
+        and(
+          eq(schema.transMain.fyCode, schema.transDetail.fyCode),
+          eq(schema.transMain.vtype, schema.transDetail.vtype),
+          eq(schema.transMain.vno, schema.transDetail.vno),
+        ),
       )
       .where(and(eq(schema.transDetail.accCode, partyAcc.code), lt(schema.transMain.vdate, pp.vDate)));
     previous = rnd(Number(row?.dr ?? 0) - Number(row?.cr ?? 0));

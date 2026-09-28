@@ -42,12 +42,18 @@ export default async function PackiParchiPrint({
 
   const meter = parchi.meterNet ?? parchi.meterRe ?? 0;
   const greyRate = parchi.greyRate ?? 0;
-  const greyAmount = meter * greyRate;
-  const wokc = parchi.wokc ?? 0;
-  const wkcBrk = parchi.wkcBrk ?? 0;
-  const commission = parchi.commission ?? 0;
+  // Same purchase ladder the parchi saves with. wkcBrk is the kaat RATE code
+  // (per 40 m), checkery a rate per KP meter and commission / broker are
+  // percentages — adding them straight to the amount mixed codes and rates in
+  // with money.
+  const rnd = (v: number) => Math.round(v * 100) / 100;
+  const greyAmount = rnd(meter * greyRate);
+  const kaatAmt = rnd((meter / 40) * (parchi.wkcBrk ?? 0));
+  const checkeryAmt = rnd((parchi.kpMeter ?? 0) * (parchi.checkery ?? 0));
+  const brokerAmt = rnd((greyAmount * (parchi.brokerPercent ?? 0)) / 100);
+  const commissionAmt = rnd((meter * (parchi.greyRateKp ?? 0) * (parchi.commission ?? 0)) / 100);
   const bagsTotal = bags.reduce((s, b) => s + (b.amount ?? 0), 0);
-  const grand = greyAmount + wokc + wkcBrk + commission + bagsTotal;
+  const grand = rnd(greyAmount - kaatAmt - checkeryAmt - brokerAmt - commissionAmt + bagsTotal);
 
   return (
     <>
@@ -133,9 +139,10 @@ export default async function PackiParchiPrint({
               <td colSpan={5} className="border border-black px-2 py-1 text-right font-bold uppercase text-[10px]">Subtotal</td>
               <td className="border border-black px-1 py-1 text-right font-bold mono">{fmt(greyAmount + bagsTotal)}</td>
             </tr>
-            {wokc ? (<tr><td colSpan={5} className="border border-black px-2 py-1 text-right uppercase text-[10px]">WOKC</td><td className="border border-black px-1 py-1 text-right mono">{fmt(wokc)}</td></tr>) : null}
-            {wkcBrk ? (<tr><td colSpan={5} className="border border-black px-2 py-1 text-right uppercase text-[10px]">WKC Brokerage</td><td className="border border-black px-1 py-1 text-right mono">{fmt(wkcBrk)}</td></tr>) : null}
-            {commission ? (<tr><td colSpan={5} className="border border-black px-2 py-1 text-right uppercase text-[10px]">Commission</td><td className="border border-black px-1 py-1 text-right mono">{fmt(commission)}</td></tr>) : null}
+            {kaatAmt ? (<tr><td colSpan={5} className="border border-black px-2 py-1 text-right uppercase text-[10px]">Less Kaat</td><td className="border border-black px-1 py-1 text-right mono">-{fmt(kaatAmt)}</td></tr>) : null}
+            {checkeryAmt ? (<tr><td colSpan={5} className="border border-black px-2 py-1 text-right uppercase text-[10px]">Less Checkery</td><td className="border border-black px-1 py-1 text-right mono">-{fmt(checkeryAmt)}</td></tr>) : null}
+            {brokerAmt ? (<tr><td colSpan={5} className="border border-black px-2 py-1 text-right uppercase text-[10px]">Less Brokerage</td><td className="border border-black px-1 py-1 text-right mono">-{fmt(brokerAmt)}</td></tr>) : null}
+            {commissionAmt ? (<tr><td colSpan={5} className="border border-black px-2 py-1 text-right uppercase text-[10px]">Less Commission</td><td className="border border-black px-1 py-1 text-right mono">-{fmt(commissionAmt)}</td></tr>) : null}
             <tr>
               <td colSpan={5} className="border border-black px-2 py-1 text-right font-bold uppercase text-[10px]">Grand Total</td>
               <td className="border border-black px-1 py-1 text-right font-extrabold mono text-[12px]">{fmt(grand)}</td>
