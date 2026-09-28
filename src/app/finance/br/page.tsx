@@ -9,8 +9,9 @@ import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession, requireAdmin } from "@/lib/auth";
+import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -110,24 +111,38 @@ async function saveVoucher(formData: FormData) {
     redirect(`${BASE}?error=bad_account&${ctx}`);
   }
 
-  let editMain: { fyCode: string; vno: number } | null = null;
+  let editMain: { fyCode: string; vno: number; vdate: string | null } | null = null;
   if (isEdit) {
     const rows = await db
-      .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })
+      .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno, vdate: schema.transMain.vdate })
       .from(schema.transMain)
       .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)));
     editMain = rows[0] ?? null;
     if (!editMain) redirect(BASE);
+    // Moving a voucher out of a locked period is as much a change to it as
+    // editing it in place.
+    if (editMain.vdate) await assertPeriodOpen(editMain.vdate, "FINANCE");
   }
 
   const chqList = postable.map((l) => l.chqNo).filter((c): c is string => !!c);
   if (chqList.length) {
     const dupRows = await db
-      .select({ fyCode: schema.transDetail.fyCode, vno: schema.transDetail.vno })
+      .select({
+        fyCode: schema.transDetail.fyCode,
+        vno: schema.transDetail.vno,
+        chqNo: schema.transDetail.chqNo,
+        accCode: schema.transDetail.accCode,
+      })
       .from(schema.transDetail)
       .where(and(eq(schema.transDetail.vtype, VTYPE), inArray(schema.transDetail.chqNo, chqList)));
+    // Cheque numbers are only unique within one party's cheque book, so two
+    // parties can hand over the same number. A clash is the same number on
+    // the same account.
+    const lineKeys = new Set(postable.filter((l) => l.chqNo).map((l) => `${l.chqNo}|${l.accCode}`));
     const clash = dupRows.some(
-      (d) => !editMain || d.fyCode !== editMain.fyCode || d.vno !== editMain.vno,
+      (d) =>
+        lineKeys.has(`${d.chqNo}|${d.accCode}`) &&
+        (!editMain || d.fyCode !== editMain.fyCode || d.vno !== editMain.vno),
     );
     if (clash) redirect(`${BASE}?error=dup_chq&${ctx}`);
   }
@@ -240,7 +255,9 @@ async function saveVoucher(formData: FormData) {
   if (!company?.currentFy) {
     redirect(`${BASE}?error=no_fy&adding=1`);
   }
-  const fyCode = company.currentFy;
+  // Voucher numbers restart each FY, so a back-dated voucher belongs to the
+  // FY its date falls in, not whichever FY is current.
+  const fyCode = (await fyCodeForDate(vdate)) || company.currentFy;
 
   let newId = 0;
   let codeExists = false;
@@ -309,6 +326,14 @@ async function deleteVoucher(formData: FormData) {
   if (session?.roleName !== "ADMIN") {
     redirect(`${BASE}?error=forbidden&id=${id}`);
   }
+  const [target] = await db
+    .select({ vdate: schema.transMain.vdate })
+    .from(schema.transMain)
+    .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)));
+  if (target?.vdate) {
+    const thru = await lockedThrough(target.vdate, "FINANCE");
+    if (thru) redirect(`${BASE}?id=${id}&error=period_locked&thru=${thru}`);
+  }
   await db.transaction(async (tx) => {
     const existing = await tx
       .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })
@@ -355,11 +380,13 @@ async function setOkStatus(formData: FormData, value: string | null) {
 
 async function markOk(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/br");
   await setOkStatus(formData, "Y");
 }
 
 async function clearOk(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/br");
   await setOkStatus(formData, null);
 }
 

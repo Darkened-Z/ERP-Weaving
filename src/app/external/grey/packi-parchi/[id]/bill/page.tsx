@@ -64,12 +64,14 @@ export default async function PackiBillPage({
   // here is visible and gets filled in; a wrong construction is not.
   const greyDesc = constrOf(pp.qualityPrint);
 
-  // Piece rows come from the godown stock this parchi sold out of.
-  const stockRows = pp.purchaseParty
+  // Piece rows come only from the godown stock this parchi names by KP number.
+  // Matching on quality alone listed every lot of that quality the godown ever
+  // held on a customer bill; with no KP link the grid is left blank.
+  const stockRows = pp.purchaseParty && pp.kpNo
     ? await db
         .select({ id: schema.extGodownStock.id, dspQuality: schema.extGodownStock.dspQuality })
         .from(schema.extGodownStock)
-        .where(eq(schema.extGodownStock.gdnParty, pp.purchaseParty))
+        .where(and(eq(schema.extGodownStock.gdnParty, pp.purchaseParty), eq(schema.extGodownStock.kpNo, pp.kpNo)))
     : [];
   const myStockIds = stockRows
     .filter((s) => normQuality(s.dspQuality, codeSet) === normQuality(pp.quality, codeSet))
@@ -156,7 +158,11 @@ export default async function PackiBillPage({
       .from(schema.transDetail)
       .innerJoin(
         schema.transMain,
-        and(eq(schema.transMain.vtype, schema.transDetail.vtype), eq(schema.transMain.vno, schema.transDetail.vno)),
+        and(
+          eq(schema.transMain.fyCode, schema.transDetail.fyCode),
+          eq(schema.transMain.vtype, schema.transDetail.vtype),
+          eq(schema.transMain.vno, schema.transDetail.vno),
+        ),
       )
       .where(and(eq(schema.transDetail.accCode, partyAcc.code), lt(schema.transMain.vdate, pp.vDate)));
     previous = rnd(Number(row?.dr ?? 0) - Number(row?.cr ?? 0));

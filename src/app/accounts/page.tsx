@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { AccountPicker } from "@/components/account-picker";
@@ -165,6 +166,7 @@ export default async function ChartOfAccountPage({
 
   async function deleteAccount(formData: FormData) {
     "use server";
+    await requireAdmin("/accounts");
     const code = (formData.get("code") as string)?.trim();
     if (!code) return;
     const esc = code.replace(/[\\%_]/g, (m) => "\\" + m);

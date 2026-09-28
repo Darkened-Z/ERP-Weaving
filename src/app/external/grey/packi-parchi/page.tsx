@@ -8,12 +8,13 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PackiCalc } from "@/components/packi-calc";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { assertPeriodOpen } from "@/lib/period-lock";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, fullConstruction as gqFullConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
@@ -656,11 +657,7 @@ export default async function PackiParchiPage({
 
     const nowIso = new Date().toISOString();
 
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(vDate);
 
     const coaRows = await db
       .select({
@@ -701,12 +698,7 @@ export default async function PackiParchiPage({
       // Always clear prior GPV rows, THEN re-post only if it still qualifies — so
       // editing a posted packi into a non-postable state (sale party/rate cleared)
       // reverses the old ledger instead of orphaning it.
-      await tx
-        .delete(schema.transDetail)
-        .where(and(eq(schema.transDetail.vtype, "GPV"), eq(schema.transDetail.vno, vno)));
-      await tx
-        .delete(schema.transMain)
-        .where(and(eq(schema.transMain.vtype, "GPV"), eq(schema.transMain.vno, vno)));
+      await clearVoucher(tx, "GPV", vno);
       if (!canPostGl) return;
 
       await tx.insert(schema.transMain).values({
@@ -800,6 +792,11 @@ export default async function PackiParchiPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extPackiParchi.vDate }).from(schema.extPackiParchi).where(eq(schema.extPackiParchi.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
     if (Number.isFinite(id) && id > 0) {
       await db.transaction(async (tx) => {
@@ -933,6 +930,8 @@ export default async function PackiParchiPage({
     if (s?.roleName !== "ADMIN") redirect("/external/grey/packi-parchi?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extPackiParchi.vDate }).from(schema.extPackiParchi).where(eq(schema.extPackiParchi.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/grey/packi-parchi?id=${id}`);
     await db.transaction(async (tx) => {
       const cur = await tx
         .select({ vNo: schema.extPackiParchi.vNo })
@@ -947,12 +946,7 @@ export default async function PackiParchiPage({
       const m = cur[0]?.vNo ? /(\d+)\s*$/.exec(cur[0].vNo) : null;
       const delVno = m ? parseInt(m[1], 10) : 0;
       if (delVno > 0) {
-        await tx
-          .delete(schema.transDetail)
-          .where(and(eq(schema.transDetail.vtype, "GPV"), eq(schema.transDetail.vno, delVno)));
-        await tx
-          .delete(schema.transMain)
-          .where(and(eq(schema.transMain.vtype, "GPV"), eq(schema.transMain.vno, delVno)));
+        await clearVoucher(tx, "GPV", delVno);
       }
       await tx.delete(schema.extPackiParchiBag).where(eq(schema.extPackiParchiBag.parchiId, id));
       await tx.delete(schema.extPackiParchiCount).where(eq(schema.extPackiParchiCount.parchiId, id));

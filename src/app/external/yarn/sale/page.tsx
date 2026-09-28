@@ -12,13 +12,14 @@ import { TermSelect } from "@/components/term-select";
 import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { BatchHeaderFill } from "./batch-header-fill";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { num, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
@@ -123,7 +124,7 @@ export default async function YarnSaleVoucherPage({
   const salAggByCont = await db
     .select({
       contNo: schema.extYarnSalVoucherLine.contNo,
-      bags: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+      bags: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
     })
     .from(schema.extYarnSalVoucherLine)
     .where(formVoucher ? ne(schema.extYarnSalVoucherLine.voucherId, formVoucher.id) : undefined)
@@ -363,7 +364,7 @@ export default async function YarnSaleVoucherPage({
   const salByBatch = await db
     .select({
       batchNo: schema.extYarnSalVoucherLine.batchNo,
-      bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+      bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
       con: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.cons}), 0)`,
       lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
     })
@@ -562,7 +563,7 @@ export default async function YarnSaleVoucherPage({
   if (voucherCounts.length) {
     const purStock = await db
       .select({
-        bag: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+        bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0)), 0)`,
         con: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.con}), 0)`,
         lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
       })
@@ -570,7 +571,7 @@ export default async function YarnSaleVoucherPage({
       .where(inArray(schema.extYarnPurVoucherLine.count, voucherCounts));
     const salStock = await db
       .select({
-        bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+        bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
         con: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.cons}), 0)`,
         lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
       })
@@ -793,13 +794,58 @@ export default async function YarnSaleVoucherPage({
       }
     }
 
+    // Lines without a batch draw on the count as a whole: purchases of that
+    // count less every other sale of it (batched or not).
+    {
+      const wanted = new Map<string, number>();
+      for (const l of validLines) {
+        if (l.batchNo || !l.count) continue;
+        wanted.set(l.count, (wanted.get(l.count) ?? 0) + (l.lbs ?? 0));
+      }
+      if (wanted.size) {
+        const keys = Array.from(wanted.keys());
+        const purRows = await db
+          .select({
+            count: schema.extYarnPurVoucherLine.count,
+            lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+          })
+          .from(schema.extYarnPurVoucherLine)
+          .where(inArray(schema.extYarnPurVoucherLine.count, keys))
+          .groupBy(schema.extYarnPurVoucherLine.count);
+        const saleRows = await db
+          .select({
+            count: schema.extYarnSalVoucherLine.count,
+            lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
+          })
+          .from(schema.extYarnSalVoucherLine)
+          .where(
+            Number.isFinite(id) && id > 0
+              ? and(inArray(schema.extYarnSalVoucherLine.count, keys), ne(schema.extYarnSalVoucherLine.voucherId, id))
+              : inArray(schema.extYarnSalVoucherLine.count, keys),
+          )
+          .groupBy(schema.extYarnSalVoucherLine.count);
+        const purBy = new Map(purRows.map((r) => [r.count ?? "", r.lbs]));
+        const soldBy = new Map(saleRows.map((r) => [r.count ?? "", r.lbs]));
+        // Batched lines on THIS voucher also come out of the count.
+        for (const l of validLines) {
+          if (l.batchNo && l.count) soldBy.set(l.count, (soldBy.get(l.count) ?? 0) + (l.lbs ?? 0));
+        }
+        for (const [count, want] of wanted) {
+          const avail = round2((purBy.get(count) ?? 0) - (soldBy.get(count) ?? 0));
+          if (want > avail + 0.01) {
+            redirect(
+              `/external/yarn/sale?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}` +
+                `error=over_stock&batch=${encodeURIComponent(`count ${count}`)}` +
+                `&avail=${avail}&want=${round2(want)}`,
+            );
+          }
+        }
+      }
+    }
+
     const nowIso = new Date().toISOString();
 
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(vDate);
 
     const partyRows = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -836,6 +882,11 @@ export default async function YarnSaleVoucherPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extYarnSalVoucher.vDate }).from(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
@@ -867,12 +918,7 @@ export default async function YarnSaleVoucherPage({
             const vno = lvRow[0]?.lvNo ?? 0;
             if (vno > 0) {
               // Always clear prior YSV rows, then re-post only if it still qualifies.
-              await tx
-                .delete(schema.transDetail)
-                .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, vno)));
-              await tx
-                .delete(schema.transMain)
-                .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, vno)));
+              await clearVoucher(tx, "YSV", vno);
               if (!doGl) return;
 
               await tx.insert(schema.transMain).values({
@@ -954,12 +1000,7 @@ export default async function YarnSaleVoucherPage({
 
             if (doGl) {
               const vno = nextL;
-              await tx
-                .delete(schema.transDetail)
-                .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, vno)));
-              await tx
-                .delete(schema.transMain)
-                .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, vno)));
+              await clearVoucher(tx, "YSV", vno);
 
               await tx.insert(schema.transMain).values({
                 fyCode,
@@ -1058,6 +1099,8 @@ export default async function YarnSaleVoucherPage({
     if (s?.roleName !== "ADMIN") redirect("/external/yarn/sale?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extYarnSalVoucher.vDate }).from(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/yarn/sale?id=${id}`);
     const lvRow = await db
       .select({ lvNo: schema.extYarnSalVoucher.lvNo })
       .from(schema.extYarnSalVoucher)
@@ -1066,12 +1109,7 @@ export default async function YarnSaleVoucherPage({
     const lvNo = lvRow[0]?.lvNo ?? 0;
     await db.transaction(async (tx) => {
       if (lvNo > 0) {
-        await tx
-          .delete(schema.transDetail)
-          .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, lvNo)));
-        await tx
-          .delete(schema.transMain)
-          .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, lvNo)));
+        await clearVoucher(tx, "YSV", lvNo);
       }
       await tx.delete(schema.extYarnSalVoucherLine).where(eq(schema.extYarnSalVoucherLine.voucherId, id));
       await tx.delete(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));
@@ -1084,6 +1122,7 @@ export default async function YarnSaleVoucherPage({
 
   async function setOk(formData: FormData) {
     "use server";
+    await requireAdmin("/external/yarn/sale");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db
@@ -1098,6 +1137,7 @@ export default async function YarnSaleVoucherPage({
 
   async function clearOk(formData: FormData) {
     "use server";
+    await requireAdmin("/external/yarn/sale");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db

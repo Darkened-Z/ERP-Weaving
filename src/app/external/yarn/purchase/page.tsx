@@ -15,12 +15,13 @@ import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { acc } from "@/lib/gl-accounts";
 import { num, txt, escLike } from "@/lib/form";
@@ -311,7 +312,7 @@ export default async function YarnPurchaseVoucherPage({
   const purAggByCont = await db
     .select({
       contNo: schema.extYarnPurVoucherLine.contNo,
-      bags: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+      bags: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0)), 0)`,
     })
     .from(schema.extYarnPurVoucherLine)
     .where(formVoucher ? ne(schema.extYarnPurVoucherLine.voucherId, formVoucher.id) : undefined)
@@ -500,9 +501,13 @@ export default async function YarnPurchaseVoucherPage({
       .select()
       .from(schema.partyCounts)
       .where(eq(schema.partyCounts.partyCode, savedPartyCode));
+    // party_counts.count_code holds yarn_counts.id; the grid keys by the
+    // count's code text, so translate before filling.
+    const codeById = new Map(countList.map((c) => [c.id, String(c.code)]));
     for (const r of pcRows) {
       if (r.ratePerLbs == null) continue;
-      const k = String(r.countCode);
+      const k = codeById.get(r.countCode);
+      if (!k) continue;
       countDefaultMap[k] = {
         ...(countDefaultMap[k] ?? { line_pack: 24, line_unit: "GDN", line_despatch_party: godownParty }),
         line_rate: r.ratePerLbs,
@@ -660,7 +665,7 @@ export default async function YarnPurchaseVoucherPage({
         const sold = await db
           .select({
             batchNo: schema.extYarnSalVoucherLine.batchNo,
-            bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+            bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
             lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
           })
           .from(schema.extYarnSalVoucherLine)
@@ -692,11 +697,7 @@ export default async function YarnPurchaseVoucherPage({
     const nowIso = new Date().toISOString();
 
     const VTYPE = "YPV";
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(vDate);
 
     const partyRows = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -740,6 +741,11 @@ export default async function YarnPurchaseVoucherPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extYarnPurVoucher.vDate }).from(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
       if (Number.isFinite(id) && id > 0) {
         const [existing] = await db
@@ -786,12 +792,7 @@ export default async function YarnPurchaseVoucherPage({
           }
 
           if (existingLvNo > 0) {
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, existingLvNo))
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, existingLvNo))
-            );
+            await clearVoucher(tx, VTYPE, existingLvNo);
           }
 
           if (canPostGL && existingLvNo > 0) {
@@ -870,12 +871,7 @@ export default async function YarnPurchaseVoucherPage({
                 .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
             }
 
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, nextL))
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, nextL))
-            );
+            await clearVoucher(tx, VTYPE, nextL);
 
             if (canPostGL) {
               await tx.insert(schema.transMain).values({
@@ -940,6 +936,8 @@ export default async function YarnPurchaseVoucherPage({
     if (s?.roleName !== "ADMIN") redirect("/external/yarn/purchase?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extYarnPurVoucher.vDate }).from(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/yarn/purchase?id=${id}`);
 
     // Deleting the whole voucher is the same wound as cutting one line below
     // what was sold, only bigger: the sale rows survive, keep subtracting, and
@@ -986,12 +984,7 @@ export default async function YarnPurchaseVoucherPage({
     const lvNo = existing?.lvNo ?? 0;
     await db.transaction(async (tx) => {
       if (lvNo > 0) {
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, "YPV"), eq(schema.transDetail.vno, lvNo))
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, "YPV"), eq(schema.transMain.vno, lvNo))
-        );
+        await clearVoucher(tx, "YPV", lvNo);
       }
       await tx.delete(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.voucherId, id));
       await tx.delete(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
@@ -1002,6 +995,7 @@ export default async function YarnPurchaseVoucherPage({
 
   async function setOk(formData: FormData) {
     "use server";
+    await requireAdmin("/external/yarn/purchase");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db
@@ -1014,6 +1008,7 @@ export default async function YarnPurchaseVoucherPage({
 
   async function clearOk(formData: FormData) {
     "use server";
+    await requireAdmin("/external/yarn/purchase");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db

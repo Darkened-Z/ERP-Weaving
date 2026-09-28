@@ -10,8 +10,9 @@ import { JvBalanceBar } from "./balance-bar";
 import { GrowRows } from "@/components/grow-rows";
 import { db, schema } from "@/db";
 import { eq, and, sql, desc, gte } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession, requireAdmin } from "@/lib/auth";
+import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -78,10 +79,14 @@ async function saveVoucher(formData: FormData) {
       .where(eq(schema.transMain.id, id))
       .limit(1);
     existingMain = rows[0] ?? null;
-    if (!existingMain) redirect(`/finance/jv`);
+    // Only a JV may be edited from the JV screen.
+    if (!existingMain || existingMain.vtype !== VTYPE) redirect(`/finance/jv`);
+    await assertPeriodOpen(existingMain.vdate, "FINANCE");
   }
 
-  const fyForRow = editing ? existingMain!.fyCode : currentFy!;
+  // New vouchers go to the FY their date falls in; edits keep their own FY.
+  const newFy = (await fyCodeForDate(txt(formData.get("v_date")) ?? today())) || currentFy!;
+  const fyForRow = editing ? existingMain!.fyCode : newFy;
 
   const accRows = await db
     .select({
@@ -337,7 +342,9 @@ async function deleteVoucher(formData: FormData) {
     .where(eq(schema.transMain.id, id))
     .limit(1);
   const main = rows[0];
-  if (!main) redirect("/finance/jv");
+  if (!main || main.vtype !== VTYPE) redirect("/finance/jv");
+  const thru = await lockedThrough(main.vdate, "FINANCE");
+  if (thru) redirect(`/finance/jv?id=${id}&error=period_locked&thru=${thru}`);
 
   await db.transaction(async (tx) => {
     await tx
@@ -382,11 +389,13 @@ async function setOkStatus(formData: FormData, value: string | null) {
 
 async function markOk(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/jv");
   await setOkStatus(formData, "Y");
 }
 
 async function clearOk(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/jv");
   await setOkStatus(formData, null);
 }
 

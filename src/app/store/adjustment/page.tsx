@@ -3,7 +3,10 @@ import { RowAutoFill, RowCalc } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { getSession, requireSession } from "@/lib/auth";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
+import { assertStockNotNegative, negStockPart } from "@/lib/store-stock";
+import { acc } from "@/lib/gl-accounts";
 import { today } from "@/lib/time";
 import {
   forwardToAudit as fwdAudit,
@@ -18,6 +21,8 @@ import { num, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
+
+const VTYPE_ADJ = "SA";
 
 const fmt = new Intl.NumberFormat("en-PK");
 
@@ -126,26 +131,39 @@ async function saveAdjustment(formData: FormData) {
   const itemCount = lines.length;
   const totalValue = r2(lines.reduce((s, l) => s + l.amount, 0));
 
-  const [company] = await db
-    .select({ fy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  const fyCode = company?.fy ?? "";
+  // Adjustment numbers restart every fiscal year: an edit keeps its own FY.
+  let fyCode = await fyCodeForDate(adjDate);
+  if (!isNew) {
+    const [ex] = await db
+      .select({ fyCode: schema.storeAdjustments.fyCode, adjDate: schema.storeAdjustments.adjDate })
+      .from(schema.storeAdjustments)
+      .where(eq(schema.storeAdjustments.id, id))
+      .limit(1);
+    if (ex?.fyCode) fyCode = ex.fyCode;
+    await assertPeriodsOpen([ex?.adjDate], "STORE");
+  }
+  // A stock adjustment changes what the parts are worth, so it posts: a gain
+  // debits parts stock against the adjustment account, a loss the reverse.
+  const stockAcc = await acc("PARTS_STOCK");
+  const adjAcc = await acc("ADJUSTMENT_LOSS");
 
   let savedId = isNew ? 0 : id;
   let codeExists = false;
+  const touchedParts: string[] = [];
   try {
     savedId = await db.transaction(async (tx) => {
       let aid: number;
+      let adjNo: number;
       if (isNew) {
         const [{ maxN }] = await tx
           .select({ maxN: sql<number>`coalesce(max(adj_no), 0)` })
           .from(schema.storeAdjustments)
           .where(eq(schema.storeAdjustments.fyCode, fyCode));
+        adjNo = (maxN ?? 0) + 1;
         const [inserted] = await tx
           .insert(schema.storeAdjustments)
           .values({
-            adjNo: (maxN ?? 0) + 1,
+            adjNo,
             fyCode,
             adjDate,
             type,
@@ -156,10 +174,17 @@ async function saveAdjustment(formData: FormData) {
           .returning({ id: schema.storeAdjustments.id });
         aid = inserted.id;
       } else {
+        const [cur] = await tx
+          .select({ adjNo: schema.storeAdjustments.adjNo })
+          .from(schema.storeAdjustments)
+          .where(eq(schema.storeAdjustments.id, id))
+          .limit(1);
+        adjNo = cur?.adjNo ?? 0;
         const oldLines = await tx
           .select()
           .from(schema.storeAdjustmentDetail)
           .where(eq(schema.storeAdjustmentDetail.adjId, id));
+        touchedParts.push(...oldLines.map((ol) => ol.partCode));
         for (const ol of oldLines) {
           await tx
             .update(schema.chartParts)
@@ -186,11 +211,32 @@ async function saveAdjustment(formData: FormData) {
           .set({ currentStock: sql`current_stock + ${l.qty}` })
           .where(eq(schema.chartParts.code, l.partCode));
       }
+      // A write-off can't remove more than is in stock, new or edited.
+      await assertStockNotNegative(tx, [...touchedParts, ...lines.map((l) => l.partCode)]);
+
+      if (adjNo > 0) {
+        await clearVoucher(tx, VTYPE_ADJ, adjNo, fyCode);
+        const net = r2(totalValue);
+        if (Math.abs(net) >= 0.01 && stockAcc && adjAcc) {
+          const amt = Math.abs(net);
+          const narration = `Adj#${adjNo} ${type}${remarks ? ` ${remarks}` : ""}`.trim();
+          await tx.insert(schema.transMain).values({
+            fyCode, vtype: VTYPE_ADJ, vno: adjNo, vdate: adjDate, accCode: stockAcc,
+            narration, balanceAmount: amt,
+          });
+          await tx.insert(schema.transDetail).values([
+            { fyCode, vtype: VTYPE_ADJ, vno: adjNo, srno: 1, accCode: net > 0 ? stockAcc : adjAcc, narration, debit: amt, credit: 0 },
+            { fyCode, vtype: VTYPE_ADJ, vno: adjNo, srno: 2, accCode: net > 0 ? adjAcc : stockAcc, narration, debit: 0, credit: amt },
+          ]);
+        }
+      }
 
       return aid;
     });
   } catch (e: unknown) {
     const msg = String((e as { message?: string })?.message ?? "");
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/adjustment${back}&error=negative_stock&part=${encodeURIComponent(neg)}`);
     if (/UNIQUE/i.test(msg)) codeExists = true;
     else throw e;
   }
@@ -219,15 +265,24 @@ async function deleteAdjustment(formData: FormData) {
   if (!Number.isFinite(id)) return;
 
   const [existing] = await db
-    .select({ approvalStatus: schema.storeAdjustments.approvalStatus })
+    .select({
+      approvalStatus: schema.storeAdjustments.approvalStatus,
+      adjNo: schema.storeAdjustments.adjNo,
+      fyCode: schema.storeAdjustments.fyCode,
+      adjDate: schema.storeAdjustments.adjDate,
+    })
     .from(schema.storeAdjustments)
     .where(eq(schema.storeAdjustments.id, id))
     .limit(1);
   if (existing?.approvalStatus === "POSTED") {
     redirect("/store/adjustment?error=posted_delete_warn");
   }
+  const thru = existing?.adjDate ? await lockedThrough(existing.adjDate, "STORE") : null;
+  if (thru) redirect(`/store/adjustment?id=${id}&error=period_locked&thru=${thru}`);
 
+  try {
   await db.transaction(async (tx) => {
+    if (existing?.adjNo) await clearVoucher(tx, VTYPE_ADJ, existing.adjNo, existing.fyCode);
     const oldLines = await tx
       .select()
       .from(schema.storeAdjustmentDetail)
@@ -238,11 +293,18 @@ async function deleteAdjustment(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Undoing a stock gain whose parts were issued since would go negative.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx
       .delete(schema.storeAdjustmentDetail)
       .where(eq(schema.storeAdjustmentDetail.adjId, id));
     await tx.delete(schema.storeAdjustments).where(eq(schema.storeAdjustments.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/adjustment?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/adjustment");
   revalidatePath("/store/parts");
@@ -257,7 +319,17 @@ async function deletePostedAdjustment(formData: FormData) {
   const id = parseInt(formData.get("id") as string, 10);
   if (!Number.isFinite(id)) return;
 
+  const [existing] = await db
+    .select({ adjNo: schema.storeAdjustments.adjNo, fyCode: schema.storeAdjustments.fyCode, adjDate: schema.storeAdjustments.adjDate })
+    .from(schema.storeAdjustments)
+    .where(eq(schema.storeAdjustments.id, id))
+    .limit(1);
+  const thru = existing?.adjDate ? await lockedThrough(existing.adjDate, "STORE") : null;
+  if (thru) redirect(`/store/adjustment?id=${id}&error=period_locked&thru=${thru}`);
+
+  try {
   await db.transaction(async (tx) => {
+    if (existing?.adjNo) await clearVoucher(tx, VTYPE_ADJ, existing.adjNo, existing.fyCode);
     const oldLines = await tx
       .select()
       .from(schema.storeAdjustmentDetail)
@@ -268,11 +340,18 @@ async function deletePostedAdjustment(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Undoing a stock gain whose parts were issued since would go negative.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx
       .delete(schema.storeAdjustmentDetail)
       .where(eq(schema.storeAdjustmentDetail.adjId, id));
     await tx.delete(schema.storeAdjustments).where(eq(schema.storeAdjustments.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/adjustment?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/adjustment");
   revalidatePath("/store/parts");
@@ -436,6 +515,11 @@ export default async function AdjustmentPage({
             Adjustment No already exists. Try saving again.
           </div>
         )}
+        {params.error === "negative_stock" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Part {params.part ?? ""} would go below zero stock. Reduce the quantity removed, or reverse the issues first.
+          </div>
+        )}
         {params.error === "period_locked" && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             Period is locked. Cannot save for this date
@@ -500,7 +584,7 @@ export default async function AdjustmentPage({
                 {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
                   <form action={deletePostedAdjustment} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message="This adjustment is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                    <ConfirmButton message="This adjustment is POSTED. Deleting will reverse its stock and remove its ledger entry. Continue?">
                       Del (POSTED)
                     </ConfirmButton>
                   </form>

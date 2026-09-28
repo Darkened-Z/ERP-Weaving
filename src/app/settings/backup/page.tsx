@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { today as todayPk } from "@/lib/time";
 import { requireSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -10,7 +11,7 @@ export default async function BackupPage() {
     redirect("/?error=admin_only");
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayPk();
   const filename = `sk-mills-backup-${today}.json`;
 
   return (

@@ -54,8 +54,8 @@ type FilterType = "all" | "receivable" | "payable";
 
 const TYPE_LABEL: Record<FilterType, string> = {
   all: "All Accounts",
-  receivable: "Receivables (3.05)",
-  payable: "Payables (3.04)",
+  receivable: "Receivables (1.01.01)",
+  payable: "Payables (3.03)",
 };
 
 export default async function ChartOfAccountsPrintPage({
@@ -77,9 +77,10 @@ export default async function ChartOfAccountsPrintPage({
 
   const accounts = allAccounts.filter((a) => {
     if (type === "all") return true;
-    const head = a.codeHead ?? "";
-    if (type === "receivable") return head.startsWith("3.05");
-    if (type === "payable") return head.startsWith("3.04");
+    // Debtors live under 1.01.01, creditors under 3.03 (see aging-detail).
+    const code = a.code ?? "";
+    if (type === "receivable") return code.startsWith("1.01.01.");
+    if (type === "payable") return code.startsWith("3.03.");
     return true;
   });
 

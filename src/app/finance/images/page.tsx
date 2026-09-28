@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { monthsAgo } from "@/lib/time";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { and, eq, gte, lte, isNotNull, ne, desc } from "drizzle-orm";
@@ -52,7 +53,7 @@ const SOURCE_HREF: Record<string, (id: number) => string | null> = {
   GSC: (id) => `/external/contracts/grey-sales?id=${id}`,
   GCC: (id) => `/external/contracts/grey-conversion?id=${id}`,
   PP: (id) => `/external/grey/packi-parchi?id=${id}`,
-  KP: (id) => `/external/grey/kachi-parchi?id=${id}`,
+  // The kachi-parchi screen no longer exists; its images still show, unlinked.
   EOD: () => null,
   BP: (id) => `/finance/bp?id=${id}`,
   BR: (id) => `/finance/br?id=${id}`,
@@ -78,7 +79,9 @@ export default async function ImagesPage({
 }) {
   await requireSession();
   const p = await searchParams;
-  const from = (p.from ?? "").trim();
+  // Every image is a data URL stored inline, so an open-ended query pulled all
+  // of them into one page. Default to the last month; clear the box for more.
+  const from = p.from === undefined ? monthsAgo(1) : p.from.trim();
   const to = (p.to ?? "").trim();
   const sel = ((p.vtype ?? "ALL").trim().toUpperCase()) as (typeof SOURCES)[number];
   const partyQ = (p.party ?? "").trim().toLowerCase();

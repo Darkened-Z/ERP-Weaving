@@ -10,8 +10,9 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
 import { and, eq, gte, sql, desc } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { getSession, requireAdmin } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError, lockedThrough } from "@/lib/period-lock";
+import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -38,12 +39,10 @@ async function saveVoucher(formData: FormData) {
   const back = editing ? `&id=${id}` : "&adding=1";
   await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "FINANCE");
 
-  const [company] = await db
-    .select({ currentFy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  if (!company || !company.currentFy) redirect(`${BASE}?error=no_fy`);
-  const fyCode = company.currentFy;
+  // A voucher belongs to the fiscal year its date falls in (an edit keeps the
+  // year it was numbered in — see below).
+  const fyCode = await fyCodeForDate(txt(formData.get("v_date")) ?? today());
+  if (!fyCode) redirect(`${BASE}?error=no_fy`);
 
   const accts = await db
     .select({
@@ -152,7 +151,7 @@ async function saveVoucher(formData: FormData) {
   const total = rows.reduce((s, r) => s + r.amount, 0);
   if (total <= 0) redirect(`${BASE}?error=bad_total${back}`);
 
-  const buildDetails = (vno: number): (typeof schema.transDetail.$inferInsert)[] => {
+  const buildDetails = (vno: number, fyCode: string): (typeof schema.transDetail.$inferInsert)[] => {
     const details: (typeof schema.transDetail.$inferInsert)[] = [];
     rows.forEach((r, i) => {
       details.push({
@@ -201,7 +200,12 @@ async function saveVoucher(formData: FormData) {
       .from(schema.transMain)
       .where(eq(schema.transMain.id, id))
       .limit(1);
-    if (!main) redirect(BASE);
+    // The id must name a voucher of THIS type — otherwise a crafted id would
+    // rewrite some other voucher's lines under this page's rules.
+    if (!main || main.vtype !== VTYPE) redirect(BASE);
+    // Moving a voucher out of a locked period is as much a change to that
+    // period as editing it in place.
+    await assertPeriodOpen(main.vdate, "FINANCE");
     await db.transaction(async (tx) => {
       await tx
         .update(schema.transMain)
@@ -227,7 +231,7 @@ async function saveVoucher(formData: FormData) {
             eq(schema.transDetail.vno, main.vno)
           )
         );
-      const details = buildDetails(main.vno);
+      const details = buildDetails(main.vno, main.fyCode);
       assertBalanced(details);
       await tx.insert(schema.transDetail).values(details);
     });
@@ -261,7 +265,7 @@ async function saveVoucher(formData: FormData) {
           })
           .returning({ id: schema.transMain.id });
         const insertedId = inserted[0].id;
-        const details = buildDetails(vno);
+        const details = buildDetails(vno, fyCode);
         assertBalanced(details);
         await tx.insert(schema.transDetail).values(details);
         return insertedId;
@@ -295,7 +299,9 @@ async function deleteVoucher(formData: FormData) {
     .from(schema.transMain)
     .where(eq(schema.transMain.id, id))
     .limit(1);
-  if (!main) redirect(BASE);
+  if (!main || main.vtype !== VTYPE) redirect(BASE);
+  const thru = await lockedThrough(main.vdate, "FINANCE");
+  if (thru) redirect(`${BASE}?id=${id}&error=period_locked&thru=${thru}`);
   await db.transaction(async (tx) => {
     await tx
       .delete(schema.transDetail)
@@ -314,6 +320,7 @@ async function deleteVoucher(formData: FormData) {
 
 async function setOkStatus(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/cp");
   const id = num(formData.get("id"));
   if (id === null) return;
   const [main] = await db

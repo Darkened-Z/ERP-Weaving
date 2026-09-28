@@ -6,7 +6,9 @@ import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { acc } from "@/lib/gl-accounts";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
+import { assertStockNotNegative, negStockPart } from "@/lib/store-stock";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
 import {
@@ -108,12 +110,6 @@ async function saveGrn(formData: FormData) {
   const itemCount = lines.length;
   const totalAmount = r2(lines.reduce((s, l) => s + l.amount, 0));
 
-  const [company] = await db
-    .select({ fy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  const fyCode = company?.fy ?? "";
-
   const partyRows = await db
     .select({
       code: schema.chartOfAccounts.code,
@@ -133,20 +129,31 @@ async function saveGrn(formData: FormData) {
       ? supplierCode
       : resolvePartyCoa(supplier);
 
-  const partsStockExpCoa = await acc("PARTS_STOCK_EXP");
+  // Perpetual inventory: a GRN puts the parts INTO stock; the issue (demand)
+  // later moves them from stock to consumption. Debiting an expense here while
+  // the issue credited PARTS_STOCK drove the stock account negative and
+  // expensed every part twice.
+  const partsStockCoa = await acc("PARTS_STOCK");
 
+  // GRN numbers restart every fiscal year, so the voucher's own FY is part of
+  // its identity: an edit keeps the FY it was created in, a new GRN takes the
+  // FY its date falls in.
   let existingGrnNo: number | null = null;
+  let fyCode = await fyCodeForDate(grnDate);
   if (!isNew) {
     const [ex] = await db
-      .select({ grnNo: schema.storeGrn.grnNo })
+      .select({ grnNo: schema.storeGrn.grnNo, fyCode: schema.storeGrn.fyCode, grnDate: schema.storeGrn.grnDate })
       .from(schema.storeGrn)
       .where(eq(schema.storeGrn.id, id))
       .limit(1);
     existingGrnNo = ex?.grnNo ?? null;
+    if (ex?.fyCode) fyCode = ex.fyCode;
+    await assertPeriodsOpen([ex?.grnDate], "STORE");
   }
 
   let savedId = isNew ? 0 : id;
   let codeExists = false;
+  const touchedParts: string[] = [];
   try {
     savedId = await db.transaction(async (tx) => {
       let gid: number;
@@ -177,6 +184,7 @@ async function saveGrn(formData: FormData) {
           .select()
           .from(schema.storeGrnDetail)
           .where(eq(schema.storeGrnDetail.grnId, id));
+        touchedParts.push(...oldLines.map((ol) => ol.partCode));
         for (const ol of oldLines) {
           await tx
             .update(schema.chartParts)
@@ -226,24 +234,11 @@ async function saveGrn(formData: FormData) {
           })
           .where(eq(schema.chartParts.id, p.id));
       }
+      // Cutting a GRN below what has since been issued would go negative.
+      if (!isNew) await assertStockNotNegative(tx, touchedParts);
 
       if (vno > 0) {
-        await tx
-          .delete(schema.transDetail)
-          .where(
-            and(
-              eq(schema.transDetail.vtype, VTYPE),
-              eq(schema.transDetail.vno, vno),
-            ),
-          );
-        await tx
-          .delete(schema.transMain)
-          .where(
-            and(
-              eq(schema.transMain.vtype, VTYPE),
-              eq(schema.transMain.vno, vno),
-            ),
-          );
+        await clearVoucher(tx, VTYPE, vno, fyCode);
 
         if (totalAmount > 0 && partyCoa) {
           await tx.insert(schema.transMain).values({
@@ -262,7 +257,7 @@ async function saveGrn(formData: FormData) {
               vtype: VTYPE,
               vno,
               srno: 1,
-              accCode: partsStockExpCoa,
+              accCode: partsStockCoa,
               partyCode: partyCoa,
               debit: totalAmount,
               credit: 0,
@@ -290,6 +285,8 @@ async function saveGrn(formData: FormData) {
     });
   } catch (e: unknown) {
     const msg = String((e as { message?: string })?.message ?? "");
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/grn${back}&error=negative_stock&part=${encodeURIComponent(neg)}`);
     if (/UNIQUE/i.test(msg)) codeExists = true;
     else throw e;
   }
@@ -320,6 +317,8 @@ async function deleteGrn(formData: FormData) {
     .select({
       approvalStatus: schema.storeGrn.approvalStatus,
       grnNo: schema.storeGrn.grnNo,
+      fyCode: schema.storeGrn.fyCode,
+      grnDate: schema.storeGrn.grnDate,
     })
     .from(schema.storeGrn)
     .where(eq(schema.storeGrn.id, id))
@@ -328,25 +327,14 @@ async function deleteGrn(formData: FormData) {
     redirect("/store/grn?error=posted_delete_warn");
   }
   const vno = existing?.grnNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.grnDate ? await lockedThrough(existing.grnDate, "STORE") : null;
+  if (thru) redirect(`/store/grn?id=${id}&error=period_locked&thru=${thru}`);
 
+  try {
   await db.transaction(async (tx) => {
     if (vno > 0) {
-      await tx
-        .delete(schema.transDetail)
-        .where(
-          and(
-            eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, vno),
-          ),
-        );
-      await tx
-        .delete(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            eq(schema.transMain.vno, vno),
-          ),
-        );
+      await clearVoucher(tx, VTYPE, vno, fyCode);
     }
     const oldLines = await tx
       .select()
@@ -358,9 +346,16 @@ async function deleteGrn(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Parts from this GRN already issued can't be taken back out of stock.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx.delete(schema.storeGrnDetail).where(eq(schema.storeGrnDetail.grnId, id));
     await tx.delete(schema.storeGrn).where(eq(schema.storeGrn.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/grn?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/grn");
   revalidatePath("/store/parts");
@@ -376,30 +371,19 @@ async function deletePostedGrn(formData: FormData) {
   if (!Number.isFinite(id)) return;
 
   const [existing] = await db
-    .select({ grnNo: schema.storeGrn.grnNo })
+    .select({ grnNo: schema.storeGrn.grnNo, fyCode: schema.storeGrn.fyCode, grnDate: schema.storeGrn.grnDate })
     .from(schema.storeGrn)
     .where(eq(schema.storeGrn.id, id))
     .limit(1);
   const vno = existing?.grnNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.grnDate ? await lockedThrough(existing.grnDate, "STORE") : null;
+  if (thru) redirect(`/store/grn?id=${id}&error=period_locked&thru=${thru}`);
 
+  try {
   await db.transaction(async (tx) => {
     if (vno > 0) {
-      await tx
-        .delete(schema.transDetail)
-        .where(
-          and(
-            eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, vno),
-          ),
-        );
-      await tx
-        .delete(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            eq(schema.transMain.vno, vno),
-          ),
-        );
+      await clearVoucher(tx, VTYPE, vno, fyCode);
     }
     const oldLines = await tx
       .select()
@@ -411,9 +395,16 @@ async function deletePostedGrn(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Parts from this GRN already issued can't be taken back out of stock.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx.delete(schema.storeGrnDetail).where(eq(schema.storeGrnDetail.grnId, id));
     await tx.delete(schema.storeGrn).where(eq(schema.storeGrn.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/grn?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/grn");
   revalidatePath("/store/parts");
@@ -440,7 +431,7 @@ async function grnRevert(formData: FormData) {
 export default async function GrnPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; thru?: string; part?: string }>;
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
@@ -532,6 +523,11 @@ export default async function GrnPage({
             GRN No already exists. Try saving again.
           </div>
         )}
+        {params.error === "negative_stock" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Part {params.part ?? ""} would go below zero stock — some of it has already been issued. Return or adjust those issues first.
+          </div>
+        )}
         {params.error === "dup_part" && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             The same part appears on more than one line. Combine into a single line.
@@ -604,7 +600,7 @@ export default async function GrnPage({
                 {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
                   <form action={deletePostedGrn} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message="This GRN is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                    <ConfirmButton message="This GRN is POSTED. Deleting will reverse its stock and remove its ledger entry. Continue?">
                       Del (POSTED)
                     </ConfirmButton>
                   </form>

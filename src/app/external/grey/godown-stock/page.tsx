@@ -9,13 +9,14 @@ import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { normQuality as gqNormQuality, countLabelMap, richConstruction as gqRichConstruction } from "@/lib/grey-quality";
-import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { num, intVal, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -600,6 +601,10 @@ export default async function GodownStockPage({
     const profitPerMtr = hasBothRates ? Math.round((saleRateVal - rateVal) * 100) / 100 : null;
     const profitAmt = hasBothRates ? Math.round(netMeter * (saleRateVal - rateVal)) : null;
 
+    // The form has no than/meter grid; lines on older vouchers came over from
+    // the Oracle data. When no line fields are posted, existing lines are left
+    // as they are instead of being read as "every line removed".
+    const linesPosted = formData.has("line_than") || formData.has("line_mtr") || formData.has("line_status");
     const lineThans = formData.getAll("line_than") as string[];
     const lineMtrs = formData.getAll("line_mtr") as string[];
     const lineStatuses = formData.getAll("line_status") as string[];
@@ -673,11 +678,7 @@ export default async function GodownStockPage({
     // Grey purchase GL posting (VTYPE GDN): DR grey-stock godown account, CR the
     // supplier (purchase party). Amount = net meter × purchase rate. Only for a
     // STOCK (purchase-in) voucher. Narration follows the mill's grey convention.
-    const [gdnCompany] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const glFyCode = gdnCompany?.currentFy ?? "";
+    const glFyCode = await fyCodeForDate(vDate);
     const glAccts = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
       .from(schema.chartOfAccounts)
@@ -706,8 +707,7 @@ export default async function GodownStockPage({
       // Always clear any prior GDN rows for this voucher, THEN re-post only if it
       // still qualifies — otherwise editing a posted voucher into a non-postable
       // state (Type≠STOCK, party cleared, netMeter≤0) would orphan stale GL rows.
-      await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "GDN"), eq(schema.transDetail.vno, vno)));
-      await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "GDN"), eq(schema.transMain.vno, vno)));
+      await clearVoucher(tx, "GDN", vno);
       if (!canPostGrey) return;
       await tx.insert(schema.transMain).values({
         fyCode: glFyCode, vtype: "GDN", vno, vdate: vDate, accCode: supplierCoa,
@@ -721,6 +721,11 @@ export default async function GodownStockPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extGodownStock.vDate }).from(schema.extGodownStock).where(eq(schema.extGodownStock.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
     if (Number.isFinite(id) && id > 0) {
       const existingLines = await db
@@ -731,7 +736,7 @@ export default async function GodownStockPage({
       const existingBySr = new Map(existingLines.map((l) => [l.srNo, l]));
 
       const consumedRemovedSr: number[] = [];
-      for (const old of existingLines) {
+      for (const old of linesPosted ? existingLines : []) {
         const match = validLines.find((v) => v.srNo === old.srNo);
         if (!match && old.status === "Y") consumedRemovedSr.push(old.srNo ?? 0);
       }
@@ -758,6 +763,7 @@ export default async function GodownStockPage({
         await tx.delete(schema.extGodownStockCount).where(eq(schema.extGodownStockCount.stockId, id));
 
         const seenSr = new Set<number>();
+        if (linesPosted) {
         for (const line of validLines) {
           seenSr.add(line.srNo);
           const prev = existingBySr.get(line.srNo);
@@ -779,6 +785,7 @@ export default async function GodownStockPage({
           if (!seenSr.has(old.srNo ?? -1) && old.status !== "Y") {
             await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.id, old.id));
           }
+        }
         }
         if (validCounts.length) {
           await tx.insert(schema.extGodownStockCount).values(validCounts.map((c) => ({ ...c, stockId: id })));
@@ -864,6 +871,8 @@ export default async function GodownStockPage({
     if (s?.roleName !== "ADMIN") redirect("/external/grey/godown-stock?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extGodownStock.vDate }).from(schema.extGodownStock).where(eq(schema.extGodownStock.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/grey/godown-stock?id=${id}`);
 
     const lineRows = await db
       .select({ status: schema.extGodownStockLine.status })
@@ -884,8 +893,7 @@ export default async function GodownStockPage({
       await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.stockId, id));
       await tx.delete(schema.extGodownStock).where(eq(schema.extGodownStock.id, id));
       if (delLv > 0) {
-        await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "GDN"), eq(schema.transDetail.vno, delLv)));
-        await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "GDN"), eq(schema.transMain.vno, delLv)));
+        await clearVoucher(tx, "GDN", delLv);
       }
     });
     revalidatePath("/external/grey/godown-stock");
@@ -894,6 +902,7 @@ export default async function GodownStockPage({
 
   async function setStatusOk(formData: FormData) {
     "use server";
+    await requireAdmin("/external/grey/godown-stock");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id) || id <= 0) return;
     await db
@@ -906,6 +915,7 @@ export default async function GodownStockPage({
 
   async function clearStatusOk(formData: FormData) {
     "use server";
+    await requireAdmin("/external/grey/godown-stock");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id) || id <= 0) return;
     await db

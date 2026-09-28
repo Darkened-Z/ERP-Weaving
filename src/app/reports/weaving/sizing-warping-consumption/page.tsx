@@ -67,11 +67,16 @@ export default async function SizingWarpingConsumptionPage({
     detailsByContract.get(d.contractId)!.push(d);
   }
 
-  const partyToWarpedMtr = new Map<string, number>();
-  const parties2 = Array.from(new Set(contracts.map((c) => c.warpingParty).filter(Boolean))) as string[];
-  if (parties2.length) {
+  // Warped meters belong to the contract the receiving names (sizingContNo).
+  // Crediting a party's whole total to each of its contracts counted the same
+  // meters once per contract. Receivings with no contract fall to the party
+  // only when it has a single contract in the range.
+  const mtrByContract = new Map<string, number>();
+  const unassignedByParty = new Map<string, number>();
+  if (contracts.length) {
     const recRows = await db
       .select({
+        contNo: schema.intWarpedBeamReceiving.sizingContNo,
         party: schema.intWarpedBeamReceiving.beamReceivingFrom,
         totalMtr: sql<number>`coalesce(sum(${schema.intWarpedBeamReceivingLine.length}), 0)`,
       })
@@ -86,10 +91,20 @@ export default async function SizingWarpingConsumptionPage({
           lte(schema.intWarpedBeamReceiving.vDate, to)
         )
       )
-      .groupBy(schema.intWarpedBeamReceiving.beamReceivingFrom);
-
-    for (const r of recRows) if (r.party) partyToWarpedMtr.set(r.party, r.totalMtr ?? 0);
+      .groupBy(schema.intWarpedBeamReceiving.sizingContNo, schema.intWarpedBeamReceiving.beamReceivingFrom);
+    for (const r of recRows) {
+      const m = Number(r.totalMtr ?? 0);
+      if (r.contNo) mtrByContract.set(r.contNo, (mtrByContract.get(r.contNo) ?? 0) + m);
+      else if (r.party) unassignedByParty.set(r.party, (unassignedByParty.get(r.party) ?? 0) + m);
+    }
   }
+  const contractsPerParty = new Map<string, number>();
+  for (const c of contracts) {
+    if (c.warpingParty) contractsPerParty.set(c.warpingParty, (contractsPerParty.get(c.warpingParty) ?? 0) + 1);
+  }
+  const warpedMtrOf = (c: (typeof contracts)[number]) =>
+    (mtrByContract.get(c.contNo) ?? 0) +
+    (c.warpingParty && contractsPerParty.get(c.warpingParty) === 1 ? unassignedByParty.get(c.warpingParty) ?? 0 : 0);
 
   type Row = {
     contNo: string;
@@ -106,7 +121,7 @@ export default async function SizingWarpingConsumptionPage({
   const rows: Row[] = [];
   for (const c of contracts) {
     const dets = detailsByContract.get(c.id) ?? [];
-    const warpedMtr = partyToWarpedMtr.get(c.warpingParty ?? "") ?? 0;
+    const warpedMtr = warpedMtrOf(c);
     if (dets.length === 0) {
       rows.push({
         contNo: c.contNo,
@@ -136,7 +151,8 @@ export default async function SizingWarpingConsumptionPage({
     }
   }
 
-  const totMtr = rows.reduce((s, r) => s + r.warpedMtr, 0);
+  // A contract with several counts shows its meters on each count row; total them once.
+  const totMtr = contracts.reduce((s, c) => s + warpedMtrOf(c), 0);
   const totLbs = rows.reduce((s, r) => s + r.consumedLbs, 0);
 
   const partyOpts = parties

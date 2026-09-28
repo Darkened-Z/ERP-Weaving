@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -59,6 +60,7 @@ export default async function YarnFibersPage({
 
   async function remove(formData: FormData) {
     "use server";
+    await requireAdmin("/define/yarn-fibers");
     const id = parseInt(formData.get("id") as string, 10);
     if (!id || Number.isNaN(id)) return;
 

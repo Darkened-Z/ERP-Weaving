@@ -6,9 +6,11 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
+import { wovenThisCycle } from "@/lib/beam-cycle";
 import { and, eq, sql, desc, inArray } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { RowErase } from "@/components/production-calc";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -258,6 +260,11 @@ export default async function WarpedBeamReceivingPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const vDate = txt(formData.get("vDate")) ?? today();
     await assertPeriodOpen(vDate, "INVENTORY");
+    // An edit can't move a voucher out of a locked period either.
+    if (Number.isFinite(id) && id > 0) {
+      const [old] = await db.select({ d: schema.intWarpedBeamReceiving.vDate }).from(schema.intWarpedBeamReceiving).where(eq(schema.intWarpedBeamReceiving.id, id));
+      if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+    }
 
     const header = {
       vDate,
@@ -392,11 +399,7 @@ export default async function WarpedBeamReceivingPage({
 
     const nowIso = new Date().toISOString();
 
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(vDate);
     if (!fyCode) throw new Error("No current FY");
 
     const partyRows = await db
@@ -465,19 +468,29 @@ export default async function WarpedBeamReceivingPage({
           // forced back to LOADED by re-saving this voucher — that used to break
           // the mount and hide the beam from Daily Production. Only its receiving
           // stamps and set/ends/length are refreshed.
-          const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
+          // Includes the statuses daily production assigns: a beam at F-ROLL
+          // is still on its loom.
+          const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING", "F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT"]);
           const lineBeams = validLines.map((l) => l.beamNo).filter((b): b is string => !!b);
-          const curStatus = new Map<string, string>();
-          if (lineBeams.length) {
+          const allBeams = Array.from(new Set([...lineBeams, ...oldBeams]));
+          const beamNow = new Map<string, { status: string; brVno: string | null }>();
+          if (allBeams.length) {
             const rows0 = await tx
-              .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+              .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk, brVno: schema.beams.brVno })
               .from(schema.beams)
-              .where(sql`${schema.beams.beamNo} IN (${sql.join(lineBeams.map((b) => sql`${b}`), sql`, `)})`);
-            for (const r of rows0) curStatus.set(r.beamNo, (r.statusWrk ?? "").toUpperCase());
+              .where(sql`${schema.beams.beamNo} IN (${sql.join(allBeams.map((b) => sql`${b}`), sql`, `)})`);
+            for (const r of rows0) beamNow.set(r.beamNo, { status: (r.statusWrk ?? "").toUpperCase(), brVno: r.brVno });
           }
           for (const l of validLines) {
             if (!l.beamNo) continue;
-            const advanced = ADVANCED.has(curStatus.get(l.beamNo) ?? "");
+            const c = beamNow.get(l.beamNo);
+            // Received again by a later bill: that bill owns the beam now.
+            if (c?.brVno && c.brVno !== vNo) continue;
+            const advanced = ADVANCED.has(c?.status ?? "");
+            // Woven out on this receiving (EMPTY with production in its cycle):
+            // re-saving must not load it back.
+            const wovenOut = c?.status === "EMPTY" && c.brVno === vNo && (await wovenThisCycle(tx, l.beamNo)) > 0;
+            if (wovenOut) continue;
             await tx
               .update(schema.beams)
               .set({
@@ -492,11 +505,12 @@ export default async function WarpedBeamReceivingPage({
               })
               .where(eq(schema.beams.beamNo, l.beamNo));
           }
-          const newBeams = new Set(validLines.map((l) => l.beamNo).filter((b): b is string => !!b));
+          const newBeams = new Set(lineBeams);
           for (const ob of oldBeams) {
             if (newBeams.has(ob)) continue;
-            // Same guard: only an un-mounted (LOADED) beam reverts to EMPTY.
-            if (ADVANCED.has(curStatus.get(ob) ?? "")) continue;
+            // Only a beam still sitting LOADED from THIS receiving reverts.
+            const c = beamNow.get(ob);
+            if (!c || c.status !== "LOADED" || c.brVno !== vNo) continue;
             await tx
               .update(schema.beams)
               .set({ statusWrk: "EMPTY", receivedDate: null, brVno: null, brDate: null })
@@ -506,12 +520,7 @@ export default async function WarpedBeamReceivingPage({
           if (lvNo > 0) {
             // Always clear prior EXT rows, then re-post only if it still qualifies —
             // so editing into a non-postable state reverses the ledger, not orphans it.
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, lvNo)),
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, lvNo)),
-            );
+            await clearVoucher(tx, VTYPE_GL, lvNo);
             if (!shouldPostGl) return;
 
             await tx.insert(schema.transMain).values({
@@ -596,7 +605,7 @@ export default async function WarpedBeamReceivingPage({
           }
           // Same beam-status guard as edit: never pull a mounted
           // (KNOTTING/PRODUCTION/RUNNING) beam back to LOADED.
-          const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
+          const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING", "F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT"]);
           const lineBeams = validLines.map((l) => l.beamNo).filter((b): b is string => !!b);
           const curStatus = new Map<string, string>();
           if (lineBeams.length) {
@@ -609,10 +618,16 @@ export default async function WarpedBeamReceivingPage({
           for (const l of validLines) {
             if (!l.beamNo) continue;
             const advanced = ADVANCED.has(curStatus.get(l.beamNo) ?? "");
+            // A mounted beam can't come in again until production empties it;
+            // stamping a new receiving on it would restart its cycle mid-weave.
+            if (advanced) continue;
             await tx
               .update(schema.beams)
               .set({
-                ...(advanced ? {} : { statusWrk: "LOADED" }),
+                statusWrk: "LOADED",
+                // New cycle: the previous cycle's knotting mount no longer applies.
+                knVno: null,
+                knDate: null,
                 receivedDate: header.vDate,
                 brVno: vNo,
                 brDate: header.vDate,
@@ -625,12 +640,7 @@ export default async function WarpedBeamReceivingPage({
           }
 
           if (shouldPostGl && nextLv > 0) {
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, nextLv)),
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, nextLv)),
-            );
+            await clearVoucher(tx, VTYPE_GL, nextLv);
 
             await tx.insert(schema.transMain).values({
               fyCode,
@@ -719,6 +729,8 @@ export default async function WarpedBeamReceivingPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/warped-beam?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
+    const [dated] = await db.select({ d: schema.intWarpedBeamReceiving.vDate }).from(schema.intWarpedBeamReceiving).where(eq(schema.intWarpedBeamReceiving.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/inventory/warped-beam?id=${id}`);
 
     const head = await db
       .select({ lvNo: schema.intWarpedBeamReceiving.lvNo, vNo: schema.intWarpedBeamReceiving.vNo })
@@ -744,12 +756,7 @@ export default async function WarpedBeamReceivingPage({
 
     await db.transaction(async (tx) => {
       if (lvNo > 0) {
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, lvNo)),
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, lvNo)),
-        );
+        await clearVoucher(tx, VTYPE_GL, lvNo);
       }
       const oldLines = await tx
         .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })
@@ -758,18 +765,23 @@ export default async function WarpedBeamReceivingPage({
       // Only un-mount beams that are still LOADED — a beam already knotted into
       // production (KNOTTING/PRODUCTION/RUNNING) keeps its lifecycle.
       const delBeams = oldLines.map((r) => r.beamNo).filter((b): b is string => !!b);
-      const delStatus = new Map<string, string>();
+      const delStatus = new Map<string, { status: string; brVno: string | null }>();
       if (delBeams.length) {
         const rows0 = await tx
-          .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+          .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk, brVno: schema.beams.brVno })
           .from(schema.beams)
           .where(sql`${schema.beams.beamNo} IN (${sql.join(delBeams.map((b) => sql`${b}`), sql`, `)})`);
-        for (const r of rows0) delStatus.set(r.beamNo, (r.statusWrk ?? "").toUpperCase());
+        for (const r of rows0) delStatus.set(r.beamNo, { status: (r.statusWrk ?? "").toUpperCase(), brVno: r.brVno });
       }
-      const ADVANCED = new Set(["KNOTTING", "PRODUCTION", "RUNNING"]);
+      const [delHead] = await tx
+        .select({ vNo: schema.intWarpedBeamReceiving.vNo })
+        .from(schema.intWarpedBeamReceiving)
+        .where(eq(schema.intWarpedBeamReceiving.id, id));
       for (const l of oldLines) {
         if (!l.beamNo) continue;
-        if (ADVANCED.has(delStatus.get(l.beamNo) ?? "")) continue;
+        // Only a beam still sitting LOADED from this receiving is released.
+        const c = delStatus.get(l.beamNo);
+        if (!c || c.status !== "LOADED" || c.brVno !== (delHead?.vNo ?? null)) continue;
         await tx
           .update(schema.beams)
           .set({ statusWrk: "EMPTY", receivedDate: null, brVno: null, brDate: null })
@@ -784,6 +796,7 @@ export default async function WarpedBeamReceivingPage({
 
   async function deleteBillAction(formData: FormData) {
     "use server";
+    await requireAdmin("/inventory/warped-beam");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {

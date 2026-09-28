@@ -35,7 +35,7 @@ export default async function WeavingCountLedgerPage({
     ? (
         await db
           .select({
-            bags: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+            bags: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
             lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
             amt: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.amt}), 0)`,
           })

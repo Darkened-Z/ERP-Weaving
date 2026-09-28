@@ -2,38 +2,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { createHmac } from "crypto";
 import bcrypt from "bcryptjs";
+import { createToken, verifyToken, SESSION_TTL_SECONDS, type Session } from "@/lib/session-token";
 
-const SECRET =
-  process.env.SESSION_SECRET ||
-  (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build"
-    ? (() => { throw new Error("SESSION_SECRET must be set in production"); })()
-    : "dev-secret-change-in-production");
-
-function sign(payload: string): string {
-  return createHmac("sha256", SECRET).update(payload).digest("hex");
-}
-
-export type Session = {
-  userId: number;
-  login: string;
-  fullName: string;
-  roleName: string;
-};
+export type { Session };
 
 export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
-  const raw = cookieStore.get("session")?.value;
-  if (!raw) return null;
-  try {
-    const [payload, sig] = raw.split(".");
-    if (!payload || !sig) return null;
-    if (sign(payload) !== sig) return null;
-    return JSON.parse(Buffer.from(payload, "base64").toString("utf-8"));
-  } catch {
-    return null;
-  }
+  return verifyToken(cookieStore.get("session")?.value);
 }
 
 export async function requireSession(): Promise<Session> {
@@ -42,15 +18,43 @@ export async function requireSession(): Promise<Session> {
   return session;
 }
 
-export async function login(loginId: string, password: string): Promise<Session | null> {
+// Failed-login throttle. In-memory, so each serverless instance counts on its
+// own: it slows a password guesser down rather than stopping a determined one.
+const MAX_FAILURES = 5;
+const LOCK_MS = 15 * 60 * 1000;
+const failures = new Map<string, { count: number; first: number }>();
+
+function isThrottled(key: string): boolean {
+  const f = failures.get(key);
+  if (!f) return false;
+  if (Date.now() - f.first > LOCK_MS) {
+    failures.delete(key);
+    return false;
+  }
+  return f.count >= MAX_FAILURES;
+}
+
+function noteFailure(key: string) {
+  const f = failures.get(key);
+  if (!f || Date.now() - f.first > LOCK_MS) failures.set(key, { count: 1, first: Date.now() });
+  else f.count++;
+}
+
+export async function login(loginId: string, password: string): Promise<Session | null | "throttled"> {
+  const key = (loginId ?? "").trim().toLowerCase();
+  if (isThrottled(key)) return "throttled";
+
   const rows = await db
     .select()
     .from(schema.users)
     .where(eq(schema.users.login, loginId));
 
   const user = rows[0];
-  if (!user || user.status !== "A") return null;
-  if (!(await bcrypt.compare(password, user.password))) return null;
+  if (!user || user.status !== "A" || !(await bcrypt.compare(password, user.password))) {
+    noteFailure(key);
+    return null;
+  }
+  failures.delete(key);
 
   const session: Session = {
     userId: user.id,
@@ -59,8 +63,7 @@ export async function login(loginId: string, password: string): Promise<Session 
     roleName: user.roleName,
   };
 
-  const payload = Buffer.from(JSON.stringify(session)).toString("base64");
-  const signed = `${payload}.${sign(payload)}`;
+  const signed = createToken(session);
 
   const isProd = process.env.NODE_ENV === "production";
   const cookieStore = await cookies();
@@ -69,7 +72,7 @@ export async function login(loginId: string, password: string): Promise<Session 
     sameSite: "lax",
     secure: isProd,
     path: "/",
-    maxAge: 60 * 60 * 24,
+    maxAge: SESSION_TTL_SECONDS,
   });
 
   return session;
@@ -78,4 +81,17 @@ export async function login(loginId: string, password: string): Promise<Session 
 export async function logout() {
   const cookieStore = await cookies();
   cookieStore.delete("session");
+}
+
+/**
+ * Gate for destructive or approval actions (deletes, OK marks, bill removal).
+ * Anyone else is sent back to `back` with error=admin_only.
+ */
+export async function requireAdmin(back: string): Promise<Session> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (session.roleName !== "ADMIN") {
+    redirect(`${back}${back.includes("?") ? "&" : "?"}error=admin_only`);
+  }
+  return session;
 }
