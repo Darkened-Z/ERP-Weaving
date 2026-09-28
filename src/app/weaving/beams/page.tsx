@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { loadConvContracts } from "@/lib/conv-contracts";
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
@@ -41,19 +42,9 @@ export default async function BeamsPage({
     filterKey: l.shed,
   }));
   const shedList = [...new Set(looms.map((l) => l.shed).filter((s): s is string => !!s))];
-  const convContracts = await db
-    .select({
-      contNo: schema.intGreyConversionContract.contNo,
-      contDate: schema.intGreyConversionContract.contDate,
-      grayQltyCode: schema.intGreyConversionContract.grayQltyCode,
-      grayCode: schema.intGreyConversionContract.grayCode,
-      qtyMtr: schema.intGreyConversionContract.qtyMtr,
-      convRatePerMtr: schema.intGreyConversionContract.convRatePerMtr,
-      grayRatePerMtr: schema.intGreyConversionContract.grayRatePerMtr,
-      status: schema.intGreyConversionContract.status,
-    })
-    .from(schema.intGreyConversionContract)
-    .orderBy(schema.intGreyConversionContract.contNo);
+  // Both internal (IGCC-) and external (GCC-) contracts: the mill's existing
+  // contracts live in the external table, so an INT-only list looked empty.
+  const convContracts = (await loadConvContracts()).sort((a, b) => a.contNo.localeCompare(b.contNo));
   const constructions = await db
     .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
     .from(schema.greyConstruction);

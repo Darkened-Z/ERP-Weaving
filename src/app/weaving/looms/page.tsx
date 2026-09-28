@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Shell } from "@/components/shell";
 import { requireAdmin } from "@/lib/auth";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -226,7 +227,7 @@ export default async function LoomsPage({
               <a href="/weaving/looms?adding=1" className="btn btn-outline btn-sm">New</a>
               {formItem ? (
                 <a
-                  href={`/tickets/new?loom=${encodeURIComponent(formItem.loomNo)}`}
+                  href={`/tickets/new?loom=${encodeURIComponent(`${formItem.shed}|${formItem.loomNo}`)}`}
                   className="btn btn-outline btn-sm"
                 >
                   Report Issue
@@ -243,7 +244,7 @@ export default async function LoomsPage({
                 </button>
               )}
               {formItem ? (() => {
-                const busy = !!(formItem.currentBeam || formItem.currentContract || formItem.statusWrk === "R");
+                const busy = !!(formItem.currentBeam || formItem.currentContract || formItem.statusWrk === "R" || formItem.statusWrk === "RUNNING");
                 if (busy) {
                   return (
                     <form action={freeLoom} className="inline">
@@ -398,6 +399,9 @@ export default async function LoomsPage({
                 <label className="label block mb-1">Status Wrk</label>
                 <select name="status_wrk" className="input-box" defaultValue={formItem?.statusWrk ?? ""}>
                   <option value="">—</option>
+                  {/* Knotting writes RUNNING when it mounts a beam; without the
+                      option here, saving a mounted loom blanked its status. */}
+                  <option value="RUNNING">RUNNING (mounted by knotting)</option>
                   <option value="R">R - Running (beam mounted)</option>
                   <option value="F">F - Free (ready for beam)</option>
                   <option value="S">S - Stopped</option>
@@ -464,7 +468,7 @@ export default async function LoomsPage({
                 const showShedHeader = !shedFilter && (!prev || prev.shed !== l.shed);
                 const shedCount = listed.filter((x) => x.shed === l.shed).length;
                 return (
-                  <>
+                  <Fragment key={l.id}>
                     {showShedHeader && (
                       <tr key={`h-${l.shed}`} style={{ background: "#0f172a", color: "white" }}>
                         <td colSpan={10} className="mono text-[11px] font-bold uppercase tracking-wide px-3 py-1">
@@ -504,7 +508,7 @@ export default async function LoomsPage({
                         </tr>
                       );
                     })()}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

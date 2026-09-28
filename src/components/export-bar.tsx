@@ -1,7 +1,6 @@
 "use client";
 
 import { ExcelExportButton, type Column } from "./excel-export-button";
-import { PdfExportButton } from "./pdf-export-button";
 
 type Props = {
   rows: Record<string, unknown>[];
@@ -9,24 +8,14 @@ type Props = {
   filename: string;
   sheetName?: string;
   title?: string;
+  /** Kept for callers; the PDF picks its orientation from the column count. */
   orientation?: "portrait" | "landscape";
 };
 
 /**
- * Renders Excel + PDF export buttons side by side with a row-count chip.
- * Drop-in replacement for the standalone ExcelExportButton.
+ * Excel + PDF export buttons with a row-count chip. ExcelExportButton already
+ * renders the PDF button, so adding PdfExportButton here showed it twice.
  */
-export function ExportBar({ rows, columns, filename, sheetName, title, orientation }: Props) {
-  return (
-    <div className="inline-flex items-center gap-2">
-      <ExcelExportButton rows={rows} columns={columns} filename={filename} sheetName={sheetName} />
-      <PdfExportButton
-        rows={rows}
-        columns={columns}
-        filename={filename}
-        title={title}
-        orientation={orientation}
-      />
-    </div>
-  );
+export function ExportBar({ rows, columns, filename, sheetName, title }: Props) {
+  return <ExcelExportButton rows={rows} columns={columns} filename={filename} sheetName={sheetName} title={title} />;
 }
