@@ -322,7 +322,6 @@ export default async function WarpedBeamReceivingPage({
     const wts = formData.getAll("wt") as string[];
     const widths = formData.getAll("width") as string[];
     const endss = formData.getAll("ends") as string[];
-    const rates = formData.getAll("rate") as string[];
     const lengths = formData.getAll("length") as string[];
     const convs = formData.getAll("conv") as string[];
     const amounts = formData.getAll("amount") as string[];
@@ -345,7 +344,7 @@ export default async function WarpedBeamReceivingPage({
         wt: num(wts[i] ?? null),
         width: num(widths[i] ?? null),
         ends: intVal(endss[i] ?? null),
-        rate: num(rates[i] ?? null),
+        rate: null,
         length: num(lengths[i] ?? null),
         conv: num(convs[i] ?? null),
         amount: num(amounts[i] ?? null),
@@ -355,7 +354,7 @@ export default async function WarpedBeamReceivingPage({
         !row.rDate && !row.yarnLotNo && !row.yarnBrand && !row.setNo && !row.beamSetNo &&
         !row.beamNo && row.beamLoadedHnk == null && row.emptyKg == null &&
         row.yarnBmsNetLbs == null && row.beamLength == null && !row.warpingCntNo && row.wt == null &&
-        row.width == null && row.ends == null && row.rate == null && row.length == null &&
+        row.width == null && row.ends == null && row.length == null &&
         row.conv == null && row.amount == null && !row.gpNoLine;
       if (isEmpty) continue;
       // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count SZG × Sizing Rate.
@@ -364,8 +363,8 @@ export default async function WarpedBeamReceivingPage({
       const rcNum = parseFloat(header.resultCountSzg ?? "");
       const rcDiv = Number.isFinite(rcNum) && rcNum > 0 ? rcNum : 1;
       const sizingRateNum = num(formData.get("sizingRate")) ?? 0;
-      // Rate = the row's own Rate when typed, else the header Sizing Rate.
-      const rowRate = (row.rate ?? 0) > 0 ? (row.rate as number) : sizingRateNum;
+      row.rate = sizingRateNum || null;
+      const rowRate = sizingRateNum;
       if (row.beamLength != null && row.ends != null) {
         row.amount = Math.round((row.beamLength * row.ends / 1693.2 / rcDiv) * rowRate * 100) / 100;
       } else {
@@ -1085,8 +1084,8 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 90 }} className="text-right">Beam Length</th>
                         <th style={{ width: 70 }} className="text-right">Width</th>
                         <th style={{ width: 70 }} className="text-right">Ends</th>
-                        <th style={{ width: 70 }} className="text-right">Rate</th>
-                        <th style={{ width: 70 }} className="text-right">Rate/Mtr</th>
+                        <th style={{ width: 80 }} className="text-right">Rate/Mtr</th>
+                        <th style={{ width: 80 }} className="text-right">Rate/Kg</th>
                         <th style={{ width: 90 }} className="text-right">Amount</th>
                         <th style={{ width: 80 }}>GP NO</th>
                         <th style={{ width: 40 }}>Upd</th>
@@ -1121,8 +1120,8 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="beamLength" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLength ?? ""} /></td>
                             <td><input name="width" type="number" step="any" className={gridCellNumCls} defaultValue={l?.width ?? ""} /></td>
                             <td><input name="ends" type="number" step="1" className={gridCellNumCls} defaultValue={l?.ends ?? ""} /></td>
-                            <td><input name="rate" type="number" step="any" className={gridCellNumCls} defaultValue={l?.rate ?? ""} /></td>
-                            <td><input name="conv" type="number" step="any" className={gridCellNumCls} defaultValue={l?.conv ?? ""} /></td>
+                            <td><input name="conv" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.conv ?? ""} readOnly tabIndex={-1} /></td>
+                            <td><input name="rateKgLine" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue="" readOnly tabIndex={-1} /></td>
                             <td><input name="amount" type="number" step="any" className={gridCellNumCls + " bg-gray-100"} defaultValue={l?.amount ?? ""} readOnly tabIndex={-1} /></td>
                             <td><input name="gpNoLine" className={gridCellCls} defaultValue={l?.gpNoLine ?? ""} /></td>
                             <td className="mono text-[10px] text-center text-[var(--muted)]">

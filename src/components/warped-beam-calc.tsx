@@ -20,29 +20,25 @@ export function WarpedBeamCalc() {
 
     const recalc = () => {
       const sizingRate = val(q("sizingRate"));
-      const rc = val(q("resultCountSzg")); // Result Count SZG (header) — OPTIONAL
-      const rcDiv = rc > 0 ? rc : 1; // blank RC = skip the count division
+      const sizingRateKg = val(q("sizingRateKg"));
+      const rc = val(q("resultCountSzg"));
+      const rcDiv = rc > 0 ? rc : 1;
       let amountSum = 0;
       let lengthSum = 0;
       form.querySelectorAll("tbody tr").forEach((tr) => {
         const beamNo = tr.querySelector<HTMLInputElement>('[name="beamNo"]');
         const bl = tr.querySelector<HTMLInputElement>('[name="beamLength"]');
-        const rate = tr.querySelector<HTMLInputElement>('[name="rate"]');
         const ends = tr.querySelector<HTMLInputElement>('[name="ends"]');
         const conv = tr.querySelector<HTMLInputElement>('[name="conv"]');
+        const rateKgLine = tr.querySelector<HTMLInputElement>('[name="rateKgLine"]');
         const amount = tr.querySelector<HTMLInputElement>('[name="amount"]');
         const hasRow = !!(beamNo?.value || (bl && bl.value));
-        // Sizing rate entered up top flows into each populated row's Rate.
-        if (sizingRate > 0 && hasRow) {
-          if (rate) rate.value = String(sizingRate);
-          if (conv && !conv.value) conv.value = String(sizingRate);
+        if (hasRow) {
+          if (conv) conv.value = sizingRate > 0 ? String(sizingRate) : "";
+          if (rateKgLine) rateKgLine.value = sizingRateKg > 0 ? String(sizingRateKg) : "";
         }
-        // Amount = Beam Length × Ends (tar) ÷ 1693.20 ÷ Result Count × Rate.
-        // Rate = the row's own Rate when typed, else the header Sizing Rate.
-        // Blank Result Count SZG → the ÷RC step is skipped (divide by 1).
-        if (amount && bl?.value && ends?.value) {
-          const r = val(rate) || sizingRate;
-          set(amount, (val(bl) * val(ends)) / 1693.2 / rcDiv * r);
+        if (amount && bl?.value && ends?.value && sizingRate > 0) {
+          set(amount, (val(bl) * val(ends)) / 1693.2 / rcDiv * sizingRate);
         }
         amountSum += val(amount);
         lengthSum += val(bl);
@@ -51,7 +47,6 @@ export function WarpedBeamCalc() {
       set(q("total_length_disp"), lengthSum);
       set(q("total_amount_disp"), amountSum);
 
-      // Kgs is per-bag / per-cone weight: multiply by Qty (blank Qty = weight already a total).
       const bagConeWt =
         (val(q("bagsQty")) || 1) * val(q("bagsWeight")) +
         (val(q("conesQty")) || 1) * val(q("conesWeight"));
