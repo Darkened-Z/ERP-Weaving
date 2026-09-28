@@ -242,10 +242,17 @@ export default async function TicketDetailPage({
 
   async function deleteTicket(formData: FormData) {
     "use server";
-    await requireSession();
+    const me = await requireSession();
     const ticketIdStr = formData.get("ticket_id") as string;
     const tid = parseInt(ticketIdStr, 10);
     if (!Number.isFinite(tid)) return;
+    // Only whoever raised the ticket, or an ADMIN, may delete it.
+    const [own] = await db
+      .select({ reporter: schema.tickets.reporterUserId })
+      .from(schema.tickets)
+      .where(eq(schema.tickets.id, tid));
+    if (!own) return;
+    if (me.roleName !== "ADMIN" && own.reporter !== me.userId) redirect(`/tickets/${tid}?error=forbidden`);
 
     await db.transaction(async (tx) => {
       await tx

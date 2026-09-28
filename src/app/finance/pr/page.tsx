@@ -7,7 +7,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
 import { and, eq, gte, sql, desc, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
@@ -266,6 +266,7 @@ async function deleteVoucher(formData: FormData) {
 
 async function setOkStatus(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/pr");
   const id = intVal(formData.get("id"));
   if (id === null) return;
   const [main] = await db

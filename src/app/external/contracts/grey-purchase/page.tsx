@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { num, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -354,6 +354,7 @@ export default async function GreyPurchaseContractPage({
 
   async function deleteDeliveryRow(formData: FormData) {
     "use server";
+  await requireAdmin("/external/contracts/grey-purchase");
     const deleteId = parseInt(formData.get("delete_delivery_id") as string, 10);
     const contractId = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(deleteId) || !Number.isFinite(contractId)) return;

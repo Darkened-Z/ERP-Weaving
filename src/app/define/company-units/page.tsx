@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -49,6 +50,7 @@ export default async function CompanyUnitsPage({
 
   async function deleteUnit(formData: FormData) {
     "use server";
+  await requireAdmin("/define/company-units");
     const code = (formData.get("code") as string)?.trim();
     if (!code) return;
     await db

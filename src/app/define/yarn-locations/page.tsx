@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -52,6 +53,7 @@ export default async function YarnLocationsPage({
 
   async function deleteLocation(formData: FormData) {
     "use server";
+  await requireAdmin("/define/yarn-locations");
     const id = parseInt(formData.get("id") as string, 10);
     if (!id || Number.isNaN(id)) return;
     await db.delete(schema.locations).where(eq(schema.locations.id, id));

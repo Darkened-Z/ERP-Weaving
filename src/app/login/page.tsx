@@ -17,6 +17,7 @@ export default async function LoginPage({
     const password = formData.get("password") as string;
 
     const result = await login(loginId, password);
+    if (result === "throttled") redirect("/login?error=throttled");
     if (!result) {
       redirect("/login?error=1");
     }
@@ -60,7 +61,9 @@ export default async function LoginPage({
 
             {params.error && (
               <p className="text-[13px] text-[var(--danger)]">
-                Invalid credentials. Try again.
+                {params.error === "throttled"
+                  ? "Too many failed attempts. Wait 15 minutes and try again."
+                  : "Invalid credentials. Try again."}
               </p>
             )}
 

@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -110,6 +111,7 @@ export default async function CostCentersPage({
 
   async function deleteCenter(formData: FormData) {
     "use server";
+  await requireAdmin("/settings/cost-centers");
     const code = parseInt((formData.get("code") as string) ?? "", 10);
     if (!Number.isFinite(code)) return;
     const kids = await db

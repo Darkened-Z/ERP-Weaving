@@ -12,7 +12,7 @@ import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { inCurrentBeamCycle } from "@/lib/beam-cycle";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
@@ -627,6 +627,7 @@ async function deleteKnotting(formData: FormData) {
 
 async function deleteBillKnotting(formData: FormData) {
   "use server";
+  await requireAdmin("/inventory/knotting");
   const id = intVal(formData.get("id"));
   if (id === null) return;
   await db

@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -47,6 +48,7 @@ export default async function CitiesPage({
 
   async function deleteCity(formData: FormData) {
     "use server";
+  await requireAdmin("/define/cities");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = Number(id);
