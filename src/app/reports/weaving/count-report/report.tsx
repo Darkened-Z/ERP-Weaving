@@ -322,6 +322,14 @@ export async function CountsAccountsReport({
                                 >
                                   Yarn Register
                                 </a>
+                                <a
+                                  href={`/external/reports/grey-register/conv-ledger?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
+                                  className="ml-3 underline text-[11px] font-normal no-print"
+                                  style={{ color: "#93c5fd" }}
+                                  title="Conversion ledger — parchis, finance, balance"
+                                >
+                                  Conversion Register
+                                </a>
                               </td>
                             </tr>
                             {prows.map((r) => (
