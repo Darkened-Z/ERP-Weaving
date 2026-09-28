@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { getSession, requireSession } from "@/lib/auth";
 import { invalidateGlCache } from "@/lib/gl-accounts";
 import { today } from "@/lib/time";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -15,6 +15,7 @@ const BASE = "/settings/posting-accounts";
 const ERR_MSG: Record<string, string> = {
   admin_only: "Only ADMIN can edit posting accounts.",
   no_changes: "No account codes were changed.",
+  bad_account: "Every posting account must be an existing ledger account (level 4 or below). Nothing was saved.",
 };
 
 async function saveAccounts(formData: FormData) {
@@ -26,14 +27,29 @@ async function saveAccounts(formData: FormData) {
   const stamp = today();
   let changed = 0;
 
+  const updates: { key: string; next: string }[] = [];
   for (const r of rows) {
     const raw = formData.get(`accCode__${r.key}`);
     const next = typeof raw === "string" ? raw.trim() : "";
     if (!next || next === r.accCode) continue;
+    updates.push({ key: r.key, next });
+  }
+  // Every module posts straight to these codes, so a typo or a group head here
+  // would send live ledger rows to an account no report reads.
+  if (updates.length) {
+    const codes = Array.from(new Set(updates.map((u) => u.next)));
+    const valid = await db
+      .select({ code: schema.chartOfAccounts.code })
+      .from(schema.chartOfAccounts)
+      .where(and(inArray(schema.chartOfAccounts.code, codes), gte(schema.chartOfAccounts.level, 4)));
+    if (valid.length !== codes.length) redirect(`${BASE}?error=bad_account`);
+  }
+
+  for (const { key, next } of updates) {
     await db
       .update(schema.postingAccounts)
       .set({ accCode: next, updatedAt: stamp })
-      .where(eq(schema.postingAccounts.key, r.key));
+      .where(eq(schema.postingAccounts.key, key));
     changed++;
   }
 

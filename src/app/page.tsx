@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -8,14 +8,22 @@ export const dynamic = "force-dynamic";
 export default async function Dashboard() {
   const [company] = await db.select().from(schema.companyProfile);
 
-  const [dRow] = await db.select({ total: sql<number>`coalesce(sum(debit), 0)` }).from(schema.transDetail);
-  const [cRow] = await db.select({ total: sql<number>`coalesce(sum(credit), 0)` }).from(schema.transDetail);
+  // Totals for the fiscal year shown in the header, not every year ever posted.
+  const fy = company?.currentFy ?? "";
+  const [dRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${schema.transDetail.debit}), 0)` })
+    .from(schema.transDetail)
+    .where(eq(schema.transDetail.fyCode, fy));
+  const [cRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${schema.transDetail.credit}), 0)` })
+    .from(schema.transDetail)
+    .where(eq(schema.transDetail.fyCode, fy));
   const totalDebit = dRow?.total ?? 0;
   const totalCredit = cRow?.total ?? 0;
 
-  const [vRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.transMain);
+  const [vRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.transMain).where(eq(schema.transMain.fyCode, fy));
   const [loomRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms);
-  const [runningRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms).where(sql`status = 'RUNNING'`);
+  const [runningRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms).where(inArray(schema.looms.statusWrk, ["RUNNING", "R"]));
   const [contractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts);
   const [activeContractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts).where(sql`status = 'A'`);
   const oracleContracts = await db.get<{ total: number; running: number }>(sql`
@@ -58,7 +66,11 @@ export default async function Dashboard() {
     running: sql<number>`count(case when status = 'R' then 1 end)`,
     totalBags: sql<number>`coalesce(sum(case when status = 'R' then qty_bags else 0 end), 0)`,
   }).from(schema.extYarnPurContract);
-  const [prodRow] = await db.select({ total: sql<number>`coalesce(sum(meters), 0)` }).from(schema.dailyProduction);
+  // Production entries go to int_daily_production*; daily_production is the
+  // legacy table nothing writes any more.
+  const [prodRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${schema.intDailyProductionSet.totalCount}), 0)` })
+    .from(schema.intDailyProductionSet);
   const [userRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.users);
 
   const recentVouchers = await db

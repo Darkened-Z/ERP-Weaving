@@ -21,9 +21,9 @@ export default async function AgingPage() {
   const creditors = accounts
     .filter(
       (a) =>
-        a.codeHead === "3" &&
-        (a.level ?? 0) === 4 &&
-        (a.code ?? "").startsWith("3.04")
+        // Party ledgers sit at level 5 under CREDITORS (3.03).
+          (a.level ?? 0) >= 5 &&
+          (a.code ?? "").startsWith("3.03.")
     )
     .map((a) => {
       const b = balanceMap.get(a.code);
@@ -47,9 +47,9 @@ export default async function AgingPage() {
   const debtors = accounts
     .filter(
       (a) =>
-        a.codeHead === "3" &&
-        (a.level ?? 0) === 4 &&
-        (a.code ?? "").startsWith("3.05")
+        // Party ledgers sit at level 5 under DEBTORS (1.01.01).
+          (a.level ?? 0) >= 5 &&
+          (a.code ?? "").startsWith("1.01.01.")
     )
     .map((a) => {
       const b = balanceMap.get(a.code);

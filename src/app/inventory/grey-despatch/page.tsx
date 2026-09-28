@@ -8,8 +8,9 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DespatchAmountCalc, CountGridFiller, DesignThansFill } from "@/components/production-calc";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -62,6 +63,12 @@ export default async function GreyDespatchPage({
 
   const selected = isEditing ? despatches.find((d) => d.id === idParam) ?? null : null;
   const formItem = isAdding ? null : selected;
+  // GST / further tax are stored as amounts; the rate boxes start from the rate
+  // those amounts imply, so re-saving keeps the tax instead of zeroing it.
+  const rateOf = (tax: number | null | undefined) => {
+    const base = Number(formItem?.amnt ?? 0);
+    return base > 0 && tax ? Math.round((Number(tax) / base) * 100 * 10000) / 10000 : 0;
+  };
 
   const lineRows = formItem
     ? await db
@@ -394,6 +401,11 @@ export default async function GreyDespatchPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
     await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "INVENTORY");
+    // An edit can't move a voucher out of a locked period either.
+    if (isUpdate) {
+      const [old] = await db.select({ d: schema.intGreyDespatch.vDate }).from(schema.intGreyDespatch).where(eq(schema.intGreyDespatch.id, id));
+      if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+    }
 
     const data = {
       vDate: txt(formData.get("v_date")) ?? today(),
@@ -561,11 +573,7 @@ export default async function GreyDespatchPage({
       }
     }
 
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(data.vDate);
 
     const partyRowsAll = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -744,12 +752,7 @@ export default async function GreyDespatchPage({
         if (vno > 0) {
           // Always clear prior GL rows, THEN re-post only if it still qualifies — so
           // de-posting an edited despatch reverses the ledger instead of orphaning it.
-          await tx.delete(schema.transDetail).where(
-            and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, vno))
-          );
-          await tx.delete(schema.transMain).where(
-            and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
-          );
+          await clearVoucher(tx, VTYPE, vno);
 
           if (partyCoa && fyCode) {
           await tx.insert(schema.transMain).values({
@@ -823,12 +826,7 @@ export default async function GreyDespatchPage({
           // routing it through the party's receivable is what put a second
           // identical debit beside the conversion bill. The deletes remain so a
           // voucher posted under the old behaviour is cleaned on its next save.
-          await tx.delete(schema.transDetail).where(
-            and(eq(schema.transDetail.vtype, "DPR"), eq(schema.transDetail.vno, vno))
-          );
-          await tx.delete(schema.transMain).where(
-            and(eq(schema.transMain.vtype, "DPR"), eq(schema.transMain.vno, vno))
-          );
+          await clearVoucher(tx, "DPR", vno);
                   }
 
         return did;
@@ -867,6 +865,10 @@ export default async function GreyDespatchPage({
     const id = parseInt((formData.get("id") as string) ?? "", 10);
     const next = ((formData.get("state") as string) ?? "").toUpperCase() === "EDIT" ? "EDIT" : "FINAL";
     if (!Number.isFinite(id) || id <= 0) return;
+    // Releasing a despatch lets production rewrite its thans and amounts, so it
+    // is gated like delete.
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect(`/inventory/grey-despatch?id=${id}&error=admin_only`);
     await db
       .update(schema.intGreyDespatch)
       .set({ lockState: next })
@@ -882,6 +884,8 @@ export default async function GreyDespatchPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/grey-despatch?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.intGreyDespatch.vDate }).from(schema.intGreyDespatch).where(eq(schema.intGreyDespatch.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/inventory/grey-despatch?id=${id}`);
     await db.transaction(async (tx) => {
       const [voucherRow] = await tx
         .select({ lNo: schema.intGreyDespatch.lNo })
@@ -889,19 +893,9 @@ export default async function GreyDespatchPage({
         .where(eq(schema.intGreyDespatch.id, id));
       const vno = Number(voucherRow?.lNo ?? 0);
       if (vno > 0) {
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, vno))
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
-        );
+        await clearVoucher(tx, VTYPE, vno);
         // Folding grey stock reversal voucher (DPR) — remove on delete too.
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, "DPR"), eq(schema.transDetail.vno, vno))
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, "DPR"), eq(schema.transMain.vno, vno))
-        );
+        await clearVoucher(tx, "DPR", vno);
       }
       const oldLines = await tx
         .select({ tSrNo: schema.intGreyDespatchLine.tSrNo })
@@ -1041,7 +1035,7 @@ export default async function GreyDespatchPage({
         )}
         {params.error === "admin_only" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Only ADMIN can delete vouchers.
+            Only ADMIN can delete vouchers or switch them between Edit and Final.
           </div>
         )}
 
@@ -1359,11 +1353,11 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">GST %</label>
-                    <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
+                    <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={rateOf(formItem?.gst)} />
                   </div>
                   <div>
                     <label className="label block mb-1">Ftx %</label>
-                    <input name="ftx_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
+                    <input name="ftx_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={rateOf(formItem?.further)} />
                   </div>
                   <div>
                     <label className="label block mb-1">GST</label>

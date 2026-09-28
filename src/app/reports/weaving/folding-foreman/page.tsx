@@ -49,9 +49,15 @@ export default async function FoldingForemanPage({
       eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id)
     )
     .leftJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
+    // The loom the row was woven on (stored on the row / voucher), not the
+    // beam's current loom — that is cleared once the beam runs out, which put
+    // every finished beam's production under "-".
     .leftJoin(
       schema.looms,
-      and(eq(schema.beams.loomNo, schema.looms.loomNo), eq(schema.beams.shed, schema.looms.shed)),
+      and(
+        eq(schema.looms.loomNo, sql`coalesce(${schema.intDailyProductionSet.loomNo}, ${schema.beams.loomNo})`),
+        eq(schema.looms.shed, sql`coalesce(${schema.intDailyProduction.shedNo}, ${schema.beams.shed})`),
+      ),
     )
     .where(and(...conds))
     .groupBy(schema.looms.forman);

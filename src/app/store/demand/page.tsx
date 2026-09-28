@@ -5,7 +5,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { today } from "@/lib/time";
@@ -85,11 +86,18 @@ async function saveDemand(formData: FormData) {
   const itemCount = lines.length;
   const totalAmount = r2(lines.reduce((s, l) => s + l.amount, 0));
 
-  const [company] = await db
-    .select({ fy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  const fyCode = company?.fy ?? "";
+  // Demand numbers restart every fiscal year: an edit keeps the FY the demand
+  // was raised in, a new one takes the FY its date falls in.
+  let fyCode = await fyCodeForDate(demandDate);
+  if (!isNew) {
+    const [ex] = await db
+      .select({ fyCode: schema.storeDemands.fyCode, demandDate: schema.storeDemands.demandDate })
+      .from(schema.storeDemands)
+      .where(eq(schema.storeDemands.id, id))
+      .limit(1);
+    if (ex?.fyCode) fyCode = ex.fyCode;
+    await assertPeriodsOpen([ex?.demandDate], "STORE");
+  }
 
   const partsConsumptionAcc = await acc("PARTS_CONSUMPTION");
   const partsStockAcc = await acc("PARTS_STOCK");
@@ -168,22 +176,7 @@ async function saveDemand(formData: FormData) {
           .where(eq(schema.chartParts.id, p.id));
       }
 
-      await tx
-        .delete(schema.transDetail)
-        .where(
-          and(
-            eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, demandNoVal)
-          )
-        );
-      await tx
-        .delete(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            eq(schema.transMain.vno, demandNoVal)
-          )
-        );
+      await clearVoucher(tx, VTYPE, demandNoVal, fyCode);
 
       if (totalAmount > 0) {
         const ccInt = ccCode ? parseInt(ccCode, 10) : null;
@@ -269,6 +262,8 @@ async function deleteDemand(formData: FormData) {
     .select({
       approvalStatus: schema.storeDemands.approvalStatus,
       demandNo: schema.storeDemands.demandNo,
+      fyCode: schema.storeDemands.fyCode,
+      demandDate: schema.storeDemands.demandDate,
     })
     .from(schema.storeDemands)
     .where(eq(schema.storeDemands.id, id))
@@ -277,25 +272,13 @@ async function deleteDemand(formData: FormData) {
     redirect("/store/demand?error=posted_delete_warn");
   }
   const demandNoVal = existing?.demandNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.demandDate ? await lockedThrough(existing.demandDate, "STORE") : null;
+  if (thru) redirect(`/store/demand?id=${id}&error=period_locked&thru=${thru}`);
 
   await db.transaction(async (tx) => {
     if (demandNoVal) {
-      await tx
-        .delete(schema.transDetail)
-        .where(
-          and(
-            eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, demandNoVal)
-          )
-        );
-      await tx
-        .delete(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            eq(schema.transMain.vno, demandNoVal)
-          )
-        );
+      await clearVoucher(tx, VTYPE, demandNoVal, fyCode);
     }
     const oldLines = await tx
       .select()
@@ -327,30 +310,18 @@ async function deletePostedDemand(formData: FormData) {
   if (!Number.isFinite(id)) return;
 
   const [existing] = await db
-    .select({ demandNo: schema.storeDemands.demandNo })
+    .select({ demandNo: schema.storeDemands.demandNo, fyCode: schema.storeDemands.fyCode, demandDate: schema.storeDemands.demandDate })
     .from(schema.storeDemands)
     .where(eq(schema.storeDemands.id, id))
     .limit(1);
   const demandNoVal = existing?.demandNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.demandDate ? await lockedThrough(existing.demandDate, "STORE") : null;
+  if (thru) redirect(`/store/demand?id=${id}&error=period_locked&thru=${thru}`);
 
   await db.transaction(async (tx) => {
     if (demandNoVal) {
-      await tx
-        .delete(schema.transDetail)
-        .where(
-          and(
-            eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, demandNoVal)
-          )
-        );
-      await tx
-        .delete(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            eq(schema.transMain.vno, demandNoVal)
-          )
-        );
+      await clearVoucher(tx, VTYPE, demandNoVal, fyCode);
     }
     const oldLines = await tx
       .select()
@@ -577,7 +548,7 @@ export default async function DemandPage({
                 {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
                   <form action={deletePostedDemand} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message="This demand is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                    <ConfirmButton message="This demand is POSTED. Deleting will reverse its stock and remove its ledger entry. Continue?">
                       Del (POSTED)
                     </ConfirmButton>
                   </form>

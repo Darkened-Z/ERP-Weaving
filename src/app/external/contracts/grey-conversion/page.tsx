@@ -215,8 +215,12 @@ export default async function GreyConvContractPage({
         .orderBy(schema.extGreyConvWeft.srNo)
     : [];
 
-  const warpGrid = Array.from({ length: 4 }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
-  const weftGrid = Array.from({ length: 4 }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
+  // Grow past 4 rows when a contract already has more, as the internal page
+  // does — otherwise rows 5+ are dropped the next time it is saved.
+  const warpLen = Math.max(4, ...warpRows.map((r) => r.srNo ?? 0));
+  const weftLen = Math.max(4, ...weftRows.map((r) => r.srNo ?? 0));
+  const warpGrid = Array.from({ length: warpLen }, (_, i) => warpRows.find((r) => r.srNo === i + 1) ?? null);
+  const weftGrid = Array.from({ length: weftLen }, (_, i) => weftRows.find((r) => r.srNo === i + 1) ?? null);
 
   const today = pkToday();
   const [lRow] = await db
@@ -494,7 +498,7 @@ export default async function GreyConvContractPage({
       const errCode = String((e as { code?: string })?.code ?? "");
       const lockMatch = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
       if (lockMatch) {
-        redirect(`/external/contracts/grey-conversion?error=period_locked&thru=${lockMatch[1]}`);
+        redirect(`/external/contracts/grey-conversion${backQ}&error=period_locked&thru=${lockMatch[1]}`);
       }
       if (msg.includes("UNIQUE") || errCode === "SQLITE_CONSTRAINT_UNIQUE") {
         uniqueError = true;

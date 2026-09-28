@@ -19,6 +19,7 @@ import { num, intVal, txt, escLike, round } from "@/lib/form";
 import { yarnStockGodownDesc, godownLocationOpts, partyCountRateMap } from "@/lib/godowns";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { DateBox } from "@/components/date-box";
+import { yarnStockAt } from "@/lib/yarn-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   lbs_mismatch: "Header Qty Lbs does not match the carton total. Clear it to auto-fill, or fix the cartons.",
   period_locked: "Period is locked. Cannot save for this date.",
   admin_only: "Only ADMIN can delete vouchers.",
+  over_stock: "Qty is more than the yarn lying at Location From for this count.",
 };
 
 export default async function YarnTransferPage({
@@ -200,13 +202,19 @@ export default async function YarnTransferPage({
         .where(eq(schema.intYarnReceipt.yarnPartyTo, yarnGodownDesc))
         .groupBy(schema.intYarnReceipt.countCode)
     : [];
+  // Stock shown is net of transfers in and out of the godown, not receipts alone.
+  const godownStock = yarnGodownDesc ? await yarnStockAt(yarnGodownDesc) : new Map<string, { bags: number; lbs: number }>();
   const countInfoMap: Record<string, Record<string, number>> = {};
+  for (const [countCode, st] of godownStock) {
+    countInfoMap[countCode] = { stock_bage_disp: st.bags, stock_lbs_disp: st.lbs };
+  }
   for (const r of rcptAgg) {
     if (!r.countCode) continue;
     const avg = (r.rlbs ?? 0) > 0 ? Math.round(((r.ramt ?? 0) / (r.rlbs ?? 1)) * 100) / 100 : 0;
+    const st = godownStock.get(r.countCode) ?? { bags: 0, lbs: 0 };
     countInfoMap[r.countCode] = {
-      stock_bage_disp: Math.round((r.bags ?? 0) * 100) / 100,
-      stock_lbs_disp: Math.round((r.lbs ?? 0) * 100) / 100,
+      stock_bage_disp: st.bags,
+      stock_lbs_disp: st.lbs,
       // A zero avg is omitted so the party-count rate fallback can fill the box.
       ...(avg > 0 ? { ratePerLbs: avg } : {}),
     };
@@ -303,6 +311,14 @@ export default async function YarnTransferPage({
       remarks: txt(formData.get("remarks")),
       rkd: num(formData.get("rkd")),
     };
+
+    // Can't move more yarn out of a location than is lying there.
+    if (header.locationFrom && header.countCode && (qtyLbs ?? 0) > 0) {
+      const st = (await yarnStockAt(header.locationFrom, isUpdate ? id : undefined)).get(header.countCode);
+      if ((qtyLbs ?? 0) > (st?.lbs ?? 0) + 0.01) {
+        redirect(`/inventory/yarn-transfer?${isUpdate ? `id=${id}` : "adding=1"}&error=over_stock`);
+      }
+    }
 
     const nowIso = new Date().toISOString();
 

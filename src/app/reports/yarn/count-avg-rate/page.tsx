@@ -49,9 +49,9 @@ export default async function YarnCountAvgRatePage({
     .select({
       count: schema.extYarnPurVoucherLine.count,
       lines: sql<number>`count(*)`,
-      totalBags: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+      totalBags: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0)), 0)`,
       totalLbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
-      weightedRateNum: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
+      weightedRateNum: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0) * ${schema.extYarnPurVoucherLine.rate}), 0)`,
       totalAmt: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
     })
     .from(schema.extYarnPurVoucherLine)

@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
@@ -78,6 +79,7 @@ export default async function YarnCountsPage({
 
   async function deleteCount(formData: FormData) {
     "use server";
+    await requireAdmin("/define/yarn-counts");
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
 
@@ -88,7 +90,6 @@ export default async function YarnCountsPage({
       .limit(1);
     if (!row) redirect("/define/yarn-counts");
     const code = row.countCode;
-    const codeN = parseInt(code, 10);
 
     const [purCon] = await db
       .select({ id: schema.extYarnPurContract.id })
@@ -100,15 +101,12 @@ export default async function YarnCountsPage({
       .from(schema.extYarnSalContract)
       .where(eq(schema.extYarnSalContract.countCode, code))
       .limit(1);
-    const pcRef = Number.isFinite(codeN)
-      ? (
-          await db
-            .select({ id: schema.partyCounts.id })
-            .from(schema.partyCounts)
-            .where(eq(schema.partyCounts.countCode, codeN))
-            .limit(1)
-        )[0]
-      : null;
+    // party_counts.count_code stores yarn_counts.id, not the code text.
+    const [pcRef] = await db
+      .select({ id: schema.partyCounts.id })
+      .from(schema.partyCounts)
+      .where(eq(schema.partyCounts.countCode, row.id))
+      .limit(1);
     const [extWarp] = await db
       .select({ id: schema.extGreyConvWarp.id })
       .from(schema.extGreyConvWarp)

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, desc } from "drizzle-orm";
 import { PrintButton } from "@/components/print-button";
 import { Shell } from "@/components/shell";
 
@@ -112,13 +112,27 @@ export default async function GPVPage({
     );
   }
 
+  // Without ?fy= prefer the current FY, then the latest: numbers restart each
+  // year, so "the first row found" could be any year's voucher.
+  let fyWanted = fyParam;
+  if (!fyWanted) {
+    const [cp] = await db.select({ fy: schema.companyProfile.currentFy }).from(schema.companyProfile).limit(1);
+    fyWanted = cp?.fy ?? "";
+  }
   const headConds = [eq(schema.transMain.vtype, vtype), eq(schema.transMain.vno, vno)];
-  if (fyParam) headConds.push(eq(schema.transMain.fyCode, fyParam));
-  const [head] = await db
+  let [head] = await db
     .select()
     .from(schema.transMain)
-    .where(and(...headConds))
+    .where(and(...headConds, ...(fyWanted ? [eq(schema.transMain.fyCode, fyWanted)] : [])))
     .limit(1);
+  if (!head && !fyParam) {
+    [head] = await db
+      .select()
+      .from(schema.transMain)
+      .where(and(...headConds))
+      .orderBy(desc(schema.transMain.vdate), desc(schema.transMain.id))
+      .limit(1);
+  }
 
   if (!head) {
     return (

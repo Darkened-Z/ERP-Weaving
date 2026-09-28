@@ -65,12 +65,15 @@ export default async function CountsAccountsDesignPage({
   if (designQ) conds.push(eq(schema.intDailyProduction.designNo, designQ));
   if (partyQ) conds.push(eq(schema.intDailyProduction.convContParty, partyQ));
 
-  const consumed = await db
+  // Weight once per beam per design (not per production row), meters as the
+  // sum of what each row wove — rcvdMtr is a running total and can't be summed.
+  const consumedRaw = await db
     .select({
       designNo: schema.intDailyProduction.designNo,
+      beamNo: schema.beams.beamNo,
       yarnCount: schema.beams.yarnCount,
-      lbs: sql<number>`coalesce(sum(${schema.beams.weight}), 0)`,
-      mtrs: sql<number>`coalesce(sum(${schema.intDailyProductionSet.rcvdMtr}), 0)`,
+      weight: schema.beams.weight,
+      mtr: schema.intDailyProductionSet.totalCount,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(
@@ -78,8 +81,21 @@ export default async function CountsAccountsDesignPage({
       eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id)
     )
     .innerJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
-    .where(and(...conds))
-    .groupBy(schema.intDailyProduction.designNo, schema.beams.yarnCount);
+    .where(and(...conds));
+  const agg = new Map<string, { designNo: string | null; yarnCount: string | null; lbs: number; mtrs: number }>();
+  const seenPair = new Set<string>();
+  for (const r of consumedRaw) {
+    const key = `${r.designNo ?? ""}|${r.yarnCount ?? ""}`;
+    const a = agg.get(key) ?? { designNo: r.designNo, yarnCount: r.yarnCount, lbs: 0, mtrs: 0 };
+    const pair = `${r.designNo ?? ""}|${r.beamNo}`;
+    if (!seenPair.has(pair)) {
+      seenPair.add(pair);
+      a.lbs += Number(r.weight ?? 0);
+    }
+    a.mtrs += Number(r.mtr ?? 0);
+    agg.set(key, a);
+  }
+  const consumed = Array.from(agg.values());
 
   const rows = consumed
     .filter((r) => r.designNo && r.yarnCount && inSection(r.yarnCount))

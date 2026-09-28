@@ -37,18 +37,31 @@ export default async function BranchOpeningPage({
     const phone = (formData.get("phone") as string)?.trim() || null;
     const status = (formData.get("status") as string)?.trim() || "A";
 
+    // branch_code is unique: a duplicate comes back as a message, not a crash.
+    const isDup = (e: unknown) => /UNIQUE|constraint/i.test((e as { message?: string })?.message ?? "");
     if (id) {
+      try {
       await db
         .update(schema.branchOpening)
         .set({ branchCode: branchCode ?? "", branchName: branchName ?? "", address, city, phone, fyCode: fyCode ?? "", openingDate: openingDate ?? "", status })
         .where(eq(schema.branchOpening.id, parseInt(id)));
+      } catch (e) {
+        if (isDup(e)) redirect(`/define/branch-opening?id=${id}&error=code_exists`);
+        throw e;
+      }
       revalidatePath("/define/branch-opening");
       redirect(`/define/branch-opening?id=${id}`);
     } else {
-      const [row] = await db
-        .insert(schema.branchOpening)
-        .values({ branchCode: branchCode ?? "", branchName: branchName ?? "", address, city, phone, fyCode: fyCode ?? "", openingDate: openingDate ?? "", status })
-        .returning();
+      let row: { id: number };
+      try {
+        [row] = await db
+          .insert(schema.branchOpening)
+          .values({ branchCode: branchCode ?? "", branchName: branchName ?? "", address, city, phone, fyCode: fyCode ?? "", openingDate: openingDate ?? "", status })
+          .returning();
+      } catch (e) {
+        if (isDup(e)) redirect("/define/branch-opening?error=code_exists");
+        throw e;
+      }
       revalidatePath("/define/branch-opening");
       redirect(`/define/branch-opening?id=${row.id}`);
     }
@@ -109,6 +122,11 @@ export default async function BranchOpeningPage({
                 </div>
               </div>
 
+              {params.error === "code_exists" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  That branch code already exists.
+                </div>
+              )}
               {params.error === "admin_only" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   Only ADMIN users can delete branch opening records.

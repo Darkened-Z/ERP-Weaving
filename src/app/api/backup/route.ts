@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { today as todayPk } from "@/lib/time";
 import { db, schema } from "@/db";
 import { getSession } from "@/lib/auth";
 import { isTable } from "drizzle-orm";
@@ -35,7 +36,7 @@ export async function GET() {
   dump.tables = tables;
 
   const body = JSON.stringify(dump, null, 2);
-  const date = new Date().toISOString().slice(0, 10);
+  const date = todayPk();
   const filename = `sk-mills-backup-${date}.json`;
 
   return new NextResponse(body, {

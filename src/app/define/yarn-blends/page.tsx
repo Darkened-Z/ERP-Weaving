@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -56,6 +57,7 @@ export default async function YarnBlendsPage({
 
   async function deleteBlend(formData: FormData) {
     "use server";
+    await requireAdmin("/define/yarn-blends");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = Number(id);

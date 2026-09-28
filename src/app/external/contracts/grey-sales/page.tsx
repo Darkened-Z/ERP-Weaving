@@ -15,7 +15,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { num, intVal, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -468,7 +468,7 @@ export default async function GreySalesContractPage({
       const errCode = String((e as { code?: string })?.code ?? "");
       const lockMatch = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
       if (lockMatch) {
-        redirect(`/external/contracts/grey-sales?error=period_locked&thru=${lockMatch[1]}`);
+        redirect(`/external/contracts/grey-sales?${Number.isFinite(id) && id > 0 ? `id=${id}` : "adding=1"}&error=period_locked&thru=${lockMatch[1]}`);
       }
       if (msg.includes("UNIQUE") || errCode === "SQLITE_CONSTRAINT_UNIQUE") {
         uniqueError = true;
@@ -499,6 +499,9 @@ export default async function GreySalesContractPage({
       await tx
         .delete(schema.extGreySalContractDelivery)
         .where(eq(schema.extGreySalContractDelivery.contractId, id));
+      // Warp/weft rows hang off the contract too; leaving them behind orphans them.
+      await tx.delete(schema.extGreySalContractWarp).where(eq(schema.extGreySalContractWarp.contractId, id));
+      await tx.delete(schema.extGreySalContractWeft).where(eq(schema.extGreySalContractWeft.contractId, id));
       await tx.delete(schema.extGreySalContract).where(eq(schema.extGreySalContract.id, id));
     });
 
@@ -508,6 +511,7 @@ export default async function GreySalesContractPage({
 
   async function deleteDeliveryRow(formData: FormData) {
     "use server";
+    await requireAdmin("/external/contracts/grey-sales");
     const deleteId = parseInt(formData.get("delete_delivery_id") as string, 10);
     const contractId = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(deleteId) || !Number.isFinite(contractId)) return;

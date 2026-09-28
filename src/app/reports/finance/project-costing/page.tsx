@@ -146,7 +146,8 @@ export default async function ProjectCostingPage({
 
   for (const g of glRows) {
     const acc = accMap.get(g.accCode);
-    const head = acc?.codeHead ?? "";
+    // Root digit of the code; codeHead is the full parent code, never "6"/"7".
+    const head = (acc?.code ?? g.accCode).split(".")[0];
     const desc = acc?.description ?? g.accCode;
     const bucket = classifyExpense(desc, head);
     const net = (g.debit ?? 0) - (g.credit ?? 0);

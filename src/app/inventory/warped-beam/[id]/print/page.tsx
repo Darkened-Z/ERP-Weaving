@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
@@ -37,13 +37,18 @@ export default async function WarpedBeamBillPrint({
 
   const partyAcc = bill.beamReceivingFrom
     ? (await db.select().from(schema.chartOfAccounts)
-        .where(eq(schema.chartOfAccounts.description, bill.beamReceivingFrom)).limit(1))[0] ?? null
+        // The field holds an account code on newer bills, a name on older ones.
+        .where(or(eq(schema.chartOfAccounts.code, bill.beamReceivingFrom), eq(schema.chartOfAccounts.description, bill.beamReceivingFrom))).limit(1))[0] ?? null
     : null;
 
   const subtotal = lines.reduce((s, l) => s + (l.amount ?? 0), 0);
   const freight = bill.freightCharges ?? 0;
-  const gst = bill.gstFtx ?? 0;
-  const grand = bill.totalAmountFinal ?? bill.totalAmount ?? subtotal + freight + gst;
+  // gstFtx is a PERCENT (the save applies it as amt × (1 + gst/100)); the bill
+  // shows the amount it comes to on the lines + freight printed above.
+  const gstPct = bill.gstFtx ?? 0;
+  const base = Math.round((subtotal + freight) * 100) / 100;
+  const gst = Math.round(base * gstPct) / 100;
+  const grand = Math.round((base + gst) * 100) / 100;
 
   return (
     <>
@@ -134,7 +139,7 @@ export default async function WarpedBeamBillPrint({
             ) : null}
             {gst ? (
               <tr>
-                <td colSpan={8} className="border border-black px-2 py-1 text-right uppercase text-[10px]">GST</td>
+                <td colSpan={8} className="border border-black px-2 py-1 text-right uppercase text-[10px]">GST @ {gstPct}%</td>
                 <td className="border border-black px-1 py-1 text-right mono">{fmt(gst)}</td>
               </tr>
             ) : null}

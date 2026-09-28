@@ -68,7 +68,9 @@ export default async function GreyDespatchDamiPage({
     : [];
 
   const upcomingVNo = nextVNoFromRows(damis, "IGDD");
-  const upcomingLvNo = damis.length + 1;
+  // MAX+1 like the server assigns — a row count repeats a number once any
+  // voucher has been deleted.
+  const upcomingLvNo = damis.reduce((m, d) => Math.max(m, d.lvNo ?? 0), 0) + 1;
 
   // Grey constructions for DSP quality LOV. The code alone ("GC-001") says
   // nothing on a despatch slip — the operator picks a quality by its reed x pick
@@ -194,7 +196,9 @@ export default async function GreyDespatchDamiPage({
               .values({
                 ...data,
                 vNo,
-                lvNo: data.lvNo ?? nextLvNo,
+                // Always the server's MAX+1 for a new voucher; the form value is
+                // only a preview.
+                lvNo: nextLvNo,
                 postedDate: new Date().toISOString(),
               })
               .returning({ id: schema.intGreyDespatchDami.id });

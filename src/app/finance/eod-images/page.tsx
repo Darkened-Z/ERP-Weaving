@@ -1,8 +1,9 @@
 import { Shell } from "@/components/shell";
+import { today as todayPk } from "@/lib/time";
 import { ImageAttach } from "@/components/image-attach";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { requireSession, getSession } from "@/lib/auth";
+import { requireSession, getSession, requireAdmin } from "@/lib/auth";
 import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -18,7 +19,8 @@ const trim = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
-const today = () => new Date().toISOString().slice(0, 10);
+// Mill-local (Karachi) date; the server clock is UTC.
+const today = () => todayPk();
 
 async function saveImage(formData: FormData) {
   "use server";
@@ -42,6 +44,7 @@ async function saveImage(formData: FormData) {
 
 async function deleteImage(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/eod-images");
   await requireSession();
   const idRaw = formData.get("id");
   const id = idRaw ? parseInt(String(idRaw), 10) : NaN;

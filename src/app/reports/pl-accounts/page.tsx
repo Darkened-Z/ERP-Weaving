@@ -8,10 +8,14 @@ import { today } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
-const yearStart = () => `${new Date().getFullYear()}-01-01`;
+// Karachi-local year, same as the ledger: the server clock is UTC.
+const yearStart = () => `${today().slice(0, 4)}-01-01`;
 
+// Classified by the root digit of the account code. codeHead holds the full
+// parent code (e.g. 5.01.01.01), so it never equals a single digit.
 const REVENUE_HEADS = new Set(["4", "5"]);
 const EXPENSE_HEADS = new Set(["6", "7"]);
+const rootOf = (code: string) => code.split(".")[0];
 
 export default async function PLAccountsPage({
   searchParams,
@@ -56,7 +60,7 @@ export default async function PLAccountsPage({
   for (const b of balances) {
     const acc = accMap.get(b.accCode ?? "");
     if (!acc) continue;
-    const head = acc.codeHead;
+    const head = rootOf(acc.code);
     if (REVENUE_HEADS.has(head)) {
       const amt = (b.c ?? 0) - (b.d ?? 0);
       if (amt !== 0) revenues.push({ code: acc.code, description: acc.description ?? "", amount: amt });
