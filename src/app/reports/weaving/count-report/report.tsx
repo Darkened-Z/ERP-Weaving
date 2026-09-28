@@ -26,11 +26,9 @@ export async function CountsAccountsReport({
    * Which parties the report is about.
    *
    * "activity" (default) lists whoever actually moved yarn in the period.
-   * "grey-sale-contract" is the Sale side as the mill defines it: the parties
-   * named on an EXTERNAL grey conversion contract of type SALE, each shown with
-   * every count they are set up with in Party Count — so a party the mill is
-   * committed to appears with zeros rather than not appearing at all.
-   * "grey-conv-contract" is the same thing for type CONV — the purchase side.
+   * "grey-sale-contract" / "grey-conv-contract" show every party that has
+   * counts set up in Party Counts, crossed with those counts — a party
+   * appears even when no yarn has moved yet.
    */
   partyScope?: "activity" | "grey-sale-contract" | "grey-conv-contract";
   title?: string;
@@ -119,41 +117,26 @@ export async function CountsAccountsReport({
   // against it is exactly what the mill needs to see.
   // Sale reads the SALE contracts, purchase the CONV ones; everything below is
   // identical, which is the point — one report, two scopes.
-  const contractType = partyScope === "grey-conv-contract" ? "CONV" : "SALE";
   const scopedSeedRows: { party: string; count: string }[] = [];
   let scopedParties: Set<string> | null = null;
   if (partyScope === "grey-sale-contract" || partyScope === "grey-conv-contract") {
-    const saleContracts = await db
-      .select({ party: schema.extGreyConvContract.party })
-      .from(schema.extGreyConvContract)
-      .where(
-        sql`upper(coalesce(${schema.extGreyConvContract.type}, '')) = ${contractType}`,
-      );
-    const contractParties = Array.from(
-      new Set(saleContracts.map((r) => (r.party ?? "").trim()).filter(Boolean)),
-    ).filter((pt) => !party || pt.toLowerCase().includes(party.toLowerCase()));
-    scopedParties = new Set(contractParties);
-    if (contractParties.length) {
-      const coa = await db
-        .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
-        .from(schema.chartOfAccounts);
-      const codeByDesc = new Map(coa.map((a) => [(a.description ?? "").trim(), a.code]));
-      const pcRows = await db.select().from(schema.partyCounts);
-      // party_counts.count_code holds the yarn_counts PK on most rows and the
-      // visible code on a few, so both are tried — the same fallback the yarn
-      // vouchers use.
-      const codeById = new Map(allCounts.map((c) => [c.id, String(c.countCode)]));
-      for (const pt of contractParties) {
-        const partyCode = codeByDesc.get(pt);
-        if (!partyCode) continue;
-        for (const pc of pcRows) {
-          if (pc.partyCode !== partyCode) continue;
-          const cc = codeById.get(pc.countCode as unknown as number) ?? String(pc.countCode);
-          if (count && cc !== count) continue;
-          scopedSeedRows.push({ party: pt, count: cc });
-        }
-      }
+    const coa = await db
+      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+      .from(schema.chartOfAccounts);
+    const coaNameByCode = new Map(coa.map((a) => [a.code, (a.description ?? "").trim()]));
+    const pcRows = await db.select().from(schema.partyCounts);
+    const codeById = new Map(allCounts.map((c) => [c.id, String(c.countCode)]));
+    const partySet = new Set<string>();
+    for (const pc of pcRows) {
+      const partyName = coaNameByCode.get(pc.partyCode) ?? "";
+      if (!partyName) continue;
+      if (party && !partyName.toLowerCase().includes(party.toLowerCase())) continue;
+      const cc = codeById.get(pc.countCode as unknown as number) ?? String(pc.countCode);
+      if (count && cc !== count) continue;
+      partySet.add(partyName);
+      scopedSeedRows.push({ party: partyName, count: cc });
     }
+    scopedParties = partySet;
   }
 
   const map = new Map<string, Row>();
@@ -319,9 +302,7 @@ export async function CountsAccountsReport({
                 <tr>
                   <td colSpan={9} className="text-center text-[var(--muted)] py-8">
                     {partyScope !== "activity" && (scopedParties?.size ?? 0) === 0
-                      ? `No external grey conversion contract is set to type ${contractType}, so there are ` +
-                        `no parties to report. Set a contract's type to ${contractType} and its parties ` +
-                        `appear here with their Party Counts.`
+                      ? "No parties found in Party Counts. Add a party with counts in the Party Count form first."
                       : "No count activity in period"}
                   </td>
                 </tr>
