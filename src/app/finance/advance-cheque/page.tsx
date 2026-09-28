@@ -6,7 +6,8 @@ import { RowAutoFill } from "@/components/auto-fill";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -144,6 +145,7 @@ async function issueCheques(formData: FormData) {
       if (!m) redirect(`${BASE}?error=not_found`);
       editVno = m!.vno;
       editFy = m!.fyCode;
+      await assertPeriodOpen(m!.vdate, "FINANCE");
       const existingChqs = (
         await db
           .select({ chqNo: schema.transDetail.chqNo })
@@ -206,7 +208,7 @@ async function issueCheques(formData: FormData) {
     );
     if (activeClash) redirect(`${BASE}?error=dup_chq${backTo}`);
 
-    const fyCode = await currentFy();
+    const fyCode = (await fyCodeForDate(vdate)) || (await currentFy());
     if (!fyCode && !isEdit) redirect(`${BASE}?error=no_fy${backTo}`);
     const vtime = nowTime();
 
@@ -418,18 +420,25 @@ async function deleteCheque(formData: FormData) {
 
   // A voucher can hold several cheques, so deleting it must take every
   // clear/bounce raised against ANY of them — otherwise a reversal would be
-  // left behind pointing at an issue that no longer exists.
-  const ownChqs = (
-    await db
-      .select({ chqNo: schema.transDetail.chqNo })
-      .from(schema.transDetail)
-      .where(and(eq(schema.transDetail.fyCode, fyCode), eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, issueVno)))
-  )
-    .map((r) => (r.chqNo ?? "").trim())
-    .filter(Boolean);
-  const related = ownChqs.length
+  // left behind pointing at an issue that no longer exists. A bounced cheque
+  // can be re-issued under the same number, though, and the later issue's own
+  // clear/bounce must survive: a transition belongs to this issue only when it
+  // falls between this issue and the next ISSUE of the same cheque.
+  const ownChqs = Array.from(
+    new Set(
+      (
+        await db
+          .select({ chqNo: schema.transDetail.chqNo })
+          .from(schema.transDetail)
+          .where(and(eq(schema.transDetail.fyCode, fyCode), eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, issueVno)))
+      )
+        .map((r) => (r.chqNo ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const chqRows = ownChqs.length
     ? await db
-        .select({ vno: schema.transMain.vno })
+        .select({ vno: schema.transMain.vno, vdate: schema.transMain.vdate, trnType: schema.transMain.trnType, chqNo: schema.transDetail.chqNo })
         .from(schema.transMain)
         .innerJoin(
           schema.transDetail,
@@ -439,8 +448,23 @@ async function deleteCheque(formData: FormData) {
             eq(schema.transDetail.vno, schema.transMain.vno),
           ),
         )
-        .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.fyCode, fyCode), inArray(schema.transDetail.chqNo, Array.from(new Set(ownChqs)))))
+        .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.fyCode, fyCode), inArray(schema.transDetail.chqNo, ownChqs)))
     : [];
+  const related: { vno: number; vdate: string }[] = [];
+  for (const chq of ownChqs) {
+    const rows = chqRows.filter((r) => (r.chqNo ?? "").trim() === chq);
+    const nextIssue = Math.min(
+      ...rows.filter((r) => r.trnType === "ISSUE" && r.vno > issueVno).map((r) => r.vno),
+      Number.POSITIVE_INFINITY,
+    );
+    for (const r of rows) {
+      if (r.trnType !== "ISSUE" && r.vno > issueVno && r.vno < nextIssue) related.push(r);
+    }
+  }
+  for (const d of [issue.main.vdate, ...related.map((r) => r.vdate)]) {
+    const thru = await lockedThrough(d, "FINANCE");
+    if (thru) redirect(`${BASE}?id=${id}&error=period_locked&thru=${thru}`);
+  }
   const vnos = Array.from(new Set([issueVno, ...related.map((r) => r.vno)]));
   if (!vnos.length) redirect(BASE);
   await db.transaction(async (tx) => {
