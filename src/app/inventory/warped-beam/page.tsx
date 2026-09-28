@@ -789,7 +789,7 @@ export default async function WarpedBeamReceivingPage({
 
   async function deleteBillAction(formData: FormData) {
     "use server";
-  await requireAdmin("/inventory/warped-beam");
+    await requireAdmin("/inventory/warped-beam");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {

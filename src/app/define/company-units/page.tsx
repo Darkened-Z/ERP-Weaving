@@ -50,7 +50,7 @@ export default async function CompanyUnitsPage({
 
   async function deleteUnit(formData: FormData) {
     "use server";
-  await requireAdmin("/define/company-units");
+    await requireAdmin("/define/company-units");
     const code = (formData.get("code") as string)?.trim();
     if (!code) return;
     await db

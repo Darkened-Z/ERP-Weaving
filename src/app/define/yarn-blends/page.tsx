@@ -57,7 +57,7 @@ export default async function YarnBlendsPage({
 
   async function deleteBlend(formData: FormData) {
     "use server";
-  await requireAdmin("/define/yarn-blends");
+    await requireAdmin("/define/yarn-blends");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = Number(id);

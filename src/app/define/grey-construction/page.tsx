@@ -154,7 +154,7 @@ export default async function GreyConstructionPage({
 
   async function deleteConstruction(formData: FormData) {
     "use server";
-  await requireAdmin("/define/grey-construction");
+    await requireAdmin("/define/grey-construction");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
 

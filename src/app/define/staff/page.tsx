@@ -68,7 +68,7 @@ export default async function StaffPage({
 
   async function remove(formData: FormData) {
     "use server";
-  await requireAdmin("/define/staff");
+    await requireAdmin("/define/staff");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = parseInt(id);

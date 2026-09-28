@@ -57,7 +57,7 @@ export default async function ProductsPage({
 
   async function deleteProduct(formData: FormData) {
     "use server";
-  await requireAdmin("/define/products");
+    await requireAdmin("/define/products");
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
 

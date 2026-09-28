@@ -53,7 +53,7 @@ export default async function GreyLocationsPage({
 
   async function deleteLocation(formData: FormData) {
     "use server";
-  await requireAdmin("/define/locations");
+    await requireAdmin("/define/locations");
     const id = parseInt(formData.get("id") as string, 10);
     if (!id || Number.isNaN(id)) return;
     await db.delete(schema.locations).where(eq(schema.locations.id, id));

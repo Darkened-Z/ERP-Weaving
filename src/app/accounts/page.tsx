@@ -166,7 +166,7 @@ export default async function ChartOfAccountPage({
 
   async function deleteAccount(formData: FormData) {
     "use server";
-  await requireAdmin("/accounts");
+    await requireAdmin("/accounts");
     const code = (formData.get("code") as string)?.trim();
     if (!code) return;
     const esc = code.replace(/[\\%_]/g, (m) => "\\" + m);

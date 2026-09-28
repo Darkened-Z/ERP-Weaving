@@ -131,6 +131,8 @@ export default async function YarnSalesContractPage({
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    // Keep the operator on the record they were editing when a check fails.
+    const back = Number.isFinite(id) && id > 0 ? `id=${id}&` : "adding=1&";
     const contDate = ((formData.get("cont_date") as string) || "").trim() || today();
     const expdDate = ((formData.get("expd_date") as string) || "").trim() || null;
     const refno = ((formData.get("refno") as string) || "").trim() || null;
@@ -144,7 +146,7 @@ export default async function YarnSalesContractPage({
     const qtyBags = num(formData.get("qty_bags"));
     const ratePerLbs = num(formData.get("rate_per_lbs"));
     if (!qtyBags || !ratePerLbs) {
-      redirect(`/external/contracts/yarn-sales?error=qty_rate_required`);
+      redirect(`/external/contracts/yarn-sales?${back}error=qty_rate_required`);
     }
     // 1 bag = 100 lbs; rate is per-lbs (Oracle: QTY_BAG * RATE * 100)
     const qtyLbs = qtyBags * 100;
@@ -179,7 +181,7 @@ export default async function YarnSalesContractPage({
     // Oracle pre-commit: delivery total must stay within ±5% of contract qty
     const dlvTotal = validDeliveries.reduce((s, d) => s + (d.bags ?? 0), 0);
     if (dlvTotal > 0 && (dlvTotal < qtyBags * 0.95 || dlvTotal > qtyBags * 1.05)) {
-      redirect(`/external/contracts/yarn-sales?error=qty_tolerance`);
+      redirect(`/external/contracts/yarn-sales?${back}error=qty_tolerance`);
     }
 
     const nowIso = new Date().toISOString();
@@ -254,7 +256,7 @@ export default async function YarnSalesContractPage({
         }
 
         if (codeExists) {
-          redirect(`/external/contracts/yarn-sales?error=code_exists`);
+          redirect(`/external/contracts/yarn-sales?${back}error=code_exists`);
         }
         revalidatePath("/external/contracts/yarn-sales");
         redirect(`/external/contracts/yarn-sales?id=${newId}`);
@@ -265,7 +267,7 @@ export default async function YarnSalesContractPage({
       const msg = (e as { message?: string })?.message ?? "";
       const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
       if (m) {
-        redirect(`/external/contracts/yarn-sales?error=period_locked&thru=${m[1]}`);
+        redirect(`/external/contracts/yarn-sales?${back}error=period_locked&thru=${m[1]}`);
       }
       throw e;
     }

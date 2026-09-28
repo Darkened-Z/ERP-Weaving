@@ -58,7 +58,7 @@ export default async function GreyDspPage({
 
   async function remove(formData: FormData) {
     "use server";
-  await requireAdmin("/define/grey-dsp");
+    await requireAdmin("/define/grey-dsp");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = parseInt(id);

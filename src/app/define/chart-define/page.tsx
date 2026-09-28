@@ -58,7 +58,7 @@ export default async function ChartDefinePage({
 
   async function deleteChart(formData: FormData) {
     "use server";
-  await requireAdmin("/define/chart-define");
+    await requireAdmin("/define/chart-define");
     const id = parseInt(formData.get("id") as string, 10);
     if (!id || Number.isNaN(id)) return;
 

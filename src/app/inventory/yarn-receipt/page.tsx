@@ -21,6 +21,7 @@ import { redirect } from "next/navigation";
 import { num, intVal, txt, escLike, round } from "@/lib/form";
 import { yarnStockGodownDesc, godownLocationOpts, partyCountRateMap } from "@/lib/godowns";
 import { DateBox } from "@/components/date-box";
+import { yarnStockAt } from "@/lib/yarn-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -336,29 +337,26 @@ export default async function YarnReceiptPage({
     stockLbs = agg[0]?.lbs ?? 0;
   }
 
-  // Existing godown stock of each count BEFORE this voucher (net of RCPT − RETN in the
-  // yarn-stock godown, excluding the current voucher). Shown when a count is picked.
-  const godownStockRows = yarnGodownDesc
-    ? await db
-        .select({
-          countCode: schema.intYarnReceipt.countCode,
-          bags: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType} = 'RETN' THEN -${schema.intYarnReceipt.bags} ELSE ${schema.intYarnReceipt.bags} END), 0)`,
-          lbs: sql<number>`COALESCE(SUM(CASE WHEN ${schema.intYarnReceipt.trnType} = 'RETN' THEN -${schema.intYarnReceipt.qtyLbs} ELSE ${schema.intYarnReceipt.qtyLbs} END), 0)`,
-        })
-        .from(schema.intYarnReceipt)
-        .where(and(
-          eq(schema.intYarnReceipt.yarnPartyTo, yarnGodownDesc),
-          ...(editing ? [ne(schema.intYarnReceipt.id, editing.id)] : []),
-        ))
-        .groupBy(schema.intYarnReceipt.countCode)
-    : [];
+  // Existing godown stock of each count BEFORE this voucher: receipts net of
+  // returns, plus transfers in, less transfers out — excluding this receipt's
+  // own quantity when editing. Shown when a count is picked.
   const countStockMap: Record<string, Record<string, number>> = {};
-  for (const r of godownStockRows) {
-    if (!r.countCode) continue;
-    countStockMap[r.countCode] = {
-      stock_bage_disp: Math.round((r.bags ?? 0) * 100) / 100,
-      stock_lbs_disp: Math.round((r.lbs ?? 0) * 100) / 100,
-    };
+  if (yarnGodownDesc) {
+    const stock = await yarnStockAt(yarnGodownDesc);
+    if (editing && editing.countCode && editing.yarnPartyTo === yarnGodownDesc) {
+      const sign = editing.trnType === "RETN" ? -1 : 1;
+      const cur = stock.get(editing.countCode) ?? { bags: 0, lbs: 0 };
+      stock.set(editing.countCode, {
+        bags: cur.bags - sign * (editing.bags ?? 0),
+        lbs: cur.lbs - sign * (editing.qtyLbs ?? 0),
+      });
+    }
+    for (const [countCode, st] of stock) {
+      countStockMap[countCode] = {
+        stock_bage_disp: Math.round(st.bags * 100) / 100,
+        stock_lbs_disp: Math.round(st.lbs * 100) / 100,
+      };
+    }
   }
 
   async function saveAction(formData: FormData) {

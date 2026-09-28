@@ -48,7 +48,7 @@ export default async function BeamStatusPage({
 
   async function deleteStatus(formData: FormData) {
     "use server";
-  await requireAdmin("/define/beam-status");
+    await requireAdmin("/define/beam-status");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = Number(id);

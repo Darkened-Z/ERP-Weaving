@@ -53,7 +53,7 @@ export default async function YarnLocationsPage({
 
   async function deleteLocation(formData: FormData) {
     "use server";
-  await requireAdmin("/define/yarn-locations");
+    await requireAdmin("/define/yarn-locations");
     const id = parseInt(formData.get("id") as string, 10);
     if (!id || Number.isNaN(id)) return;
     await db.delete(schema.locations).where(eq(schema.locations.id, id));
