@@ -178,7 +178,7 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
                   <label className="label block mb-2">Voucher Type</label>
                   <div className="input-box mono">JV - Journal Voucher</div>
                   <p className="text-[11px] text-[var(--muted)] mt-1">
-                    Cash, bank and petty-cash vouchers are entered on their own screens under Finance.
+                    Cash and bank vouchers are entered on their own screens under Finance.
                   </p>
                 </div>
                 <div>

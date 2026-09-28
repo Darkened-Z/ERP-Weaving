@@ -24,8 +24,6 @@ const VTYPE_ROUTE: Record<string, string> = {
   BR: "/finance/br",
   BP: "/finance/bp",
   JV: "/finance/jv",
-  PR: "/finance/pr",
-  PC: "/finance/pc",
 };
 
 const trim = (s?: string) => (s ?? "").trim();

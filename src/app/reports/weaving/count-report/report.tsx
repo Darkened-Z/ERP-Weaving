@@ -306,7 +306,7 @@ export async function CountsAccountsReport({
                   return (
                     <tbody key={pt}>
                       <tr style={{ background: "#0f172a", color: "white" }}>
-                        <td className="font-bold text-[16px] px-3 py-2" colSpan={7}>
+                        <td className="font-bold text-[16px] px-3 py-2" colSpan={2}>
                           {pt}
                           <a
                             href={`/external/reports/grey-register/conv-ledger?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
@@ -323,11 +323,12 @@ export async function CountsAccountsReport({
                             Yarn Reg
                           </a>
                           <span className="ml-4 text-[18px] font-bold">{prows.length}</span>
-                          <span className="float-right mono">{fmt(sub.amount)}</span>
-                          <span className="float-right mono mr-6">{fmt(sub.balLbs)}</span>
-                          <span className="float-right mono mr-6">{fmt(sub.bags)}</span>
-                          <span className="float-right mono mr-6">{fmt(sub.totalLbs)}</span>
                         </td>
+                        <td className="mono text-right px-2 font-bold">{fmt(sub.totalLbs)}</td>
+                        <td className="mono text-right px-2 font-bold">{fmt(sub.bags)}</td>
+                        <td className="mono text-right px-2 font-bold">{fmt(sub.balLbs)}</td>
+                        <td></td>
+                        <td className="mono text-right px-2 font-bold">{fmt(sub.amount)}</td>
                       </tr>
                       {prows.map((r) => (
                         <tr key={r.count} className="border-b border-[var(--border-light)]">

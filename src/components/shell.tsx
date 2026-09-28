@@ -178,8 +178,6 @@ const SECTIONS = [
       { href: "/finance/advance-cheque", label: "Advance Cheque", key: "fin-advance-cheque" },
       { href: "/finance/cheque-books", label: "Cheque Books", key: "fin-cheque-books" },
       { href: "/finance/jv", label: "Journal Voucher", key: "fin-jv" },
-      { href: "/finance/pr", label: "Petty Cash Receipt", key: "fin-pr" },
-      { href: "/finance/pc", label: "Petty Cash Payment", key: "fin-pc" },
       { href: "/finance/finding", label: "Find Voucher", key: "finding" },
       { href: "/finance/eod-images", label: "EOD Images", key: "eod-images" },
       { href: "/finance/images", label: "Images", key: "images" },
