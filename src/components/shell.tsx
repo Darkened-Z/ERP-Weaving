@@ -159,6 +159,7 @@ const SECTIONS = [
           { href: "/external/reports/cloth-register", label: "Cloth Purchase Sale Register", key: "ext-r-cloth" },
           { href: "/external/reports/grey-register", label: "Grey Register", key: "ext-r-greyreg" },
           { href: "/external/reports/grey-register/sale-ledger", label: "Grey Register — Sale Ledger", key: "ext-r-grey-sale-ledger" },
+          { href: "/external/reports/grey-register/conv-ledger", label: "Grey Register — Conversion Ledger", key: "ext-r-grey-conv-ledger" },
           { href: "/external/reports/grey-stock", label: "Grey Stock", key: "ext-r-greystock" },
           { href: "/external/reports/yarn-register", label: "Yarn Register", key: "ext-r-yarnreg" },
           { href: "/reports/yarn/sale-register", label: "Yarn Sale Register", key: "rpt-yarn-sale-register" },
