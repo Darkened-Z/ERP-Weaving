@@ -6,9 +6,10 @@ import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
-import { and, eq, gte, sql, desc } from "drizzle-orm";
+import { and, eq, gte, sql, desc, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -121,11 +122,19 @@ async function saveVoucher(formData: FormData) {
     redirect(`${BASE}?${back}&error=invalid`);
   }
 
-  const cpRows = await db
-    .select({ fy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  const currentFy = cpRows[0]?.fy ?? null;
+  // Every account on the voucher must be a real posting account — the pickers
+  // accept free text, and an unknown code would post money nowhere.
+  {
+    const wanted = Array.from(new Set([pettyAcc!, ...lines.map((l) => l.acc)]));
+    const found = await db
+      .select({ code: schema.chartOfAccounts.code })
+      .from(schema.chartOfAccounts)
+      .where(and(inArray(schema.chartOfAccounts.code, wanted), gte(schema.chartOfAccounts.level, 4)));
+    if (found.length !== wanted.length) redirect(`${BASE}?${back}&error=invalid`);
+  }
+
+  // New vouchers take the FY their date falls in; an edit keeps its own.
+  const currentFy = (await fyCodeForDate(vdate)) || null;
   if (!currentFy) {
     redirect(`${BASE}?${back}&error=no_fy`);
   }
@@ -138,6 +147,12 @@ async function saveVoucher(formData: FormData) {
         .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)))
         .limit(1);
       if (!ex.length) return;
+      const [old] = await tx
+        .select({ vdate: schema.transMain.vdate })
+        .from(schema.transMain)
+        .where(eq(schema.transMain.id, id))
+        .limit(1);
+      if (old) await assertPeriodOpen(old.vdate, "FINANCE");
       const exFy = ex[0].fyCode;
       const vno = ex[0].vno;
       await tx
@@ -220,6 +235,13 @@ async function deleteVoucher(formData: FormData) {
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   if (!Number.isFinite(id) || id <= 0) return;
+  const [cur] = await db
+    .select({ vdate: schema.transMain.vdate })
+    .from(schema.transMain)
+    .where(and(eq(schema.transMain.id, id), eq(schema.transMain.vtype, VTYPE)))
+    .limit(1);
+  const thru = cur ? await lockedThrough(cur.vdate, "FINANCE") : null;
+  if (thru) redirect(`${BASE}?id=${id}&error=period_locked&thru=${thru}`);
   await db.transaction(async (tx) => {
     const ex = await tx
       .select({ fyCode: schema.transMain.fyCode, vno: schema.transMain.vno })

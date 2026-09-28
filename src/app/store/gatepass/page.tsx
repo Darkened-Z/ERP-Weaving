@@ -5,7 +5,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -82,11 +83,17 @@ async function saveReturn(formData: FormData) {
   const itemCount = lines.length;
   const totalAmount = r2(lines.reduce((s, l) => s + l.amount, 0));
 
-  const [company] = await db
-    .select({ fy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  const fyCode = company?.fy ?? "";
+  // Return numbers restart every fiscal year: an edit keeps its own FY.
+  let fyCode = await fyCodeForDate(returnDate);
+  if (!isNew) {
+    const [ex] = await db
+      .select({ fyCode: schema.storeReturns.fyCode, returnDate: schema.storeReturns.returnDate })
+      .from(schema.storeReturns)
+      .where(eq(schema.storeReturns.id, id))
+      .limit(1);
+    if (ex?.fyCode) fyCode = ex.fyCode;
+    await assertPeriodsOpen([ex?.returnDate], "STORE");
+  }
 
   const shouldPostGL = totalAmount > 0;
   const stockAcc = shouldPostGL ? await acc("PARTS_STOCK") : "";
@@ -166,13 +173,10 @@ async function saveReturn(formData: FormData) {
           .where(eq(schema.chartParts.code, l.partCode));
       }
 
+      // Clear first either way, so an edit that empties the return also takes
+      // its old ledger entry back out instead of leaving it stranded.
+      if (vno > 0) await clearVoucher(tx, "SR", vno, fyCode);
       if (shouldPostGL && vno > 0) {
-        await tx
-          .delete(schema.transDetail)
-          .where(and(eq(schema.transDetail.vtype, "SR"), eq(schema.transDetail.vno, vno)));
-        await tx
-          .delete(schema.transMain)
-          .where(and(eq(schema.transMain.vtype, "SR"), eq(schema.transMain.vno, vno)));
 
         await tx.insert(schema.transMain).values({
           fyCode,
@@ -244,6 +248,8 @@ async function deleteReturn(formData: FormData) {
     .select({
       returnNo: schema.storeReturns.returnNo,
       approvalStatus: schema.storeReturns.approvalStatus,
+      fyCode: schema.storeReturns.fyCode,
+      returnDate: schema.storeReturns.returnDate,
     })
     .from(schema.storeReturns)
     .where(eq(schema.storeReturns.id, id))
@@ -252,15 +258,13 @@ async function deleteReturn(formData: FormData) {
     redirect("/store/gatepass?error=posted_delete_warn");
   }
   const vno = existing?.returnNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.returnDate ? await lockedThrough(existing.returnDate, "STORE") : null;
+  if (thru) redirect(`/store/gatepass?id=${id}&error=period_locked&thru=${thru}`);
 
   await db.transaction(async (tx) => {
     if (vno > 0) {
-      await tx
-        .delete(schema.transDetail)
-        .where(and(eq(schema.transDetail.vtype, "SR"), eq(schema.transDetail.vno, vno)));
-      await tx
-        .delete(schema.transMain)
-        .where(and(eq(schema.transMain.vtype, "SR"), eq(schema.transMain.vno, vno)));
+      await clearVoucher(tx, "SR", vno, fyCode);
     }
     const oldLines = await tx
       .select()
@@ -292,20 +296,18 @@ async function deletePostedReturn(formData: FormData) {
   if (!Number.isFinite(id)) return;
 
   const [existing] = await db
-    .select({ returnNo: schema.storeReturns.returnNo })
+    .select({ returnNo: schema.storeReturns.returnNo, fyCode: schema.storeReturns.fyCode, returnDate: schema.storeReturns.returnDate })
     .from(schema.storeReturns)
     .where(eq(schema.storeReturns.id, id))
     .limit(1);
   const vno = existing?.returnNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.returnDate ? await lockedThrough(existing.returnDate, "STORE") : null;
+  if (thru) redirect(`/store/gatepass?id=${id}&error=period_locked&thru=${thru}`);
 
   await db.transaction(async (tx) => {
     if (vno > 0) {
-      await tx
-        .delete(schema.transDetail)
-        .where(and(eq(schema.transDetail.vtype, "SR"), eq(schema.transDetail.vno, vno)));
-      await tx
-        .delete(schema.transMain)
-        .where(and(eq(schema.transMain.vtype, "SR"), eq(schema.transMain.vno, vno)));
+      await clearVoucher(tx, "SR", vno, fyCode);
     }
     const oldLines = await tx
       .select()

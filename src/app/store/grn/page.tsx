@@ -6,7 +6,8 @@ import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { acc } from "@/lib/gl-accounts";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
 import {
@@ -108,12 +109,6 @@ async function saveGrn(formData: FormData) {
   const itemCount = lines.length;
   const totalAmount = r2(lines.reduce((s, l) => s + l.amount, 0));
 
-  const [company] = await db
-    .select({ fy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  const fyCode = company?.fy ?? "";
-
   const partyRows = await db
     .select({
       code: schema.chartOfAccounts.code,
@@ -133,16 +128,26 @@ async function saveGrn(formData: FormData) {
       ? supplierCode
       : resolvePartyCoa(supplier);
 
-  const partsStockExpCoa = await acc("PARTS_STOCK_EXP");
+  // Perpetual inventory: a GRN puts the parts INTO stock; the issue (demand)
+  // later moves them from stock to consumption. Debiting an expense here while
+  // the issue credited PARTS_STOCK drove the stock account negative and
+  // expensed every part twice.
+  const partsStockCoa = await acc("PARTS_STOCK");
 
+  // GRN numbers restart every fiscal year, so the voucher's own FY is part of
+  // its identity: an edit keeps the FY it was created in, a new GRN takes the
+  // FY its date falls in.
   let existingGrnNo: number | null = null;
+  let fyCode = await fyCodeForDate(grnDate);
   if (!isNew) {
     const [ex] = await db
-      .select({ grnNo: schema.storeGrn.grnNo })
+      .select({ grnNo: schema.storeGrn.grnNo, fyCode: schema.storeGrn.fyCode, grnDate: schema.storeGrn.grnDate })
       .from(schema.storeGrn)
       .where(eq(schema.storeGrn.id, id))
       .limit(1);
     existingGrnNo = ex?.grnNo ?? null;
+    if (ex?.fyCode) fyCode = ex.fyCode;
+    await assertPeriodsOpen([ex?.grnDate], "STORE");
   }
 
   let savedId = isNew ? 0 : id;
@@ -228,22 +233,7 @@ async function saveGrn(formData: FormData) {
       }
 
       if (vno > 0) {
-        await tx
-          .delete(schema.transDetail)
-          .where(
-            and(
-              eq(schema.transDetail.vtype, VTYPE),
-              eq(schema.transDetail.vno, vno),
-            ),
-          );
-        await tx
-          .delete(schema.transMain)
-          .where(
-            and(
-              eq(schema.transMain.vtype, VTYPE),
-              eq(schema.transMain.vno, vno),
-            ),
-          );
+        await clearVoucher(tx, VTYPE, vno, fyCode);
 
         if (totalAmount > 0 && partyCoa) {
           await tx.insert(schema.transMain).values({
@@ -262,7 +252,7 @@ async function saveGrn(formData: FormData) {
               vtype: VTYPE,
               vno,
               srno: 1,
-              accCode: partsStockExpCoa,
+              accCode: partsStockCoa,
               partyCode: partyCoa,
               debit: totalAmount,
               credit: 0,
@@ -320,6 +310,8 @@ async function deleteGrn(formData: FormData) {
     .select({
       approvalStatus: schema.storeGrn.approvalStatus,
       grnNo: schema.storeGrn.grnNo,
+      fyCode: schema.storeGrn.fyCode,
+      grnDate: schema.storeGrn.grnDate,
     })
     .from(schema.storeGrn)
     .where(eq(schema.storeGrn.id, id))
@@ -328,25 +320,13 @@ async function deleteGrn(formData: FormData) {
     redirect("/store/grn?error=posted_delete_warn");
   }
   const vno = existing?.grnNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.grnDate ? await lockedThrough(existing.grnDate, "STORE") : null;
+  if (thru) redirect(`/store/grn?id=${id}&error=period_locked&thru=${thru}`);
 
   await db.transaction(async (tx) => {
     if (vno > 0) {
-      await tx
-        .delete(schema.transDetail)
-        .where(
-          and(
-            eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, vno),
-          ),
-        );
-      await tx
-        .delete(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            eq(schema.transMain.vno, vno),
-          ),
-        );
+      await clearVoucher(tx, VTYPE, vno, fyCode);
     }
     const oldLines = await tx
       .select()
@@ -376,30 +356,18 @@ async function deletePostedGrn(formData: FormData) {
   if (!Number.isFinite(id)) return;
 
   const [existing] = await db
-    .select({ grnNo: schema.storeGrn.grnNo })
+    .select({ grnNo: schema.storeGrn.grnNo, fyCode: schema.storeGrn.fyCode, grnDate: schema.storeGrn.grnDate })
     .from(schema.storeGrn)
     .where(eq(schema.storeGrn.id, id))
     .limit(1);
   const vno = existing?.grnNo ?? 0;
+  const fyCode = existing?.fyCode ?? null;
+  const thru = existing?.grnDate ? await lockedThrough(existing.grnDate, "STORE") : null;
+  if (thru) redirect(`/store/grn?id=${id}&error=period_locked&thru=${thru}`);
 
   await db.transaction(async (tx) => {
     if (vno > 0) {
-      await tx
-        .delete(schema.transDetail)
-        .where(
-          and(
-            eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, vno),
-          ),
-        );
-      await tx
-        .delete(schema.transMain)
-        .where(
-          and(
-            eq(schema.transMain.vtype, VTYPE),
-            eq(schema.transMain.vno, vno),
-          ),
-        );
+      await clearVoucher(tx, VTYPE, vno, fyCode);
     }
     const oldLines = await tx
       .select()

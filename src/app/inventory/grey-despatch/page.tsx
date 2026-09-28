@@ -8,6 +8,7 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DespatchAmountCalc, CountGridFiller, DesignThansFill } from "@/components/production-calc";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
@@ -561,11 +562,7 @@ export default async function GreyDespatchPage({
       }
     }
 
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(data.vDate);
 
     const partyRowsAll = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -744,12 +741,7 @@ export default async function GreyDespatchPage({
         if (vno > 0) {
           // Always clear prior GL rows, THEN re-post only if it still qualifies — so
           // de-posting an edited despatch reverses the ledger instead of orphaning it.
-          await tx.delete(schema.transDetail).where(
-            and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, vno))
-          );
-          await tx.delete(schema.transMain).where(
-            and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
-          );
+          await clearVoucher(tx, VTYPE, vno);
 
           if (partyCoa && fyCode) {
           await tx.insert(schema.transMain).values({
@@ -823,12 +815,7 @@ export default async function GreyDespatchPage({
           // routing it through the party's receivable is what put a second
           // identical debit beside the conversion bill. The deletes remain so a
           // voucher posted under the old behaviour is cleaned on its next save.
-          await tx.delete(schema.transDetail).where(
-            and(eq(schema.transDetail.vtype, "DPR"), eq(schema.transDetail.vno, vno))
-          );
-          await tx.delete(schema.transMain).where(
-            and(eq(schema.transMain.vtype, "DPR"), eq(schema.transMain.vno, vno))
-          );
+          await clearVoucher(tx, "DPR", vno);
                   }
 
         return did;
@@ -889,19 +876,9 @@ export default async function GreyDespatchPage({
         .where(eq(schema.intGreyDespatch.id, id));
       const vno = Number(voucherRow?.lNo ?? 0);
       if (vno > 0) {
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, vno))
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, vno))
-        );
+        await clearVoucher(tx, VTYPE, vno);
         // Folding grey stock reversal voucher (DPR) — remove on delete too.
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, "DPR"), eq(schema.transDetail.vno, vno))
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, "DPR"), eq(schema.transMain.vno, vno))
-        );
+        await clearVoucher(tx, "DPR", vno);
       }
       const oldLines = await tx
         .select({ tSrNo: schema.intGreyDespatchLine.tSrNo })

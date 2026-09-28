@@ -3,7 +3,7 @@ import { and, eq, inArray, lte } from "drizzle-orm";
 
 type Module = "FINANCE" | "INVENTORY" | "STORE";
 
-async function resolveFyCode(vDate: string): Promise<string | null> {
+export async function resolveFyCode(vDate: string): Promise<string | null> {
   const fys = await db
     .select({
       code: schema.fiscalYears.code,
@@ -83,4 +83,9 @@ export async function assertPeriodOpen(vDate: string, module: Module): Promise<v
 export function parseLockedThroughFromError(msg: string): string | null {
   const m = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
   return m ? m[1] : null;
+}
+
+/** Asserts every date is in an open period — for edits (old + new date) and deletes. */
+export async function assertPeriodsOpen(dates: (string | null | undefined)[], module: Module): Promise<void> {
+  for (const d of dates) if (d) await assertPeriodOpen(d, module);
 }

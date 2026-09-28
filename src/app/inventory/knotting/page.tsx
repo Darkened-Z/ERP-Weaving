@@ -8,6 +8,7 @@ import { KnottingCalc } from "@/components/knotting-calc";
 import { RowErase } from "@/components/production-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
@@ -231,11 +232,7 @@ async function saveKnotting(formData: FormData) {
 
   const nowIso = new Date().toISOString();
 
-  const [company] = await db
-    .select({ currentFy: schema.companyProfile.currentFy })
-    .from(schema.companyProfile)
-    .limit(1);
-  const fyCode = company?.currentFy ?? "";
+  const fyCode = await fyCodeForDate(header.vDate);
 
   const partyRows = await db
     .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -350,12 +347,7 @@ async function saveKnotting(formData: FormData) {
         .where(eq(schema.intKnottingSarning.id, id));
       const vno = current?.lvNo ?? 0;
       if (vno > 0) {
-        await tx
-          .delete(schema.transDetail)
-          .where(and(eq(schema.transDetail.vtype, "KB"), eq(schema.transDetail.vno, vno)));
-        await tx
-          .delete(schema.transMain)
-          .where(and(eq(schema.transMain.vtype, "KB"), eq(schema.transMain.vno, vno)));
+        await clearVoucher(tx, "KB", vno);
 
         if (canPostGl) {
           await tx.insert(schema.transMain).values({
@@ -454,12 +446,7 @@ async function saveKnotting(formData: FormData) {
         }
 
         const vno = nextLv;
-        await tx
-          .delete(schema.transDetail)
-          .where(and(eq(schema.transDetail.vtype, "KB"), eq(schema.transDetail.vno, vno)));
-        await tx
-          .delete(schema.transMain)
-          .where(and(eq(schema.transMain.vtype, "KB"), eq(schema.transMain.vno, vno)));
+        await clearVoucher(tx, "KB", vno);
 
         if (canPostGl) {
           await tx.insert(schema.transMain).values({
@@ -555,12 +542,7 @@ async function deleteKnotting(formData: FormData) {
 
   await db.transaction(async (tx) => {
     if (vno > 0) {
-      await tx
-        .delete(schema.transDetail)
-        .where(and(eq(schema.transDetail.vtype, "KB"), eq(schema.transDetail.vno, vno)));
-      await tx
-        .delete(schema.transMain)
-        .where(and(eq(schema.transMain.vtype, "KB"), eq(schema.transMain.vno, vno)));
+      await clearVoucher(tx, "KB", vno);
     }
     const oldLines = await tx
       .select({

@@ -9,6 +9,7 @@ import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -673,11 +674,7 @@ export default async function GodownStockPage({
     // Grey purchase GL posting (VTYPE GDN): DR grey-stock godown account, CR the
     // supplier (purchase party). Amount = net meter × purchase rate. Only for a
     // STOCK (purchase-in) voucher. Narration follows the mill's grey convention.
-    const [gdnCompany] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const glFyCode = gdnCompany?.currentFy ?? "";
+    const glFyCode = await fyCodeForDate(vDate);
     const glAccts = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
       .from(schema.chartOfAccounts)
@@ -706,8 +703,7 @@ export default async function GodownStockPage({
       // Always clear any prior GDN rows for this voucher, THEN re-post only if it
       // still qualifies — otherwise editing a posted voucher into a non-postable
       // state (Type≠STOCK, party cleared, netMeter≤0) would orphan stale GL rows.
-      await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "GDN"), eq(schema.transDetail.vno, vno)));
-      await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "GDN"), eq(schema.transMain.vno, vno)));
+      await clearVoucher(tx, "GDN", vno);
       if (!canPostGrey) return;
       await tx.insert(schema.transMain).values({
         fyCode: glFyCode, vtype: "GDN", vno, vdate: vDate, accCode: supplierCoa,
@@ -884,8 +880,7 @@ export default async function GodownStockPage({
       await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.stockId, id));
       await tx.delete(schema.extGodownStock).where(eq(schema.extGodownStock.id, id));
       if (delLv > 0) {
-        await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "GDN"), eq(schema.transDetail.vno, delLv)));
-        await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "GDN"), eq(schema.transMain.vno, delLv)));
+        await clearVoucher(tx, "GDN", delLv);
       }
     });
     revalidatePath("/external/grey/godown-stock");
