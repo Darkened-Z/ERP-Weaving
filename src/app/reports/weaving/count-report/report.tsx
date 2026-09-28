@@ -310,15 +310,15 @@ export async function CountsAccountsReport({
                           {pt}
                           <a
                             href={`/external/reports/grey-register/conv-ledger?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
-                            className="ml-4 text-[12px] font-normal no-print"
-                            style={{ color: "#93c5fd" }}
+                            className="ml-4 text-[13px] font-semibold no-print px-2 py-0.5 rounded"
+                            style={{ background: "#2563eb", color: "#fff" }}
                           >
                             Conv Lgr
                           </a>
                           <a
                             href={`/reports/yarn/sale-register?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
-                            className="ml-3 text-[12px] font-normal no-print"
-                            style={{ color: "#93c5fd" }}
+                            className="ml-2 text-[13px] font-semibold no-print px-2 py-0.5 rounded"
+                            style={{ background: "#059669", color: "#fff" }}
                           >
                             Yarn Reg
                           </a>
@@ -333,9 +333,9 @@ export async function CountsAccountsReport({
                       {prows.map((r) => (
                         <tr key={r.count} className="border-b border-[var(--border-light)]">
                           <td className="px-3 py-1.5">
-                            <span className="mono font-bold text-[15px]">{r.count}</span>
-                            <span className="ml-2">{r.desc || ""}</span>
-                            {r.blend ? <span className="ml-2 text-[var(--muted)]">{r.blend}</span> : null}
+                            <span className="mono text-[12px] text-[var(--muted)]">{r.count}</span>
+                            <span className="ml-2 font-bold">{r.desc || ""}</span>
+                            {r.blend ? <span className="ml-2 font-bold">{r.blend}</span> : null}
                           </td>
                           <td className="no-print whitespace-nowrap text-center">
                             <a href={bagsHref(r.party, r.count)} className="btn btn-outline btn-xs" title="Bags">B</a>
