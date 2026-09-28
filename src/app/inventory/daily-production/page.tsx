@@ -13,6 +13,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { SaveForm, type SaveError } from "@/components/save-form";
 import { db, schema } from "@/db";
 import { clearVoucher } from "@/lib/gl-post";
+import { inCurrentBeamCycle, recomputeBeamStatus, wovenThisCycle } from "@/lib/beam-cycle";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
@@ -197,28 +198,23 @@ export default async function DailyProductionPage({
 
   // Per-beam accumulated Rcvd/Mtr = Σ(totalCount + rejCount) across ALL saved production
   // (excluding the current voucher so the live client math can add this row's own numbers).
-  const accumRowsRaw = editing
-    ? await db
-        .select({
-          beamNo: schema.intDailyProductionSet.beamNo,
-          total: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0) + COALESCE(${schema.intDailyProductionSet.rejCount},0)),0)`,
-        })
-        .from(schema.intDailyProductionSet)
-        .where(
-          and(
-            isNotNull(schema.intDailyProductionSet.beamNo),
-            ne(schema.intDailyProductionSet.productionId, editing.id)
-          )
-        )
-        .groupBy(schema.intDailyProductionSet.beamNo)
-    : await db
-        .select({
-          beamNo: schema.intDailyProductionSet.beamNo,
-          total: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0) + COALESCE(${schema.intDailyProductionSet.rejCount},0)),0)`,
-        })
-        .from(schema.intDailyProductionSet)
-        .where(isNotNull(schema.intDailyProductionSet.beamNo))
-        .groupBy(schema.intDailyProductionSet.beamNo);
+  // Current cycle only (see lib/beam-cycle): a reused beam starts from zero.
+  const accumRowsRaw = await db
+    .select({
+      beamNo: schema.intDailyProductionSet.beamNo,
+      total: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0) + COALESCE(${schema.intDailyProductionSet.rejCount},0)),0)`,
+    })
+    .from(schema.intDailyProductionSet)
+    .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
+    .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
+    .where(
+      and(
+        isNotNull(schema.intDailyProductionSet.beamNo),
+        inCurrentBeamCycle,
+        editing ? ne(schema.intDailyProductionSet.productionId, editing.id) : undefined,
+      )
+    )
+    .groupBy(schema.intDailyProductionSet.beamNo);
 
   // Rcvd/Mtr opening balance = the Rcvd/Mtr the LAST saved voucher stamped on that
   // beam (owner), which the new voucher's own meters then build on. Rows come back
@@ -230,17 +226,15 @@ export default async function DailyProductionPage({
       rcvdMtr: schema.intDailyProductionSet.rcvdMtr,
     })
     .from(schema.intDailyProductionSet)
+    .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
+    .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
     .where(
-      editing
-        ? and(
-            isNotNull(schema.intDailyProductionSet.beamNo),
-            isNotNull(schema.intDailyProductionSet.rcvdMtr),
-            ne(schema.intDailyProductionSet.productionId, editing.id)
-          )
-        : and(
-            isNotNull(schema.intDailyProductionSet.beamNo),
-            isNotNull(schema.intDailyProductionSet.rcvdMtr)
-          )
+      and(
+        isNotNull(schema.intDailyProductionSet.beamNo),
+        isNotNull(schema.intDailyProductionSet.rcvdMtr),
+        inCurrentBeamCycle,
+        editing ? ne(schema.intDailyProductionSet.productionId, editing.id) : undefined,
+      )
     )
     .orderBy(schema.intDailyProductionSet.id);
 
@@ -946,6 +940,10 @@ export default async function DailyProductionPage({
             })
             .from(schema.intDailyProductionSet)
             .where(eq(schema.intDailyProductionSet.productionId, id));
+          const [oldHead] = await tx
+            .select({ vDate: schema.intDailyProduction.vDate })
+            .from(schema.intDailyProduction)
+            .where(eq(schema.intDailyProduction.id, id));
           const oldBeamStatus = new Map<string, string | null>();
           // Per-ROW delivery memory (serial + beam) — rows of one voucher share a
           // serial now, so a serial-only key would cross-mark the A/B/C thans.
@@ -1101,53 +1099,15 @@ export default async function DailyProductionPage({
               );
           }
 
-          // Beam lifecycle: apply this voucher's beam statuses, then revert
-          // beams the new grid dropped back to EMPTY (no history to restore to).
-          for (const s of validSets) {
-            if (!s.beamNo || !s.beamStatus) continue;
-            // L-ROLL is the LAST roll — the beam is finished, so it comes off the
-            // loom exactly like EMPTY and the loom is free for the next knotting.
-            // (F-ROLL / R-CUT / RE-KNOT are mid-run and keep the beam mounted.)
-            const done = ["EMPTY", "L-ROLL"].includes(s.beamStatus.toUpperCase());
-            const patch: { statusWrk: string; loomNo?: number | null } = {
-              statusWrk: done ? "EMPTY" : s.beamStatus,
-            };
-            if (done) patch.loomNo = null;
-            const [was] = done
-              ? await tx
-                  .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
-                  .from(schema.beams)
-                  .where(eq(schema.beams.beamNo, s.beamNo))
-                  .limit(1)
-              : [undefined];
-            await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
-            if (done && was?.shed && was.loomNo != null) {
-              await tx
-                .update(schema.looms)
-                .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-                .where(and(eq(schema.looms.loomNo, was.loomNo), eq(schema.looms.shed, was.shed)));
-            }
-          }
+          // Beam lifecycle: every beam this voucher touches now or touched
+          // before is re-derived from the latest production of its cycle, so
+          // re-saving an older voucher can't wind a beam back past a newer one,
+          // and a dropped beam falls back to its knotting mount only when no
+          // other production remains.
           const newBeams = new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b));
-          // Beams the new grid dropped: revert to the knotting mount (KNOTTING)
-          // when the beam still carries its knotting voucher — EMPTY only for
-          // beams that were never knotted. Prevents a deleted production voucher
-          // from un-mounting a beam that knotting mounted.
-          const droppedBeams = [...oldBeamStatus.keys()].filter((b) => !newBeams.has(b));
-          const droppedKnot = new Map<string, boolean>();
-          if (droppedBeams.length) {
-            const rows0 = await tx
-              .select({ beamNo: schema.beams.beamNo, knVno: schema.beams.knVno })
-              .from(schema.beams)
-              .where(sql`${schema.beams.beamNo} IN (${sql.join(droppedBeams.map((b) => sql`${b}`), sql`, `)})`);
-            for (const r of rows0) droppedKnot.set(r.beamNo, !!r.knVno);
-          }
-          for (const oldBeam of droppedBeams) {
-            const knotted = droppedKnot.get(oldBeam) ?? false;
-            await tx
-              .update(schema.beams)
-              .set(knotted ? { statusWrk: "KNOTTING" } : { statusWrk: "EMPTY", loomNo: null })
-              .where(eq(schema.beams.beamNo, oldBeam));
+          for (const b of new Set([...newBeams, ...oldBeamStatus.keys()])) {
+            const d = newBeams.has(b) ? header.vDate : (oldHead?.vDate ?? header.vDate);
+            await recomputeBeamStatus(tx, b, d);
           }
           // Auto "last roll → EMPTY": a beam whose cumulative woven meters reach
           // its total length is exhausted → force EMPTY + detach from loom.
@@ -1160,11 +1120,9 @@ export default async function DailyProductionPage({
               .where(eq(schema.beams.beamNo, beamNo))
               .limit(1);
             if (!b?.length || b.length <= 0 || b.statusWrk === "EMPTY") continue;
-            const [agg] = await tx
-              .select({ woven: sql<number>`COALESCE(SUM(${schema.intDailyProductionSet.totalCount}), 0)` })
-              .from(schema.intDailyProductionSet)
-              .where(eq(schema.intDailyProductionSet.beamNo, beamNo));
-            if ((agg?.woven ?? 0) >= b.length) {
+            // Current cycle only: a reused beam number carries earlier cycles'
+            // production, which would empty it on its first entry back.
+            if ((await wovenThisCycle(tx, beamNo)) >= b.length) {
               // Last roll: the beam is spent, so free the LOOM too — otherwise it
               // keeps pointing at an exhausted beam and never reads as available
               // for the next knotting.
@@ -1239,30 +1197,8 @@ export default async function DailyProductionPage({
               .insert(schema.intDailyProductionSet)
               .values(validSets.map((s) => ({ ...s, productionId: insertedId })));
           }
-          for (const s of validSets) {
-            if (!s.beamNo || !s.beamStatus) continue;
-            // L-ROLL is the LAST roll — the beam is finished, so it comes off the
-            // loom exactly like EMPTY and the loom is free for the next knotting.
-            // (F-ROLL / R-CUT / RE-KNOT are mid-run and keep the beam mounted.)
-            const done = ["EMPTY", "L-ROLL"].includes(s.beamStatus.toUpperCase());
-            const patch: { statusWrk: string; loomNo?: number | null } = {
-              statusWrk: done ? "EMPTY" : s.beamStatus,
-            };
-            if (done) patch.loomNo = null;
-            const [was] = done
-              ? await tx
-                  .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
-                  .from(schema.beams)
-                  .where(eq(schema.beams.beamNo, s.beamNo))
-                  .limit(1)
-              : [undefined];
-            await tx.update(schema.beams).set(patch).where(eq(schema.beams.beamNo, s.beamNo));
-            if (done && was?.shed && was.loomNo != null) {
-              await tx
-                .update(schema.looms)
-                .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-                .where(and(eq(schema.looms.loomNo, was.loomNo), eq(schema.looms.shed, was.shed)));
-            }
+          for (const b of new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b))) {
+            await recomputeBeamStatus(tx, b, header.vDate);
           }
           // Auto "last roll → EMPTY" (see update path for rationale). No-ops
           // until beam length is set.
@@ -1274,11 +1210,9 @@ export default async function DailyProductionPage({
               .where(eq(schema.beams.beamNo, beamNo))
               .limit(1);
             if (!b?.length || b.length <= 0 || b.statusWrk === "EMPTY") continue;
-            const [agg] = await tx
-              .select({ woven: sql<number>`COALESCE(SUM(${schema.intDailyProductionSet.totalCount}), 0)` })
-              .from(schema.intDailyProductionSet)
-              .where(eq(schema.intDailyProductionSet.beamNo, beamNo));
-            if ((agg?.woven ?? 0) >= b.length) {
+            // Current cycle only: a reused beam number carries earlier cycles'
+            // production, which would empty it on its first entry back.
+            if ((await wovenThisCycle(tx, beamNo)) >= b.length) {
               // Last roll: the beam is spent, so free the LOOM too — otherwise it
               // keeps pointing at an exhausted beam and never reads as available
               // for the next knotting.
@@ -1370,29 +1304,19 @@ export default async function DailyProductionPage({
         .select({ beamNo: schema.intDailyProductionSet.beamNo })
         .from(schema.intDailyProductionSet)
         .where(eq(schema.intDailyProductionSet.productionId, id));
-      // Deleting the voucher releases its beams, but a beam mounted by a knotting
-      // bill goes back to KNOTTING (not EMPTY) — the mount must survive.
-      const delBeams = oldSets.map((os) => os.beamNo).filter((b): b is string => !!b);
-      const delKnot = new Map<string, boolean>();
-      if (delBeams.length) {
-        const rows0 = await tx
-          .select({ beamNo: schema.beams.beamNo, knVno: schema.beams.knVno })
-          .from(schema.beams)
-          .where(sql`${schema.beams.beamNo} IN (${sql.join(delBeams.map((b) => sql`${b}`), sql`, `)})`);
-        for (const r of rows0) delKnot.set(r.beamNo, !!r.knVno);
-      }
-      for (const os of oldSets) {
-        if (!os.beamNo) continue;
-        const knotted = delKnot.get(os.beamNo) ?? false;
-        await tx
-          .update(schema.beams)
-          .set(knotted ? { statusWrk: "KNOTTING" } : { statusWrk: "EMPTY", loomNo: null })
-          .where(eq(schema.beams.beamNo, os.beamNo));
-      }
+      const [oldHead] = await tx
+        .select({ vDate: schema.intDailyProduction.vDate })
+        .from(schema.intDailyProduction)
+        .where(eq(schema.intDailyProduction.id, id));
       await clearVoucher(tx, "DP", id);
       await tx.delete(schema.intDailyProductionSet).where(eq(schema.intDailyProductionSet.productionId, id));
       await tx.delete(schema.intDailyProductionDetail).where(eq(schema.intDailyProductionDetail.productionId, id));
       await tx.delete(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));
+      // With this voucher gone, each of its beams takes the status of the
+      // latest production left in its cycle — or its knotting mount if none.
+      for (const b of new Set(oldSets.map((os) => os.beamNo).filter((b): b is string => !!b))) {
+        await recomputeBeamStatus(tx, b, oldHead?.vDate);
+      }
     });
     revalidatePath("/inventory/daily-production");
     redirect(`/inventory/daily-production`);

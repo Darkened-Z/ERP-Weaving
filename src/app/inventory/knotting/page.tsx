@@ -9,6 +9,7 @@ import { RowErase } from "@/components/production-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
+import { inCurrentBeamCycle } from "@/lib/beam-cycle";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
@@ -282,20 +283,36 @@ async function saveKnotting(formData: FormData) {
         .from(schema.intKnottingSarningLine)
         .where(eq(schema.intKnottingSarningLine.knottingId, id));
 
+      // Only undo what THIS bill still owns: a beam whose mount came from this
+      // bill and that production hasn't picked up yet. A beam already woven on
+      // (or re-knotted by a later bill) keeps its state and its loom.
+      const [billRow] = await tx
+        .select({ vNo: schema.intKnottingSarning.vNo })
+        .from(schema.intKnottingSarning)
+        .where(eq(schema.intKnottingSarning.id, id));
+      const billVNo = billRow?.vNo ?? null;
+      const ownedByBill = async (beamNo: string) => {
+        const [b] = await tx
+          .select({ statusWrk: schema.beams.statusWrk, knVno: schema.beams.knVno })
+          .from(schema.beams)
+          .where(eq(schema.beams.beamNo, beamNo))
+          .limit(1);
+        return !!b && b.knVno === billVNo && (b.statusWrk ?? "").toUpperCase() === "KNOTTING";
+      };
+
       for (const ol of oldLines) {
+        if (!ol.beamNo || !(await ownedByBill(ol.beamNo))) continue;
         const loomNo = ol.lmHash ? parseInt(ol.lmHash, 10) : NaN;
         if (Number.isFinite(loomNo) && ol.shdHash) {
           await tx
             .update(schema.looms)
             .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-            .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash)));
+            .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash), eq(schema.looms.currentBeam, ol.beamNo)));
         }
-        if (ol.beamNo) {
-          await tx
-            .update(schema.beams)
-            .set({ statusWrk: "LOADED", loomNo: null, knVno: null, knDate: null })
-            .where(eq(schema.beams.beamNo, ol.beamNo));
-        }
+        await tx
+          .update(schema.beams)
+          .set({ statusWrk: "LOADED", loomNo: null, knVno: null, knDate: null })
+          .where(eq(schema.beams.beamNo, ol.beamNo));
       }
 
       await tx
@@ -313,15 +330,18 @@ async function saveKnotting(formData: FormData) {
           .values(lines.map((l) => ({ ...l, knottingId: id })));
       }
 
-      // Mount each picked beam on its loom (LOADED → KNOTTING). Old lines were
-      // reversed above, so this re-applies the mount for the current lines.
-      const [billRow] = await tx
-        .select({ vNo: schema.intKnottingSarning.vNo })
-        .from(schema.intKnottingSarning)
-        .where(eq(schema.intKnottingSarning.id, id));
+      // Mount each picked beam on its loom (LOADED → KNOTTING). Beams this bill
+      // still owned were reversed above; anything not LOADED now is already
+      // past knotting (or belongs to another bill) and is left alone.
       for (const l of lines) {
         const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
         if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
+          const [cur] = await tx
+            .select({ statusWrk: schema.beams.statusWrk })
+            .from(schema.beams)
+            .where(eq(schema.beams.beamNo, l.beamNo))
+            .limit(1);
+          if ((cur?.statusWrk ?? "").toUpperCase() !== "LOADED") continue;
           await tx
             .update(schema.looms)
             .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -422,10 +442,18 @@ async function saveKnotting(formData: FormData) {
             .values(lines.map((l) => ({ ...l, knottingId: insertedId })));
         }
 
-        // Mount each picked beam on its loom (LOADED → KNOTTING).
+        // Mount each picked beam on its loom (LOADED → KNOTTING). A beam that
+        // isn't LOADED is already on a loom or empty; mounting it again would
+        // pull it out from under its current bill.
         for (const l of lines) {
           const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
           if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
+            const [cur] = await tx
+              .select({ statusWrk: schema.beams.statusWrk })
+              .from(schema.beams)
+              .where(eq(schema.beams.beamNo, l.beamNo))
+              .limit(1);
+            if ((cur?.statusWrk ?? "").toUpperCase() !== "LOADED") continue;
             await tx
               .update(schema.looms)
               .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -519,10 +547,11 @@ async function deleteKnotting(formData: FormData) {
   const id = intVal(formData.get("id"));
   if (id === null) return;
   const [existing] = await db
-    .select({ lvNo: schema.intKnottingSarning.lvNo })
+    .select({ lvNo: schema.intKnottingSarning.lvNo, vNo: schema.intKnottingSarning.vNo })
     .from(schema.intKnottingSarning)
     .where(eq(schema.intKnottingSarning.id, id));
   const vno = existing?.lvNo ?? 0;
+  const billVNo = existing?.vNo ?? null;
 
   const knLines = await db
     .select({ beamNo: schema.intKnottingSarningLine.beamNo })
@@ -530,10 +559,21 @@ async function deleteKnotting(formData: FormData) {
     .where(eq(schema.intKnottingSarningLine.knottingId, id));
   const knBeams = knLines.map((r) => r.beamNo).filter((b): b is string => !!b);
   if (knBeams.length) {
+    // Only production in the beam's CURRENT cycle, and only while this bill is
+    // still the beam's mount — a reused beam number otherwise blocks deleting
+    // any old bill forever.
     const usedInProd = await db
       .select({ beamNo: schema.intDailyProductionSet.beamNo })
       .from(schema.intDailyProductionSet)
-      .where(sql`${schema.intDailyProductionSet.beamNo} IN (${sql.join(knBeams.map((b) => sql`${b}`), sql`, `)})`)
+      .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
+      .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
+      .where(
+        and(
+          sql`${schema.intDailyProductionSet.beamNo} IN (${sql.join(knBeams.map((b) => sql`${b}`), sql`, `)})`,
+          eq(schema.beams.knVno, billVNo ?? ""),
+          inCurrentBeamCycle,
+        ),
+      )
       .limit(1);
     if (usedInProd.length > 0) {
       redirect(`/inventory/knotting?id=${id}&error=has_production`);
@@ -553,19 +593,26 @@ async function deleteKnotting(formData: FormData) {
       .from(schema.intKnottingSarningLine)
       .where(eq(schema.intKnottingSarningLine.knottingId, id));
     for (const ol of oldLines) {
+      if (!ol.beamNo) continue;
+      // Leave beams this bill no longer owns (re-knotted by a later bill, or
+      // woven out and received again) exactly as they are.
+      const [b] = await tx
+        .select({ knVno: schema.beams.knVno, statusWrk: schema.beams.statusWrk })
+        .from(schema.beams)
+        .where(eq(schema.beams.beamNo, ol.beamNo))
+        .limit(1);
+      if (!b || b.knVno !== billVNo || (b.statusWrk ?? "").toUpperCase() !== "KNOTTING") continue;
       const loomNo = ol.lmHash ? parseInt(ol.lmHash, 10) : NaN;
       if (Number.isFinite(loomNo) && ol.shdHash) {
         await tx
           .update(schema.looms)
           .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-          .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash)));
+          .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash), eq(schema.looms.currentBeam, ol.beamNo)));
       }
-      if (ol.beamNo) {
-        await tx
-          .update(schema.beams)
-          .set({ statusWrk: "LOADED", loomNo: null, knVno: null, knDate: null })
-          .where(eq(schema.beams.beamNo, ol.beamNo));
-      }
+      await tx
+        .update(schema.beams)
+        .set({ statusWrk: "LOADED", loomNo: null, knVno: null, knDate: null })
+        .where(eq(schema.beams.beamNo, ol.beamNo));
     }
     await tx
       .delete(schema.intKnottingSarningLine)
@@ -598,6 +645,8 @@ async function deleteBillKnotting(formData: FormData) {
 
 async function mountBeam(formData: FormData) {
   "use server";
+  const session = await getSession();
+  if (!session) redirect("/login");
   const lineId = intVal(formData.get("mount_line_id"));
   if (lineId === null) return;
   const rows = await db
@@ -619,6 +668,17 @@ async function mountBeam(formData: FormData) {
   const loomNo = line.lmHash ? parseInt(line.lmHash, 10) : NaN;
   if (!line.beamNo || !Number.isFinite(loomNo) || !line.shdHash) {
     redirect(`/inventory/knotting?id=${row.knottingId}&error=loom_required`);
+  }
+  // Mount only a beam that is waiting to be knotted, or re-mount one this same
+  // bill already holds — never pull a beam off production or another bill.
+  const [cur] = await db
+    .select({ statusWrk: schema.beams.statusWrk, knVno: schema.beams.knVno })
+    .from(schema.beams)
+    .where(eq(schema.beams.beamNo, line.beamNo!))
+    .limit(1);
+  const st = (cur?.statusWrk ?? "").toUpperCase();
+  if (!cur || !(st === "LOADED" || (st === "KNOTTING" && cur.knVno === row.vNo))) {
+    redirect(`/inventory/knotting?id=${row.knottingId}&error=beam_not_loaded`);
   }
   await db.transaction(async (tx) => {
     await tx
@@ -684,7 +744,13 @@ export default async function KnottingPage({
         .orderBy(desc(schema.intKnottingSarning.id))
         .limit(200);
 
-  const selected = isEditing ? bills.find((b) => b.id === idParam) ?? null : null;
+  // The list only carries the latest 200; an older bill opened by ?id= is
+  // fetched on its own rather than silently opening nothing.
+  const selected = isEditing
+    ? bills.find((b) => b.id === idParam) ??
+      (await db.select().from(schema.intKnottingSarning).where(eq(schema.intKnottingSarning.id, idParam)).limit(1))[0] ??
+      null
+    : null;
   const formBill = isAdding ? null : selected;
 
   const lines = formBill
@@ -950,6 +1016,11 @@ export default async function KnottingPage({
         {params.error === "admin_only" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Only ADMIN can delete vouchers.
+          </div>
+        )}
+        {params.error === "beam_not_loaded" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Cannot mount — the beam is not LOADED (it is empty, in production, or on another bill).
           </div>
         )}
         {params.error === "has_production" && (
