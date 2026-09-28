@@ -282,20 +282,20 @@ export default async function GreyRegisterConvLedgerPage({
         </form>
 
         <div className="card overflow-x-auto">
-          <table style={{ minWidth: 1150 }}>
+          <table className="sm:min-w-[1150px]">
             <thead>
               <tr>
-                <th style={{ width: 90 }}>Date</th>
-                <th style={{ width: 90 }}>V.#</th>
-                <th style={{ width: 80 }}>Conv Cont #</th>
-                <th style={{ width: 80 }}>Sale Cont #</th>
+                <th style={{ width: 80 }}>Date</th>
+                <th style={{ width: 80 }}>V.#</th>
+                <th className="hidden sm:table-cell" style={{ width: 80 }}>Conv Cont #</th>
+                <th className="hidden sm:table-cell" style={{ width: 80 }}>Sale Cont #</th>
                 <th>Narration</th>
-                <th className="text-right" style={{ width: 60 }}>Than</th>
-                <th className="text-right" style={{ width: 80 }}>Mtr</th>
-                <th className="text-right" style={{ width: 75 }}>Conv. Rate</th>
-                <th className="text-right" style={{ width: 100 }}>Dr</th>
-                <th className="text-right" style={{ width: 100 }}>Cr</th>
-                <th className="text-right" style={{ width: 110 }}>Balance</th>
+                <th className="hidden sm:table-cell text-right" style={{ width: 60 }}>Than</th>
+                <th className="text-right" style={{ width: 70 }}>Mtr</th>
+                <th className="hidden sm:table-cell text-right" style={{ width: 70 }}>Conv. Rate</th>
+                <th className="text-right" style={{ width: 90 }}>Dr</th>
+                <th className="text-right" style={{ width: 90 }}>Cr</th>
+                <th className="text-right" style={{ width: 100 }}>Balance</th>
               </tr>
             </thead>
             <tbody>
@@ -308,17 +308,17 @@ export default async function GreyRegisterConvLedgerPage({
               ) : (
                 rows.map((r, i) => (
                   <tr key={`${r.vno}-${i}`}>
-                    <td className="mono text-[12px]">{r.date}</td>
-                    <td className="mono text-[12px] font-bold">{r.vno}</td>
-                    <td className="mono text-[12px]">{r.convCont}</td>
-                    <td className="mono text-[12px]">{r.saleCont}</td>
-                    <td className="text-[12px]">{r.narration}</td>
-                    <td className="mono text-right">{r.than ? fmt(r.than) : ""}</td>
-                    <td className="mono text-right">{r.mtr ? fmt(r.mtr) : ""}</td>
-                    <td className="mono text-right">{r.rate ? fmt2(r.rate) : ""}</td>
-                    <td className="mono text-right">{r.dr ? fmt(r.dr) : ""}</td>
-                    <td className="mono text-right">{r.cr ? fmt(r.cr) : ""}</td>
-                    <td className="mono text-right font-semibold">
+                    <td className="mono text-[11px] sm:text-[12px]">{r.date}</td>
+                    <td className="mono text-[11px] sm:text-[12px] font-bold">{r.vno}</td>
+                    <td className="hidden sm:table-cell mono text-[12px]">{r.convCont}</td>
+                    <td className="hidden sm:table-cell mono text-[12px]">{r.saleCont}</td>
+                    <td className="text-[11px] sm:text-[12px] max-w-[120px] sm:max-w-none truncate">{r.narration}</td>
+                    <td className="hidden sm:table-cell mono text-right">{r.than ? fmt(r.than) : ""}</td>
+                    <td className="mono text-right text-[11px] sm:text-[13px]">{r.mtr ? fmt(r.mtr) : ""}</td>
+                    <td className="hidden sm:table-cell mono text-right">{r.rate ? fmt2(r.rate) : ""}</td>
+                    <td className="mono text-right text-[11px] sm:text-[13px]">{r.dr ? fmt(r.dr) : ""}</td>
+                    <td className="mono text-right text-[11px] sm:text-[13px]">{r.cr ? fmt(r.cr) : ""}</td>
+                    <td className="mono text-right font-semibold text-[11px] sm:text-[13px]">
                       {fmt(Math.abs(r.balance))}{" "}
                       <span className="text-[10px] text-[var(--muted)]">{r.balance >= 0 ? "Dr" : "Cr"}</span>
                     </td>
@@ -329,12 +329,15 @@ export default async function GreyRegisterConvLedgerPage({
             {rows.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-black">
-                  <td colSpan={5} className="font-bold text-[12px] uppercase tracking-[0.05em]">
-                    Closing Balance ({to})
+                  <td colSpan={2} className="font-bold text-[11px] sm:text-[12px] uppercase tracking-[0.05em]">
+                    Closing ({to})
                   </td>
-                  <td className="mono text-right font-bold">{fmt(total.than)}</td>
-                  <td className="mono text-right font-bold">{fmt(total.mtr)}</td>
+                  <td className="hidden sm:table-cell" />
+                  <td className="hidden sm:table-cell" />
                   <td />
+                  <td className="hidden sm:table-cell mono text-right font-bold">{fmt(total.than)}</td>
+                  <td className="mono text-right font-bold">{fmt(total.mtr)}</td>
+                  <td className="hidden sm:table-cell" />
                   <td className="mono text-right font-bold">{fmt(total.dr)}</td>
                   <td className="mono text-right font-bold">{fmt(total.cr)}</td>
                   <td className="mono text-right font-bold">

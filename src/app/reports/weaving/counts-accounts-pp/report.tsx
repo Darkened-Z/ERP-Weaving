@@ -339,8 +339,14 @@ export async function CountsAccountsPartyWiseReport({
 
             {/* SUMMERY REPORT — what went out, what the cloth ate, what is left. */}
             <div className="border-2 border-black">
-              <div className="bg-[var(--accent)] text-white px-3 py-1.5 text-[12px] uppercase tracking-[0.1em] font-semibold">
-                Summary Report{partyQ ? ` — ${partyQ}` : ""}
+              <div className="bg-[var(--accent)] text-white px-3 py-1.5 text-[12px] uppercase tracking-[0.1em] font-semibold flex items-center justify-between">
+                <span>Summary Report{partyQ ? ` — ${partyQ}` : ""}</span>
+                {partyQ && (
+                  <span className="flex gap-2 no-print">
+                    <a href={`/external/reports/yarn-register?party=${encodeURIComponent(partyQ)}&from=${from}&to=${to}`} target="_blank" rel="noopener" className="text-[10px] bg-white text-black px-2 py-0.5 rounded normal-case tracking-normal font-medium hover:bg-gray-200">Yarn Register</a>
+                    <a href={`/external/reports/grey-register/conv-ledger?party=${encodeURIComponent(partyQ)}&from=${from}&to=${to}`} target="_blank" rel="noopener" className="text-[10px] bg-white text-black px-2 py-0.5 rounded normal-case tracking-normal font-medium hover:bg-gray-200">Conv Register</a>
+                  </span>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="mono text-[12px] w-full">
