@@ -275,24 +275,22 @@ export async function CountsAccountsReport({
         </form>
 
         <div className="overflow-x-auto">
-          <table>
+          <table className="w-full text-[15px]" style={{ minWidth: 780 }}>
             <thead>
               <tr>
-                <th>Count</th>
-                <th>Blend</th>
-                <th className="text-right">Total Lbs</th>
-                <th className="text-right">Bags</th>
-                <th className="text-right">Consumed Lbs</th>
-                <th className="text-right">Bal Lbs</th>
-                <th className="text-right">Rate</th>
-                <th className="text-right">Amount</th>
-                <th className="no-print"></th>
+                <th className="text-left">Count Desc</th>
+                <th className="no-print" style={{ width: 60 }}></th>
+                <th className="text-right" style={{ width: 110 }}>Total Lbs</th>
+                <th className="text-right" style={{ width: 90 }}>Bages</th>
+                <th className="text-right" style={{ width: 110 }}>Bal Lbs</th>
+                <th className="text-right" style={{ width: 80 }}>Rate</th>
+                <th className="text-right" style={{ width: 120 }}>Amount</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-[var(--muted)] py-8">
+                  <td colSpan={7} className="text-center text-[var(--muted)] py-8">
                     {partyScope !== "activity" && (scopedParties?.size ?? 0) === 0
                       ? "No parties found in Party Counts. Add a party with counts in the Party Count form first."
                       : "No count activity in period"}
@@ -306,78 +304,60 @@ export async function CountsAccountsReport({
                   );
                   return (
                     <tr key={pt} className="contents">
-                      <td colSpan={9} className="p-0">
-                        <table className="w-full">
+                      <td colSpan={7} className="p-0">
+                        <table className="w-full text-[15px]">
                           <tbody>
                             <tr style={{ background: "#0f172a", color: "white" }}>
-                              <td className="font-bold text-[13px] px-2 py-1" colSpan={9}>
-                                {pt} <span className="opacity-70">· {prows.length}</span>
-                                {/* The whole party's yarn movement, every count at
-                                    once — the register the mill reads per party. */}
-                                <a
-                                  href={`/reports/yarn/sale-register?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
-                                  className="ml-3 underline text-[11px] font-normal no-print"
-                                  style={{ color: "#93c5fd" }}
-                                  title="Open this party's yarn register — purchases in, sales out, all counts"
-                                >
-                                  Yarn Register
-                                </a>
+                              <td className="font-bold text-[16px] px-3 py-2" colSpan={7}>
+                                {pt}
                                 <a
                                   href={`/external/reports/grey-register/conv-ledger?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
-                                  className="ml-3 underline text-[11px] font-normal no-print"
+                                  className="ml-4 text-[12px] font-normal no-print"
                                   style={{ color: "#93c5fd" }}
-                                  title="Conversion ledger — parchis, finance, balance"
                                 >
-                                  Conversion Register
+                                  Conv Lgr
                                 </a>
+                                <a
+                                  href={`/reports/yarn/sale-register?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
+                                  className="ml-3 text-[12px] font-normal no-print"
+                                  style={{ color: "#93c5fd" }}
+                                >
+                                  Yarn Reg
+                                </a>
+                                <span className="ml-4 text-[18px] font-bold">{prows.length}</span>
+                                <span className="float-right mono">{fmt(sub.amount)}</span>
+                                <span className="float-right mono mr-6">{fmt(sub.balLbs)}</span>
+                                <span className="float-right mono mr-6">{fmt(sub.bags)}</span>
+                                <span className="float-right mono mr-6">{fmt(sub.totalLbs)}</span>
                               </td>
                             </tr>
                             {prows.map((r) => (
-                              <tr key={r.count}>
-                                <td className="text-[13px]"><span className="mono font-bold">{r.count}</span> — {r.desc || r.count}</td>
-                                <td className="text-[12px] text-[var(--muted)]">{r.blend || "-"}</td>
-                                <td className="mono text-right">{fmt(r.totalLbs)}</td>
-                                <td className="mono text-right">
+                              <tr key={r.count} className="border-b border-[var(--border-light)]">
+                                <td className="px-3 py-1.5">
+                                  <span className="mono font-bold text-[15px]">{r.count}</span>
+                                  <span className="ml-2">{r.desc || ""}</span>
+                                  {r.blend ? <span className="ml-2 text-[var(--muted)]">{r.blend}</span> : null}
+                                </td>
+                                <td className="no-print whitespace-nowrap text-center">
+                                  <a href={bagsHref(r.party, r.count)} className="btn btn-outline btn-xs" title="Bags">B</a>
+                                  <a href={ledgerHref(r.party, r.count)} className="btn btn-outline btn-xs ml-0.5" title="Ledger">L</a>
+                                </td>
+                                <td className="mono text-right px-2">{fmt(r.totalLbs)}</td>
+                                <td className="mono text-right px-2">
                                   {r.bags !== 0 ? (
-                                    <a
-                                      href={bagsHref(r.party, r.count)}
-                                      className="underline"
-                                      title="Open the bags detail — purchases in, sales out"
-                                    >
-                                      {fmt(r.bags)}
-                                    </a>
-                                  ) : (
-                                    fmt(r.bags)
-                                  )}
+                                    <a href={bagsHref(r.party, r.count)} className="underline" title="Bags detail">{fmt(r.bags)}</a>
+                                  ) : fmt(r.bags)}
                                 </td>
-                                <td className="mono text-right">{fmt(r.consumedLbs)}</td>
-                                <td className="mono text-right font-bold">{fmt(r.balLbs)}</td>
-                                <td className="mono text-right">{fmt2(r.rate)}</td>
-                                <td className="mono text-right">{fmt(r.amount)}</td>
-                                {/* L opens the count ledger; B opens the bags —
-                                    the purchase and sale vouchers behind them. */}
-                                <td className="no-print whitespace-nowrap">
-                                  <a
-                                    href={ledgerHref(r.party, r.count)}
-                                    className="btn btn-outline btn-xs"
-                                    title="Ledger — packi parchis, ends, summary"
-                                  >
-                                    L
-                                  </a>
-                                  <a
-                                    href={bagsHref(r.party, r.count)}
-                                    className="btn btn-outline btn-xs ml-1"
-                                    title="Bags — the yarn purchase and sale vouchers for this count"
-                                  >
-                                    B
-                                  </a>
-                                </td>
+                                <td className="mono text-right px-2 font-bold">{fmt(r.balLbs)}</td>
+                                <td className="mono text-right px-2">{fmt2(r.rate)}</td>
+                                <td className="mono text-right px-2">{fmt(r.amount)}</td>
                               </tr>
                             ))}
                             <tr style={{ borderTop: "1px solid #cbd5e1", fontWeight: 700 }}>
-                              <td className="text-right pr-2" colSpan={2}>Party Total</td>
-                              <td className="mono text-right">{fmt(sub.totalLbs)}</td>
-                              <td className="mono text-right">
+                              <td className="px-3">Party Total</td>
+                              <td className="no-print"></td>
+                              <td className="mono text-right px-2">{fmt(sub.totalLbs)}</td>
+                              <td className="mono text-right px-2">
                                 {sub.bags !== 0 ? (
                                   <a
                                     href={`/reports/yarn/sale-register?party=${encodeURIComponent(pt)}&from=${from}&to=${to}`}
@@ -390,11 +370,9 @@ export async function CountsAccountsReport({
                                   fmt(sub.bags)
                                 )}
                               </td>
-                              <td className="mono text-right">{fmt(sub.consumedLbs)}</td>
-                              <td className="mono text-right">{fmt(sub.balLbs)}</td>
+                              <td className="mono text-right px-2">{fmt(sub.balLbs)}</td>
                               <td></td>
-                              <td className="mono text-right">{fmt(sub.amount)}</td>
-                              <td className="no-print"></td>
+                              <td className="mono text-right px-2">{fmt(sub.amount)}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -407,14 +385,13 @@ export async function CountsAccountsReport({
             {rows.length > 0 && (
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
-                  <td className="text-right pr-2" colSpan={2}>Grand Total</td>
-                  <td className="mono text-right">{fmt(grand.totalLbs)}</td>
-                  <td className="mono text-right">{fmt(grand.bags)}</td>
-                  <td className="mono text-right">{fmt(grand.consumedLbs)}</td>
-                  <td className="mono text-right">{fmt(grand.balLbs)}</td>
-                  <td></td>
-                  <td className="mono text-right">{fmt(grand.amount)}</td>
+                  <td className="px-3">Grand Total</td>
                   <td className="no-print"></td>
+                  <td className="mono text-right px-2">{fmt(grand.totalLbs)}</td>
+                  <td className="mono text-right px-2">{fmt(grand.bags)}</td>
+                  <td className="mono text-right px-2">{fmt(grand.balLbs)}</td>
+                  <td></td>
+                  <td className="mono text-right px-2">{fmt(grand.amount)}</td>
                 </tr>
               </tfoot>
             )}
