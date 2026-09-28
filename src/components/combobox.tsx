@@ -98,6 +98,7 @@ export function Combobox({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hiddenRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
   const display = typed !== null ? typed : val ? labelFor(val) : "";
@@ -128,6 +129,13 @@ export function Combobox({
     mirrorDesc(val);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (open && listRef.current) {
+      const t = setTimeout(() => listRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 350);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
 
   const choose = (o: Opt) => {
     setVal(o.value);
@@ -227,6 +235,7 @@ export function Combobox({
       </span>
       {open && (
         <div
+          ref={listRef}
           className="absolute z-30 left-0 mt-0.5 max-h-56 overflow-y-auto bg-white border border-[var(--border)] shadow-lg"
           style={{ minWidth: "100%", width: "max-content", maxWidth: "min(500px, 90vw)" }}
           role="listbox"
