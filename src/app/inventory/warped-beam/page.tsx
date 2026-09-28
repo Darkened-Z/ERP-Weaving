@@ -1086,7 +1086,7 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 70 }} className="text-right">Width</th>
                         <th style={{ width: 70 }} className="text-right">Ends</th>
                         <th style={{ width: 70 }} className="text-right">Rate</th>
-                        <th style={{ width: 70 }} className="text-right">Conv</th>
+                        <th style={{ width: 70 }} className="text-right">Rate/Mtr</th>
                         <th style={{ width: 90 }} className="text-right">Amount</th>
                         <th style={{ width: 80 }}>GP NO</th>
                         <th style={{ width: 40 }}>Upd</th>
