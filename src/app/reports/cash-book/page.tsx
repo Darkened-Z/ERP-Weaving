@@ -11,7 +11,8 @@ import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
-const yearStart = () => `${new Date().getFullYear()}-01-01`;
+// Karachi-local year, same as the ledger: the server clock is UTC.
+const yearStart = () => `${today().slice(0, 4)}-01-01`;
 
 export default async function CashBookPage({
   searchParams,

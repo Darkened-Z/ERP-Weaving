@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DateBox } from "@/components/date-box";
+import { today } from "@/lib/time";
 
 type Line = {
   accCode: string;
@@ -16,8 +17,9 @@ type Account = { code: string; description: string };
 
 export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
   const router = useRouter();
-  const [vtype, setVtype] = useState("JV");
-  const [vdate, setVdate] = useState(new Date().toISOString().split("T")[0]);
+  // Only journals come through here. Cash/bank/petty vouchers need a header
+  // account and contra legs, which their own screens build.
+  const vtype = "JV";
   const [narration, setNarration] = useState("");
   const [lines, setLines] = useState<Line[]>([
     { accCode: "", narration: "", debit: "", credit: "" },
@@ -55,6 +57,12 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    // DateBox keeps its value in a hidden input, so read it off the form.
+    const vdate = String(new FormData(e.currentTarget as HTMLFormElement).get("v_date") ?? "");
+    if (!vdate) {
+      setError("Enter a valid date.");
+      return;
+    }
 
     const validLines = lines.filter((l) => l.accCode && (parseFloat(l.debit) || parseFloat(l.credit)));
     if (validLines.length < 2) {
@@ -168,23 +176,14 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 gform">
                 <div>
                   <label className="label block mb-2">Voucher Type</label>
-                  <select
-                    value={vtype}
-                    onChange={(e) => setVtype(e.target.value)}
-                    className="input-box mono"
-                  >
-                    <option value="JV">JV - Journal Voucher</option>
-                    <option value="CR">CR - Cash Receipt</option>
-                    <option value="CP">CP - Cash Payment</option>
-                    <option value="BR">BR - Bank Receipt</option>
-                    <option value="BP">BP - Bank Payment</option>
-                    <option value="PR">PR - Petty Cash Receipt</option>
-                    <option value="PC">PC - Petty Cash Payment</option>
-                  </select>
+                  <div className="input-box mono">JV - Journal Voucher</div>
+                  <p className="text-[11px] text-[var(--muted)] mt-1">
+                    Cash, bank and petty-cash vouchers are entered on their own screens under Finance.
+                  </p>
                 </div>
                 <div>
                   <label className="label block mb-2">Date</label>
-                  <DateBox className="input-box mono" />
+                  <DateBox name="v_date" defaultValue={today()} className="input-box mono" required />
                 </div>
                 <div>
                   <label className="label block mb-2">Narration</label>

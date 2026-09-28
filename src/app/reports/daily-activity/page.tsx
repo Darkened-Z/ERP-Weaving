@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { today } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
 
@@ -31,16 +31,21 @@ export default async function DailyActivityPage({
           vtype: schema.transDetail.vtype,
           vno: schema.transDetail.vno,
           fyCode: schema.transDetail.fyCode,
-          totalDebit: sql<number>`sum(debit)`,
-          totalCredit: sql<number>`sum(credit)`,
+          totalDebit: sql<number>`sum(${schema.transDetail.debit})`,
+          totalCredit: sql<number>`sum(${schema.transDetail.credit})`,
         })
         .from(schema.transDetail)
-        .where(
-          eq(
-            schema.transDetail.fyCode,
-            vouchers[0].fyCode
-          )
+        // Join on the full key and filter by date: a day's vouchers can come
+        // from more than one FY (back-dated LV-numbered postings).
+        .innerJoin(
+          schema.transMain,
+          and(
+            eq(schema.transDetail.fyCode, schema.transMain.fyCode),
+            eq(schema.transDetail.vtype, schema.transMain.vtype),
+            eq(schema.transDetail.vno, schema.transMain.vno),
+          ),
         )
+        .where(eq(schema.transMain.vdate, date))
         .groupBy(schema.transDetail.fyCode, schema.transDetail.vtype, schema.transDetail.vno)
     : [];
 

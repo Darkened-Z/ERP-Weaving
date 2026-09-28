@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ImageLinks } from "@/components/image-links";
 import { Combobox } from "@/components/combobox";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
@@ -316,19 +317,7 @@ export default async function LedgerPage({
                       </td>
                       <td className="text-[var(--muted)]">{entry.narration}</td>
                       <td className="text-center no-print">
-                        {entry.img ? (
-                          <a
-                            href={entry.img}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[11px] underline"
-                            title="Open this voucher's image"
-                          >
-                            Img
-                          </a>
-                        ) : (
-                          <span className="text-[11px] text-[var(--muted)]">—</span>
-                        )}
+                        <ImageLinks value={entry.img} />
                       </td>
                       <td className="text-[11px] no-print">
                         {(entry.splitCount ?? 0) > 1 ? (

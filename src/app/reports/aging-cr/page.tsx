@@ -57,9 +57,9 @@ export default async function AgingCreditorsPage({
     accounts
       .filter(
         (a) =>
-          a.codeHead === "3" &&
-          (a.level ?? 0) >= 4 &&
-          (a.code ?? "").startsWith("3.04"),
+          // Party ledgers sit at level 5 under CREDITORS (3.03).
+          (a.level ?? 0) >= 5 &&
+          (a.code ?? "").startsWith("3.03."),
       )
       .map((a) => [a.code, a]),
   );

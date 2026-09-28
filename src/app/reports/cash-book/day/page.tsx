@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { ImageLinks } from "@/components/image-links";
 import { PrintButton } from "@/components/print-button";
 import { DateBox } from "@/components/date-box";
 import { acc } from "@/lib/gl-accounts";
@@ -259,13 +260,7 @@ export default async function CashBookDayPage({
                           <td className="text-[12px]">{r.desc}</td>
                           <td className="text-[12px]">{(r.narration ?? "").trim()}</td>
                           <td className="text-center no-print">
-                            {r.img ? (
-                              <a href={r.img} target="_blank" rel="noreferrer" className="text-[11px] underline">
-                                Im
-                              </a>
-                            ) : (
-                              <span className="text-[11px] text-[var(--muted)]">—</span>
-                            )}
+                            <ImageLinks value={r.img} label="Im" />
                           </td>
                           <td className="mono text-right">{fmt(r.amount)}</td>
                         </tr>
