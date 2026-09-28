@@ -794,6 +794,55 @@ export default async function YarnSaleVoucherPage({
       }
     }
 
+    // Lines without a batch draw on the count as a whole: purchases of that
+    // count less every other sale of it (batched or not).
+    {
+      const wanted = new Map<string, number>();
+      for (const l of validLines) {
+        if (l.batchNo || !l.count) continue;
+        wanted.set(l.count, (wanted.get(l.count) ?? 0) + (l.lbs ?? 0));
+      }
+      if (wanted.size) {
+        const keys = Array.from(wanted.keys());
+        const purRows = await db
+          .select({
+            count: schema.extYarnPurVoucherLine.count,
+            lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
+          })
+          .from(schema.extYarnPurVoucherLine)
+          .where(inArray(schema.extYarnPurVoucherLine.count, keys))
+          .groupBy(schema.extYarnPurVoucherLine.count);
+        const saleRows = await db
+          .select({
+            count: schema.extYarnSalVoucherLine.count,
+            lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
+          })
+          .from(schema.extYarnSalVoucherLine)
+          .where(
+            Number.isFinite(id) && id > 0
+              ? and(inArray(schema.extYarnSalVoucherLine.count, keys), ne(schema.extYarnSalVoucherLine.voucherId, id))
+              : inArray(schema.extYarnSalVoucherLine.count, keys),
+          )
+          .groupBy(schema.extYarnSalVoucherLine.count);
+        const purBy = new Map(purRows.map((r) => [r.count ?? "", r.lbs]));
+        const soldBy = new Map(saleRows.map((r) => [r.count ?? "", r.lbs]));
+        // Batched lines on THIS voucher also come out of the count.
+        for (const l of validLines) {
+          if (l.batchNo && l.count) soldBy.set(l.count, (soldBy.get(l.count) ?? 0) + (l.lbs ?? 0));
+        }
+        for (const [count, want] of wanted) {
+          const avail = round2((purBy.get(count) ?? 0) - (soldBy.get(count) ?? 0));
+          if (want > avail + 0.01) {
+            redirect(
+              `/external/yarn/sale?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}` +
+                `error=over_stock&batch=${encodeURIComponent(`count ${count}`)}` +
+                `&avail=${avail}&want=${round2(want)}`,
+            );
+          }
+        }
+      }
+    }
+
     const nowIso = new Date().toISOString();
 
     const fyCode = await fyCodeForDate(vDate);
@@ -1066,7 +1115,7 @@ export default async function YarnSaleVoucherPage({
 
   async function setOk(formData: FormData) {
     "use server";
-  await requireAdmin("/external/yarn/sale");
+    await requireAdmin("/external/yarn/sale");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db
@@ -1081,7 +1130,7 @@ export default async function YarnSaleVoucherPage({
 
   async function clearOk(formData: FormData) {
     "use server";
-  await requireAdmin("/external/yarn/sale");
+    await requireAdmin("/external/yarn/sale");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db

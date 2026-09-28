@@ -58,7 +58,7 @@ export default async function DoPartiesPage({
 
   async function remove(formData: FormData) {
     "use server";
-  await requireAdmin("/define/do-parties");
+    await requireAdmin("/define/do-parties");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = parseInt(id);

@@ -59,7 +59,7 @@ export default async function WeaversPage({
 
   async function remove(formData: FormData) {
     "use server";
-  await requireAdmin("/define/weavers");
+    await requireAdmin("/define/weavers");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = parseInt(id);

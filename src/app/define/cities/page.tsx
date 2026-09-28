@@ -48,7 +48,7 @@ export default async function CitiesPage({
 
   async function deleteCity(formData: FormData) {
     "use server";
-  await requireAdmin("/define/cities");
+    await requireAdmin("/define/cities");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = Number(id);

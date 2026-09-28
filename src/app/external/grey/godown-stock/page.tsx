@@ -601,6 +601,10 @@ export default async function GodownStockPage({
     const profitPerMtr = hasBothRates ? Math.round((saleRateVal - rateVal) * 100) / 100 : null;
     const profitAmt = hasBothRates ? Math.round(netMeter * (saleRateVal - rateVal)) : null;
 
+    // The form has no than/meter grid; lines on older vouchers came over from
+    // the Oracle data. When no line fields are posted, existing lines are left
+    // as they are instead of being read as "every line removed".
+    const linesPosted = formData.has("line_than") || formData.has("line_mtr") || formData.has("line_status");
     const lineThans = formData.getAll("line_than") as string[];
     const lineMtrs = formData.getAll("line_mtr") as string[];
     const lineStatuses = formData.getAll("line_status") as string[];
@@ -727,7 +731,7 @@ export default async function GodownStockPage({
       const existingBySr = new Map(existingLines.map((l) => [l.srNo, l]));
 
       const consumedRemovedSr: number[] = [];
-      for (const old of existingLines) {
+      for (const old of linesPosted ? existingLines : []) {
         const match = validLines.find((v) => v.srNo === old.srNo);
         if (!match && old.status === "Y") consumedRemovedSr.push(old.srNo ?? 0);
       }
@@ -754,6 +758,7 @@ export default async function GodownStockPage({
         await tx.delete(schema.extGodownStockCount).where(eq(schema.extGodownStockCount.stockId, id));
 
         const seenSr = new Set<number>();
+        if (linesPosted) {
         for (const line of validLines) {
           seenSr.add(line.srNo);
           const prev = existingBySr.get(line.srNo);
@@ -775,6 +780,7 @@ export default async function GodownStockPage({
           if (!seenSr.has(old.srNo ?? -1) && old.status !== "Y") {
             await tx.delete(schema.extGodownStockLine).where(eq(schema.extGodownStockLine.id, old.id));
           }
+        }
         }
         if (validCounts.length) {
           await tx.insert(schema.extGodownStockCount).values(validCounts.map((c) => ({ ...c, stockId: id })));
@@ -889,7 +895,7 @@ export default async function GodownStockPage({
 
   async function setStatusOk(formData: FormData) {
     "use server";
-  await requireAdmin("/external/grey/godown-stock");
+    await requireAdmin("/external/grey/godown-stock");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id) || id <= 0) return;
     await db
@@ -902,7 +908,7 @@ export default async function GodownStockPage({
 
   async function clearStatusOk(formData: FormData) {
     "use server";
-  await requireAdmin("/external/grey/godown-stock");
+    await requireAdmin("/external/grey/godown-stock");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id) || id <= 0) return;
     await db

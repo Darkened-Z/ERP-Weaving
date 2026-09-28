@@ -110,7 +110,7 @@ export default async function LoomsPage({
 
   async function deleteLoom(formData: FormData) {
     "use server";
-  await requireAdmin("/weaving/looms");
+    await requireAdmin("/weaving/looms");
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
 

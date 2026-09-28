@@ -57,7 +57,7 @@ export default async function YarnBrandsPage({
 
   async function deleteBrand(formData: FormData) {
     "use server";
-  await requireAdmin("/define/yarn-brands");
+    await requireAdmin("/define/yarn-brands");
     const id = formData.get("id") as string;
     if (!id) return;
     const numId = Number(id);

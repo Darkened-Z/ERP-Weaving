@@ -119,7 +119,7 @@ export default async function PartyCountsPage({
 
   async function deletePartyCount(formData: FormData) {
     "use server";
-  await requireAdmin("/define/party-counts");
+    await requireAdmin("/define/party-counts");
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
     await db.delete(schema.partyCounts).where(eq(schema.partyCounts.id, id));
@@ -281,7 +281,7 @@ export default async function PartyCountsPage({
                         </td>
                         <td className="mono text-[12px] p-0">
                           <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
-                            {c.countCode}
+                            {yc?.countCode ?? c.countCode}
                           </a>
                         </td>
                         <td className="text-[13px] p-0">

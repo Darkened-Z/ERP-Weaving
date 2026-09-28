@@ -501,9 +501,13 @@ export default async function YarnPurchaseVoucherPage({
       .select()
       .from(schema.partyCounts)
       .where(eq(schema.partyCounts.partyCode, savedPartyCode));
+    // party_counts.count_code holds yarn_counts.id; the grid keys by the
+    // count's code text, so translate before filling.
+    const codeById = new Map(countList.map((c) => [c.id, String(c.code)]));
     for (const r of pcRows) {
       if (r.ratePerLbs == null) continue;
-      const k = String(r.countCode);
+      const k = codeById.get(r.countCode);
+      if (!k) continue;
       countDefaultMap[k] = {
         ...(countDefaultMap[k] ?? { line_pack: 24, line_unit: "GDN", line_despatch_party: godownParty }),
         line_rate: r.ratePerLbs,
@@ -984,7 +988,7 @@ export default async function YarnPurchaseVoucherPage({
 
   async function setOk(formData: FormData) {
     "use server";
-  await requireAdmin("/external/yarn/purchase");
+    await requireAdmin("/external/yarn/purchase");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db
@@ -997,7 +1001,7 @@ export default async function YarnPurchaseVoucherPage({
 
   async function clearOk(formData: FormData) {
     "use server";
-  await requireAdmin("/external/yarn/purchase");
+    await requireAdmin("/external/yarn/purchase");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db

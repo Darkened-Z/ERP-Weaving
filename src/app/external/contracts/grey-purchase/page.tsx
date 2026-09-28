@@ -314,7 +314,7 @@ export default async function GreyPurchaseContractPage({
       const errCode = String((e as { code?: string })?.code ?? "");
       const lockMatch = /Period locked through (\d{4}-\d{2}-\d{2})/.exec(msg);
       if (lockMatch) {
-        redirect(`/external/contracts/grey-purchase?error=period_locked&thru=${lockMatch[1]}`);
+        redirect(`/external/contracts/grey-purchase?${Number.isFinite(id) && id > 0 ? `id=${id}` : "adding=1"}&error=period_locked&thru=${lockMatch[1]}`);
       }
       if (msg.includes("UNIQUE") || errCode === "SQLITE_CONSTRAINT_UNIQUE") {
         uniqueError = true;
@@ -354,7 +354,7 @@ export default async function GreyPurchaseContractPage({
 
   async function deleteDeliveryRow(formData: FormData) {
     "use server";
-  await requireAdmin("/external/contracts/grey-purchase");
+    await requireAdmin("/external/contracts/grey-purchase");
     const deleteId = parseInt(formData.get("delete_delivery_id") as string, 10);
     const contractId = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(deleteId) || !Number.isFinite(contractId)) return;
