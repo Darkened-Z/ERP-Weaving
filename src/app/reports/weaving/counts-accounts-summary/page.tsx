@@ -65,10 +65,13 @@ export default async function CountsAccountsSummaryPage({
     .where(and(...receiptConds))
     .groupBy(schema.intYarnReceipt.countCode);
 
-  const consumedRows = await db
+  // One beam's weight counts once however many production rows it has in the
+  // range — summing it per row multiplied consumption by production days.
+  const consumedRaw = await db
     .select({
+      beamNo: schema.beams.beamNo,
       yarnCount: schema.beams.yarnCount,
-      lbs: sql<number>`coalesce(sum(${schema.beams.weight}), 0)`,
+      weight: schema.beams.weight,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(
@@ -76,8 +79,15 @@ export default async function CountsAccountsSummaryPage({
       eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id)
     )
     .innerJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
-    .where(and(gte(schema.intDailyProduction.vDate, from), lte(schema.intDailyProduction.vDate, to)))
-    .groupBy(schema.beams.yarnCount);
+    .where(and(gte(schema.intDailyProduction.vDate, from), lte(schema.intDailyProduction.vDate, to)));
+  const seenBeam = new Set<string>();
+  const byCount = new Map<string, number>();
+  for (const r of consumedRaw) {
+    if (!r.yarnCount || seenBeam.has(r.beamNo)) continue;
+    seenBeam.add(r.beamNo);
+    byCount.set(r.yarnCount, (byCount.get(r.yarnCount) ?? 0) + Number(r.weight ?? 0));
+  }
+  const consumedRows = Array.from(byCount, ([yarnCount, lbs]) => ({ yarnCount, lbs }));
 
   const consumedMap = new Map<string, number>();
   for (const r of consumedRows)
