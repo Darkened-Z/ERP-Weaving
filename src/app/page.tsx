@@ -97,7 +97,7 @@ export default async function Dashboard() {
     ]},
     { label: "Production", items: [
       { label: "Looms", value: `${runningRow?.count ?? 0}/${loomRow?.count ?? 0}`, unit: "running / total", href: "/weaving/looms" },
-      { label: "Output", value: formatNum(prodRow?.total ?? 0), unit: "meters produced", href: "/weaving/production" },
+      { label: "Output", value: formatNum(prodRow?.total ?? 0), unit: "meters produced", href: "/weaving/looms" },
       { label: "Grey Specs", value: greyRow?.count ?? 0, unit: "construction types", href: "/define/grey-construction" },
     ]},
     { label: "Supply Chain", items: [
