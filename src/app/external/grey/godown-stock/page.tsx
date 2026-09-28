@@ -15,7 +15,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { normQuality as gqNormQuality, countLabelMap, richConstruction as gqRichConstruction } from "@/lib/grey-quality";
-import { assertPeriodOpen } from "@/lib/period-lock";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin } from "@/lib/auth";
 import { num, intVal, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
@@ -721,6 +721,11 @@ export default async function GodownStockPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extGodownStock.vDate }).from(schema.extGodownStock).where(eq(schema.extGodownStock.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
     if (Number.isFinite(id) && id > 0) {
       const existingLines = await db
@@ -866,6 +871,8 @@ export default async function GodownStockPage({
     if (s?.roleName !== "ADMIN") redirect("/external/grey/godown-stock?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extGodownStock.vDate }).from(schema.extGodownStock).where(eq(schema.extGodownStock.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/grey/godown-stock?id=${id}`);
 
     const lineRows = await db
       .select({ status: schema.extGodownStockLine.status })

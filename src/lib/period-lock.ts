@@ -1,5 +1,6 @@
 import { db, schema } from "@/db";
 import { and, eq, inArray, lte } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
 type Module = "FINANCE" | "INVENTORY" | "STORE";
 
@@ -88,4 +89,15 @@ export function parseLockedThroughFromError(msg: string): string | null {
 /** Asserts every date is in an open period — for edits (old + new date) and deletes. */
 export async function assertPeriodsOpen(dates: (string | null | undefined)[], module: Module): Promise<void> {
   for (const d of dates) if (d) await assertPeriodOpen(d, module);
+}
+
+/**
+ * For delete actions: a voucher dated inside a locked period can't be
+ * removed (its ledger rows would go with it). Sends the user back to `back`
+ * with error=period_locked&thru=… instead of throwing.
+ */
+export async function refuseIfLocked(date: string | null | undefined, module: Module, back: string): Promise<void> {
+  if (!date) return;
+  const thru = await lockedThrough(date, module);
+  if (thru) redirect(`${back}${back.includes("?") ? "&" : "?"}error=period_locked&thru=${thru}`);
 }

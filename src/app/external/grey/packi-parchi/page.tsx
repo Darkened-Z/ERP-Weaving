@@ -14,7 +14,7 @@ import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { assertPeriodOpen } from "@/lib/period-lock";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, fullConstruction as gqFullConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
@@ -792,6 +792,11 @@ export default async function PackiParchiPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extPackiParchi.vDate }).from(schema.extPackiParchi).where(eq(schema.extPackiParchi.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
     if (Number.isFinite(id) && id > 0) {
       await db.transaction(async (tx) => {
@@ -925,6 +930,8 @@ export default async function PackiParchiPage({
     if (s?.roleName !== "ADMIN") redirect("/external/grey/packi-parchi?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extPackiParchi.vDate }).from(schema.extPackiParchi).where(eq(schema.extPackiParchi.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/grey/packi-parchi?id=${id}`);
     await db.transaction(async (tx) => {
       const cur = await tx
         .select({ vNo: schema.extPackiParchi.vNo })

@@ -548,7 +548,7 @@ export default async function DemandPage({
                 {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
                   <form action={deletePostedDemand} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message="This demand is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                    <ConfirmButton message="This demand is POSTED. Deleting will reverse its stock and remove its ledger entry. Continue?">
                       Del (POSTED)
                     </ConfirmButton>
                   </form>

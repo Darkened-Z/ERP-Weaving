@@ -7,6 +7,7 @@ import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
+import { assertStockNotNegative, negStockPart } from "@/lib/store-stock";
 import { getSession } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -109,6 +110,7 @@ async function saveReturn(formData: FormData) {
 
   let savedId = isNew ? 0 : id;
   let codeExists = false;
+  const touchedParts: string[] = [];
   try {
     savedId = await db.transaction(async (tx) => {
       let rid: number;
@@ -144,6 +146,7 @@ async function saveReturn(formData: FormData) {
           .select()
           .from(schema.storeReturnDetail)
           .where(eq(schema.storeReturnDetail.returnId, id));
+        touchedParts.push(...oldLines.map((ol) => ol.partCode));
         for (const ol of oldLines) {
           await tx
             .update(schema.chartParts)
@@ -172,6 +175,8 @@ async function saveReturn(formData: FormData) {
           .set({ currentStock: sql`current_stock + ${l.qty}` })
           .where(eq(schema.chartParts.code, l.partCode));
       }
+      // Shrinking a return whose parts were re-issued since would go negative.
+      if (!isNew) await assertStockNotNegative(tx, touchedParts);
 
       // Clear first either way, so an edit that empties the return also takes
       // its old ledger entry back out instead of leaving it stranded.
@@ -218,6 +223,8 @@ async function saveReturn(formData: FormData) {
     });
   } catch (e: unknown) {
     const msg = String((e as { message?: string })?.message ?? "");
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/gatepass${back}&error=negative_stock&part=${encodeURIComponent(neg)}`);
     if (/UNIQUE/i.test(msg)) codeExists = true;
     else throw e;
   }
@@ -262,6 +269,7 @@ async function deleteReturn(formData: FormData) {
   const thru = existing?.returnDate ? await lockedThrough(existing.returnDate, "STORE") : null;
   if (thru) redirect(`/store/gatepass?id=${id}&error=period_locked&thru=${thru}`);
 
+  try {
   await db.transaction(async (tx) => {
     if (vno > 0) {
       await clearVoucher(tx, "SR", vno, fyCode);
@@ -276,11 +284,18 @@ async function deleteReturn(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Returned parts that were issued again can't be taken back out of stock.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx
       .delete(schema.storeReturnDetail)
       .where(eq(schema.storeReturnDetail.returnId, id));
     await tx.delete(schema.storeReturns).where(eq(schema.storeReturns.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/gatepass?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/gatepass");
   revalidatePath("/store/parts");
@@ -305,6 +320,7 @@ async function deletePostedReturn(formData: FormData) {
   const thru = existing?.returnDate ? await lockedThrough(existing.returnDate, "STORE") : null;
   if (thru) redirect(`/store/gatepass?id=${id}&error=period_locked&thru=${thru}`);
 
+  try {
   await db.transaction(async (tx) => {
     if (vno > 0) {
       await clearVoucher(tx, "SR", vno, fyCode);
@@ -319,11 +335,18 @@ async function deletePostedReturn(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Returned parts that were issued again can't be taken back out of stock.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx
       .delete(schema.storeReturnDetail)
       .where(eq(schema.storeReturnDetail.returnId, id));
     await tx.delete(schema.storeReturns).where(eq(schema.storeReturns.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/gatepass?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/gatepass");
   revalidatePath("/store/parts");
@@ -350,7 +373,7 @@ async function retRevert(formData: FormData) {
 export default async function GatepassPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; thru?: string; part?: string }>;
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
@@ -524,6 +547,11 @@ export default async function GatepassPage({
             Return No already exists. Try saving again.
           </div>
         )}
+        {params.error === "negative_stock" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Part {params.part ?? ""} would go below zero stock — the returned quantity has already been issued again.
+          </div>
+        )}
         {params.error === "dup_part" && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             The same part appears on more than one line. Combine into a single line.
@@ -598,7 +626,7 @@ export default async function GatepassPage({
                 {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
                   <form action={deletePostedReturn} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message="This return is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                    <ConfirmButton message="This return is POSTED. Deleting will reverse its stock and remove its ledger entry. Continue?">
                       Del (POSTED)
                     </ConfirmButton>
                   </form>

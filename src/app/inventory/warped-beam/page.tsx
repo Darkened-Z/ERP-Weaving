@@ -9,7 +9,7 @@ import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { wovenThisCycle } from "@/lib/beam-cycle";
 import { and, eq, sql, desc, inArray } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin } from "@/lib/auth";
 import { RowErase } from "@/components/production-calc";
 import { today, nowTime } from "@/lib/time";
@@ -260,6 +260,11 @@ export default async function WarpedBeamReceivingPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const vDate = txt(formData.get("vDate")) ?? today();
     await assertPeriodOpen(vDate, "INVENTORY");
+    // An edit can't move a voucher out of a locked period either.
+    if (Number.isFinite(id) && id > 0) {
+      const [old] = await db.select({ d: schema.intWarpedBeamReceiving.vDate }).from(schema.intWarpedBeamReceiving).where(eq(schema.intWarpedBeamReceiving.id, id));
+      if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+    }
 
     const header = {
       vDate,
@@ -724,6 +729,8 @@ export default async function WarpedBeamReceivingPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/warped-beam?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
+    const [dated] = await db.select({ d: schema.intWarpedBeamReceiving.vDate }).from(schema.intWarpedBeamReceiving).where(eq(schema.intWarpedBeamReceiving.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/inventory/warped-beam?id=${id}`);
 
     const head = await db
       .select({ lvNo: schema.intWarpedBeamReceiving.lvNo, vNo: schema.intWarpedBeamReceiving.vNo })
