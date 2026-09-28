@@ -37,8 +37,12 @@ export function WarpedBeamCalc() {
           if (conv) conv.value = sizingRate > 0 ? String(sizingRate) : "";
           if (rateKgLine) rateKgLine.value = sizingRateKg > 0 ? String(sizingRateKg) : "";
         }
-        if (amount && bl?.value && ends?.value && sizingRate > 0) {
-          set(amount, (val(bl) * val(ends)) / 1693.2 / rcDiv * sizingRate);
+        if (amount) {
+          if (bl?.value && ends?.value && sizingRate > 0) {
+            set(amount, (val(bl) * val(ends)) / 1693.2 / rcDiv * sizingRate);
+          } else if (hasRow && sizingRate <= 0) {
+            amount.value = "";
+          }
         }
         amountSum += val(amount);
         lengthSum += val(bl);
@@ -59,7 +63,9 @@ export function WarpedBeamCalc() {
         val(q("headConeKgs"));
       const netWt = bagConeWt - packWt;
       set(q("netWeightDisp"), netWt);
-      const amount = netWt * val(q("netWeightRate"));
+      const nwrEl = q("netWeightRate");
+      if (nwrEl && sizingRateKg > 0) nwrEl.value = String(sizingRateKg);
+      const amount = netWt * val(nwrEl);
       set(q("totalAmountFinal"), amount);
       set(q("amtTot"), amount * (1 + val(q("gstFtx")) / 100));
     };
