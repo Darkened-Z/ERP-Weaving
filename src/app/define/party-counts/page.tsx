@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill } from "@/components/auto-fill";
@@ -118,6 +119,7 @@ export default async function PartyCountsPage({
 
   async function deletePartyCount(formData: FormData) {
     "use server";
+  await requireAdmin("/define/party-counts");
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
     await db.delete(schema.partyCounts).where(eq(schema.partyCounts.id, id));

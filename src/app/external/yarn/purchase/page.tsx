@@ -21,7 +21,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { acc } from "@/lib/gl-accounts";
 import { num, txt, escLike } from "@/lib/form";
@@ -984,6 +984,7 @@ export default async function YarnPurchaseVoucherPage({
 
   async function setOk(formData: FormData) {
     "use server";
+  await requireAdmin("/external/yarn/purchase");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db
@@ -996,6 +997,7 @@ export default async function YarnPurchaseVoucherPage({
 
   async function clearOk(formData: FormData) {
     "use server";
+  await requireAdmin("/external/yarn/purchase");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
     await db

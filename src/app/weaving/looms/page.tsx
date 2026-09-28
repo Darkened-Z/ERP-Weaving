@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { requireAdmin } from "@/lib/auth";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill } from "@/components/auto-fill";
@@ -109,6 +110,7 @@ export default async function LoomsPage({
 
   async function deleteLoom(formData: FormData) {
     "use server";
+  await requireAdmin("/weaving/looms");
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
 

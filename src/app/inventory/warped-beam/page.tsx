@@ -10,7 +10,7 @@ import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { wovenThisCycle } from "@/lib/beam-cycle";
 import { and, eq, sql, desc, inArray } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { RowErase } from "@/components/production-calc";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -789,6 +789,7 @@ export default async function WarpedBeamReceivingPage({
 
   async function deleteBillAction(formData: FormData) {
     "use server";
+  await requireAdmin("/inventory/warped-beam");
     const id = intVal(formData.get("id"));
     if (id === null) return;
     await db.transaction(async (tx) => {

@@ -9,7 +9,7 @@ import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
@@ -380,11 +380,13 @@ async function setOkStatus(formData: FormData, value: string | null) {
 
 async function markOk(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/br");
   await setOkStatus(formData, "Y");
 }
 
 async function clearOk(formData: FormData) {
   "use server";
+  await requireAdmin("/finance/br");
   await setOkStatus(formData, null);
 }
 

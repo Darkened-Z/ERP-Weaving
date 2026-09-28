@@ -16,7 +16,7 @@ import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { normQuality as gqNormQuality, countLabelMap, richConstruction as gqRichConstruction } from "@/lib/grey-quality";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
 import { num, intVal, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -889,6 +889,7 @@ export default async function GodownStockPage({
 
   async function setStatusOk(formData: FormData) {
     "use server";
+  await requireAdmin("/external/grey/godown-stock");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id) || id <= 0) return;
     await db
@@ -901,6 +902,7 @@ export default async function GodownStockPage({
 
   async function clearStatusOk(formData: FormData) {
     "use server";
+  await requireAdmin("/external/grey/godown-stock");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id) || id <= 0) return;
     await db
