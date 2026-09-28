@@ -56,12 +56,18 @@ const ORACLE_DEFAULTS: Record<PostingKey, string> = {
   DEFAULT_DEBTOR: "1.01.25.01.0001",
 };
 
+// Serverless runs several instances; invalidateGlCache() only reaches the one
+// that saved the change, so the cache also expires on its own. A minute of
+// staleness is the most any other instance can post to an old account.
+const CACHE_TTL_MS = 60_000;
 let cache: Map<string, string> | null = null;
+let cachedAt = 0;
 
 async function loadCache(): Promise<Map<string, string>> {
-  if (cache) return cache;
+  if (cache && Date.now() - cachedAt < CACHE_TTL_MS) return cache;
   const rows = await db.select().from(schema.postingAccounts);
   cache = new Map(rows.map((r) => [r.key, r.accCode]));
+  cachedAt = Date.now();
   return cache;
 }
 

@@ -6,6 +6,7 @@ import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, sql, desc, inArray } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
@@ -392,11 +393,7 @@ export default async function WarpedBeamReceivingPage({
 
     const nowIso = new Date().toISOString();
 
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(vDate);
     if (!fyCode) throw new Error("No current FY");
 
     const partyRows = await db
@@ -506,12 +503,7 @@ export default async function WarpedBeamReceivingPage({
           if (lvNo > 0) {
             // Always clear prior EXT rows, then re-post only if it still qualifies —
             // so editing into a non-postable state reverses the ledger, not orphans it.
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, lvNo)),
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, lvNo)),
-            );
+            await clearVoucher(tx, VTYPE_GL, lvNo);
             if (!shouldPostGl) return;
 
             await tx.insert(schema.transMain).values({
@@ -625,12 +617,7 @@ export default async function WarpedBeamReceivingPage({
           }
 
           if (shouldPostGl && nextLv > 0) {
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, nextLv)),
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, nextLv)),
-            );
+            await clearVoucher(tx, VTYPE_GL, nextLv);
 
             await tx.insert(schema.transMain).values({
               fyCode,
@@ -744,12 +731,7 @@ export default async function WarpedBeamReceivingPage({
 
     await db.transaction(async (tx) => {
       if (lvNo > 0) {
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, VTYPE_GL), eq(schema.transDetail.vno, lvNo)),
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, VTYPE_GL), eq(schema.transMain.vno, lvNo)),
-        );
+        await clearVoucher(tx, VTYPE_GL, lvNo);
       }
       const oldLines = await tx
         .select({ beamNo: schema.intWarpedBeamReceivingLine.beamNo })

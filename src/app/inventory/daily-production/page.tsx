@@ -12,6 +12,7 @@ import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { ConfirmButton } from "@/components/confirm-button";
 import { SaveForm, type SaveError } from "@/components/save-form";
 import { db, schema } from "@/db";
+import { clearVoucher } from "@/lib/gl-post";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
@@ -1191,8 +1192,7 @@ export default async function DailyProductionPage({
           // behaviour are cleaned up the next time they are saved. Daily Folding
           // Stock reads the production and despatch tables directly, not the GL,
           // so nothing is lost by leaving it off the books.
-          await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "DP"), eq(schema.transDetail.vno, id)));
-          await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "DP"), eq(schema.transMain.vno, id)));
+          await clearVoucher(tx, "DP", id);
                   });
         revalidatePath("/inventory/daily-production");
         redirect(`/inventory/daily-production?id=${id}`);
@@ -1389,8 +1389,7 @@ export default async function DailyProductionPage({
           .set(knotted ? { statusWrk: "KNOTTING" } : { statusWrk: "EMPTY", loomNo: null })
           .where(eq(schema.beams.beamNo, os.beamNo));
       }
-      await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.vtype, "DP"), eq(schema.transDetail.vno, id)));
-      await tx.delete(schema.transMain).where(and(eq(schema.transMain.vtype, "DP"), eq(schema.transMain.vno, id)));
+      await clearVoucher(tx, "DP", id);
       await tx.delete(schema.intDailyProductionSet).where(eq(schema.intDailyProductionSet.productionId, id));
       await tx.delete(schema.intDailyProductionDetail).where(eq(schema.intDailyProductionDetail.productionId, id));
       await tx.delete(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));

@@ -12,6 +12,7 @@ import { TermSelect } from "@/components/term-select";
 import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { BatchHeaderFill } from "./batch-header-fill";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
@@ -795,11 +796,7 @@ export default async function YarnSaleVoucherPage({
 
     const nowIso = new Date().toISOString();
 
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(vDate);
 
     const partyRows = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -867,12 +864,7 @@ export default async function YarnSaleVoucherPage({
             const vno = lvRow[0]?.lvNo ?? 0;
             if (vno > 0) {
               // Always clear prior YSV rows, then re-post only if it still qualifies.
-              await tx
-                .delete(schema.transDetail)
-                .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, vno)));
-              await tx
-                .delete(schema.transMain)
-                .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, vno)));
+              await clearVoucher(tx, "YSV", vno);
               if (!doGl) return;
 
               await tx.insert(schema.transMain).values({
@@ -954,12 +946,7 @@ export default async function YarnSaleVoucherPage({
 
             if (doGl) {
               const vno = nextL;
-              await tx
-                .delete(schema.transDetail)
-                .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, vno)));
-              await tx
-                .delete(schema.transMain)
-                .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, vno)));
+              await clearVoucher(tx, "YSV", vno);
 
               await tx.insert(schema.transMain).values({
                 fyCode,
@@ -1066,12 +1053,7 @@ export default async function YarnSaleVoucherPage({
     const lvNo = lvRow[0]?.lvNo ?? 0;
     await db.transaction(async (tx) => {
       if (lvNo > 0) {
-        await tx
-          .delete(schema.transDetail)
-          .where(and(eq(schema.transDetail.vtype, "YSV"), eq(schema.transDetail.vno, lvNo)));
-        await tx
-          .delete(schema.transMain)
-          .where(and(eq(schema.transMain.vtype, "YSV"), eq(schema.transMain.vno, lvNo)));
+        await clearVoucher(tx, "YSV", lvNo);
       }
       await tx.delete(schema.extYarnSalVoucherLine).where(eq(schema.extYarnSalVoucherLine.voucherId, id));
       await tx.delete(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));

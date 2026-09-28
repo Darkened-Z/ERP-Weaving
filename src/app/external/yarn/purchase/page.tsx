@@ -15,6 +15,7 @@ import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
+import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -692,11 +693,7 @@ export default async function YarnPurchaseVoucherPage({
     const nowIso = new Date().toISOString();
 
     const VTYPE = "YPV";
-    const [company] = await db
-      .select({ currentFy: schema.companyProfile.currentFy })
-      .from(schema.companyProfile)
-      .limit(1);
-    const fyCode = company?.currentFy ?? "";
+    const fyCode = await fyCodeForDate(vDate);
 
     const partyRows = await db
       .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
@@ -786,12 +783,7 @@ export default async function YarnPurchaseVoucherPage({
           }
 
           if (existingLvNo > 0) {
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, existingLvNo))
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, existingLvNo))
-            );
+            await clearVoucher(tx, VTYPE, existingLvNo);
           }
 
           if (canPostGL && existingLvNo > 0) {
@@ -870,12 +862,7 @@ export default async function YarnPurchaseVoucherPage({
                 .values(validLines.map((l) => ({ ...l, voucherId: insertedId })));
             }
 
-            await tx.delete(schema.transDetail).where(
-              and(eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, nextL))
-            );
-            await tx.delete(schema.transMain).where(
-              and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, nextL))
-            );
+            await clearVoucher(tx, VTYPE, nextL);
 
             if (canPostGL) {
               await tx.insert(schema.transMain).values({
@@ -986,12 +973,7 @@ export default async function YarnPurchaseVoucherPage({
     const lvNo = existing?.lvNo ?? 0;
     await db.transaction(async (tx) => {
       if (lvNo > 0) {
-        await tx.delete(schema.transDetail).where(
-          and(eq(schema.transDetail.vtype, "YPV"), eq(schema.transDetail.vno, lvNo))
-        );
-        await tx.delete(schema.transMain).where(
-          and(eq(schema.transMain.vtype, "YPV"), eq(schema.transMain.vno, lvNo))
-        );
+        await clearVoucher(tx, "YPV", lvNo);
       }
       await tx.delete(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.voucherId, id));
       await tx.delete(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
