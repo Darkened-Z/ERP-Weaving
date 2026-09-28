@@ -27,20 +27,32 @@ export default async function GreyRegisterConvLedgerPage({
   const to = p.to?.trim() || todayIso();
   const party = p.party?.trim() ?? "";
 
-  const partyRows = await db
-    .selectDistinct({ party: schema.extPackiParchi.saleParty })
-    .from(schema.extPackiParchi)
-    .where(sql`${schema.extPackiParchi.convRate} IS NOT NULL AND ${schema.extPackiParchi.convRate} > 0`);
-  const partyOpts = partyRows
-    .map((r) => (r.party ?? "").trim())
-    .filter(Boolean)
-    .sort()
-    .map((v) => ({ value: v, label: v }));
-
-  const accounts = await db
-    .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
-    .from(schema.chartOfAccounts);
+  const [partyRows, accounts, financePartyCodes] = await Promise.all([
+    db
+      .selectDistinct({ party: schema.extPackiParchi.saleParty })
+      .from(schema.extPackiParchi)
+      .where(sql`${schema.extPackiParchi.convRate} IS NOT NULL AND ${schema.extPackiParchi.convRate} > 0`),
+    db
+      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+      .from(schema.chartOfAccounts),
+    db
+      .selectDistinct({ accCode: schema.transDetail.accCode })
+      .from(schema.transDetail)
+      .where(
+        and(
+          inArray(schema.transDetail.vtype, [...FINANCE_TYPES]),
+          sql`${schema.transDetail.accCode} LIKE '1.01.01.%'`,
+        ),
+      ),
+  ]);
   const codeByDesc = new Map(accounts.map((a) => [(a.description ?? "").trim(), a.code]));
+  const descByCode = new Map(accounts.map((a) => [a.code, (a.description ?? "").trim()]));
+  const ppParties = new Set(partyRows.map((r) => (r.party ?? "").trim()).filter(Boolean));
+  for (const r of financePartyCodes) {
+    const desc = descByCode.get(r.accCode ?? "");
+    if (desc && !ppParties.has(desc)) ppParties.add(desc);
+  }
+  const partyOpts = Array.from(ppParties).sort().map((v) => ({ value: v, label: v }));
   const partyCoa = party
     ? /^\d+(\.\d+)+$/.test(party)
       ? party
