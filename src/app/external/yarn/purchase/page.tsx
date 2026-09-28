@@ -20,7 +20,7 @@ import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { assertPeriodOpen } from "@/lib/period-lock";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { acc } from "@/lib/gl-accounts";
@@ -312,7 +312,7 @@ export default async function YarnPurchaseVoucherPage({
   const purAggByCont = await db
     .select({
       contNo: schema.extYarnPurVoucherLine.contNo,
-      bags: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+      bags: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0)), 0)`,
     })
     .from(schema.extYarnPurVoucherLine)
     .where(formVoucher ? ne(schema.extYarnPurVoucherLine.voucherId, formVoucher.id) : undefined)
@@ -665,7 +665,7 @@ export default async function YarnPurchaseVoucherPage({
         const sold = await db
           .select({
             batchNo: schema.extYarnSalVoucherLine.batchNo,
-            bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+            bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
             lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
           })
           .from(schema.extYarnSalVoucherLine)
@@ -741,6 +741,11 @@ export default async function YarnPurchaseVoucherPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extYarnPurVoucher.vDate }).from(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
       if (Number.isFinite(id) && id > 0) {
         const [existing] = await db
@@ -931,6 +936,8 @@ export default async function YarnPurchaseVoucherPage({
     if (s?.roleName !== "ADMIN") redirect("/external/yarn/purchase?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extYarnPurVoucher.vDate }).from(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/yarn/purchase?id=${id}`);
 
     // Deleting the whole voucher is the same wound as cutting one line below
     // what was sold, only bigger: the sale rows survive, keep subtracting, and

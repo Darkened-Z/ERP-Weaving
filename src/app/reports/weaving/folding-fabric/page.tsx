@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
 import { today as todayFn } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
+import { loadConvContracts } from "@/lib/conv-contracts";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +33,13 @@ export default async function FoldingFabricPage({
     lte(schema.intDailyProduction.vDate, to),
   ];
 
-  const raw = await db
+  // Fabric comes from the contract each production row names (falling back to
+  // its beam's), looked up across internal AND external conversion contracts.
+  // Joining through the beam to the internal table alone left production on
+  // external (GCC-) contracts, or with no beam, in an unnamed group.
+  const perContract = await db
     .select({
-      grayCode: schema.intGreyConversionContract.grayCode,
-      grayQlty: schema.intGreyConversionContract.grayQltyCode,
-      grayDesc: schema.greyConstruction.description,
+      contNo: sql<string | null>`coalesce(nullif(${schema.intDailyProductionSet.contNo}, ''), ${schema.beams.contractNo})`,
       a: sql<number>`coalesce(sum(${schema.intDailyProductionSet.aCount}), 0)`,
       b: sql<number>`coalesce(sum(${schema.intDailyProductionSet.bCount}), 0)`,
       c: sql<number>`coalesce(sum(${schema.intDailyProductionSet.cCount}), 0)`,
@@ -51,20 +54,30 @@ export default async function FoldingFabricPage({
       eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id)
     )
     .leftJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
-    .leftJoin(
-      schema.intGreyConversionContract,
-      eq(schema.beams.contractNo, schema.intGreyConversionContract.contNo)
-    )
-    .leftJoin(
-      schema.greyConstruction,
-      eq(schema.intGreyConversionContract.grayCode, schema.greyConstruction.code)
-    )
     .where(and(...conds))
-    .groupBy(
-      schema.intGreyConversionContract.grayCode,
-      schema.intGreyConversionContract.grayQltyCode,
-      schema.greyConstruction.description
-    );
+    .groupBy(sql`1`);
+  const contractsByNo = new Map((await loadConvContracts()).map((c) => [c.contNo, c]));
+  const constructions = await db
+    .select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description })
+    .from(schema.greyConstruction);
+  const constrDesc = new Map(constructions.map((c) => [c.code, c.description]));
+  const byFabric = new Map<string, { grayCode: string | null; grayQlty: string | null; grayDesc: string | null; a: number; b: number; c: number; cp: number; ppc: number; rej: number; total: number }>();
+  for (const r of perContract) {
+    const k = r.contNo ? contractsByNo.get(r.contNo) : undefined;
+    const grayCode = k?.grayCode ?? null;
+    const key = `${grayCode ?? ""}|${k?.grayQltyCode ?? ""}`;
+    const g = byFabric.get(key) ?? {
+      grayCode,
+      grayQlty: k?.grayQltyCode ?? null,
+      grayDesc: (grayCode && constrDesc.get(grayCode)) || null,
+      a: 0, b: 0, c: 0, cp: 0, ppc: 0, rej: 0, total: 0,
+    };
+    g.a += Number(r.a ?? 0); g.b += Number(r.b ?? 0); g.c += Number(r.c ?? 0);
+    g.cp += Number(r.cp ?? 0); g.ppc += Number(r.ppc ?? 0); g.rej += Number(r.rej ?? 0);
+    g.total += Number(r.total ?? 0);
+    byFabric.set(key, g);
+  }
+  const raw = Array.from(byFabric.values());
 
   const rows = raw
     .filter(

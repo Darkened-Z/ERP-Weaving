@@ -3,7 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
-import { and, gte, lte, sql } from "drizzle-orm";
+import { and, gte, lte, sql, inArray } from "drizzle-orm";
 import { DateBox } from "@/components/date-box";
 import {
   fmt,
@@ -47,8 +47,13 @@ export default async function YarnPurContractHistoryPage({
     lte(schema.extYarnPurContract.contDate, to),
   ];
   if (party) {
-    const pat = `%${escLike(party)}%`;
-    conds.push(sql`${schema.extYarnPurContract.partyCode} LIKE ${pat} ESCAPE '\\'`);
+    // The picker submits the party NAME; contracts store the account code.
+    // Match either, so a typed code still works.
+    const pl = party.toLowerCase();
+    const codes = accountRows
+      .filter((r) => r.code.toLowerCase().includes(pl) || (r.description ?? "").toLowerCase().includes(pl))
+      .map((r) => r.code);
+    conds.push(codes.length ? inArray(schema.extYarnPurContract.partyCode, codes) : sql`0`);
   }
   if (cont) {
     const pat = `%${escLike(cont)}%`;
@@ -80,7 +85,7 @@ export default async function YarnPurContractHistoryPage({
     ? await db
         .select({
           contNo: schema.extYarnPurVoucherLine.contNo,
-          bags: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+          bags: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0)), 0)`,
           lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
           amt: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs} * ${schema.extYarnPurVoucherLine.rate}), 0)`,
           deliveries: sql<number>`count(distinct ${schema.extYarnPurVoucherLine.voucherId})`,
