@@ -3,7 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
-import { and, lte, sql } from "drizzle-orm";
+import { and, lte, sql, eq } from "drizzle-orm";
 import { DateBox } from "@/components/date-box";
 import {
   fmt,
@@ -13,7 +13,6 @@ import {
   todayIso,
   partyByNameOptions,
   yarnCountOptions,
-  locationOptions,
 } from "../../_shared";
 
 export const dynamic = "force-dynamic";
@@ -21,68 +20,58 @@ export const dynamic = "force-dynamic";
 export default async function YarnStockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; party?: string; count?: string; location?: string; neg?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; party?: string; count?: string; neg?: string }>;
 }) {
   const p = await searchParams;
   const from = p.from?.trim() || sixMonthsAgo();
   const to = p.to?.trim() || todayIso();
   const party = p.party?.trim() ?? "";
   const count = p.count?.trim() ?? "";
-  const location = p.location?.trim() ?? "";
   const onlyNeg = p.neg === "1";
 
-  const [partyOpts, countOpts, locationOpts, countMetaRows] = await Promise.all([
+  const [partyOpts, countOpts, countMetaRows] = await Promise.all([
     partyByNameOptions(),
     yarnCountOptions(),
-    locationOptions(),
     db.select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description }).from(schema.yarnCounts),
   ]);
   const countDescMap = new Map(countMetaRows.map((r) => [r.code, r.description]));
 
-  // Everything up to `to` is read so the rows can open with what was already
-  // lying there on `from`. With a location picked, stock is what came INTO it
-  // (receipts to it, transfers to it) less what left (returns, transfers
-  // out). Without one it is mill-wide: receipts less returns, less yarn sent
-  // to the loom sheds — a godown-to-godown move doesn't change it.
-  const receiptConds = [lte(schema.intYarnReceipt.vDate, to)];
+  const purConds = [lte(schema.extYarnPurVoucher.vDate, to)];
   if (party) {
     const pat = `%${escLike(party)}%`;
-    receiptConds.push(sql`${schema.intYarnReceipt.party} LIKE ${pat} ESCAPE '\\'`);
+    purConds.push(sql`${schema.extYarnPurVoucher.party} LIKE ${pat} ESCAPE '\\'`);
   }
-  if (count) receiptConds.push(sql`${schema.intYarnReceipt.countCode} = ${count}`);
-  if (location) {
-    const pat = `%${escLike(location)}%`;
-    receiptConds.push(sql`${schema.intYarnReceipt.yarnPartyTo} LIKE ${pat} ESCAPE '\\'`);
-  }
-  const transferConds = [lte(schema.intYarnTransfer.vDate, to)];
-  if (party) {
-    const pat = `%${escLike(party)}%`;
-    transferConds.push(sql`(${schema.intYarnTransfer.transferFromParty} LIKE ${pat} ESCAPE '\\' OR ${schema.intYarnTransfer.transferToParty} LIKE ${pat} ESCAPE '\\')`);
-  }
-  if (count) transferConds.push(sql`${schema.intYarnTransfer.countCode} = ${count}`);
+  if (count) purConds.push(eq(schema.extYarnPurVoucherLine.count, count));
 
-  const receipts = await db
+  const purchases = await db
     .select({
-      vDate: schema.intYarnReceipt.vDate,
-      countCode: schema.intYarnReceipt.countCode,
-      trnType: schema.intYarnReceipt.trnType,
-      bags: schema.intYarnReceipt.bags,
-      lbs: schema.intYarnReceipt.qtyLbs,
-      amt: schema.intYarnReceipt.amount,
+      vDate: schema.extYarnPurVoucher.vDate,
+      count: schema.extYarnPurVoucherLine.count,
+      bags: schema.extYarnPurVoucherLine.bag,
+      lbs: schema.extYarnPurVoucherLine.lbs,
+      rate: schema.extYarnPurVoucherLine.rate,
     })
-    .from(schema.intYarnReceipt)
-    .where(and(...receiptConds));
-  const transfers = await db
+    .from(schema.extYarnPurVoucherLine)
+    .innerJoin(schema.extYarnPurVoucher, eq(schema.extYarnPurVoucher.id, schema.extYarnPurVoucherLine.voucherId))
+    .where(and(...purConds));
+
+  const salConds = [lte(schema.extYarnSalVoucher.vDate, to)];
+  if (party) {
+    const pat = `%${escLike(party)}%`;
+    salConds.push(sql`${schema.extYarnSalVoucher.party} LIKE ${pat} ESCAPE '\\'`);
+  }
+  if (count) salConds.push(eq(schema.extYarnSalVoucherLine.count, count));
+
+  const sales = await db
     .select({
-      vDate: schema.intYarnTransfer.vDate,
-      countCode: schema.intYarnTransfer.countCode,
-      from: schema.intYarnTransfer.locationFrom,
-      to: schema.intYarnTransfer.locationTo,
-      bags: schema.intYarnTransfer.qtyBags,
-      lbs: schema.intYarnTransfer.qtyLbs,
+      vDate: schema.extYarnSalVoucher.vDate,
+      count: schema.extYarnSalVoucherLine.count,
+      bags: schema.extYarnSalVoucherLine.bag,
+      lbs: schema.extYarnSalVoucherLine.lbs,
     })
-    .from(schema.intYarnTransfer)
-    .where(and(...transferConds));
+    .from(schema.extYarnSalVoucherLine)
+    .innerJoin(schema.extYarnSalVoucher, eq(schema.extYarnSalVoucher.id, schema.extYarnSalVoucherLine.voucherId))
+    .where(and(...salConds));
 
   type Acc = { count: string; opBags: number; opLbs: number; rcvBags: number; rcvLbs: number; rcvAmt: number; issBags: number; issLbs: number };
   const map = new Map<string, Acc>();
@@ -91,35 +80,34 @@ export default async function YarnStockPage({
     map.set(k, b);
     return b;
   };
-  // dir: +1 into stock, -1 out of it.
-  const post = (count: string | null, vDate: string, dir: 1 | -1, bags: number, lbs: number, amt = 0) => {
-    const b = at(count ?? "—");
-    if (vDate < from) {
-      b.opBags += dir * bags;
-      b.opLbs += dir * lbs;
-    } else if (dir > 0) {
+
+  for (const r of purchases) {
+    const cnt = (r.count ?? "").trim() || "—";
+    const bags = Number(r.bags ?? 0);
+    const lbs = Number(r.lbs ?? 0);
+    const rate = Number(r.rate ?? 0);
+    const b = at(cnt);
+    if (r.vDate < from) {
+      b.opBags += bags;
+      b.opLbs += lbs;
+    } else {
       b.rcvBags += bags;
       b.rcvLbs += lbs;
-      b.rcvAmt += amt;
+      b.rcvAmt += rate * lbs;
+    }
+  }
+
+  for (const r of sales) {
+    const cnt = (r.count ?? "").trim() || "—";
+    const bags = Number(r.bags ?? 0);
+    const lbs = Number(r.lbs ?? 0);
+    const b = at(cnt);
+    if (r.vDate < from) {
+      b.opBags -= bags;
+      b.opLbs -= lbs;
     } else {
       b.issBags += bags;
       b.issLbs += lbs;
-    }
-  };
-  const locL = location.toLowerCase();
-  const isLoc = (v: string | null) => !!v && v.toLowerCase().includes(locL);
-  for (const r of receipts) {
-    const ret = (r.trnType ?? "").toUpperCase() === "RETN";
-    post(r.countCode, r.vDate, ret ? -1 : 1, Number(r.bags ?? 0), Number(r.lbs ?? 0), ret ? 0 : Number(r.amt ?? 0));
-  }
-  for (const t of transfers) {
-    const bags = Number(t.bags ?? 0);
-    const lbs = Number(t.lbs ?? 0);
-    if (location) {
-      if (isLoc(t.to) && !isLoc(t.from)) post(t.countCode, t.vDate, 1, bags, lbs);
-      else if (isLoc(t.from) && !isLoc(t.to)) post(t.countCode, t.vDate, -1, bags, lbs);
-    } else if ((t.to ?? "").toUpperCase().startsWith("LOOM SHED")) {
-      post(t.countCode, t.vDate, -1, bags, lbs);
     }
   }
 
@@ -156,7 +144,7 @@ export default async function YarnStockPage({
           <div>
             <h1 className="page-title">Yarn Stock (Count-wise)</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {rows.length} counts · {from} to {to}
+              {rows.length} counts &middot; {from} to {to}
             </p>
           </div>
           <div className="flex gap-2">
@@ -189,13 +177,14 @@ export default async function YarnStockPage({
               filename="yarn-stock"
               sheetName="Stock"
             />
+            <a href="/external/reports/yarn-stock" className="btn btn-outline btn-sm no-print">Voucher-wise</a>
           </div>
         </div>
 
         <form
           method="GET"
           action=""
-          className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-5 gap-4 no-print"
+          className="border border-black p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-4 no-print"
         >
           <div>
             <label className="label block mb-1">Date From</label>
@@ -213,11 +202,7 @@ export default async function YarnStockPage({
             <label className="label block mb-1">Count</label>
             <Combobox name="count" options={countOpts} defaultValue={count} placeholder="All counts" />
           </div>
-          <div>
-            <label className="label block mb-1">Location</label>
-            <Combobox name="location" options={locationOpts} defaultValue={location} placeholder="All locations" />
-          </div>
-          <div className="sm:col-span-5 flex gap-2 flex-wrap items-center">
+          <div className="sm:col-span-4 flex gap-2 flex-wrap items-center">
             <button type="submit" className="btn btn-sm">Apply</button>
             <a href="/reports/yarn/stock" className="btn btn-outline btn-sm">Clear</a>
             <label className="flex items-center gap-2 text-[12px] mono ml-2">
