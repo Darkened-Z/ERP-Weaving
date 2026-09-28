@@ -1057,6 +1057,7 @@ export default async function DailyProductionPage({
                 amnt: schema.intGreyDespatch.amnt,
                 gst: schema.intGreyDespatch.gst,
                 further: schema.intGreyDespatch.further,
+                lNo: schema.intGreyDespatch.lNo,
               })
               .from(schema.intGreyDespatch)
               .where(eq(schema.intGreyDespatch.id, did));
@@ -1079,6 +1080,29 @@ export default async function DailyProductionPage({
                 modifiedDate: nowIso,
               })
               .where(eq(schema.intGreyDespatch.id, did));
+            // Keep the despatch's GDP ledger entry in step with its new amounts
+            // (srno 1 party Dr, 2 income Cr, 3 GST Cr, 4 further Cr — as grey
+            // despatch posts it). GDP numbers are LV numbers, unique across FYs.
+            const gdpNo = Number(hdr?.lNo ?? 0);
+            if (gdpNo > 0) {
+              const amtTot = Math.round((amnt + gst + further) * 100) / 100;
+              const legs: [number, { debit: number; credit: number }][] = [
+                [1, { debit: amtTot, credit: 0 }],
+                [2, { debit: 0, credit: amnt }],
+                [3, { debit: 0, credit: gst }],
+                [4, { debit: 0, credit: further }],
+              ];
+              for (const [srno, amt] of legs) {
+                await tx
+                  .update(schema.transDetail)
+                  .set(amt)
+                  .where(and(eq(schema.transDetail.vtype, "GDP"), eq(schema.transDetail.vno, gdpNo), eq(schema.transDetail.srno, srno)));
+              }
+              await tx
+                .update(schema.transMain)
+                .set({ balanceAmount: amtTot })
+                .where(and(eq(schema.transMain.vtype, "GDP"), eq(schema.transMain.vno, gdpNo)));
+            }
           }
 
           // Re-stamp dlvStatus='Y' per ROW where the old voucher already delivered.

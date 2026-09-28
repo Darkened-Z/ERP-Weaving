@@ -63,6 +63,12 @@ export default async function GreyDespatchPage({
 
   const selected = isEditing ? despatches.find((d) => d.id === idParam) ?? null : null;
   const formItem = isAdding ? null : selected;
+  // GST / further tax are stored as amounts; the rate boxes start from the rate
+  // those amounts imply, so re-saving keeps the tax instead of zeroing it.
+  const rateOf = (tax: number | null | undefined) => {
+    const base = Number(formItem?.amnt ?? 0);
+    return base > 0 && tax ? Math.round((Number(tax) / base) * 100 * 10000) / 10000 : 0;
+  };
 
   const lineRows = formItem
     ? await db
@@ -854,6 +860,10 @@ export default async function GreyDespatchPage({
     const id = parseInt((formData.get("id") as string) ?? "", 10);
     const next = ((formData.get("state") as string) ?? "").toUpperCase() === "EDIT" ? "EDIT" : "FINAL";
     if (!Number.isFinite(id) || id <= 0) return;
+    // Releasing a despatch lets production rewrite its thans and amounts, so it
+    // is gated like delete.
+    const session = await getSession();
+    if (session?.roleName !== "ADMIN") redirect(`/inventory/grey-despatch?id=${id}&error=admin_only`);
     await db
       .update(schema.intGreyDespatch)
       .set({ lockState: next })
@@ -1018,7 +1028,7 @@ export default async function GreyDespatchPage({
         )}
         {params.error === "admin_only" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Only ADMIN can delete vouchers.
+            Only ADMIN can delete vouchers or switch them between Edit and Final.
           </div>
         )}
 
@@ -1336,11 +1346,11 @@ export default async function GreyDespatchPage({
                 <div className="grid grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">GST %</label>
-                    <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
+                    <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={rateOf(formItem?.gst)} />
                   </div>
                   <div>
                     <label className="label block mb-1">Ftx %</label>
-                    <input name="ftx_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue="0" />
+                    <input name="ftx_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={rateOf(formItem?.further)} />
                   </div>
                   <div>
                     <label className="label block mb-1">GST</label>
