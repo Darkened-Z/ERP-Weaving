@@ -110,13 +110,8 @@ export async function CountsAccountsReport({
     .groupBy(schema.extYarnPurVoucher.party, schema.extYarnPurVoucherLine.count);
 
   type Row = { party: string; count: string; desc: string; blend: string; purLbs: number; salLbs: number; totalLbs: number; bags: number; consumedLbs: number; balLbs: number; rate: number; amount: number };
-  // The Sale side starts from the commitment, not from the movement: every
-  // party on a SALE-type external grey conversion contract, crossed with every
-  // count that party is set up with in Party Count. Those rows exist whether or
-  // not any yarn has moved yet, which is the point — a party with nothing
-  // against it is exactly what the mill needs to see.
-  // Sale reads the SALE contracts, purchase the CONV ones; everything below is
-  // identical, which is the point — one report, two scopes.
+  // Party Counts seed: every party that has counts in party_counts, crossed
+  // with those counts — a party appears even when no yarn has moved yet.
   const scopedSeedRows: { party: string; count: string }[] = [];
   let scopedParties: Set<string> | null = null;
   if (partyScope === "grey-sale-contract" || partyScope === "grey-conv-contract") {
@@ -145,14 +140,13 @@ export async function CountsAccountsReport({
     party: pt, count: c, desc: descByCode.get(c) ?? "", blend: blendByCode.get(c) ?? "",
     purLbs: 0, salLbs: 0, totalLbs: 0, bags: 0, consumedLbs: 0, balLbs: 0, rate: 0, amount: 0,
   });
-  let seedValue = 0;
   // Rate is what the BAGS WERE BOUGHT AT, so it is weighted over the purchase
   // book alone — a sale is yarn going out, not a second purchase at a new price.
   const purValueByKey = new Map<string, number>();
   const valueByKey = new Map<string, number>();
   for (const sr of scopedSeedRows) map.set(key(sr.party, sr.count), blank(sr.party, sr.count));
   for (const s of seedAgg) {
-    const pt = s.party ?? "—", c = s.count ?? "—";
+    const pt = (s.party ?? "—").trim(), c = (s.count ?? "—").trim();
     const k = key(pt, c);
     const r = map.get(k) ?? blank(pt, c);
     r.salLbs += s.lbs;
@@ -160,7 +154,7 @@ export async function CountsAccountsReport({
     map.set(k, r);
   }
   for (const pu of purAgg) {
-    const pt = pu.party ?? "—", c = pu.count ?? "—";
+    const pt = (pu.party ?? "—").trim(), c = (pu.count ?? "—").trim();
     const k = key(pt, c);
     const r = map.get(k) ?? blank(pt, c);
     r.purLbs += pu.lbs;
@@ -169,7 +163,7 @@ export async function CountsAccountsReport({
     map.set(k, r);
   }
   for (const cs of consAgg) {
-    const pt = cs.party ?? "—", c = cs.count ?? "—";
+    const pt = (cs.party ?? "—").trim(), c = (cs.count ?? "—").trim();
     const k = key(pt, c);
     const r = map.get(k) ?? blank(pt, c);
     r.consumedLbs += cs.lbs;
@@ -184,9 +178,7 @@ export async function CountsAccountsReport({
     r.bags = r.totalLbs / 100;
     const purVal = purValueByKey.get(k) ?? 0;
     r.rate = r.purLbs > 0 ? purVal / r.purLbs : 0;
-    seedValue += valueByKey.get(k) ?? 0;
   }
-  void seedValue;
   // Outside the scope the mill asked for, a row is noise: the Sale report is
   // about the parties committed on a SALE contract, not everyone who happened
   // to move yarn.
@@ -278,7 +270,7 @@ export async function CountsAccountsReport({
           </div>
           <div className="sm:col-span-4 flex gap-2">
             <button type="submit" className="btn btn-sm">Apply</button>
-            <a href="/reports/weaving/count-report" className="btn btn-outline btn-sm">Clear</a>
+            <a href="?" className="btn btn-outline btn-sm">Clear</a>
           </div>
         </form>
 
