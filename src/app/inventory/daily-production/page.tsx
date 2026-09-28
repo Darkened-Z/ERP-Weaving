@@ -15,7 +15,7 @@ import { db, schema } from "@/db";
 import { clearVoucher } from "@/lib/gl-post";
 import { inCurrentBeamCycle, recomputeBeamStatus, wovenThisCycle } from "@/lib/beam-cycle";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
@@ -670,6 +670,11 @@ export default async function DailyProductionPage({
       billingStatus: txt(formData.get("billingStatus")),
     };
     await assertPeriodOpen(header.vDate, "INVENTORY");
+    // An edit can't move a voucher out of a locked period either.
+    if (Number.isFinite(id) && id > 0) {
+      const [old] = await db.select({ d: schema.intDailyProduction.vDate }).from(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));
+      if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+    }
 
     const setHashArr = formData.getAll("setHash") as string[];
     const mmThanSrNoArr = formData.getAll("mmThanSrNo") as string[];
@@ -1290,6 +1295,8 @@ export default async function DailyProductionPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/daily-production?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
+    const [dated] = await db.select({ d: schema.intDailyProduction.vDate }).from(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/inventory/daily-production?id=${id}`);
 
     // One than out on a despatch is enough to hold the whole voucher. Deleting
     // it would leave that despatch pointing at production that no longer
@@ -1405,6 +1412,11 @@ export default async function DailyProductionPage({
             {params.dv}. Even one despatched than holds the whole voucher, because deleting it
             would leave that despatch pointing at production that no longer exists. Remove the
             than from despatch {params.dv} first. Nothing was deleted.
+          </div>
+        )}
+        {params.error === "period_locked" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Period is locked{params.thru ? ` through ${params.thru}` : ""} — this voucher can&apos;t be deleted.
           </div>
         )}
         {params.error === "admin_only" && (

@@ -11,7 +11,7 @@ import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { inCurrentBeamCycle } from "@/lib/beam-cycle";
 import { eq, sql, desc, and } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -41,6 +41,11 @@ async function saveKnotting(formData: FormData) {
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "INVENTORY");
+  // An edit can't move a voucher out of a locked period either.
+  if (Number.isFinite(id) && id > 0) {
+    const [old] = await db.select({ d: schema.intKnottingSarning.vDate }).from(schema.intKnottingSarning).where(eq(schema.intKnottingSarning.id, id));
+    if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+  }
 
   const header = {
     vDate: txt(formData.get("v_date")) ?? today(),
@@ -546,6 +551,8 @@ async function deleteKnotting(formData: FormData) {
   if (session?.roleName !== "ADMIN") redirect("/inventory/knotting?error=admin_only");
   const id = intVal(formData.get("id"));
   if (id === null) return;
+  const [dated] = await db.select({ d: schema.intKnottingSarning.vDate }).from(schema.intKnottingSarning).where(eq(schema.intKnottingSarning.id, id));
+  await refuseIfLocked(dated?.d, "INVENTORY", `/inventory/knotting?id=${id}`);
   const [existing] = await db
     .select({ lvNo: schema.intKnottingSarning.lvNo, vNo: schema.intKnottingSarning.vNo })
     .from(schema.intKnottingSarning)

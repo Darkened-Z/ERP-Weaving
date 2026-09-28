@@ -10,7 +10,7 @@ import { DespatchAmountCalc, CountGridFiller, DesignThansFill } from "@/componen
 import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
-import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -401,6 +401,11 @@ export default async function GreyDespatchPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
     await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "INVENTORY");
+    // An edit can't move a voucher out of a locked period either.
+    if (isUpdate) {
+      const [old] = await db.select({ d: schema.intGreyDespatch.vDate }).from(schema.intGreyDespatch).where(eq(schema.intGreyDespatch.id, id));
+      if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+    }
 
     const data = {
       vDate: txt(formData.get("v_date")) ?? today(),
@@ -879,6 +884,8 @@ export default async function GreyDespatchPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/grey-despatch?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.intGreyDespatch.vDate }).from(schema.intGreyDespatch).where(eq(schema.intGreyDespatch.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/inventory/grey-despatch?id=${id}`);
     await db.transaction(async (tx) => {
       const [voucherRow] = await tx
         .select({ lNo: schema.intGreyDespatch.lNo })

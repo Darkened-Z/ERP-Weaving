@@ -5,6 +5,7 @@ import { ApprovalActions, ApprovalBadge } from "@/components/approval-controls";
 import { getSession, requireSession } from "@/lib/auth";
 import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
+import { assertStockNotNegative, negStockPart } from "@/lib/store-stock";
 import { acc } from "@/lib/gl-accounts";
 import { today } from "@/lib/time";
 import {
@@ -148,6 +149,7 @@ async function saveAdjustment(formData: FormData) {
 
   let savedId = isNew ? 0 : id;
   let codeExists = false;
+  const touchedParts: string[] = [];
   try {
     savedId = await db.transaction(async (tx) => {
       let aid: number;
@@ -182,6 +184,7 @@ async function saveAdjustment(formData: FormData) {
           .select()
           .from(schema.storeAdjustmentDetail)
           .where(eq(schema.storeAdjustmentDetail.adjId, id));
+        touchedParts.push(...oldLines.map((ol) => ol.partCode));
         for (const ol of oldLines) {
           await tx
             .update(schema.chartParts)
@@ -208,6 +211,8 @@ async function saveAdjustment(formData: FormData) {
           .set({ currentStock: sql`current_stock + ${l.qty}` })
           .where(eq(schema.chartParts.code, l.partCode));
       }
+      // A write-off can't remove more than is in stock, new or edited.
+      await assertStockNotNegative(tx, [...touchedParts, ...lines.map((l) => l.partCode)]);
 
       if (adjNo > 0) {
         await clearVoucher(tx, VTYPE_ADJ, adjNo, fyCode);
@@ -230,6 +235,8 @@ async function saveAdjustment(formData: FormData) {
     });
   } catch (e: unknown) {
     const msg = String((e as { message?: string })?.message ?? "");
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/adjustment${back}&error=negative_stock&part=${encodeURIComponent(neg)}`);
     if (/UNIQUE/i.test(msg)) codeExists = true;
     else throw e;
   }
@@ -273,6 +280,7 @@ async function deleteAdjustment(formData: FormData) {
   const thru = existing?.adjDate ? await lockedThrough(existing.adjDate, "STORE") : null;
   if (thru) redirect(`/store/adjustment?id=${id}&error=period_locked&thru=${thru}`);
 
+  try {
   await db.transaction(async (tx) => {
     if (existing?.adjNo) await clearVoucher(tx, VTYPE_ADJ, existing.adjNo, existing.fyCode);
     const oldLines = await tx
@@ -285,11 +293,18 @@ async function deleteAdjustment(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Undoing a stock gain whose parts were issued since would go negative.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx
       .delete(schema.storeAdjustmentDetail)
       .where(eq(schema.storeAdjustmentDetail.adjId, id));
     await tx.delete(schema.storeAdjustments).where(eq(schema.storeAdjustments.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/adjustment?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/adjustment");
   revalidatePath("/store/parts");
@@ -312,6 +327,7 @@ async function deletePostedAdjustment(formData: FormData) {
   const thru = existing?.adjDate ? await lockedThrough(existing.adjDate, "STORE") : null;
   if (thru) redirect(`/store/adjustment?id=${id}&error=period_locked&thru=${thru}`);
 
+  try {
   await db.transaction(async (tx) => {
     if (existing?.adjNo) await clearVoucher(tx, VTYPE_ADJ, existing.adjNo, existing.fyCode);
     const oldLines = await tx
@@ -324,11 +340,18 @@ async function deletePostedAdjustment(formData: FormData) {
         .set({ currentStock: sql`current_stock - ${ol.qty}` })
         .where(eq(schema.chartParts.code, ol.partCode));
     }
+    // Undoing a stock gain whose parts were issued since would go negative.
+    await assertStockNotNegative(tx, oldLines.map((ol) => ol.partCode));
     await tx
       .delete(schema.storeAdjustmentDetail)
       .where(eq(schema.storeAdjustmentDetail.adjId, id));
     await tx.delete(schema.storeAdjustments).where(eq(schema.storeAdjustments.id, id));
   });
+  } catch (e) {
+    const neg = negStockPart(e);
+    if (neg) redirect(`/store/adjustment?id=${id}&error=negative_stock&part=${encodeURIComponent(neg)}`);
+    throw e;
+  }
 
   revalidatePath("/store/adjustment");
   revalidatePath("/store/parts");
@@ -492,6 +515,11 @@ export default async function AdjustmentPage({
             Adjustment No already exists. Try saving again.
           </div>
         )}
+        {params.error === "negative_stock" && (
+          <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+            Part {params.part ?? ""} would go below zero stock. Reduce the quantity removed, or reverse the issues first.
+          </div>
+        )}
         {params.error === "period_locked" && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             Period is locked. Cannot save for this date
@@ -556,7 +584,7 @@ export default async function AdjustmentPage({
                 {formItem && formItem.approvalStatus === "POSTED" && role === "ADMIN" && (
                   <form action={deletePostedAdjustment} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message="This adjustment is POSTED. Deleting will reverse stock AND require manual reversal of GL entries. Continue?">
+                    <ConfirmButton message="This adjustment is POSTED. Deleting will reverse its stock and remove its ledger entry. Continue?">
                       Del (POSTED)
                     </ConfirmButton>
                   </form>
