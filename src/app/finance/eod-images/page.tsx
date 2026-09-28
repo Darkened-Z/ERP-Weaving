@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { today as todayPk } from "@/lib/time";
 import { ImageAttach } from "@/components/image-attach";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
@@ -18,7 +19,8 @@ const trim = (v: FormDataEntryValue | null): string | null => {
   const s = (v as string)?.trim();
   return s ? s : null;
 };
-const today = () => new Date().toISOString().slice(0, 10);
+// Mill-local (Karachi) date; the server clock is UTC.
+const today = () => todayPk();
 
 async function saveImage(formData: FormData) {
   "use server";

@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { today as todayPk } from "@/lib/time";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { DateBox } from "@/components/date-box";
@@ -11,7 +12,7 @@ export default async function ProductionPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date: dateParam } = await searchParams;
-  const date = dateParam || new Date().toISOString().split("T")[0];
+  const date = dateParam || todayPk();
 
   const rows = await db
     .select()

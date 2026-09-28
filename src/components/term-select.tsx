@@ -70,7 +70,9 @@ export function TermSelect({
             <label className="label block mb-1">
               Due Date <span className="text-[9px] text-[var(--muted)]">(auto)</span>
             </label>
-            <DateBox name="due_date" className="input-box mono" />
+            {/* Remounts when Days recomputes the date; a hand-typed override is
+                kept until Days changes again. Also carries the saved date on edit. */}
+            <DateBox key={due} name="due_date" defaultValue={due} className="input-box mono" />
           </div>
         </>
       )}

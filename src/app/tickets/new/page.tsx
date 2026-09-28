@@ -32,6 +32,14 @@ export default async function NewTicketPage({
 
   const users = await db.select().from(schema.users);
   const looms = await db.select().from(schema.looms);
+  // Options are "shed|loom"; a bare loom number (older links) picks the first
+  // loom with that number.
+  const loomDefault = (() => {
+    const p = (params.loom ?? "").trim();
+    if (!p || p.includes("|")) return p;
+    const hit = looms.find((l) => String(l.loomNo) === p);
+    return hit ? `${hit.shed}|${hit.loomNo}` : "";
+  })();
   const greyConstructions = await db.select().from(schema.greyConstruction);
 
   const [convContracts, purContracts, salContracts, coaParties] = await Promise.all([
@@ -242,7 +250,7 @@ export default async function NewTicketPage({
               <select
                 name="loom_no"
                 className="input-box mono"
-                defaultValue={params.loom ?? ""}
+                defaultValue={loomDefault}
               >
                 <option value="">--</option>
                 {looms.map((l) => (

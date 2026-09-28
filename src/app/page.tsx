@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function Dashboard() {
 
   const [vRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.transMain).where(eq(schema.transMain.fyCode, fy));
   const [loomRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms);
-  const [runningRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms).where(eq(schema.looms.statusWrk, "RUNNING"));
+  const [runningRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms).where(inArray(schema.looms.statusWrk, ["RUNNING", "R"]));
   const [contractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts);
   const [activeContractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts).where(sql`status = 'A'`);
   const oracleContracts = await db.get<{ total: number; running: number }>(sql`
