@@ -9,7 +9,7 @@ export default async function InventoryReportsPage() {
   const [yarnRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.yarnTransactions);
   const [beamRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.beamTransactions);
   const [knotRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.knottingTransactions);
-  const [prodRow] = await db.select({ total: sql<number>`coalesce(sum(meters), 0)` }).from(schema.dailyProduction);
+  const [prodRow] = await db.select({ total: sql<number>`coalesce(sum(${schema.intDailyProductionSet.totalCount}), 0)` }).from(schema.intDailyProductionSet);
   const [greyRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.greyDespatch);
   const [ppRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.greyPakiParchi);
   const [hoursRow] = await db.select({ total: sql<number>`coalesce(sum(hours), 0)` }).from(schema.productionHours);
@@ -45,7 +45,7 @@ export default async function InventoryReportsPage() {
         { label: "Total Output", value: formatNum(prodRow?.total ?? 0) + " mtrs" },
         { label: "Looms", value: loomRow?.count ?? 0 },
       ],
-      href: "/weaving/production",
+      href: "/weaving/looms",
     },
     {
       label: "Grey Stock Report",

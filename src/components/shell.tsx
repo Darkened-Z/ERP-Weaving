@@ -8,8 +8,6 @@ const SECTIONS = [
     items: [
       { href: "/", label: "Dashboard", key: "dash" },
       { href: "/quick-contract", label: "Quick Contract", key: "quick-contract" },
-      { href: "/owner/dashboard", label: "Executive Overview", key: "owner-dash" },
-      { href: "/production/board", label: "Live Production Board", key: "prod-board" },
       { href: "/tickets", label: "Tickets", key: "tickets" },
       { href: "/my-tasks", label: "My Tasks", key: "my-tasks" },
       { href: "/my-queue", label: "My Queue", key: "my-queue" },
@@ -105,7 +103,6 @@ const SECTIONS = [
           { href: "/reports/weaving/counts-accounts", label: "Counts Accounts", key: "w-counts" },
           { href: "/reports/weaving/counts-accounts-design", label: "Counts Accounts by Design", key: "w-counts-design" },
           { href: "/reports/weaving/counts-accounts-summary", label: "Counts Accounts Summary", key: "w-counts-sum" },
-          { href: "/reports/weaving/production-date-wise", label: "Production Date Wise", key: "w-prod-date-wise" },
           { href: "/reports/weaving/delivery-order-partywise", label: "Grey Delivery Order Party Wise", key: "w-do-partywise" },
           { href: "/reports/weaving/daily-folding", label: "Daily Folding", key: "w-daily-folding" },
           { href: "/reports/weaving/folding-stock", label: "Daily Folding Stock", key: "w-folding-stock" },
@@ -113,7 +110,6 @@ const SECTIONS = [
           { href: "/reports/weaving/folding-foreman", label: "Folding by Foreman", key: "w-folding-foreman" },
           { href: "/reports/weaving/sizing-warping-consumption", label: "Sizing/Warping Consumption", key: "w-szg-wrp" },
           { href: "/reports/weaving/knotting-bill", label: "Knotting Bill Register", key: "w-knotting-bill" },
-          { href: "/reports/weaving/loom-rpm-avg", label: "Loom RPM Average", key: "w-loom-rpm-avg" },
           { href: "/reports/weaving/missing-audit", label: "Missing Audit / Supervisor", key: "w-missing-audit" },
           { href: "/reports/weaving/empty-beam-stock", label: "Empty Beam Stock", key: "w-empty-beam-stock" },
         ],
@@ -206,8 +202,6 @@ const SECTIONS = [
       { href: "/reports/voucher-daybook", label: "Voucher Daybook", key: "fin-daybook" },
       { href: "/reports/gpv", label: "Print Voucher (GPV)", key: "fin-gpv" },
       { href: "/reports/grey-aging", label: "Grey Stock Aging", key: "grey-aging" },
-      { href: "/reports/payroll", label: "Weaver Payroll", key: "payroll" },
-      { href: "/reports/loom-efficiency", label: "Loom Efficiency", key: "loom-eff" },
     ],
   },
   {
