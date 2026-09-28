@@ -15,16 +15,7 @@ function yearsBack(d: string, n: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
-/** 2026-05-07 → 07-05-26, the way the Oracle sheet prints dates. */
-function shortDate(iso: string | null): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return `${d}-${m}-${y.slice(2)}`;
-}
-
 const n2 = (v: number) => (v ? fmt2(v) : "");
-const n4 = (v: number) =>
-  v ? String(Math.round(v * 10000) / 10000).replace(/^0\./, ".") : "";
 
 /**
  * WEAVING COUNTS ACCOUNTS REPORT — per party (Oracle WEAVING_COUNTS_ACCOUNTS_PP).
@@ -131,6 +122,7 @@ export async function CountsAccountsPartyWiseReport({
   };
 
   type Row = {
+    party: string;
     bookNo: string; contNo: string; vNo: string; date: string; than: number; mtrs: number;
     dying: string; product: string; prdQlty: string; resultedCount: string;
     endsWarp: number; endsWeft: number; endsTotal: number;
@@ -152,6 +144,7 @@ export async function CountsAccountsPartyWiseReport({
     // share it, so take whichever side carries one.
     const rate = warp.rate || weft.rate || 0;
     return {
+      party: h.party ?? "",
       bookNo: c?.lContNo != null ? String(c.lContNo) : h.convContNo ?? "—",
       contNo: h.convContNo ?? "—",
       vNo: h.vNo,
@@ -171,20 +164,38 @@ export async function CountsAccountsPartyWiseReport({
     };
   });
 
-  // Group by the contract's book no, the way the Oracle sheet blocks it.
-  const blocks = new Map<string, Row[]>();
-  for (const r of rows) {
-    const k = `${r.bookNo}||${r.contNo}`;
-    (blocks.get(k) ?? blocks.set(k, []).get(k)!).push(r);
-  }
-  const ordered = [...blocks.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-
   const sumOf = (rs: Row[]) =>
     rs.reduce(
       (a, r) => ({ than: a.than + r.than, mtrs: a.mtrs + r.mtrs, con: a.con + r.conTotal, amount: a.amount + r.amount }),
       { than: 0, mtrs: 0, con: 0, amount: 0 },
     );
   const grand = sumOf(rows);
+
+  type CountGroup = { countDesc: string; lbs: number; bags: number; rate: number; amount: number; contNo: string };
+  type PartyBlock = { party: string; counts: CountGroup[]; total: { lbs: number; bags: number; amount: number } };
+  const pMap = new Map<string, Map<string, CountGroup>>();
+  for (const r of rows) {
+    const party = r.party || "Unknown";
+    if (!pMap.has(party)) pMap.set(party, new Map());
+    const cMap = pMap.get(party)!;
+    const key = r.resultedCount || "—";
+    const ex = cMap.get(key);
+    if (ex) {
+      ex.lbs += r.conTotal;
+      ex.bags += r.than;
+      ex.amount += r.amount;
+      if (!ex.rate && r.rate) ex.rate = r.rate;
+    } else {
+      cMap.set(key, { countDesc: key, lbs: r.conTotal, bags: r.than, rate: r.rate, amount: r.amount, contNo: r.contNo });
+    }
+  }
+  const partyBlocks: PartyBlock[] = [...pMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([party, cMap]) => {
+      const counts = [...cMap.values()].sort((a, b) => a.countDesc.localeCompare(b.countDesc));
+      const total = counts.reduce((t, c) => ({ lbs: t.lbs + c.lbs, bags: t.bags + c.bags, amount: t.amount + c.amount }), { lbs: 0, bags: 0, amount: 0 });
+      return { party, counts, total };
+    });
 
   // Summary: what the party was sent, what the cloth consumed, what is left.
   // Sent = yarn issued to the party (receipts out of the mill's godown to it).
@@ -203,27 +214,16 @@ export async function CountsAccountsPartyWiseReport({
   const sumRate = Number(sentRows[0]?.rate ?? 0) || rows.find((r) => r.rate)?.rate || 0;
   const balLbs = sentLbs - grand.con;
 
-  const excelRows = ordered.flatMap(([, rs]) =>
-    rs.map((r) => ({
-      book: r.bookNo, vNo: r.vNo, date: shortDate(r.date), than: r.than, mtrs: r.mtrs,
-      dying: r.dying, product: r.product, count: r.resultedCount,
-      endsW: r.endsWarp, endsF: r.endsWeft, lbsMW: r.lbsMWarp, lbsMF: r.lbsMWeft,
-      conW: r.conWarp, conF: r.conWeft, conT: r.conTotal, convRate: r.convRate, rate: r.rate, amount: r.amount,
+  const excelRows = partyBlocks.flatMap((pb) =>
+    pb.counts.map((c) => ({
+      party: pb.party, count: c.countDesc, lbs: c.lbs, bags: c.bags, rate: c.rate, amount: c.amount,
     })),
   );
   const excelCols = [
-    { key: "book", label: "Book No" }, { key: "vNo", label: "V.No" }, { key: "date", label: "Date" },
-    { key: "than", label: "Than" }, { key: "mtrs", label: "Meters" }, { key: "dying", label: "Dying" },
-    { key: "product", label: "Product" }, { key: "count", label: "Resulted Count" },
-    { key: "endsW", label: "Ends Warp" }, { key: "endsF", label: "Ends Weft" },
-    { key: "lbsMW", label: "Lbs/M Warp" }, { key: "lbsMF", label: "Lbs/M Weft" },
-    { key: "conW", label: "Consumed Warp" }, { key: "conF", label: "Consumed Weft" },
-    { key: "conT", label: "Consumed Total" }, { key: "convRate", label: "Conv Rate" },
+    { key: "party", label: "Party" }, { key: "count", label: "Count Desc" },
+    { key: "lbs", label: "Total Lbs" }, { key: "bags", label: "Bages" },
     { key: "rate", label: "Rate" }, { key: "amount", label: "Amount" },
   ];
-
-  const HEADS = ["Book No", "V.No", "Date", "Than", "Meters", "Dying", "Product", "Resulted Count",
-    "Ends W/F/T", "Lbs/M W/F", "Consumed W/F/T", "Conv Rate", "Rate", "Amount"];
 
   return (
     <Shell active={navKey}>
@@ -263,75 +263,63 @@ export async function CountsAccountsPartyWiseReport({
           <button className="btn btn-sm">View</button>
         </form>
 
-        {ordered.length === 0 ? (
+        {partyBlocks.length === 0 ? (
           <div className="border border-black p-6 text-center text-[13px] text-[var(--muted)]">
             No despatches in this range.
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto border border-black mb-4">
-              <table className="mono text-[11px] w-full" style={{ minWidth: 1250 }}>
+            <div className="border border-black mb-4">
+              <table className="mono text-[12px] w-full">
                 <thead>
                   <tr className="border-b border-black bg-gray-100">
-                    {HEADS.map((h, i) => (
-                      <th key={h} className={`px-2 py-1 whitespace-nowrap ${i >= 3 && i !== 5 && i !== 6 && i !== 7 ? "text-right" : "text-left"}`}>{h}</th>
-                    ))}
+                    <th className="px-2 py-1 text-left">Count Desc</th>
+                    <th className="px-2 py-1 text-right" style={{ width: 90 }}>Total Lbs</th>
+                    <th className="px-2 py-1 text-right" style={{ width: 70 }}>Bages</th>
+                    <th className="px-2 py-1 text-right hidden sm:table-cell" style={{ width: 60 }}>Bal Lbs</th>
+                    <th className="px-2 py-1 text-right" style={{ width: 55 }}>Rate</th>
+                    <th className="px-2 py-1 text-right" style={{ width: 100 }}>Amount</th>
                   </tr>
                 </thead>
-                {ordered.map(([key, rs]) => {
-                  const sub = sumOf(rs);
-                  return (
-                    <tbody key={key}>
-                      <tr style={{ background: "#0f172a", color: "white" }}>
-                        <td colSpan={HEADS.length} className="px-2 py-1 font-bold">
-                          CONV.C# {rs[0].bookNo}{rs[0].contNo !== rs[0].bookNo ? ` · ${rs[0].contNo}` : ""}
-                        </td>
+                {partyBlocks.map((pb) => (
+                  <tbody key={pb.party}>
+                    <tr style={{ background: "#0f172a", color: "white" }}>
+                      <td className="px-2 py-1.5 font-bold text-[13px]" colSpan={2}>
+                        {pb.party}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-bold">{pb.counts.length}</td>
+                      <td className="hidden sm:table-cell" />
+                      <td />
+                      <td className="px-2 py-1.5 text-right font-bold">{n2(pb.total.amount)}</td>
+                    </tr>
+                    {pb.counts.map((c, i) => (
+                      <tr key={`${c.countDesc}-${i}`} className="border-b border-[var(--border-light)]">
+                        <td className="px-2 py-1 text-[11px]">{c.countDesc || "—"}</td>
+                        <td className="px-2 py-1 text-right">{n2(c.lbs)}</td>
+                        <td className="px-2 py-1 text-right">{c.bags || ""}</td>
+                        <td className="px-2 py-1 text-right hidden sm:table-cell" />
+                        <td className="px-2 py-1 text-right">{c.rate || ""}</td>
+                        <td className="px-2 py-1 text-right">{n2(c.amount)}</td>
                       </tr>
-                      {rs.map((r, i) => (
-                        <tr key={`${r.vNo}-${i}`} className="border-b border-[var(--border-light)]">
-                          <td className="px-2 py-1">{r.bookNo}</td>
-                          <td className="px-2 py-1">{r.vNo}</td>
-                          <td className="px-2 py-1 whitespace-nowrap">{shortDate(r.date)}</td>
-                          <td className="px-2 py-1 text-right">{r.than || ""}</td>
-                          <td className="px-2 py-1 text-right">{n2(r.mtrs)}</td>
-                          <td className="px-2 py-1">{r.dying}</td>
-                          <td className="px-2 py-1">{r.product}</td>
-                          <td className="px-2 py-1">{r.resultedCount}</td>
-                          <td className="px-2 py-1 text-right whitespace-nowrap">
-                            {r.endsWarp || r.endsWeft ? `${r.endsWarp} / ${r.endsWeft} / ${r.endsTotal}` : ""}
-                          </td>
-                          <td className="px-2 py-1 text-right whitespace-nowrap">
-                            {r.lbsMWarp || r.lbsMWeft ? `${n4(r.lbsMWarp)} / ${n4(r.lbsMWeft)}` : ""}
-                          </td>
-                          <td className="px-2 py-1 text-right whitespace-nowrap">
-                            {r.conTotal ? `${n2(r.conWarp)} / ${n2(r.conWeft)} / ${n2(r.conTotal)}` : ""}
-                          </td>
-                          <td className="px-2 py-1 text-right">{r.convRate || ""}</td>
-                          <td className="px-2 py-1 text-right">{r.rate || ""}</td>
-                          <td className="px-2 py-1 text-right">{n2(r.amount)}</td>
-                        </tr>
-                      ))}
-                      <tr className="font-bold" style={{ background: "#dbeafe" }}>
-                        <td className="px-2 py-1 italic" colSpan={3}>CONV.C# TOTAL</td>
-                        <td className="px-2 py-1 text-right">{fmt2(sub.than)}</td>
-                        <td className="px-2 py-1 text-right">{fmt2(sub.mtrs)}</td>
-                        <td colSpan={5} />
-                        <td className="px-2 py-1 text-right">{fmt2(sub.con)}</td>
-                        <td colSpan={2} />
-                        <td className="px-2 py-1 text-right">{fmt2(sub.amount)}</td>
-                      </tr>
-                    </tbody>
-                  );
-                })}
+                    ))}
+                    <tr className="font-bold" style={{ background: "#dbeafe" }}>
+                      <td className="px-2 py-1 italic">Party Total</td>
+                      <td className="px-2 py-1 text-right">{n2(pb.total.lbs)}</td>
+                      <td className="px-2 py-1 text-right">{pb.total.bags || ""}</td>
+                      <td className="hidden sm:table-cell" />
+                      <td />
+                      <td className="px-2 py-1 text-right">{n2(pb.total.amount)}</td>
+                    </tr>
+                  </tbody>
+                ))}
                 <tfoot>
                   <tr className="font-bold border-t-2 border-black" style={{ background: "#f3e8ff" }}>
-                    <td className="px-2 py-1.5 italic" colSpan={3}>GRAND TOTAL</td>
-                    <td className="px-2 py-1.5 text-right">{fmt2(grand.than)}</td>
-                    <td className="px-2 py-1.5 text-right">{fmt2(grand.mtrs)}</td>
-                    <td colSpan={5} />
-                    <td className="px-2 py-1.5 text-right">{fmt2(grand.con)}</td>
-                    <td colSpan={2} />
-                    <td className="px-2 py-1.5 text-right">{fmt2(grand.amount)}</td>
+                    <td className="px-2 py-1.5 italic">Grand Total</td>
+                    <td className="px-2 py-1.5 text-right">{n2(grand.con)}</td>
+                    <td className="px-2 py-1.5 text-right">{grand.than || ""}</td>
+                    <td className="hidden sm:table-cell" />
+                    <td />
+                    <td className="px-2 py-1.5 text-right">{n2(grand.amount)}</td>
                   </tr>
                 </tfoot>
               </table>
