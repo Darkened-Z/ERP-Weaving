@@ -22,7 +22,7 @@ export function WarpedBeamCalc() {
       const sizingRate = val(q("sizingRate"));
       const sizingRateKg = val(q("sizingRateKg"));
       const rc = val(q("resultCountSzg"));
-      const rcDiv = rc > 0 ? rc : 1;
+      const rcMul = rc > 0 ? rc : 1;
       let amountSum = 0;
       let lengthSum = 0;
       form.querySelectorAll("tbody tr").forEach((tr) => {
@@ -39,7 +39,7 @@ export function WarpedBeamCalc() {
         }
         if (amount) {
           if (bl?.value && ends?.value && sizingRate > 0) {
-            set(amount, (val(bl) * val(ends)) / 1693.2 / rcDiv * sizingRate);
+            set(amount, (val(bl) * val(ends)) / 1693.2 * rcMul * sizingRate);
           } else if (hasRow && sizingRate <= 0) {
             amount.value = "";
           }
