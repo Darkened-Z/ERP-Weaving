@@ -171,7 +171,7 @@ export async function CountsAccountsPartyWiseReport({
     );
   const grand = sumOf(rows);
 
-  type CountGroup = { countDesc: string; lbs: number; bags: number; rate: number; amount: number; contNo: string };
+  type CountGroup = { countDesc: string; lbs: number; bags: number; rate: number; amount: number };
   type PartyBlock = { party: string; counts: CountGroup[]; total: { lbs: number; bags: number; amount: number } };
   const pMap = new Map<string, Map<string, CountGroup>>();
   for (const r of rows) {
@@ -186,7 +186,7 @@ export async function CountsAccountsPartyWiseReport({
       ex.amount += r.amount;
       if (!ex.rate && r.rate) ex.rate = r.rate;
     } else {
-      cMap.set(key, { countDesc: key, lbs: r.conTotal, bags: r.than, rate: r.rate, amount: r.amount, contNo: r.contNo });
+      cMap.set(key, { countDesc: key, lbs: r.conTotal, bags: r.than, rate: r.rate, amount: r.amount });
     }
   }
   const partyBlocks: PartyBlock[] = [...pMap.entries()]
@@ -276,7 +276,6 @@ export async function CountsAccountsPartyWiseReport({
                     <th className="px-2 py-1 text-left">Count Desc</th>
                     <th className="px-2 py-1 text-right" style={{ width: 90 }}>Total Lbs</th>
                     <th className="px-2 py-1 text-right" style={{ width: 70 }}>Bages</th>
-                    <th className="px-2 py-1 text-right hidden sm:table-cell" style={{ width: 60 }}>Bal Lbs</th>
                     <th className="px-2 py-1 text-right" style={{ width: 55 }}>Rate</th>
                     <th className="px-2 py-1 text-right" style={{ width: 100 }}>Amount</th>
                   </tr>
@@ -284,20 +283,16 @@ export async function CountsAccountsPartyWiseReport({
                 {partyBlocks.map((pb) => (
                   <tbody key={pb.party}>
                     <tr style={{ background: "#0f172a", color: "white" }}>
-                      <td className="px-2 py-1.5 font-bold text-[13px]" colSpan={2}>
-                        {pb.party}
+                      <td className="px-2 py-1.5 font-bold text-[13px]" colSpan={5}>
+                        {pb.party} <span className="opacity-70">· {pb.counts.length}</span>
+                        <span className="float-right">{n2(pb.total.amount)}</span>
                       </td>
-                      <td className="px-2 py-1.5 text-right font-bold">{pb.counts.length}</td>
-                      <td className="hidden sm:table-cell" />
-                      <td />
-                      <td className="px-2 py-1.5 text-right font-bold">{n2(pb.total.amount)}</td>
                     </tr>
                     {pb.counts.map((c, i) => (
                       <tr key={`${c.countDesc}-${i}`} className="border-b border-[var(--border-light)]">
                         <td className="px-2 py-1 text-[11px]">{c.countDesc || "—"}</td>
                         <td className="px-2 py-1 text-right">{n2(c.lbs)}</td>
                         <td className="px-2 py-1 text-right">{c.bags || ""}</td>
-                        <td className="px-2 py-1 text-right hidden sm:table-cell" />
                         <td className="px-2 py-1 text-right">{c.rate || ""}</td>
                         <td className="px-2 py-1 text-right">{n2(c.amount)}</td>
                       </tr>
@@ -306,7 +301,6 @@ export async function CountsAccountsPartyWiseReport({
                       <td className="px-2 py-1 italic">Party Total</td>
                       <td className="px-2 py-1 text-right">{n2(pb.total.lbs)}</td>
                       <td className="px-2 py-1 text-right">{pb.total.bags || ""}</td>
-                      <td className="hidden sm:table-cell" />
                       <td />
                       <td className="px-2 py-1 text-right">{n2(pb.total.amount)}</td>
                     </tr>
@@ -317,7 +311,6 @@ export async function CountsAccountsPartyWiseReport({
                     <td className="px-2 py-1.5 italic">Grand Total</td>
                     <td className="px-2 py-1.5 text-right">{n2(grand.con)}</td>
                     <td className="px-2 py-1.5 text-right">{grand.than || ""}</td>
-                    <td className="hidden sm:table-cell" />
                     <td />
                     <td className="px-2 py-1.5 text-right">{n2(grand.amount)}</td>
                   </tr>
