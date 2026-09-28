@@ -48,7 +48,8 @@ export default async function YarnPurchaseAvgPage({
   const purchasedRows = await db
     .select({
       contNo: schema.extYarnPurVoucherLine.contNo,
-      totalBags: sql<number>`coalesce(sum(bag), 0)`,
+      // bag is blank on current lines; qty carries the bag count there.
+      totalBags: sql<number>`coalesce(sum(coalesce(nullif(bag, 0), qty, 0)), 0)`,
     })
     .from(schema.extYarnPurVoucherLine)
     .where(sql`cont_no is not null and cont_no != ''`)

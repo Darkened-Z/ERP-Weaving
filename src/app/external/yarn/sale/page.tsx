@@ -18,7 +18,7 @@ import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
-import { assertPeriodOpen } from "@/lib/period-lock";
+import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { num, txt, escLike } from "@/lib/form";
@@ -124,7 +124,7 @@ export default async function YarnSaleVoucherPage({
   const salAggByCont = await db
     .select({
       contNo: schema.extYarnSalVoucherLine.contNo,
-      bags: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+      bags: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
     })
     .from(schema.extYarnSalVoucherLine)
     .where(formVoucher ? ne(schema.extYarnSalVoucherLine.voucherId, formVoucher.id) : undefined)
@@ -364,7 +364,7 @@ export default async function YarnSaleVoucherPage({
   const salByBatch = await db
     .select({
       batchNo: schema.extYarnSalVoucherLine.batchNo,
-      bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+      bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
       con: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.cons}), 0)`,
       lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
     })
@@ -563,7 +563,7 @@ export default async function YarnSaleVoucherPage({
   if (voucherCounts.length) {
     const purStock = await db
       .select({
-        bag: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.bag}), 0)`,
+        bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0)), 0)`,
         con: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.con}), 0)`,
         lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
       })
@@ -571,7 +571,7 @@ export default async function YarnSaleVoucherPage({
       .where(inArray(schema.extYarnPurVoucherLine.count, voucherCounts));
     const salStock = await db
       .select({
-        bag: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.bag}), 0)`,
+        bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
         con: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.cons}), 0)`,
         lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
       })
@@ -882,6 +882,11 @@ export default async function YarnSaleVoucherPage({
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
+      // An edit can't move a voucher out of a locked period either.
+      if (Number.isFinite(id) && id > 0) {
+        const [old] = await db.select({ d: schema.extYarnSalVoucher.vDate }).from(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));
+        if (old?.d) await assertPeriodOpen(old.d, "INVENTORY");
+      }
 
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
@@ -1094,6 +1099,8 @@ export default async function YarnSaleVoucherPage({
     if (s?.roleName !== "ADMIN") redirect("/external/yarn/sale?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [dated] = await db.select({ d: schema.extYarnSalVoucher.vDate }).from(schema.extYarnSalVoucher).where(eq(schema.extYarnSalVoucher.id, id));
+    await refuseIfLocked(dated?.d, "INVENTORY", `/external/yarn/sale?id=${id}`);
     const lvRow = await db
       .select({ lvNo: schema.extYarnSalVoucher.lvNo })
       .from(schema.extYarnSalVoucher)

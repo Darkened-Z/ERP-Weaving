@@ -3,7 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
-import { and, gte, lte, sql } from "drizzle-orm";
+import { and, lte, sql } from "drizzle-orm";
 import { DateBox } from "@/components/date-box";
 import {
   fmt,
@@ -39,89 +39,105 @@ export default async function YarnStockPage({
   ]);
   const countDescMap = new Map(countMetaRows.map((r) => [r.code, r.description]));
 
-  const receiptConds = [
-    gte(schema.intYarnReceipt.vDate, from),
-    lte(schema.intYarnReceipt.vDate, to),
-  ];
+  // Everything up to `to` is read so the rows can open with what was already
+  // lying there on `from`. With a location picked, stock is what came INTO it
+  // (receipts to it, transfers to it) less what left (returns, transfers
+  // out). Without one it is mill-wide: receipts less returns, less yarn sent
+  // to the loom sheds — a godown-to-godown move doesn't change it.
+  const receiptConds = [lte(schema.intYarnReceipt.vDate, to)];
   if (party) {
     const pat = `%${escLike(party)}%`;
     receiptConds.push(sql`${schema.intYarnReceipt.party} LIKE ${pat} ESCAPE '\\'`);
   }
-  if (count) {
-    receiptConds.push(sql`${schema.intYarnReceipt.countCode} = ${count}`);
-  }
+  if (count) receiptConds.push(sql`${schema.intYarnReceipt.countCode} = ${count}`);
   if (location) {
     const pat = `%${escLike(location)}%`;
-    receiptConds.push(sql`${schema.intYarnReceipt.locationFrom} LIKE ${pat} ESCAPE '\\'`);
+    receiptConds.push(sql`${schema.intYarnReceipt.yarnPartyTo} LIKE ${pat} ESCAPE '\\'`);
   }
-
-  const transferConds = [
-    gte(schema.intYarnTransfer.vDate, from),
-    lte(schema.intYarnTransfer.vDate, to),
-  ];
+  const transferConds = [lte(schema.intYarnTransfer.vDate, to)];
   if (party) {
     const pat = `%${escLike(party)}%`;
     transferConds.push(sql`(${schema.intYarnTransfer.transferFromParty} LIKE ${pat} ESCAPE '\\' OR ${schema.intYarnTransfer.transferToParty} LIKE ${pat} ESCAPE '\\')`);
   }
-  if (count) {
-    transferConds.push(sql`${schema.intYarnTransfer.countCode} = ${count}`);
-  }
-  if (location) {
-    const pat = `%${escLike(location)}%`;
-    transferConds.push(sql`(${schema.intYarnTransfer.locationFrom} LIKE ${pat} ESCAPE '\\' OR ${schema.intYarnTransfer.locationTo} LIKE ${pat} ESCAPE '\\')`);
-  }
+  if (count) transferConds.push(sql`${schema.intYarnTransfer.countCode} = ${count}`);
 
-  const receiptAgg = await db
+  const receipts = await db
     .select({
+      vDate: schema.intYarnReceipt.vDate,
       countCode: schema.intYarnReceipt.countCode,
-      bags: sql<number>`coalesce(sum(${schema.intYarnReceipt.bags}), 0)`,
-      lbs: sql<number>`coalesce(sum(${schema.intYarnReceipt.qtyLbs}), 0)`,
-      amt: sql<number>`coalesce(sum(${schema.intYarnReceipt.amount}), 0)`,
+      trnType: schema.intYarnReceipt.trnType,
+      bags: schema.intYarnReceipt.bags,
+      lbs: schema.intYarnReceipt.qtyLbs,
+      amt: schema.intYarnReceipt.amount,
     })
     .from(schema.intYarnReceipt)
-    .where(and(...receiptConds))
-    .groupBy(schema.intYarnReceipt.countCode);
-
-  const transferAgg = await db
+    .where(and(...receiptConds));
+  const transfers = await db
     .select({
+      vDate: schema.intYarnTransfer.vDate,
       countCode: schema.intYarnTransfer.countCode,
-      bags: sql<number>`coalesce(sum(${schema.intYarnTransfer.qtyBags}), 0)`,
-      lbs: sql<number>`coalesce(sum(${schema.intYarnTransfer.qtyLbs}), 0)`,
+      from: schema.intYarnTransfer.locationFrom,
+      to: schema.intYarnTransfer.locationTo,
+      bags: schema.intYarnTransfer.qtyBags,
+      lbs: schema.intYarnTransfer.qtyLbs,
     })
     .from(schema.intYarnTransfer)
-    .where(and(...transferConds))
-    .groupBy(schema.intYarnTransfer.countCode);
+    .where(and(...transferConds));
 
-  const map = new Map<string, { count: string; rcvBags: number; rcvLbs: number; rcvAmt: number; issBags: number; issLbs: number }>();
-  for (const r of receiptAgg) {
-    const k = r.countCode ?? "—";
-    const b = map.get(k) ?? { count: k, rcvBags: 0, rcvLbs: 0, rcvAmt: 0, issBags: 0, issLbs: 0 };
-    b.rcvBags += r.bags;
-    b.rcvLbs += r.lbs;
-    b.rcvAmt += r.amt;
+  type Acc = { count: string; opBags: number; opLbs: number; rcvBags: number; rcvLbs: number; rcvAmt: number; issBags: number; issLbs: number };
+  const map = new Map<string, Acc>();
+  const at = (k: string) => {
+    const b = map.get(k) ?? { count: k, opBags: 0, opLbs: 0, rcvBags: 0, rcvLbs: 0, rcvAmt: 0, issBags: 0, issLbs: 0 };
     map.set(k, b);
+    return b;
+  };
+  // dir: +1 into stock, -1 out of it.
+  const post = (count: string | null, vDate: string, dir: 1 | -1, bags: number, lbs: number, amt = 0) => {
+    const b = at(count ?? "—");
+    if (vDate < from) {
+      b.opBags += dir * bags;
+      b.opLbs += dir * lbs;
+    } else if (dir > 0) {
+      b.rcvBags += bags;
+      b.rcvLbs += lbs;
+      b.rcvAmt += amt;
+    } else {
+      b.issBags += bags;
+      b.issLbs += lbs;
+    }
+  };
+  const locL = location.toLowerCase();
+  const isLoc = (v: string | null) => !!v && v.toLowerCase().includes(locL);
+  for (const r of receipts) {
+    const ret = (r.trnType ?? "").toUpperCase() === "RETN";
+    post(r.countCode, r.vDate, ret ? -1 : 1, Number(r.bags ?? 0), Number(r.lbs ?? 0), ret ? 0 : Number(r.amt ?? 0));
   }
-  for (const r of transferAgg) {
-    const k = r.countCode ?? "—";
-    const b = map.get(k) ?? { count: k, rcvBags: 0, rcvLbs: 0, rcvAmt: 0, issBags: 0, issLbs: 0 };
-    b.issBags += r.bags;
-    b.issLbs += r.lbs;
-    map.set(k, b);
+  for (const t of transfers) {
+    const bags = Number(t.bags ?? 0);
+    const lbs = Number(t.lbs ?? 0);
+    if (location) {
+      if (isLoc(t.to) && !isLoc(t.from)) post(t.countCode, t.vDate, 1, bags, lbs);
+      else if (isLoc(t.from) && !isLoc(t.to)) post(t.countCode, t.vDate, -1, bags, lbs);
+    } else if ((t.to ?? "").toUpperCase().startsWith("LOOM SHED")) {
+      post(t.countCode, t.vDate, -1, bags, lbs);
+    }
   }
 
   const rows = Array.from(map.values())
     .map((r) => ({
       ...r,
-      balBags: r.rcvBags - r.issBags,
-      balLbs: r.rcvLbs - r.issLbs,
+      balBags: r.opBags + r.rcvBags - r.issBags,
+      balLbs: r.opLbs + r.rcvLbs - r.issLbs,
       avgRate: r.rcvLbs > 0 ? r.rcvAmt / r.rcvLbs : 0,
     }))
-    .filter((r) => r.rcvLbs || r.issLbs)
+    .filter((r) => r.opLbs || r.rcvLbs || r.issLbs)
     .filter((r) => (onlyNeg ? r.balLbs < 0 || r.balBags < 0 : true))
     .sort((a, b) => a.count.localeCompare(b.count));
 
   const tot = rows.reduce(
     (t, r) => ({
+      opBags: t.opBags + r.opBags,
+      opLbs: t.opLbs + r.opLbs,
       rcvBags: t.rcvBags + r.rcvBags,
       rcvLbs: t.rcvLbs + r.rcvLbs,
       rcvAmt: t.rcvAmt + r.rcvAmt,
@@ -130,7 +146,7 @@ export default async function YarnStockPage({
       balBags: t.balBags + r.balBags,
       balLbs: t.balLbs + r.balLbs,
     }),
-    { rcvBags: 0, rcvLbs: 0, rcvAmt: 0, issBags: 0, issLbs: 0, balBags: 0, balLbs: 0 }
+    { opBags: 0, opLbs: 0, rcvBags: 0, rcvLbs: 0, rcvAmt: 0, issBags: 0, issLbs: 0, balBags: 0, balLbs: 0 }
   );
 
   return (
@@ -148,6 +164,8 @@ export default async function YarnStockPage({
             <ExcelExportButton
               rows={rows.map((r) => ({
                 count: r.count,
+                opBags: r.opBags,
+                opLbs: Math.round(r.opLbs),
                 rcvBags: r.rcvBags,
                 rcvLbs: Math.round(r.rcvLbs),
                 issBags: r.issBags,
@@ -158,6 +176,8 @@ export default async function YarnStockPage({
               }))}
               columns={[
                 { key: "count", label: "Count" },
+                { key: "opBags", label: "Op Bags" },
+                { key: "opLbs", label: "Op Lbs" },
                 { key: "rcvBags", label: "Rcv Bags" },
                 { key: "rcvLbs", label: "Rcv Lbs" },
                 { key: "issBags", label: "Iss Bags" },
@@ -217,6 +237,8 @@ export default async function YarnStockPage({
             <thead>
               <tr>
                 <th>Count</th>
+                <th className="text-right">Op Bags</th>
+                <th className="text-right">Op Lbs</th>
                 <th className="text-right">Rcv Bags</th>
                 <th className="text-right">Rcv Lbs</th>
                 <th className="text-right">Iss Bags</th>
@@ -229,7 +251,7 @@ export default async function YarnStockPage({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-[var(--muted)] py-8">
+                  <td colSpan={10} className="text-center text-[var(--muted)] py-8">
                     No yarn stock activity for filters
                   </td>
                 </tr>
@@ -242,6 +264,8 @@ export default async function YarnStockPage({
                         <div className="text-[11px] text-[var(--muted)]">{countDescMap.get(r.count)}</div>
                       ) : null}
                     </td>
+                    <td className="mono text-right">{fmt(r.opBags)}</td>
+                    <td className="mono text-right">{fmt(r.opLbs)}</td>
                     <td className="mono text-right">{fmt(r.rcvBags)}</td>
                     <td className="mono text-right">{fmt(r.rcvLbs)}</td>
                     <td className="mono text-right">{fmt(r.issBags)}</td>
@@ -257,6 +281,8 @@ export default async function YarnStockPage({
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
                   <td>Total</td>
+                  <td className="mono text-right">{fmt(tot.opBags)}</td>
+                  <td className="mono text-right">{fmt(tot.opLbs)}</td>
                   <td className="mono text-right">{fmt(tot.rcvBags)}</td>
                   <td className="mono text-right">{fmt(tot.rcvLbs)}</td>
                   <td className="mono text-right">{fmt(tot.issBags)}</td>
