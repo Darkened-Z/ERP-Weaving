@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/db";
-import { sql, eq, and, inArray } from "drizzle-orm";
+import { sql, eq, and, inArray, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
+import { fyCodeForDate } from "@/lib/gl-post";
 
-const VALID_VTYPES = ["JV", "CR", "CP", "BR", "BP", "PC", "PR"];
+// Only journals. Cash, bank and petty vouchers carry a header account and
+// contra legs (srno 50+/100+) that their own screens build; a bare
+// debit/credit list posted under those types never shows up right there.
+const VALID_VTYPES = ["JV"];
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -30,7 +35,15 @@ export async function POST(req: NextRequest) {
   if (!company?.currentFy) {
     return NextResponse.json({ error: "Company profile not configured — set current fiscal year" }, { status: 500 });
   }
-  const fyCode = company.currentFy;
+  const fyCode = (await fyCodeForDate(vdate)) || company.currentFy;
+
+  try {
+    await assertPeriodOpen(vdate, "FINANCE");
+  } catch (e) {
+    const thru = parseLockedThroughFromError(e instanceof Error ? e.message : "");
+    if (thru) return NextResponse.json({ error: `Period is locked through ${thru}` }, { status: 409 });
+    throw e;
+  }
 
   const totalDebit = lines.reduce((s: number, l: { debit: string }) => s + (parseFloat(l.debit) || 0), 0);
   const totalCredit = lines.reduce((s: number, l: { credit: string }) => s + (parseFloat(l.credit) || 0), 0);
@@ -45,7 +58,9 @@ export async function POST(req: NextRequest) {
   const validAccounts = await db
     .select({ code: schema.chartOfAccounts.code })
     .from(schema.chartOfAccounts)
-    .where(inArray(schema.chartOfAccounts.code, accCodes));
+    // Posting accounts only: a voucher against a group head never reaches any
+    // ledger that reads leaf accounts.
+    .where(and(inArray(schema.chartOfAccounts.code, accCodes), gte(schema.chartOfAccounts.level, 4)));
   const validCodes = new Set(validAccounts.map((a) => a.code));
   const invalid = accCodes.filter((c: string) => !validCodes.has(c));
   if (invalid.length > 0) {
@@ -61,11 +76,13 @@ export async function POST(req: NextRequest) {
 
       const vno = (maxRow?.max ?? 0) + 1;
 
+      const partyCode = lines.find((l: { accCode: string }) => l.accCode)?.accCode ?? null;
       await tx.insert(schema.transMain).values({
         fyCode,
         vtype,
         vno,
         vdate,
+        accCode: partyCode,
         narration: narration || null,
         utCode: session.userId,
       });
@@ -81,6 +98,7 @@ export async function POST(req: NextRequest) {
           vno,
           srno: i + 1,
           accCode: line.accCode,
+          partyCode,
           narration: line.narration || null,
           debit,
           credit,

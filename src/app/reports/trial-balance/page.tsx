@@ -1,17 +1,39 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { sql } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
+import { requireSession } from "@/lib/auth";
+import { today } from "@/lib/time";
+import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
 
-export default async function TrialBalancePage() {
+export default async function TrialBalancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ asof?: string }>;
+}) {
+  await requireSession();
+  const params = await searchParams;
+  // Balances run across fiscal years (the ledger carries them forward the same
+  // way), cut off at a date so a year-end TB can be pulled and post-dated
+  // vouchers don't leak into today's figures.
+  const asOf = /^\d{4}-\d{2}-\d{2}$/.test(params.asof ?? "") ? params.asof! : today();
   const balances = await db
     .select({
       accCode: schema.transDetail.accCode,
-      totalDebit: sql<number>`sum(debit)`,
-      totalCredit: sql<number>`sum(credit)`,
+      totalDebit: sql<number>`sum(${schema.transDetail.debit})`,
+      totalCredit: sql<number>`sum(${schema.transDetail.credit})`,
     })
     .from(schema.transDetail)
+    .innerJoin(
+      schema.transMain,
+      and(
+        eq(schema.transDetail.fyCode, schema.transMain.fyCode),
+        eq(schema.transDetail.vtype, schema.transMain.vtype),
+        eq(schema.transDetail.vno, schema.transMain.vno),
+      ),
+    )
+    .where(lte(schema.transMain.vdate, asOf))
     .groupBy(schema.transDetail.accCode);
 
   const accounts = await db.select().from(schema.chartOfAccounts);
@@ -51,9 +73,17 @@ export default async function TrialBalancePage() {
         <div className="mb-8">
           <h1 className="page-title">Trial Balance</h1>
           <p className="text-[13px] text-[var(--muted)] mt-2">
-            {rows.length} accounts with activity
+            {rows.length} accounts with activity · as of {asOf}
           </p>
         </div>
+
+        <form method="GET" className="mb-8 flex items-end gap-3 no-print">
+          <div>
+            <label className="label block mb-2">As of</label>
+            <DateBox name="asof" defaultValue={asOf} />
+          </div>
+          <button type="submit" className="btn btn-sm">View</button>
+        </form>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-black border border-black mb-10">
           <div className="bg-white p-6">

@@ -8,7 +8,8 @@ import { today } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
 
 export const dynamic = "force-dynamic";
-const yearStart = () => `${new Date().getFullYear()}-01-01`;
+// Karachi-local year, same as the ledger: the server clock is UTC.
+const yearStart = () => `${today().slice(0, 4)}-01-01`;
 
 type Row = {
   chqNo: string;
@@ -66,40 +67,49 @@ export default async function ChequeStatusPage({
     )
     .orderBy(schema.transMain.vdate, schema.transDetail.vtype, schema.transDetail.vno);
 
-  const occurrenceCount = new Map<string, number>();
+  // ENDORSED means a cheque that came in (BR/CR) and went out again (BP/CP) —
+  // not just a repeated number. ADV clear/bounce and multi-leg vouchers carry
+  // the same chqNo on several legs, so rows collapse to one per voucher+cheque.
+  const RECEIPT = new Set(["BR", "CR"]);
+  const PAYMENT = new Set(["BP", "CP"]);
+  const receivedChqs = new Set<string>();
+  const paidChqs = new Set<string>();
   for (const r of rawRows) {
     const k = (r.chqNo ?? "").trim();
     if (!k) continue;
-    occurrenceCount.set(k, (occurrenceCount.get(k) ?? 0) + 1);
+    if (RECEIPT.has(r.vtype)) receivedChqs.add(k);
+    if (PAYMENT.has(r.vtype)) paidChqs.add(k);
   }
 
-  const rows: Row[] = rawRows
-    .map((r) => {
-      const chq = (r.chqNo ?? "").trim();
-      if (!chq) return null;
-      const amount = (r.debit ?? 0) + (r.credit ?? 0);
-      const isReceipt = r.vtype === "BR" || r.vtype === "CR";
-      const isPayment = r.vtype === "BP" || r.vtype === "CP";
-      const dup = (occurrenceCount.get(chq) ?? 0) > 1;
-      let status: Row["status"];
-      if (dup) status = "ENDORSED";
-      else if (isReceipt) status = "RECEIVED";
-      else if (isPayment) status = "ISSUED";
-      else status = "ISSUED";
-      const partyLookup = r.partyCode || r.accCode;
-      return {
-        chqNo: chq,
-        chqDate: r.chqDate ?? r.vdate,
-        vtype: r.vtype,
-        vno: r.vno,
-        vdate: r.vdate,
-        partyCode: partyLookup,
-        partyName: accMap.get(partyLookup ?? "") ?? partyLookup ?? "",
-        amount,
-        status,
-      } as Row;
-    })
-    .filter(Boolean) as Row[];
+  const byVoucherChq = new Map<string, (typeof rawRows)[number] & { amount: number }>();
+  for (const r of rawRows) {
+    const chq = (r.chqNo ?? "").trim();
+    if (!chq) continue;
+    const key = `${r.vtype}|${r.vno}|${chq}`;
+    const amount = (r.debit ?? 0) + (r.credit ?? 0);
+    const prev = byVoucherChq.get(key);
+    if (!prev || amount > prev.amount) byVoucherChq.set(key, { ...r, amount });
+  }
+
+  const rows: Row[] = Array.from(byVoucherChq.values()).map((r) => {
+    const chq = (r.chqNo ?? "").trim();
+    let status: Row["status"];
+    if (receivedChqs.has(chq) && paidChqs.has(chq)) status = "ENDORSED";
+    else if (RECEIPT.has(r.vtype)) status = "RECEIVED";
+    else status = "ISSUED";
+    const partyLookup = r.partyCode || r.accCode;
+    return {
+      chqNo: chq,
+      chqDate: r.chqDate ?? r.vdate,
+      vtype: r.vtype,
+      vno: r.vno,
+      vdate: r.vdate,
+      partyCode: partyLookup,
+      partyName: accMap.get(partyLookup ?? "") ?? partyLookup ?? "",
+      amount: r.amount,
+      status,
+    };
+  });
 
   const filtered = statusFilter ? rows.filter((r) => r.status === statusFilter) : rows;
 
