@@ -430,9 +430,11 @@ export default async function GreyShrinkagePage({
   }
 
   // Add beams that belong to a set but have no production data yet
+  // Skip EMPTY beams — they have no production and add noise to a shrinkage report
   const existingBeams = new Set(blocks.map((b) => b.beamNo));
   for (const ab of allSetBeams) {
     if (!ab.beamNo || existingBeams.has(ab.beamNo)) continue;
+    if ((ab.statusWrk ?? "").toUpperCase() === "EMPTY") continue;
     if (ab.beamSetNo && ab.setNo && !ab.beamSetNo.startsWith(`${ab.setNo}-`)) continue;
     if (setFilter && ab.setNo !== setFilter) continue;
     if (shedFilter && ab.shed !== shedFilter) continue;
