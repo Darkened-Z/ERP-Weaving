@@ -66,6 +66,7 @@ export default async function GreyShrinkagePage({
           contNo: schema.intGreyConversionContract.contNo,
           rate: schema.intGreyConversionContract.convRatePerMtr,
           productName: schema.intGreyConversionContract.productName,
+          grayQltyCode: schema.intGreyConversionContract.grayQltyCode,
         })
         .from(schema.intGreyConversionContract),
       db
@@ -73,6 +74,7 @@ export default async function GreyShrinkagePage({
           contNo: schema.extGreyConvContract.contNo,
           rate: schema.extGreyConvContract.convRatePerMtr,
           productName: schema.extGreyConvContract.productName,
+          grayQltyCode: schema.extGreyConvContract.grayQltyCode,
         })
         .from(schema.extGreyConvContract),
       db
@@ -162,15 +164,18 @@ export default async function GreyShrinkagePage({
   }
   const rateByContNo = new Map<string, number>();
   const contBrand = new Map<string, string>();
+  const contQltyCode = new Map<string, string>();
   for (const c of intContracts) {
     if (!c.contNo) continue;
     rateByContNo.set(c.contNo, c.rate ?? 0);
     if (c.productName) contBrand.set(c.contNo, c.productName);
+    if (c.grayQltyCode) contQltyCode.set(c.contNo, c.grayQltyCode);
   }
   for (const c of extContracts) {
     if (!c.contNo) continue;
     rateByContNo.set(c.contNo, c.rate ?? 0);
     if (c.productName) contBrand.set(c.contNo, c.productName);
+    if (c.grayQltyCode) contQltyCode.set(c.contNo, c.grayQltyCode);
   }
 
   const setOpts = setRaw
@@ -387,7 +392,7 @@ export default async function GreyShrinkagePage({
 
     const bContNo = f.bContractNo ?? rows[0]?.contNo ?? "";
     const sizCont = iwbSizingCont.get(f.brVno ?? "") ?? "";
-    const gcCode = sizingWrpCode.get(sizCont) ?? "";
+    const gcCode = sizingWrpCode.get(sizCont) || contQltyCode.get(bContNo) || "";
     const gc = greyByCode.get(gcCode);
     const qParts: string[] = [];
     if (gc?.reed) qParts.push(String(gc.reed));
@@ -435,7 +440,7 @@ export default async function GreyShrinkagePage({
     const bLen = ab.length ?? 0;
     const abCont = ab.contractNo ?? "";
     const abSizCont = iwbSizingCont.get(ab.brVno ?? "") ?? "";
-    const abGcCode = sizingWrpCode.get(abSizCont) ?? "";
+    const abGcCode = sizingWrpCode.get(abSizCont) || contQltyCode.get(abCont) || "";
     const abGc = greyByCode.get(abGcCode);
     const abQ: string[] = [];
     if (abGc?.reed) abQ.push(String(abGc.reed));

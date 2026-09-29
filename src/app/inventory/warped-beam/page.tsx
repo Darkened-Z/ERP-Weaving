@@ -77,7 +77,7 @@ export default async function WarpedBeamReceivingPage({
         .orderBy(schema.intWarpedBeamReceivingLine.id)
     : [];
 
-  const upcomingVNo = nextVNoFromRows(list, "IWB");
+  const upcomingVNo = nextVNoFromRows(list, "SET");
   const showForm = !!editing || isAdding;
 
   const lastLvNo =
@@ -587,7 +587,7 @@ export default async function WarpedBeamReceivingPage({
           const existing = await tx
             .select({ vNo: schema.intWarpedBeamReceiving.vNo, lvNo: schema.intWarpedBeamReceiving.lvNo })
             .from(schema.intWarpedBeamReceiving);
-          const vNo = providedVNo || nextVNoFromRows(existing, "IWB");
+          const vNo = providedVNo || nextVNoFromRows(existing, "SET");
           const nextLv = existing.reduce((m, r) => Math.max(m, r.lvNo ?? 0), 0) + 1;
           const inserted = await tx
             .insert(schema.intWarpedBeamReceiving)
