@@ -25,6 +25,8 @@ export function WarpedBeamCalc() {
       const rcMul = rc > 0 ? rc : 1;
       let amountSum = 0;
       let lengthSum = 0;
+      let endsSum = 0;
+      let rowCount = 0;
       form.querySelectorAll("tbody tr").forEach((tr) => {
         const beamNo = tr.querySelector<HTMLInputElement>('[name="beamNo"]');
         const bl = tr.querySelector<HTMLInputElement>('[name="beamLength"]');
@@ -44,11 +46,14 @@ export function WarpedBeamCalc() {
             amount.value = "";
           }
         }
+        if (hasRow) { endsSum += val(ends); rowCount++; }
         amountSum += val(amount);
         lengthSum += val(bl);
       });
       set(q("totalAmount"), amountSum + val(q("freightCharges")));
       set(q("total_length_disp"), lengthSum);
+      const avgEndsEl = q("avg_ends_disp");
+      if (avgEndsEl) avgEndsEl.value = rowCount > 0 ? String(Math.round(endsSum / rowCount)) : "";
       set(q("total_amount_disp"), amountSum);
 
       const bagConeWt =
