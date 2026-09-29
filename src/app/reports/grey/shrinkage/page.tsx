@@ -662,6 +662,10 @@ export default async function GreyShrinkagePage({
               const sQuality = sFirst?.qualityLabel || "";
               const sBrand = sFirst?.brand || "";
               const sEnds = sFirst?.ends ?? 0;
+              const sWarp = sFirst?.warpInfo || "";
+              const sTotalRej = sBlocks.reduce((s, b) => s + b.totalRej, 0);
+              const sRunning = sBlocks.filter((b) => b.rCut.toUpperCase() === "RUNNING").length;
+              const sDone = sBlocks.filter((b) => { const st = b.rCut.toUpperCase(); return st === "L-ROLL" || st === "CLOSE"; }).length;
               const sVnos = new Set(sBlocks.map((b) => b.brVno).filter(Boolean));
               const sNetWtLbs = [...sVnos].reduce((s, v) => s + (iwbNetWtLbs.get(v) ?? 0), 0);
               const sResultedCount =
@@ -680,10 +684,13 @@ export default async function GreyShrinkagePage({
                       <div className="flex items-center gap-4 flex-wrap text-[12px] mt-1">
                         {sQuality && <span><span className="font-bold">Quality</span> <span className="mono font-semibold">{sQuality}</span></span>}
                         {sBrand && <span><span className="font-bold">Brand</span> <span className="mono">{sBrand}</span></span>}
+                        {sWarp && <span><span className="font-bold">Warp</span> <span className="mono">{sWarp}</span></span>}
                       </div>
                     )}
                     <div className="flex items-center gap-4 flex-wrap mono text-[12px] mt-1">
                       <span>{sBlocks.length} beam{sBlocks.length !== 1 ? "s" : ""}</span>
+                      {sRunning > 0 && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 text-white" style={{ background: "#166534" }}>{sRunning} running</span>}
+                      {sDone > 0 && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 text-white" style={{ background: "#1e3a5f" }}>{sDone} done</span>}
                       {sEnds > 0 && <span>Ends {fmt(sEnds)}</span>}
                       <span>Len {fmt(sLen)}</span>
                       <span>Mtr {fmt2(sMtr)}</span>
@@ -692,6 +699,7 @@ export default async function GreyShrinkagePage({
                       <span>Diff {fmt2(sBal)}</span>
                       {sResultedCount != null && <span>RC <b>{fmt2(sResultedCount)}</b></span>}
                       {sNetWtLbs > 0 && <span className="text-[11px] text-[var(--muted)]">Wt {fmt2(sNetWtLbs)} lbs</span>}
+                      {sTotalRej > 0 && <span className="text-[11px]" style={{ color: "#b91c1c" }}>Rej {fmt(sTotalRej)}</span>}
                       <span className="ml-auto font-bold">{fmt2(sShr)}%</span>
                     </div>
                   </summary>
@@ -707,7 +715,15 @@ export default async function GreyShrinkagePage({
                           <span>Diff {fmt2(b.balMtr)}</span>
                           <span>{fmt2(b.shrinkPct)}%</span>
                           {b.knDate && <span>{b.knDate}</span>}
-                          <span className="text-[11px]" style={{ fontFamily: "inherit" }}>{b.rCut || "-"}</span>
+                          {b.rCut && (() => {
+                            const st = b.rCut.toUpperCase();
+                            const bg = st === "RUNNING" ? "#166534" : st === "L-ROLL" || st === "CLOSE" ? "#1e3a5f" : "#666";
+                            return (
+                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 text-white" style={{ background: bg }}>
+                                {b.rCut}
+                              </span>
+                            );
+                          })()}
                         </summary>
                         {b.designs.length > 0 ? (
                           <div className="overflow-x-auto bg-white border-t border-gray-200">
