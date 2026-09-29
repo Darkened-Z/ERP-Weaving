@@ -115,6 +115,16 @@ export default async function GreyShrinkagePage({
         .select({
           vNo: schema.intWarpedBeamReceiving.vNo,
           sizingContNo: schema.intWarpedBeamReceiving.sizingContNo,
+          bagsQty: schema.intWarpedBeamReceiving.bagsQty,
+          bagsWeight: schema.intWarpedBeamReceiving.bagsWeight,
+          conesQty: schema.intWarpedBeamReceiving.conesQty,
+          conesWeight: schema.intWarpedBeamReceiving.conesWeight,
+          gulleyWeight: schema.intWarpedBeamReceiving.gulleyWeight,
+          emtBagWeight: schema.intWarpedBeamReceiving.emtBagWeight,
+          shoperWeight: schema.intWarpedBeamReceiving.shoperWeight,
+          wasteWeight: schema.intWarpedBeamReceiving.wasteWeight,
+          gattaWeight: schema.intWarpedBeamReceiving.gattaWeight,
+          headConeKgs: schema.intWarpedBeamReceiving.headConeKgs,
         })
         .from(schema.intWarpedBeamReceiving),
       db
@@ -132,8 +142,19 @@ export default async function GreyShrinkagePage({
   );
   const nameByCode = new Map(accounts.map((a) => [a.code, a.desc ?? ""]));
   const iwbSizingCont = new Map<string, string>();
+  const iwbNetWtLbs = new Map<string, number>();
   for (const r of iwbVouchers) {
     if (r.vNo && r.sizingContNo) iwbSizingCont.set(r.vNo, r.sizingContNo);
+    if (r.vNo) {
+      const bagConeWt =
+        (r.bagsQty || 1) * (r.bagsWeight ?? 0) +
+        (r.conesQty || 1) * (r.conesWeight ?? 0);
+      const packWt =
+        (r.gulleyWeight ?? 0) + (r.emtBagWeight ?? 0) + (r.shoperWeight ?? 0) +
+        (r.wasteWeight ?? 0) + (r.gattaWeight ?? 0) + (r.headConeKgs ?? 0);
+      const netKg = bagConeWt - packWt;
+      if (netKg > 0) iwbNetWtLbs.set(r.vNo, Math.round(netKg * 2.20462 * 100) / 100);
+    }
   }
   const sizingWrpCode = new Map<string, string>();
   for (const r of sizingContractsRaw) {
@@ -632,6 +653,12 @@ export default async function GreyShrinkagePage({
               const sQuality = sFirst?.qualityLabel || "";
               const sBrand = sFirst?.brand || "";
               const sEnds = sFirst?.ends ?? 0;
+              const sVnos = new Set(sBlocks.map((b) => b.brVno).filter(Boolean));
+              const sNetWtLbs = [...sVnos].reduce((s, v) => s + (iwbNetWtLbs.get(v) ?? 0), 0);
+              const sResultedCount =
+                sLen > 0 && sEnds > 0 && sNetWtLbs > 0
+                  ? Math.round((sLen * sEnds / 731.52 / sNetWtLbs) * 100) / 100
+                  : null;
               return (
                 <details key={sNo} className="mb-4 border-2 border-black group">
                   <summary className="cursor-pointer bg-[#f5f5f5] px-4 py-3 select-none list-none [&::-webkit-details-marker]:hidden">
@@ -651,7 +678,11 @@ export default async function GreyShrinkagePage({
                       {sEnds > 0 && <span>Ends {fmt(sEnds)}</span>}
                       <span>Len {fmt(sLen)}</span>
                       <span>Mtr {fmt2(sMtr)}</span>
+                    </div>
+                    <div className="flex items-center gap-4 flex-wrap mono text-[12px] mt-1">
                       <span>Diff {fmt2(sBal)}</span>
+                      {sResultedCount != null && <span>RC <b>{fmt2(sResultedCount)}</b></span>}
+                      {sNetWtLbs > 0 && <span className="text-[11px] text-[var(--muted)]">Wt {fmt2(sNetWtLbs)} lbs</span>}
                       <span className="ml-auto font-bold">{fmt2(sShr)}%</span>
                     </div>
                   </summary>
@@ -716,6 +747,7 @@ export default async function GreyShrinkagePage({
                       <span>Len {fmt(sLen)}</span>
                       <span>Mtr {fmt2(sMtr)}</span>
                       <span>Diff {fmt2(sBal)}</span>
+                      {sResultedCount != null && <span>RC {fmt2(sResultedCount)}</span>}
                       <span>{fmt2(sShr)}%</span>
                     </div>
                   </div>
