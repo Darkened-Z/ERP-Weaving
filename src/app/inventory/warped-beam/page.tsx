@@ -344,7 +344,7 @@ export default async function WarpedBeamReceivingPage({
         wt: num(wts[i] ?? null),
         width: num(widths[i] ?? null),
         ends: intVal(endss[i] ?? null),
-        rate: null,
+        rate: null as number | null,
         length: num(lengths[i] ?? null),
         conv: num(convs[i] ?? null),
         amount: num(amounts[i] ?? null),
