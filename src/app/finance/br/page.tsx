@@ -139,12 +139,12 @@ async function saveVoucher(formData: FormData) {
     // parties can hand over the same number. A clash is the same number on
     // the same account.
     const lineKeys = new Set(postable.filter((l) => l.chqNo).map((l) => `${l.chqNo}|${l.accCode}`));
-    const clash = dupRows.some(
+    const clashRow = dupRows.find(
       (d) =>
         lineKeys.has(`${d.chqNo}|${d.accCode}`) &&
         (!editMain || d.fyCode !== editMain.fyCode || d.vno !== editMain.vno),
     );
-    if (clash) redirect(`${BASE}?error=dup_chq&${ctx}`);
+    if (clashRow) redirect(`${BASE}?error=dup_chq&dup_fy=${clashRow.fyCode}&dup_vno=${clashRow.vno}&dup_chq_no=${encodeURIComponent(clashRow.chqNo ?? "")}&${ctx}`);
   }
 
   const nowIso = new Date().toISOString();
@@ -399,6 +399,9 @@ export default async function BankReceiptPage({
     error?: string;
     find?: string;
     thru?: string;
+    dup_fy?: string;
+    dup_vno?: string;
+    dup_chq_no?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -544,7 +547,9 @@ export default async function BankReceiptPage({
     code_exists: "V.No already exists. Try again.",
     invalid: "Bank account, at least one line, and a positive amount are required.",
     no_fy: "Company fiscal year is not configured.",
-    dup_chq: "Cheque number already used on another voucher of this type. Change it and save again.",
+    dup_chq: params.dup_fy
+      ? `Cheque ${params.dup_chq_no ?? ""} already used on V.No ${params.dup_vno} (FY ${params.dup_fy}). Change it and save again.`
+      : "Cheque number already used on another voucher of this type. Change it and save again.",
     bad_account: "One or more account codes are unknown or not a detail (level 4+) account.",
     forbidden: "Only ADMIN can delete vouchers.",
     period_locked: "Period is locked. Cannot save vouchers for this date.",
