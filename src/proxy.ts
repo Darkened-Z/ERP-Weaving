@@ -7,19 +7,29 @@ import { verifyToken } from "@/lib/session-token";
  * handlers and every server action (they POST straight to the page URL)
  * reachable without a login. Checking here covers all of them at once.
  */
+function withSecurityHeaders(res: NextResponse) {
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("X-DNS-Prefetch-Control", "off");
+  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  return res;
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/login") return NextResponse.next();
+  if (pathname === "/login") return withSecurityHeaders(NextResponse.next());
 
-  if (verifyToken(request.cookies.get("session")?.value)) return NextResponse.next();
+  if (verifyToken(request.cookies.get("session")?.value))
+    return withSecurityHeaders(NextResponse.next());
 
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return withSecurityHeaders(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    );
   }
-  // A server action posted without a session gets a plain 401 rather than a
-  // redirect the action client can't follow.
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return withSecurityHeaders(new NextResponse("Unauthorized", { status: 401 }));
   }
   return NextResponse.redirect(new URL("/login", request.url));
 }
