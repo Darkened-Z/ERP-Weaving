@@ -1140,10 +1140,14 @@ export default async function WarpedBeamReceivingPage({
                   Beams named on lines are marked LOADED on save.
                 </div>
                 {/* Grid totals — sum of Beam Length and Amount across the rows. */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 px-2 pb-2">
-                  <div className="md:col-start-3">
+                <div className="grid grid-cols-3 gap-2 mt-2 px-2 pb-2">
+                  <div>
                     <label className="label block mb-1">Total Length</label>
                     <input name="total_length_disp" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Avg Ends</label>
+                    <input name="avg_ends_disp" className={roCls + " text-right font-bold"} readOnly tabIndex={-1} />
                   </div>
                   <div>
                     <label className="label block mb-1">Total Amount</label>
