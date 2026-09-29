@@ -443,7 +443,13 @@ export default async function BankPaymentPage({
   );
 
   const brCheques = await db
-    .select({ chqNo: schema.transDetail.chqNo, chqDate: schema.transDetail.chqDate })
+    .select({
+      chqNo: schema.transDetail.chqNo,
+      chqDate: schema.transDetail.chqDate,
+      amount: schema.transDetail.credit,
+      narration: schema.transDetail.narration,
+      vno: schema.transDetail.vno,
+    })
     .from(schema.transDetail)
     .where(and(eq(schema.transDetail.vtype, "BR"), isNotNull(schema.transDetail.chqNo)));
   const usedInBp = new Set(
@@ -961,7 +967,7 @@ export default async function BankPaymentPage({
               <datalist id="bp-chq-endorse">
                 {endorsable.map((c) => (
                   <option key={c.chqNo} value={c.chqNo as string}>
-                    {c.chqDate ? `DT ${c.chqDate}` : ""}
+                    {c.chqNo} | {c.chqDate ?? ""} | {c.amount ? formatNum(c.amount) : ""} | {(c.narration ?? "").trim()} | V#{c.vno}
                   </option>
                 ))}
               </datalist>
