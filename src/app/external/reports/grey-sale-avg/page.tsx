@@ -123,6 +123,7 @@ export default async function GreySaleAvgPage({
       production: qty,
       despatch,
       balance,
+      estRate: c.totalCostRate ?? 0,
       rateMtr,
       amount,
       loomType: c.loomType ?? "",
@@ -136,6 +137,7 @@ export default async function GreySaleAvgPage({
   const totDespatch = round2(rows.reduce((s, r) => s + r.despatch, 0));
   const totBalance = round2(rows.reduce((s, r) => s + r.balance, 0));
   const totAmount = round2(rows.reduce((s, r) => s + r.amount, 0));
+  const avgEstRate = n ? round2(rows.reduce((s, r) => s + r.estRate, 0) / n) : 0;
   const avgRateMtr = n ? round2(rows.reduce((s, r) => s + r.rateMtr, 0) / n) : 0;
 
   const fmt = (v: number) => v ? v.toLocaleString("en-US") : "";
@@ -144,16 +146,12 @@ export default async function GreySaleAvgPage({
   const excelRows = rows.map((r) => ({
     contractNo: r.contractNo,
     party: r.party,
-    construction: r.construction,
-    quality: r.quality,
+    construction: [r.construction, r.quality ? `(${r.quality})` : "", r.warp !== "-" ? `W: ${r.warp}` : "", r.weft !== "-" ? `Wf: ${r.weft}` : ""].filter(Boolean).join(" "),
+    width: r.width,
     production: r.production,
     despatch: r.despatch,
     balance: r.balance,
-    reed: r.reed,
-    pick: r.pick,
-    warp: r.warp,
-    weft: r.weft,
-    width: r.width,
+    estRate: r.estRate,
     rateMtr: r.rateMtr,
     amount: r.amount,
     status: r.status === "R" ? "Running" : r.status === "C" ? "Closed" : r.status,
@@ -180,15 +178,11 @@ export default async function GreySaleAvgPage({
                 { key: "contractNo", label: "Contract" },
                 { key: "party", label: "Party" },
                 { key: "construction", label: "Construction" },
-                { key: "quality", label: "Quality" },
+                { key: "width", label: "Width" },
                 { key: "production", label: "Qty Mtr" },
                 { key: "despatch", label: "Despatch" },
                 { key: "balance", label: "Balance" },
-                { key: "reed", label: "Reed" },
-                { key: "pick", label: "Pick" },
-                { key: "warp", label: "Warp" },
-                { key: "weft", label: "Weft" },
-                { key: "width", label: "Width" },
+                { key: "estRate", label: "Estimates Rate" },
                 { key: "rateMtr", label: "Rate/Mtr" },
                 { key: "amount", label: "Amount" },
                 { key: "status", label: "Status" },
@@ -253,15 +247,12 @@ export default async function GreySaleAvgPage({
                 <tr style={{ backgroundColor: "#1e3a5f", color: "white" }}>
                   <th className="px-2 py-2 text-left border-r border-blue-900/30">Contract</th>
                   <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 150 }}>Party</th>
-                  <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 160 }}>Construction</th>
-                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Reed</th>
-                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Pick</th>
-                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Warp</th>
-                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Weft</th>
+                  <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 200 }}>Construction</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Width</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Qty Mtr</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Despatch</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Balance</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Est. Rate</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Rate/Mtr</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Amount</th>
                   <th className="px-2 py-2 text-left">Status</th>
@@ -282,15 +273,14 @@ export default async function GreySaleAvgPage({
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)]">
                       <div className="font-bold">{r.construction}</div>
                       {r.quality && <div className="text-[10px] mono text-[var(--muted)]">{r.quality}</div>}
+                      {r.warp !== "-" && <div className="text-[10px] text-[var(--muted)]">W: {r.warp}</div>}
+                      {r.weft !== "-" && <div className="text-[10px] text-[var(--muted)]">Wf: {r.weft}</div>}
                     </td>
-                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.reed || "-"}</td>
-                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.pick || "-"}</td>
-                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] text-[12px]">{r.warp}</td>
-                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] text-[12px]">{r.weft}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.width || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.production)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.despatch)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold">{fmt2(r.balance)}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.estRate ? fmt2(r.estRate) : "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rateMtr ? fmt2(r.rateMtr) : "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.amount ? fmt(r.amount) : "-"}</td>
                     <td className="px-2 py-1.5">
@@ -303,16 +293,17 @@ export default async function GreySaleAvgPage({
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={14} className="text-center text-[var(--muted)] py-8 text-[13px]">No contracts match the selected filters.</td></tr>
+                  <tr><td colSpan={11} className="text-center text-[var(--muted)] py-8 text-[13px]">No contracts match the selected filters.</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (
                 <tfoot>
                   <tr style={{ backgroundColor: "#1e3a5f", color: "white" }} className="font-bold">
-                    <td className="px-2 py-2 border-r border-blue-900/30" colSpan={8}>Total</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30" colSpan={4}>Total</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totProduction)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totDespatch)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totBalance)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgEstRate)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRateMtr)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt(totAmount)}</td>
                     <td className="px-2 py-2"></td>
