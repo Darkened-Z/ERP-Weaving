@@ -104,7 +104,7 @@ export default async function GreyConvSaleAvgPage({
       mainDesc,
       quality,
       constrCode,
-      designNo: c.designNo ?? "",
+      width: c.width ?? 0,
       production: qty,
       despatch,
       balance,
@@ -140,7 +140,7 @@ export default async function GreyConvSaleAvgPage({
     product: r.productName,
     mainDesc: r.mainDesc,
     quality: r.quality,
-    designNo: r.designNo,
+    width: r.width,
     production: r.production,
     despatch: r.despatch,
     balance: r.balance,
@@ -180,7 +180,7 @@ export default async function GreyConvSaleAvgPage({
                 { key: "product", label: "Product" },
                 { key: "mainDesc", label: "Main Desc" },
                 { key: "quality", label: "Quality" },
-                { key: "designNo", label: "Design #" },
+                { key: "width", label: "Width" },
                 { key: "production", label: "Production" },
                 { key: "despatch", label: "Despatch" },
                 { key: "balance", label: "Balance" },
@@ -267,7 +267,7 @@ export default async function GreyConvSaleAvgPage({
                   <th className="px-2 py-2 text-left border-r border-blue-900/30">Contract</th>
                   <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 150 }}>Party</th>
                   <th className="px-2 py-2 text-left border-r border-blue-900/30" style={{ minWidth: 180 }}>Quality</th>
-                  <th className="px-2 py-2 text-left border-r border-blue-900/30">Design #</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">Width</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Production</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Despatch</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Balance</th>
@@ -298,7 +298,7 @@ export default async function GreyConvSaleAvgPage({
                       {r.mainDesc && <div className="text-[11px] text-[var(--muted)]">{r.mainDesc}</div>}
                       {r.quality && <div className="text-[10px] mono text-[var(--muted)]">{r.quality}</div>}
                     </td>
-                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono">{r.designNo || "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.width || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.production)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.despatch)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold">{fmt2(r.balance)}</td>
