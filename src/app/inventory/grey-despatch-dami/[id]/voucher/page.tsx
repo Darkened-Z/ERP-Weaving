@@ -300,6 +300,10 @@ export default async function DamiVoucherPage({
 
           <div className="dv-head">
             <div className="dv-head-left">
+              <div style={{ textAlign: "center", fontSize: "7pt", color: "#64748b", flex: "0 0 auto" }}>
+                <QrImage value="https://wa.me/923232201515" size={48} />
+                <div style={{ marginTop: 1, fontWeight: 700 }}>WhatsApp Us</div>
+              </div>
               {/* Drawn, not an emoji — an emoji falls back to whatever font the
                   machine has and prints at a different size on every printer. */}
               <svg className="dv-truck" width="40" height="26" viewBox="0 0 48 30" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
@@ -319,11 +323,7 @@ export default async function DamiVoucherPage({
               </div>
             </div>
             <div className="dv-head-right">
-              <div style={{ textAlign: "center", fontSize: "7pt", color: "#64748b" }}>
-                <QrImage value="https://wa.me/923232201515" size={48} />
-                <div style={{ marginTop: 1, fontWeight: 700 }}>WhatsApp Us</div>
-              </div>
-              <img src="/sk-logo.png" alt={company?.name ?? "Logo"} style={{ height: 52, objectFit: "contain" }} />
+              <img src="/sk-logo.png" alt={company?.name ?? "Logo"} style={{ height: 72, objectFit: "contain" }} />
             </div>
           </div>
           <hr className="dv-rule" />
