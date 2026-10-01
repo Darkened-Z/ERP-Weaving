@@ -30,7 +30,7 @@ export default async function NewTicketPage({
   const params = await searchParams;
   await requireSession();
 
-  const users = await db.select().from(schema.users);
+  const users = (await db.select().from(schema.users)).filter((u) => u.roleName !== "superadmin");
   const looms = await db.select().from(schema.looms);
   // Options are "shed|loom"; a bare loom number (older links) picks the first
   // loom with that number.

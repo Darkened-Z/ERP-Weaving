@@ -87,10 +87,11 @@ export default async function TeamWorkloadPage({
       ? params.sort
       : "workload";
 
-  const activeUsers = await db
+  const activeUsers = (await db
     .select()
     .from(schema.users)
-    .where(eq(schema.users.status, "A"));
+    .where(eq(schema.users.status, "A")))
+    .filter((u) => u.roleName !== "superadmin");
 
   const usersFiltered = params.role
     ? activeUsers.filter((u) => u.roleName === params.role)

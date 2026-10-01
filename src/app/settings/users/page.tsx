@@ -62,10 +62,11 @@ export default async function UsersPage({
   await requireAdmin(BASE);
   const params = await searchParams;
 
-  const users = await db
+  const users = (await db
     .select()
     .from(schema.users)
-    .orderBy(schema.users.roleName, schema.users.login);
+    .orderBy(schema.users.roleName, schema.users.login))
+    .filter((u) => u.roleName !== "superadmin");
 
   const selected = params.id
     ? users.find((u) => u.id === Number(params.id)) ?? null
