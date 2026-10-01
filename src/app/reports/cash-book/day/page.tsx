@@ -41,8 +41,6 @@ export default async function CashBookDayPage({
     })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.code);
-  const descByCode = new Map(accounts.map((a) => [a.code, a.description ?? a.code]));
-
   const configuredCash = await acc("CASH_IN_HAND");
   const cashBank = accounts.filter((a) => {
     if ((a.level ?? 0) < 5) return false;
@@ -111,35 +109,6 @@ export default async function CashBookDayPage({
     openingByAcc.set(r.accCode, (openingByAcc.get(r.accCode) ?? 0) + (r.debit ?? 0) - (r.credit ?? 0));
   }
 
-  // "Desc" on the client's sheet is the account the money faced — the other
-  // side of the same voucher. Pull every leg of today's vouchers once.
-  const voucherKeys = Array.from(new Set(movements.map((m) => `${m.fyCode}|${m.vtype}|${m.vno}`)));
-  const legs = voucherKeys.length
-    ? await db
-        .select({
-          fyCode: schema.transDetail.fyCode,
-          vtype: schema.transDetail.vtype,
-          vno: schema.transDetail.vno,
-          accCode: schema.transDetail.accCode,
-          debit: schema.transDetail.debit,
-          credit: schema.transDetail.credit,
-        })
-        .from(schema.transDetail)
-        .where(inArray(schema.transDetail.vno, Array.from(new Set(movements.map((m) => m.vno)))))
-    : [];
-  const contraFor = (m: (typeof movements)[number]) => {
-    const mine = (m.debit ?? 0) > 0 ? "DR" : "CR";
-    const others = legs.filter(
-      (l) =>
-        `${l.fyCode}|${l.vtype}|${l.vno}` === `${m.fyCode}|${m.vtype}|${m.vno}` &&
-        l.accCode !== m.accCode &&
-        ((l.debit ?? 0) > 0 ? "DR" : "CR") !== mine,
-    );
-    if (others.length === 0) return "";
-    if (others.length === 1) return descByCode.get(others[0].accCode) ?? others[0].accCode;
-    return "SPLIT";
-  };
-
   // Walk the days in order so each one opens where the last one closed. The
   // 5th's closing is the 6th's opening, and so on — which is the whole point of
   // reading several days at once rather than re-running the report per date.
@@ -153,10 +122,10 @@ export default async function CashBookDayPage({
         const mine = onDay.filter((m) => m.accCode === a.code);
         const receipts = mine
           .filter((m) => (m.debit ?? 0) > 0)
-          .map((m) => ({ ...m, amount: m.debit ?? 0, desc: contraFor(m) }));
+          .map((m) => ({ ...m, amount: m.debit ?? 0 }));
         const payments = mine
           .filter((m) => (m.credit ?? 0) > 0)
-          .map((m) => ({ ...m, amount: m.credit ?? 0, desc: contraFor(m) }));
+          .map((m) => ({ ...m, amount: m.credit ?? 0 }));
         const opening = carried.get(a.code) ?? 0;
         const totRec = receipts.reduce((s, r) => s + r.amount, 0);
         const totPay = payments.reduce((s, r) => s + r.amount, 0);
@@ -245,7 +214,6 @@ export default async function CashBookDayPage({
                         <th style={{ width: 70 }}>V.No</th>
                         <th style={{ width: 44 }}>VT</th>
                         <th style={{ width: 90 }}>Date</th>
-                        <th style={{ width: 230 }}>Desc</th>
                         <th>Narration</th>
                         <th className="text-center no-print" style={{ width: 44 }}>Im</th>
                         <th className="text-right" style={{ width: 120 }}>{sec.label}</th>
@@ -257,7 +225,6 @@ export default async function CashBookDayPage({
                           <td className="mono font-bold">{r.vno}</td>
                           <td className="mono">{r.vtype}</td>
                           <td className="mono text-[12px]">{r.vdate}</td>
-                          <td className="text-[12px]">{r.desc}</td>
                           <td className="text-[12px]">{(r.narration ?? "").trim()}</td>
                           <td className="text-center no-print">
                             <ImageLinks value={r.img} label="Im" />
@@ -266,7 +233,7 @@ export default async function CashBookDayPage({
                         </tr>
                       ))}
                       <tr className="border-t-2 border-black">
-                        <td colSpan={5} className="font-bold text-[12px] uppercase tracking-[0.05em]">
+                        <td colSpan={4} className="font-bold text-[12px] uppercase tracking-[0.05em]">
                           Total {sec.label}
                         </td>
                         <td className="no-print"></td>
