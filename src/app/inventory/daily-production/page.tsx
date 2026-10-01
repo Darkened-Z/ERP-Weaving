@@ -586,6 +586,7 @@ export default async function DailyProductionPage({
       productQuality: c.productQuality ?? c.productName ?? c.grayQltyCode ?? "",
       productBrand: c.brand ?? "",
       convContParty: c.party ?? "",
+      beamContParty: c.party ?? "",
       ...yarnSpecByCont[c.contNo],
     };
   }
@@ -1489,7 +1490,7 @@ export default async function DailyProductionPage({
               <AutoFill
                 watch="conv_contract"
                 map={contractFillMap}
-                combos={["productQuality", "convContParty"]}
+                combos={["productQuality", "convContParty", "beamContParty"]}
                 inputs={["productBrand", ...SPEC_INPUTS]}
               />
               {/* A beam pick reaches only the parties, so the spec follows the party
