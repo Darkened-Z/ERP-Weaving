@@ -464,6 +464,13 @@ export default async function DailyProductionPage({
   const convContracts = (await loadConvContracts()).filter(
     (c) => c.party && convPartyCodes.has(c.party.trim())
   );
+  const partyByContNo = new Map(convContracts.map((c) => [c.contNo, c.party?.trim() ?? ""]));
+  for (const [bn, bp] of Object.entries(beamPartyMap)) {
+    if (!bp.beamContParty && bp.contNo) {
+      const cp = partyByContNo.get(bp.contNo);
+      if (cp) bp.beamContParty = descByCode.get(cp) ?? cp;
+    }
+  }
 
   // Yarn spec per contract — READ × PICK off the contract head, warp/weft yarn
   // descriptions off its count grids. Shown under the PARTIES boxes (owner) so the
