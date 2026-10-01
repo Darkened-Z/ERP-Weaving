@@ -1299,19 +1299,19 @@ export default async function KnottingPage({
                   Line Items
                 </div>
                 <div className="overflow-x-auto border border-black">
-                  <table id="ks-lines" className="mono text-[12px]" style={{ minWidth: 2000 }}>
+                  <table id="ks-lines" className="mono text-[12px]" style={{ minWidth: 2120 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 110 }}>Beam Set No</th>
                         <th style={{ width: 90 }}>Set No</th>
                         <th style={{ width: 80 }}>No Of Width</th>
-                        <th style={{ width: 230 }}>Beam # (F9)</th>
+                        <th style={{ width: 280 }}>Beam # (F9)</th>
                         <th style={{ width: 90 }}>Beam Status</th>
                         <th style={{ width: 90 }}>Beam Length</th>
                         <th style={{ width: 130 }}>Issue Date</th>
                         <th style={{ width: 130 }}>K-Date</th>
-                        <th style={{ width: 280 }}>Lm# (F9)</th>
+                        <th style={{ width: 350 }}>Lm# (F9)</th>
                         <th style={{ width: 90 }}>Ext Shr.Age</th>
                         <th style={{ width: 90 }}>Dsg Type</th>
                         <th style={{ width: 110 }}>Kn.Cont.No</th>
