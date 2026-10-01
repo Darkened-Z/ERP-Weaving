@@ -51,7 +51,7 @@ export default async function TicketsPage({
     .join("&");
   const fromParam = currentQS ? `?from=${encodeURIComponent(currentQS)}` : "";
 
-  const users = await db.select().from(schema.users);
+  const users = (await db.select().from(schema.users)).filter((u) => u.roleName !== "superadmin");
 
   const conditions = [];
   if (params.status) conditions.push(eq(schema.tickets.status, params.status));

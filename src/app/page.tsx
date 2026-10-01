@@ -71,7 +71,7 @@ export default async function Dashboard() {
   const [prodRow] = await db
     .select({ total: sql<number>`coalesce(sum(${schema.intDailyProductionSet.totalCount}), 0)` })
     .from(schema.intDailyProductionSet);
-  const [userRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.users);
+  const [userRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.users).where(sql`${schema.users.roleName} != 'superadmin'`);
 
   const recentVouchers = await db
     .select({

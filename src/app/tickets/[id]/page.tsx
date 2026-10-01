@@ -44,7 +44,7 @@ export default async function TicketDetailPage({
   const ticket = ticketRows[0];
   if (!ticket) notFound();
 
-  const users = await db.select().from(schema.users).orderBy(schema.users.fullName);
+  const users = (await db.select().from(schema.users).orderBy(schema.users.fullName)).filter((u) => u.roleName !== "superadmin");
   const looms = await db.select().from(schema.looms).orderBy(schema.looms.loomNo);
 
   const comments = await db
