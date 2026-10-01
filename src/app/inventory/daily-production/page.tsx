@@ -877,7 +877,12 @@ export default async function DailyProductionPage({
       return { error: "party_cross" };
     }
     const beamPartyHeader = (header.beamContParty ?? "").trim();
-    if (headerConvParty && beamPartyHeader && headerConvParty !== beamPartyHeader) {
+    const contractParty = [...partyByCont.values()][0]?.trim() ?? "";
+    const effectiveConvParty = headerConvParty || contractParty;
+    if (effectiveConvParty && !beamPartyHeader) {
+      return { error: "party_mismatch" };
+    }
+    if (beamPartyHeader && effectiveConvParty && beamPartyHeader !== effectiveConvParty) {
       return { error: "party_mismatch" };
     }
     const foldingAmount =
