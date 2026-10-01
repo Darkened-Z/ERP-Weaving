@@ -132,7 +132,7 @@ export default async function LedgerPage({
         ),
       )
       .where(and(...rangeConds))
-      .orderBy(schema.transMain.vdate, schema.transDetail.vtype, schema.transDetail.vno);
+      .orderBy(schema.transMain.vdate, schema.transMain.id);
 
     let running = openingBalance;
     entries = raw.map((r) => {
