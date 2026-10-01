@@ -3,7 +3,7 @@ import { ImageLinks } from "@/components/image-links";
 import { Combobox } from "@/components/combobox";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { eq, and, gte, lte, lt, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
 import { today } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
 
@@ -67,8 +67,6 @@ export default async function LedgerPage({
     img?: string | null;
     vno: number;
     narration: string | null;
-    against?: string;
-    splitCount?: number;
     debit: number;
     credit: number;
     balance: number;
@@ -136,48 +134,10 @@ export default async function LedgerPage({
       .where(and(...rangeConds))
       .orderBy(schema.transMain.vdate, schema.transDetail.vtype, schema.transDetail.vno);
 
-    // What each line sits against. Single contra = name; multiple = "SPLIT".
-    const voucherKeys = new Set(raw.map((r) => `${r.fyCode}|${r.vtype}|${r.vno}`));
-    const contraByVoucher = new Map<string, { code: string; amount: number; side: "DR" | "CR" }[]>();
-    if (voucherKeys.size) {
-      const allLegs = await db
-        .select({
-          fyCode: schema.transDetail.fyCode,
-          vtype: schema.transDetail.vtype,
-          vno: schema.transDetail.vno,
-          accCode: schema.transDetail.accCode,
-          debit: schema.transDetail.debit,
-          credit: schema.transDetail.credit,
-        })
-        .from(schema.transDetail)
-        .where(inArray(schema.transDetail.vno, Array.from(new Set(raw.map((r) => r.vno)))));
-      for (const l of allLegs) {
-        const k = `${l.fyCode}|${l.vtype}|${l.vno}`;
-        if (!voucherKeys.has(k)) continue;
-        const arr = contraByVoucher.get(k) ?? [];
-        arr.push({
-          code: l.accCode ?? "",
-          amount: (l.debit ?? 0) + (l.credit ?? 0),
-          side: (l.debit ?? 0) > 0 ? "DR" : "CR",
-        });
-        contraByVoucher.set(k, arr);
-      }
-    }
-    const descByCode = new Map(accounts.map((a) => [a.code, a.description ?? a.code]));
-
     let running = openingBalance;
     entries = raw.map((r) => {
       running += r.debit - r.credit;
-      const mySide: "DR" | "CR" = r.debit > 0 ? "DR" : "CR";
-      const legs = (contraByVoucher.get(`${r.fyCode}|${r.vtype}|${r.vno}`) ?? [])
-        .filter((l) => l.side !== mySide && l.code !== selectedAccount && l.amount > 0);
-      const against =
-        legs.length === 0
-          ? ""
-          : legs.length === 1
-          ? descByCode.get(legs[0].code) ?? legs[0].code
-          : "SPLIT";
-      return { ...r, balance: running, against, splitCount: legs.length };
+      return { ...r, balance: running };
     });
   }
 
@@ -273,7 +233,6 @@ export default async function LedgerPage({
                     <th>V.No</th>
                     <th>Narration</th>
                     <th className="no-print">Img</th>
-                    <th className="no-print">Against / Mode</th>
                     <th className="text-right">Debit</th>
                     <th className="text-right">Credit</th>
                     <th className="text-right">Balance</th>
@@ -285,7 +244,6 @@ export default async function LedgerPage({
                     <td className="mono text-[13px]">{dateFrom}</td>
                     <td className="mono font-bold">OPN-0</td>
                     <td className="text-[var(--muted)] italic">Opening Balance</td>
-                    <td className="no-print"></td>
                     <td className="no-print"></td>
                     <td className="mono text-right">
                       {openingBalance > 0 ? formatNum(openingBalance) : ""}
@@ -313,15 +271,6 @@ export default async function LedgerPage({
                       <td className="text-center no-print">
                         <ImageLinks value={entry.img} />
                       </td>
-                      <td className="text-[11px] no-print">
-                        {(entry.splitCount ?? 0) > 1 ? (
-                          <span className="mono">
-                            <span className="border border-black px-1 font-bold">SPLIT</span>
-                          </span>
-                        ) : (
-                          <span className="text-[var(--muted)]">{entry.against}</span>
-                        )}
-                      </td>
                       <td className="mono text-right">
                         {entry.debit > 0 ? formatNum(entry.debit) : ""}
                       </td>
@@ -345,7 +294,6 @@ export default async function LedgerPage({
                         No transactions in this date range.
                       </td>
                       <td className="no-print"></td>
-                      <td className="no-print"></td>
                     </tr>
                   )}
                 </tbody>
@@ -354,7 +302,6 @@ export default async function LedgerPage({
                     <td colSpan={4} className="font-bold text-[13px] uppercase tracking-[0.05em]">
                       Closing Balance ({dateTo})
                     </td>
-                    <td className="no-print"></td>
                     <td className="no-print"></td>
                     <td className="mono text-right font-bold">{formatNum(totalDr)}</td>
                     <td className="mono text-right font-bold">{formatNum(totalCr)}</td>

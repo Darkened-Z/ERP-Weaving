@@ -137,7 +137,7 @@ export default async function CashBookDayPage({
     );
     if (others.length === 0) return "";
     if (others.length === 1) return descByCode.get(others[0].accCode) ?? others[0].accCode;
-    return `SPLIT — ${others.map((o) => descByCode.get(o.accCode) ?? o.accCode).join(" · ")}`;
+    return "SPLIT";
   };
 
   // Walk the days in order so each one opens where the last one closed. The
