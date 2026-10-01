@@ -21,6 +21,7 @@ import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
+import { RowClear } from "@/components/row-clear";
 import { num, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -710,7 +711,7 @@ export default async function YarnSaleVoucherPage({
       }
 
       // Lbs is derived from Qty × 100 (the visible Lbs box is read-only).
-      const computedLbs = (q ?? 0) * 100;
+      const computedLbs = Math.round((q ?? 0) * 100);
       const recomputedAmt = rt != null ? Math.round(computedLbs * rt * 100) / 100 : null;
 
       validLines.push({
@@ -1703,7 +1704,10 @@ export default async function YarnSaleVoucherPage({
                         {gridRows.map((row, i) => (
                           <tr key={row?.id ?? `e-${i}`}>
                             <td className="mono text-[11px] text-center text-[var(--muted)]">
-                              {i + 1}
+                              <span className="flex items-center justify-center gap-0.5">
+                                {i + 1}
+                                <RowClear />
+                              </span>
                             </td>
                             <td style={{ minWidth: 66 }}>
                               <Combobox

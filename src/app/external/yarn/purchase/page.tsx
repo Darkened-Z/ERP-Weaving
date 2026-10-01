@@ -627,7 +627,7 @@ export default async function YarnPurchaseVoucherPage({
         qty: q,
         bag: b,
         con: co,
-        lbs: (q ?? 0) * 100,
+        lbs: Math.round((q ?? 0) * 100),
         unit: u || null,
         despatchParty: dp || null,
         rate: rt,
