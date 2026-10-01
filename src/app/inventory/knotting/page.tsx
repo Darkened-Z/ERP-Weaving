@@ -1299,19 +1299,19 @@ export default async function KnottingPage({
                   Line Items
                 </div>
                 <div className="overflow-x-auto border border-black">
-                  <table id="ks-lines" className="mono text-[12px]" style={{ minWidth: 1900 }}>
+                  <table id="ks-lines" className="mono text-[12px]" style={{ minWidth: 2000 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
                         <th style={{ width: 110 }}>Beam Set No</th>
                         <th style={{ width: 90 }}>Set No</th>
                         <th style={{ width: 80 }}>No Of Width</th>
-                        <th style={{ width: 180 }}>Beam # (F9)</th>
+                        <th style={{ width: 230 }}>Beam # (F9)</th>
                         <th style={{ width: 90 }}>Beam Status</th>
                         <th style={{ width: 90 }}>Beam Length</th>
                         <th style={{ width: 130 }}>Issue Date</th>
                         <th style={{ width: 130 }}>K-Date</th>
-                        <th style={{ width: 230 }}>Lm# (F9)</th>
+                        <th style={{ width: 280 }}>Lm# (F9)</th>
                         <th style={{ width: 90 }}>Ext Shr.Age</th>
                         <th style={{ width: 90 }}>Dsg Type</th>
                         <th style={{ width: 110 }}>Kn.Cont.No</th>
@@ -1378,7 +1378,7 @@ export default async function KnottingPage({
                                 columns={beamCols}
                                 title="SET NO LIST — LOADED BEAMS"
                                 placeholder="F9 beam"
-                                className="input-box mono text-[12px] cursor-pointer"
+                                className="input-box mono text-[13px] cursor-pointer"
                               />
                             </td>
                             <td>
@@ -1418,7 +1418,7 @@ export default async function KnottingPage({
                                 columns={loomCols}
                                 title="LOOM LIST"
                                 placeholder="F9 loom"
-                                className="input-box mono text-[12px] cursor-pointer min-w-[150px]"
+                                className="input-box mono text-[13px] cursor-pointer min-w-[150px]"
                               />
                             </td>
                             <td>
