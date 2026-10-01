@@ -136,11 +136,7 @@ export default async function LedgerPage({
       .where(and(...rangeConds))
       .orderBy(schema.transMain.vdate, schema.transDetail.vtype, schema.transDetail.vno);
 
-    // What each line sits against. One cheque paid to a party has a single
-    // contra and the ledger can name it; an advance paid as three cheques PLUS
-    // cash has several, and naming only the first would misstate how the money
-    // actually moved. Those read SPLIT, with every leg and its amount spelled
-    // out — which is what the client means by split mode.
+    // What each line sits against. Single contra = name; multiple = "SPLIT".
     const voucherKeys = new Set(raw.map((r) => `${r.fyCode}|${r.vtype}|${r.vno}`));
     const contraByVoucher = new Map<string, { code: string; amount: number; side: "DR" | "CR" }[]>();
     if (voucherKeys.size) {
@@ -180,9 +176,7 @@ export default async function LedgerPage({
           ? ""
           : legs.length === 1
           ? descByCode.get(legs[0].code) ?? legs[0].code
-          : `SPLIT — ${legs
-              .map((l) => `${descByCode.get(l.code) ?? l.code} ${formatNum(l.amount)}`)
-              .join(" · ")}`;
+          : "SPLIT";
       return { ...r, balance: running, against, splitCount: legs.length };
     });
   }
@@ -322,8 +316,7 @@ export default async function LedgerPage({
                       <td className="text-[11px] no-print">
                         {(entry.splitCount ?? 0) > 1 ? (
                           <span className="mono">
-                            <span className="border border-black px-1 font-bold">SPLIT</span>{" "}
-                            {entry.against?.replace("SPLIT — ", "")}
+                            <span className="border border-black px-1 font-bold">SPLIT</span>
                           </span>
                         ) : (
                           <span className="text-[var(--muted)]">{entry.against}</span>
