@@ -832,6 +832,7 @@ export default async function DailyProductionPage({
     }
 
     // ---- validations ----
+    if (!headerContract) return { error: "no_contract" };
     const hasBeam = validSets.some((s) => (s.beamNo ?? "").trim().length > 0);
     if (!hasBeam) return { error: "no_beam" };
     const totalGrade = validSets.reduce((a, s) => a + (s.totalCount ?? 0), 0);

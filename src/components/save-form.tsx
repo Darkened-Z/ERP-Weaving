@@ -15,6 +15,8 @@ const msgs: Record<string, (e: SaveError) => string> = {
   than_locked: (e) =>
     `Than ${e?.than ?? ""} has already gone out on despatch ${e?.dv ?? ""} — it cannot be changed or removed here. Edit despatch ${e?.dv ?? ""} first if the cloth really did not leave.`,
   dup_than: () => "Duplicate mm/Than Sr No — already used by another production entry.",
+  no_contract: () =>
+    "Conv Contract is required — pick a grey conversion contract before saving.",
   no_beam: () =>
     "At least one row must have a Beam # (fill it in BEAM DETAILS below, or pick a header Loom#).",
   party_cross: () =>
