@@ -221,7 +221,7 @@ export default async function WarpedBeamReceivingPage({
     };
   });
   const sizingContractMap = Object.fromEntries(
-    sizingContracts.map((c) => [c.contNo, { sizingRate: c.ratePerBeam ?? "", sizingRateKg: c.ratePerKg ?? "" }]),
+    sizingContracts.map((c) => [c.contNo, { sizingRate: c.ratePerBeam ?? "", sizingRateKg: c.ratePerKg ?? "", bmSaleParty: c.party ?? "" }]),
   );
 
   const beamRows = await db
@@ -1048,7 +1048,7 @@ export default async function WarpedBeamReceivingPage({
                     defaultValue={editing?.sizingContNo ?? ""}
                     placeholder="Sizing contract…"
                   />
-                  <AutoFill watch="sizingContNo" map={sizingContractMap} inputs={["sizingRate", "sizingRateKg"]} />
+                  <AutoFill watch="sizingContNo" map={sizingContractMap} combos={["bmSaleParty"]} inputs={["sizingRate", "sizingRateKg"]} />
                 </div>
                 <div className="lg:col-span-2">
                   <label className="label block mb-1">Rate/Mtr <span className="text-[9px] text-[var(--muted)]">(→ grid)</span></label>
