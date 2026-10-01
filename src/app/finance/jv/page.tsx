@@ -1,4 +1,5 @@
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { AccountCodeHint } from "@/components/account-code-hint";
 import { ImageAttach } from "@/components/image-attach";
 import { Shell } from "@/components/shell";
@@ -454,18 +455,6 @@ export default async function JournalVoucherPage({
     if (a.descShort && !titleMap[a.descShort]) titleMap[a.descShort] = { title: a.description };
   }
 
-  const contractNos = Array.from(
-    new Set(
-      [
-        ...(await db.select({ c: schema.extYarnPurContract.contNo }).from(schema.extYarnPurContract)).map((r) => r.c),
-        ...(await db.select({ c: schema.extYarnSalContract.contNo }).from(schema.extYarnSalContract)).map((r) => r.c),
-        ...(await db.select({ c: schema.extGreyPurContract.contractNo }).from(schema.extGreyPurContract)).map((r) => r.c),
-        ...(await db.select({ c: schema.extGreySalContract.contractNo }).from(schema.extGreySalContract)).map((r) => r.c),
-        ...(await db.select({ c: schema.extGreyConvContract.contNo }).from(schema.extGreyConvContract)).map((r) => r.c),
-      ].filter(Boolean),
-    ),
-  ).sort();
-
   const ccList = await db
     .select({
       code: schema.costCenters.code,
@@ -574,6 +563,11 @@ export default async function JournalVoucherPage({
     label: a.description ?? a.code,
     desc: a.code,
   }));
+  const accFindRows = pickerAccounts.map((a) => ({
+    value: a.code,
+    code: a.code,
+    description: a.description ?? a.code,
+  }));
   const cell = "input-box mono text-[12px]";
   const cellNum = "input-box mono text-[12px] text-right";
 
@@ -641,11 +635,6 @@ export default async function JournalVoucherPage({
                 {a.description}
               </option>
             ))}
-        </datalist>
-        <datalist id="jv-contracts">
-          {contractNos.map((c) => (
-            <option key={c} value={c} />
-          ))}
         </datalist>
         <datalist id="jv-costcenters">
           {ccList.map((c) => (
@@ -836,7 +825,7 @@ export default async function JournalVoucherPage({
                 <div className="overflow-x-auto border border-black">
                   <GrowRows tbodyId="jv-line-rows" initial={2} />
                   <AccountCodeHint field="title" />
-                  <table className="mono text-[12px]" style={{ minWidth: 1500 }}>
+                  <table className="mono text-[12px]" style={{ minWidth: 1340 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
@@ -845,8 +834,7 @@ export default async function JournalVoucherPage({
                         <th style={{ width: 200 }}>Narr</th>
                         <th style={{ width: 70 }}>Img</th>
                         <th style={{ width: 100 }}>Chq.No</th>
-                        <th style={{ width: 140 }}>Chq.Date</th>
-                        <th style={{ width: 120 }}>Cont.No</th>
+                        <th style={{ width: 100 }}>Chq.Date</th>
                         <th style={{ width: 120 }}>Dr</th>
                         <th style={{ width: 120 }}>Cr</th>
                         <th style={{ width: 190 }}>Cost Center / Jobs (F9)</th>
@@ -866,11 +854,13 @@ export default async function JournalVoucherPage({
                                 accepts just as it accepts a short name — and the
                                 code sits underneath in small type. */}
                             <td>
-                              <Combobox
+                              <FindingPicker
                                 name="title"
-                                options={jvAccOpts}
                                 defaultValue={l?.accCode ?? ""}
-                                className={cell}
+                                rows={accFindRows}
+                                title="CHART OF ACCOUNTS"
+                                placeholder="Account (F9)"
+                                className={`${cell} cursor-pointer`}
                               />
                               <div
                                 data-code-hint
@@ -901,14 +891,6 @@ export default async function JournalVoucherPage({
                             </td>
                             <td>
                               <DateBox name="chq_date" className={cell} defaultValue={l?.chqDate ?? ""} />
-                            </td>
-                            <td>
-                              <input
-                                name="cont_no"
-                                list="jv-contracts"
-                                className={cell}
-                                defaultValue={l?.contNo ?? ""}
-                              />
                             </td>
                             <td>
                               <input
