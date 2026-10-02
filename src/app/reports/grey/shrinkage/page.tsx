@@ -58,9 +58,15 @@ export default async function GreyShrinkagePage({
         })
         .from(schema.chartOfAccounts),
       db
-        .select({ setNo: schema.beams.setNo })
-        .from(schema.beams)
-        .groupBy(schema.beams.setNo),
+        .selectDistinct({
+          setNo: schema.intWarpedBeamReceivingLine.setNo,
+          vNo: schema.intWarpedBeamReceiving.vNo,
+        })
+        .from(schema.intWarpedBeamReceivingLine)
+        .innerJoin(
+          schema.intWarpedBeamReceiving,
+          eq(schema.intWarpedBeamReceivingLine.receivingId, schema.intWarpedBeamReceiving.id),
+        ),
       db
         .select({
           contNo: schema.intGreyConversionContract.contNo,
@@ -180,7 +186,7 @@ export default async function GreyShrinkagePage({
 
   const setOpts = setRaw
     .filter((r) => r.setNo)
-    .map((r) => ({ value: r.setNo!, label: r.setNo! }))
+    .map((r) => ({ value: r.setNo!, label: `SET-${r.setNo} — ${r.vNo}` }))
     .sort((a, b) => (Number(a.value) || 0) - (Number(b.value) || 0));
 
   const loomOpts = loomRaw.map((l) => ({
