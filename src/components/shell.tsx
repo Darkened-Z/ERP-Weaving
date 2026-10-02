@@ -112,6 +112,7 @@ const SECTIONS = [
           { href: "/reports/weaving/knotting-bill", label: "Knotting Bill Register", key: "w-knotting-bill" },
           { href: "/reports/weaving/missing-audit", label: "Missing Audit / Supervisor", key: "w-missing-audit" },
           { href: "/reports/weaving/empty-beam-stock", label: "Empty Beam Stock", key: "w-empty-beam-stock" },
+          { href: "/reports/weaving/running-sets", label: "Running Sets", key: "rpt-w-running-sets" },
         ],
       },
     ],

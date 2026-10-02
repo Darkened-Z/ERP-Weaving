@@ -1942,6 +1942,7 @@ export const intWarpedBeamReceiving = sqliteTable("int_warped_beam_receiving", {
   amtTot: real("amt_tot"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
+  status: text("status").notNull().default("RUNNING"),
 }, (t) => ({
   ixDate: index("ix_int_wbr_date").on(t.vDate),
   ixParty: index("ix_int_wbr_party").on(t.beamReceivingFrom),
