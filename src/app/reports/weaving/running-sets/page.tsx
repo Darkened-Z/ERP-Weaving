@@ -1,7 +1,6 @@
 import React from "react";
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
-import { ExcelExportButton } from "@/components/excel-export-button";
 import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq, sql, inArray } from "drizzle-orm";
@@ -103,7 +102,6 @@ export default async function RunningSetReportPage() {
           </div>
           <div className="flex gap-2 no-print">
             <PrintButton label="Print" />
-            <ExcelExportButton tableId="running-sets-table" fileName="running-sets-report" />
           </div>
         </div>
 
