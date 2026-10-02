@@ -913,7 +913,7 @@ export default async function KnottingPage({
     value: `${lm.shed}|${lm.loomNo}`,
     // Reads "Shed 1 — Loom 24" once picked; the value still carries both.
     code: `Shed ${lm.shed}`,
-    description: `Loom ${lm.loomNo}`,
+    description: `Shed ${lm.shed} · Loom ${lm.loomNo}`,
     filterKey: lm.shed ?? "",
     cells: {
       shed: lm.shed,
@@ -936,7 +936,7 @@ export default async function KnottingPage({
       {
         value: own,
         code: `Shed ${l?.shdHash}`,
-        description: `Loom ${l?.lmHash}`,
+        description: `Shed ${l?.shdHash} · Loom ${l?.lmHash}`,
         filterKey: l?.shdHash ?? "",
         cells: { shed: l?.shdHash, loomNo: l?.lmHash, rpm: "", status: "" },
       };
