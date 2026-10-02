@@ -306,6 +306,7 @@ export default async function WarpedBeamReceivingPage({
       gstFtx: num(formData.get("gstFtx")),
       netWeightRate: num(formData.get("netWeightRate")),
       amtTot: num(formData.get("amtTot")),
+      status: txt(formData.get("status")) ?? "RUNNING",
     };
 
     const rDates = formData.getAll("rDate") as string[];
@@ -981,6 +982,13 @@ export default async function WarpedBeamReceivingPage({
                   <label className="label block mb-1">Modified</label>
                   <input className={roCls + " text-[12px]"} defaultValue={editing?.modifiedDate?.slice(0, 10) ?? ""} readOnly tabIndex={-1} />
                 </div>
+                <div className="lg:col-span-2">
+                  <label className="label block mb-1">Status</label>
+                  <select name="status" className="input-box mono" defaultValue={editing?.status ?? "RUNNING"}>
+                    <option value="RUNNING">RUNNING</option>
+                    <option value="CLOSE">CLOSE</option>
+                  </select>
+                </div>
 
                 <div className="lg:col-span-3">
                   <label className="label block mb-1">Remarks/Destination</label>
@@ -1262,6 +1270,7 @@ export default async function WarpedBeamReceivingPage({
                   <th>Beam Receiving From</th>
                   <th>Bill No</th>
                   <th>Bill Status</th>
+                  <th>Status</th>
                   <th className="text-right">Total Amount</th>
                 </tr>
               </thead>
@@ -1287,12 +1296,15 @@ export default async function WarpedBeamReceivingPage({
                       </a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.billNo ?? "-"}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.billingStatus ?? "-"}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>
+                        <span className={r.status === "CLOSE" ? "text-[var(--muted)]" : "font-bold"}>{r.status ?? "RUNNING"}</span>
+                      </a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.totalAmount ?? "-"}</a></td>
                     </tr>
                   );
                 })}
                 {list.length === 0 && (
-                  <tr><td colSpan={8} className="text-center text-[13px] text-[var(--muted)] py-6">No vouchers. Click <b>New</b> above to create one.</td></tr>
+                  <tr><td colSpan={9} className="text-center text-[13px] text-[var(--muted)] py-6">No vouchers. Click <b>New</b> above to create one.</td></tr>
                 )}
               </tbody>
             </table>
