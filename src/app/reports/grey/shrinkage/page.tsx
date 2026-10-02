@@ -28,6 +28,7 @@ export default async function GreyShrinkagePage({
     beam?: string;
     loom?: string;
     shed?: string;
+    status?: string;
   }>;
 }) {
   await requireSession();
@@ -39,6 +40,7 @@ export default async function GreyShrinkagePage({
   const beamFilter = p.beam?.trim() ?? "";
   const loomFilter = p.loom?.trim() ?? "";
   const shedFilter = p.shed?.trim() ?? "";
+  const statusFilter = p.status?.trim() ?? "";
 
   const [partyOpts, greys, accounts, setRaw, intContracts, extContracts, loomRaw, allSetBeams, yarnCountRows, iwbVouchers, sizingContractsRaw] =
     await Promise.all([
@@ -123,6 +125,7 @@ export default async function GreyShrinkagePage({
         .select({
           vNo: schema.intWarpedBeamReceiving.vNo,
           sizingContNo: schema.intWarpedBeamReceiving.sizingContNo,
+          status: schema.intWarpedBeamReceiving.status,
           bagsQty: schema.intWarpedBeamReceiving.bagsQty,
           bagsWeight: schema.intWarpedBeamReceiving.bagsWeight,
           conesQty: schema.intWarpedBeamReceiving.conesQty,
@@ -151,8 +154,10 @@ export default async function GreyShrinkagePage({
   const nameByCode = new Map(accounts.map((a) => [a.code, a.desc ?? ""]));
   const iwbSizingCont = new Map<string, string>();
   const iwbNetWtLbs = new Map<string, number>();
+  const iwbStatusByVno = new Map<string, string>();
   for (const r of iwbVouchers) {
     if (r.vNo && r.sizingContNo) iwbSizingCont.set(r.vNo, r.sizingContNo);
+    if (r.vNo && r.status) iwbStatusByVno.set(r.vNo, r.status);
     if (r.vNo) {
       const bagConeWt =
         (r.bagsQty || 1) * (r.bagsWeight ?? 0) +
@@ -329,6 +334,7 @@ export default async function GreyShrinkagePage({
     shrinkPct: number;
     qualityLabel: string;
     brand: string;
+    setStatus: string;
   };
 
   const beamMap = new Map<string, typeof filtered>();
@@ -338,7 +344,7 @@ export default async function GreyShrinkagePage({
     beamMap.get(k)!.push(r);
   }
 
-  const blocks: Block[] = [];
+  let blocks: Block[] = [];
   for (const [beamNo, rows] of beamMap) {
     const f = rows.find((r) => r.bLen != null) ?? rows[0];
     const ends = f.lineEnds ?? f.bEnds ?? 0;
@@ -432,6 +438,7 @@ export default async function GreyShrinkagePage({
       shrinkPct: beamLength > 0 ? (balMtr / beamLength) * 100 : 0,
       qualityLabel,
       brand,
+      setStatus: iwbStatusByVno.get(f.brVno ?? "") ?? "",
     });
   }
 
@@ -481,7 +488,13 @@ export default async function GreyShrinkagePage({
       shrinkPct: 0,
       qualityLabel: abQ.join(" "),
       brand: contBrand.get(abCont) ?? "",
+      setStatus: iwbStatusByVno.get(ab.brVno ?? "") ?? "",
     });
+  }
+
+  if (statusFilter) {
+    const sf = statusFilter.toUpperCase();
+    blocks = blocks.filter((b) => (b.setStatus || "RUNNING").toUpperCase() === sf);
   }
 
   const grandMtr = blocks.reduce((s, b) => s + b.totalMtr, 0);
@@ -632,6 +645,14 @@ export default async function GreyShrinkagePage({
               placeholder="All sheds"
             />
           </div>
+          <div>
+            <label className="label block mb-1">Status</label>
+            <select name="status" className="input-box mono" defaultValue={statusFilter}>
+              <option value="">All</option>
+              <option value="RUNNING">RUNNING</option>
+              <option value="CLOSE">CLOSE</option>
+            </select>
+          </div>
           <div className="sm:col-span-7 flex gap-2">
             <button type="submit" className="btn btn-sm">
               Apply
@@ -670,6 +691,7 @@ export default async function GreyShrinkagePage({
               const sEnds = sFirst?.ends ?? 0;
               const sWarp = sFirst?.warpInfo || "";
               const sTotalRej = sBlocks.reduce((s, b) => s + b.totalRej, 0);
+              const sSetStatus = sFirst?.setStatus || "RUNNING";
               const sRunning = sBlocks.filter((b) => b.rCut.toUpperCase() === "RUNNING").length;
               const sDone = sBlocks.filter((b) => { const st = b.rCut.toUpperCase(); return st === "L-ROLL" || st === "CLOSE"; }).length;
               const sVnos = new Set(sBlocks.map((b) => b.brVno).filter(Boolean));
@@ -683,6 +705,7 @@ export default async function GreyShrinkagePage({
                   <summary className="cursor-pointer bg-[#f5f5f5] px-4 py-3 select-none list-none [&::-webkit-details-marker]:hidden">
                     <div className="flex items-center gap-4 flex-wrap text-[13px]">
                       <span className="font-bold text-[15px]">Set # {sNo}</span>
+                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 text-white" style={{ background: sSetStatus === "CLOSE" ? "#64748b" : "#166534" }}>{sSetStatus}</span>
                       {sDate && <span className="mono text-[12px]">{sDate}</span>}
                       {sSzg && <span className="text-[12px] truncate" style={{ maxWidth: 200 }}>{sSzg}</span>}
                     </div>
