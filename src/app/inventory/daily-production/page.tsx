@@ -165,12 +165,25 @@ export default async function DailyProductionPage({
         vNo: schema.intWarpedBeamReceiving.vNo,
         from: schema.intWarpedBeamReceiving.beamReceivingFrom,
         sale: schema.intWarpedBeamReceiving.bmSaleParty,
+        sizingContNo: schema.intWarpedBeamReceiving.sizingContNo,
       })
       .from(schema.intWarpedBeamReceiving);
+    const sizContParty = new Map<string, string>();
+    {
+      const contracts = await db
+        .select({ contNo: schema.intBeamContractExtWs.contNo, converterParty: schema.intBeamContractExtWs.converterParty, party: schema.intBeamContractExtWs.party })
+        .from(schema.intBeamContractExtWs);
+      for (const c of contracts) {
+        const p = c.converterParty || c.party;
+        if (p) sizContParty.set(c.contNo, p);
+      }
+    }
     for (const r of recv) {
+      const saleDesc = r.sale ? descByCode.get(r.sale) ?? r.sale : null;
+      const contParty = r.sizingContNo ? sizContParty.get(r.sizingContNo) ?? null : null;
       receivingParties.set(r.vNo, {
         szg: r.from ? descByCode.get(r.from) ?? r.from : null,
-        sale: r.sale ? descByCode.get(r.sale) ?? r.sale : null,
+        sale: saleDesc || contParty,
       });
     }
   }
