@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
 import { PrintButton } from "@/components/print-button";
+import { WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 
 export const dynamic = "force-dynamic";
@@ -55,24 +56,7 @@ export default async function PackiParchiPrint({
   const bagsTotal = bags.reduce((s, b) => s + (b.amount ?? 0), 0);
   const grand = rnd(greyAmount - kaatAmt - checkeryAmt - brokerAmt - commissionAmt + bagsTotal);
 
-  const waLines: string[] = [
-    `*PACKI PARCHI*`,
-    `V.No: ${parchi.vNo}${parchi.ppNo ? ` | PP: ${parchi.ppNo}` : ""}`,
-    `Date: ${parchi.vDate ?? "—"}`,
-    `Party: ${parchi.purchaseParty ?? "—"}`,
-    parchi.quality ? `Quality: ${parchi.quality}` : null,
-    parchi.convContNo ? `Contract: ${parchi.convContNo}` : null,
-    `Than: ${fmt(parchi.than)} | Meters: ${fmt(meter)}`,
-    `Rate: ${fmt(greyRate)} | Grey Amt: ${fmt(greyAmount)}`,
-    bags.length ? `Bags: ${bags.map((b) => `${b.section ?? ""} ${fmt(b.amount)}`).join(", ")}` : null,
-    kaatAmt ? `Kaat: -${fmt(kaatAmt)}` : null,
-    checkeryAmt ? `Checkery: -${fmt(checkeryAmt)}` : null,
-    brokerAmt ? `Brokerage: -${fmt(brokerAmt)}` : null,
-    commissionAmt ? `Commission: -${fmt(commissionAmt)}` : null,
-    `*Grand Total: Rs. ${fmt(grand)}*`,
-    parchi.remarks ? `Remarks: ${parchi.remarks}` : null,
-  ].filter(Boolean) as string[];
-  const waUrl = `https://wa.me/?text=${encodeURIComponent(waLines.join("\n"))}`;
+  const pdfName = `Packi-Parchi-${parchi.vNo ?? vid}.pdf`;
 
   return (
     <>
@@ -83,19 +67,12 @@ export default async function PackiParchiPrint({
             Back
           </Link>
           <div className="flex gap-2">
-            <a
-              href={waUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-sm"
-              style={{ background: "#25D366", color: "#fff", border: "none", fontWeight: 700 }}
-            >
-              WA
-            </a>
+            <WaPdfButton contentId="parchi-print" filename={pdfName} />
             <PrintButton label="Print" />
           </div>
         </div>
 
+        <div id="parchi-print">
         <PrintHeader
           title="PACKI PARCHI"
           subtitle="Grey Cloth Purchase Bill"
@@ -193,6 +170,7 @@ export default async function PackiParchiPrint({
         ) : null}
 
         <SignatureRow labels={["Prepared By", "Checked By", "Authorized Signatory"]} />
+        </div>
       </div>
     </>
   );
