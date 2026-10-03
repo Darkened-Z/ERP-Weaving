@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
 import { PrintButton } from "@/components/print-button";
-import { WaPdfButton } from "@/components/wa-pdf-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +67,7 @@ export default async function PackiParchiPrint({
             Back
           </Link>
           <div className="flex gap-2">
+            <ExportPdfButton contentId="parchi-print" filename={pdfName} />
             <WaPdfButton contentId="parchi-print" filename={pdfName} />
             <PrintButton label="Print" />
           </div>
