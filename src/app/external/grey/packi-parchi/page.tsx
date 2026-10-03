@@ -982,32 +982,44 @@ export default async function PackiParchiPage({
               {findFilter ? ` matching "${findFilter}"` : ""}
             </p>
           </div>
-          <ExcelExportButton
-            rows={parchis.map((p) => ({
-              vNo: p.vNo,
-              vDate: p.vDate,
-              purchaseParty: p.purchaseParty,
-              saleParty: p.saleParty,
-              ppNo: p.ppNo,
-              kpNo: p.kpNo,
-              meterRe: p.meterRe,
-              meterNet: p.meterNet,
-              commissionTotal: p.commissionTotal,
-            }))}
-            columns={[
-              { key: "vNo", label: "V.No" },
-              { key: "vDate", label: "V.Date" },
-              { key: "purchaseParty", label: "Purchase Party" },
-              { key: "saleParty", label: "Sale Party" },
-              { key: "ppNo", label: "PP.No" },
-              { key: "kpNo", label: "KP.No" },
-              { key: "meterRe", label: "Meter Re" },
-              { key: "meterNet", label: "Meter Net" },
-              { key: "commissionTotal", label: "Commission Total" },
-            ]}
-            filename="packi-parchi"
-            sheetName="PackiParchi"
-          />
+          <div className="flex items-center gap-2">
+            <ExcelExportButton
+              rows={parchis.map((p) => ({
+                vNo: p.vNo,
+                vDate: p.vDate,
+                purchaseParty: p.purchaseParty,
+                saleParty: p.saleParty,
+                ppNo: p.ppNo,
+                kpNo: p.kpNo,
+                meterRe: p.meterRe,
+                meterNet: p.meterNet,
+                commissionTotal: p.commissionTotal,
+              }))}
+              columns={[
+                { key: "vNo", label: "V.No" },
+                { key: "vDate", label: "V.Date" },
+                { key: "purchaseParty", label: "Purchase Party" },
+                { key: "saleParty", label: "Sale Party" },
+                { key: "ppNo", label: "PP.No" },
+                { key: "kpNo", label: "KP.No" },
+                { key: "meterRe", label: "Meter Re" },
+                { key: "meterNet", label: "Meter Net" },
+                { key: "commissionTotal", label: "Commission Total" },
+              ]}
+              filename="packi-parchi"
+              sheetName="PackiParchi"
+            />
+            {formItem && (
+              <a
+                href={`/external/grey/packi-parchi/${formItem.id}/print?wa=1`}
+                target="_blank"
+                className="btn btn-sm"
+                style={{ background: "#25D366", color: "#fff", border: "none", fontWeight: 700 }}
+              >
+                WA
+              </a>
+            )}
+          </div>
         </div>
 
         {params.error === "code_exists" && (

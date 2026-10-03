@@ -15,11 +15,15 @@ const fmt = (n: number | null | undefined) =>
 
 export default async function PackiParchiPrint({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ wa?: string }>;
 }) {
   await requireSession();
   const { id } = await params;
+  const sp = await searchParams;
+  const autoWa = sp.wa === "1";
   const vid = parseInt(id, 10);
   if (!Number.isFinite(vid) || vid <= 0) notFound();
 
@@ -68,7 +72,7 @@ export default async function PackiParchiPrint({
           </Link>
           <div className="flex gap-2">
             <ExportPdfButton contentId="parchi-print" filename={pdfName} />
-            <WaPdfButton contentId="parchi-print" filename={pdfName} />
+            <WaPdfButton contentId="parchi-print" filename={pdfName} autoTrigger={autoWa} />
             <PrintButton label="Print" />
           </div>
         </div>
