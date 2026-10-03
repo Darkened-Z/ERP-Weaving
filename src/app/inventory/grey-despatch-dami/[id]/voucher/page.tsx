@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
@@ -201,23 +202,27 @@ export default async function DamiVoucherPage({
   return (
     <>
       <style>{`
-        @page { size: A4 portrait; margin: 8mm 10mm; }
+        @page { size: A4 portrait; margin: 6mm 8mm; }
         @media print {
-          /* Browsers drop background fills when printing unless told otherwise.
-             The grid header is white text on a navy fill, so without this the
-             whole header printed blank and the table read as an empty box. */
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          html, body { background: #fff !important; }
+          html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
           .no-print { display: none !important; }
-          .dv-page { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; }
+          .dv-page { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; padding: 4mm 5mm !important; }
           .dv-wrap { padding: 0 !important; background: #fff !important; }
+          .dv-title { font-size: 18pt !important; }
+          table.dv-grid th, table.dv-grid td { font-size: 8pt !important; padding: 1px 2px !important; height: 13px !important; }
+          .dv-meta-row, .dv-to-val { font-size: 8.5pt !important; }
+          .dv-foot { margin-top: 6px !important; }
+          .dv-tot-row { font-size: 8.5pt !important; padding: 2px 6px !important; }
+          .dv-tot-row.grand { font-size: 9.5pt !important; }
         }
 
         .dv-wrap { background: var(--bg); min-height: 100vh; padding: 24px 12px; }
         .dv-toolbar { max-width: 210mm; margin: 0 auto 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .dv-page {
-          background: #fff; color: #111; max-width: 210mm; margin: 0 auto; padding: 9mm 9mm;
+          background: #fff; color: #111; max-width: 210mm; margin: 0 auto; padding: 7mm 7mm;
           border: 1px solid var(--border); font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.35;
+          box-sizing: border-box;
         }
 
         /* ---- masthead ---- */
@@ -248,15 +253,12 @@ export default async function DamiVoucherPage({
         .dv-meta-val { flex: 1 1 auto; min-width: 0; font-weight: 700; text-transform: uppercase; word-break: break-word; }
 
         /* ---- piece grid ---- */
-        table.dv-grid { width: 100%; border-collapse: collapse; }
-        table.dv-grid th, table.dv-grid td { border: 1px solid #c7d2e3; padding: 2px 4px; font-size: 9.5pt; }
-        /* Fixed row height: an empty cell has no line box, so a voucher with
-           few pieces printed its blank rows as hairlines while the filled ones
-           stayed tall — the grid stopped looking like a ruled form. */
-        table.dv-grid td { height: 15px; }
-        table.dv-grid th { background: #1e3a8a; color: #fff; font-weight: 700; text-align: center; letter-spacing: 0.04em; }
+        table.dv-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        table.dv-grid th, table.dv-grid td { border: 1px solid #c7d2e3; padding: 1px 3px; font-size: 9pt; overflow: hidden; }
+        table.dv-grid td { height: 14px; }
+        table.dv-grid th { background: #1e3a8a; color: #fff; font-weight: 700; text-align: center; letter-spacing: 0.02em; font-size: 8pt; }
         table.dv-grid th:nth-child(even) { text-align: right; }
-        table.dv-grid td:nth-child(odd) { text-align: center; color: #64748b; width: 22px; }
+        table.dv-grid td:nth-child(odd) { text-align: center; color: #64748b; }
         table.dv-grid td:nth-child(even) { text-align: right; font-weight: 600; }
         .dv-grid-totals td { background: #e8eef6; font-weight: 700 !important; border-top: 2px solid #1e3a8a; }
 
@@ -289,10 +291,14 @@ export default async function DamiVoucherPage({
       <div className="dv-wrap">
         <div className="dv-toolbar no-print">
           <Link href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Back</Link>
-          <PrintButton label="Print Delivery Voucher" />
+          <div className="flex gap-2">
+            <ExportPdfButton contentId="dami-voucher" filename={`Delivery-Voucher-${dami.vNo ?? damiId}.pdf`} />
+            <WaPdfButton contentId="dami-voucher" filename={`Delivery-Voucher-${dami.vNo ?? damiId}.pdf`} />
+            <PrintButton label="Print Delivery Voucher" />
+          </div>
         </div>
 
-        <div className="dv-page">
+        <div className="dv-page" id="dami-voucher">
           <div className="dv-stamp">
             <span>{printedAt}</span>
             <span>Page 1 of 1</span>
