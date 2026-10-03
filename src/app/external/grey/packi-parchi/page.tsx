@@ -1009,7 +1009,7 @@ export default async function PackiParchiPage({
               filename="packi-parchi"
               sheetName="PackiParchi"
             />
-            {formItem && (
+            {formItem ? (
               <a
                 href={`/external/grey/packi-parchi/${formItem.id}/print?wa=1`}
                 target="_blank"
@@ -1018,6 +1018,15 @@ export default async function PackiParchiPage({
               >
                 WA
               </a>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled
+                style={{ background: "#25D366", color: "#fff", border: "none", fontWeight: 700, opacity: 0.4, cursor: "not-allowed" }}
+              >
+                WA
+              </button>
             )}
           </div>
         </div>
