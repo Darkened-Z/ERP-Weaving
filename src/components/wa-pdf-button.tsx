@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 
@@ -38,6 +38,21 @@ async function generatePdf(contentId: string) {
   return pdf;
 }
 
+async function sharePdf(pdf: jsPDF, filename: string) {
+  const blob = pdf.output("blob");
+  const file = new File([blob], filename, { type: "application/pdf" });
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file] });
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function ExportPdfButton({ contentId, filename }: { contentId: string; filename: string }) {
   const [busy, setBusy] = useState(false);
   const handle = async () => {
@@ -57,29 +72,29 @@ export function ExportPdfButton({ contentId, filename }: { contentId: string; fi
   );
 }
 
-export function WaPdfButton({ contentId, filename }: { contentId: string; filename: string }) {
+export function WaPdfButton({ contentId, filename, autoTrigger }: { contentId: string; filename: string; autoTrigger?: boolean }) {
   const [busy, setBusy] = useState(false);
+  const triggered = useRef(false);
+
   const handle = async () => {
     setBusy(true);
     try {
       const pdf = await generatePdf(contentId);
       if (!pdf) return;
-      const blob = pdf.output("blob");
-      const file = new File([blob], filename, { type: "application/pdf" });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file] });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+      await sharePdf(pdf, filename);
     } finally {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (autoTrigger && !triggered.current) {
+      triggered.current = true;
+      const t = setTimeout(() => handle(), 500);
+      return () => clearTimeout(t);
+    }
+  }, [autoTrigger]);
+
   return (
     <button onClick={handle} disabled={busy} className="btn btn-sm" style={{ background: "#25D366", color: "#fff", border: "none", fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
       {busy ? "..." : "WA"}
