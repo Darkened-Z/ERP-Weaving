@@ -55,6 +55,25 @@ export default async function PackiParchiPrint({
   const bagsTotal = bags.reduce((s, b) => s + (b.amount ?? 0), 0);
   const grand = rnd(greyAmount - kaatAmt - checkeryAmt - brokerAmt - commissionAmt + bagsTotal);
 
+  const waLines: string[] = [
+    `*PACKI PARCHI*`,
+    `V.No: ${parchi.vNo}${parchi.ppNo ? ` | PP: ${parchi.ppNo}` : ""}`,
+    `Date: ${parchi.vDate ?? "—"}`,
+    `Party: ${parchi.purchaseParty ?? "—"}`,
+    parchi.quality ? `Quality: ${parchi.quality}` : null,
+    parchi.convContNo ? `Contract: ${parchi.convContNo}` : null,
+    `Than: ${fmt(parchi.than)} | Meters: ${fmt(meter)}`,
+    `Rate: ${fmt(greyRate)} | Grey Amt: ${fmt(greyAmount)}`,
+    bags.length ? `Bags: ${bags.map((b) => `${b.section ?? ""} ${fmt(b.amount)}`).join(", ")}` : null,
+    kaatAmt ? `Kaat: -${fmt(kaatAmt)}` : null,
+    checkeryAmt ? `Checkery: -${fmt(checkeryAmt)}` : null,
+    brokerAmt ? `Brokerage: -${fmt(brokerAmt)}` : null,
+    commissionAmt ? `Commission: -${fmt(commissionAmt)}` : null,
+    `*Grand Total: Rs. ${fmt(grand)}*`,
+    parchi.remarks ? `Remarks: ${parchi.remarks}` : null,
+  ].filter(Boolean) as string[];
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(waLines.join("\n"))}`;
+
   return (
     <>
       <PrintStyles />
@@ -63,7 +82,18 @@ export default async function PackiParchiPrint({
           <Link href={`/external/grey/packi-parchi?id=${vid}`} className="btn btn-outline btn-sm">
             Back
           </Link>
-          <PrintButton label="Print" />
+          <div className="flex gap-2">
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-sm"
+              style={{ background: "#25D366", color: "#fff", border: "none", fontWeight: 700 }}
+            >
+              WA
+            </a>
+            <PrintButton label="Print" />
+          </div>
         </div>
 
         <PrintHeader
