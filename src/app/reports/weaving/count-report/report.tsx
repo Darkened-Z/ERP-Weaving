@@ -115,9 +115,13 @@ export async function CountsAccountsReport({
   const scopedSeedRows: { party: string; count: string }[] = [];
   let scopedParties: Set<string> | null = null;
   if (partyScope === "grey-sale-contract" || partyScope === "grey-conv-contract") {
+    const typeFilter = partyScope === "grey-sale-contract"
+      ? sql`UPPER(COALESCE(${schema.extGreyConvContract.type}, '')) = 'SALE'`
+      : sql`UPPER(COALESCE(${schema.extGreyConvContract.type}, 'CONV')) != 'SALE'`;
     const contracts = await db
       .select({ id: schema.extGreyConvContract.id, party: schema.extGreyConvContract.party })
-      .from(schema.extGreyConvContract);
+      .from(schema.extGreyConvContract)
+      .where(typeFilter);
     const contractIds = contracts.filter((c) => c.party).map((c) => c.id);
     const partyById = new Map(contracts.map((c) => [c.id, (c.party ?? "").trim()]));
 
