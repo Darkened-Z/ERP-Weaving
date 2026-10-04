@@ -9,16 +9,17 @@ export function RowClearButton() {
       aria-label="Clear row"
       onClick={(e) => {
         const row = (e.currentTarget as HTMLButtonElement).closest("tr");
-        row?.querySelectorAll<HTMLInputElement>("input, select, textarea").forEach((el) => {
-          if (el.type === "checkbox" || el.type === "radio") {
-            (el as HTMLInputElement).checked = false;
-          } else {
-            el.value = "";
-          }
+        if (!row) return;
+        row.querySelectorAll<HTMLInputElement>("input").forEach((inp) => {
+          inp.value = "";
+          inp.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        row.querySelectorAll<HTMLSelectElement>("select").forEach((sel) => {
+          sel.value = "";
         });
       }}
     >
-      X
+      ✕
     </button>
   );
 }

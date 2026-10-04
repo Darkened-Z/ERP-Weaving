@@ -6,6 +6,7 @@ import { QualityStockStrip } from "./quality-stock-strip";
 import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
+import { RowClearButton } from "@/components/row-clear-button";
 import { PackiCalc } from "@/components/packi-calc";
 import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
@@ -1795,12 +1796,7 @@ export default async function PackiParchiPage({
                       <tr key={row?.id ?? `ec-${i}`}>
                         <td className="mono text-[11px] text-center text-[var(--muted)]">{i + 1}</td>
                         <td>
-                          <button type="button" className="text-[var(--danger)] cursor-pointer text-[13px] font-bold leading-none" title="Clear row" onClick={(e) => {
-                            const tr = (e.target as HTMLElement).closest("tr");
-                            if (!tr) return;
-                            tr.querySelectorAll<HTMLInputElement>("input").forEach((inp) => { inp.value = ""; inp.dispatchEvent(new Event("input", { bubbles: true })); });
-                            tr.querySelectorAll<HTMLSelectElement>("select").forEach((sel) => { sel.value = ""; });
-                          }}>✕</button>
+                          <RowClearButton />
                         </td>
                         <td><input name="count_code" list="pp-yarn-counts" className={gridCellCls} defaultValue={row?.code ?? ""} style={{ width: 60 }} /></td>
                         <td><input name="count_desc" className={gridCellCls} defaultValue={row?.descr ?? (row?.code ? (ppCountDescByCode.get(String(row.code)) ?? "") : "")} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} /></td>

@@ -74,6 +74,10 @@ export default async function GodownStockPage({
         .orderBy(schema.extGodownStockCount.id)
     : [];
 
+  const allCountRows = await db
+    .select({ stockId: schema.extGodownStockCount.stockId, code: schema.extGodownStockCount.code, type: schema.extGodownStockCount.type })
+    .from(schema.extGodownStockCount);
+
   const parties = await db
     .select({
       code: schema.chartOfAccounts.code,
@@ -127,6 +131,15 @@ export default async function GodownStockPage({
     gsCountFillMap[String(c.countCode)] = { count_desc: countLabelByCode.get(String(c.countCode)) ?? "", count_type: c.type ?? "" };
   }
   const gsCountDescByCode = countLabelByCode;
+
+  const countDetailByStockId = new Map<number, string>();
+  for (const c of allCountRows) {
+    if (!c.code) continue;
+    const lbl = countLabelByCode.get(String(c.code).trim()) ?? c.code;
+    const prev = countDetailByStockId.get(c.stockId);
+    const entry = `${lbl} (${c.type ?? ""})`;
+    countDetailByStockId.set(c.stockId, prev ? `${prev}, ${entry}` : entry);
+  }
 
   const convContracts = await db
     .select()
@@ -953,6 +966,7 @@ export default async function GodownStockPage({
     kpNo: s.kpNo,
     purchaseParty: s.purchaseParty,
     gdnParty: s.gdnParty,
+    countDetail: countDetailByStockId.get(s.id) ?? "",
     meter: s.meter,
     netMeter: s.netMeter,
     total: s.total,
@@ -978,6 +992,7 @@ export default async function GodownStockPage({
               { key: "kpNo", label: "KP No" },
               { key: "purchaseParty", label: "Purchase Party" },
               { key: "gdnParty", label: "Gdn Party" },
+              { key: "countDetail", label: "Count Detail" },
               { key: "meter", label: "Meter" },
               { key: "netMeter", label: "Net Meter" },
               { key: "total", label: "Total" },
@@ -1549,6 +1564,7 @@ export default async function GodownStockPage({
                   <th>KP No</th>
                   <th>Purchase Party</th>
                   <th>Gdn Party</th>
+                  <th>Count Detail</th>
                   <th className="text-right">Meter</th>
                   <th className="text-right">Total</th>
                   <th>Status</th>
@@ -1580,6 +1596,7 @@ export default async function GodownStockPage({
                           )}
                         </a>
                       </td>
+                      <td className="text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{countDetailByStockId.get(s.id) ?? ""}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(s.meter)}</a></td>
                       <td className="text-right mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{formatNum(s.total)}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{s.type}</a></td>
@@ -1588,7 +1605,7 @@ export default async function GodownStockPage({
                 })}
                 {stocks.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-[13px] text-[var(--muted)] py-6">
+                    <td colSpan={9} className="text-center text-[13px] text-[var(--muted)] py-6">
                       No entries. Click <b>New</b> above to create one.
                     </td>
                   </tr>
