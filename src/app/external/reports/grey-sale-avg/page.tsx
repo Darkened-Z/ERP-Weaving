@@ -57,6 +57,23 @@ export default async function GreySaleAvgPage({
     .groupBy(schema.extPackiParchi.convContNoSale);
   const despatchByContNo = new Map(despatchRows.map((d) => [d.contNo, d.totalMeter]));
 
+  const despatchDetailRows = await db
+    .select({
+      contNo: schema.extPackiParchi.convContNoSale,
+      party: schema.extPackiParchi.saleParty,
+      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
+      lots: sql<number>`count(*)`,
+    })
+    .from(schema.extPackiParchi)
+    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != ''`)
+    .groupBy(schema.extPackiParchi.convContNoSale, schema.extPackiParchi.saleParty);
+  const despatchDetailByContNo = new Map<string, { party: string; totalMeter: number; lots: number }[]>();
+  for (const d of despatchDetailRows) {
+    const key = d.contNo ?? "";
+    if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
+    despatchDetailByContNo.get(key)!.push({ party: d.party ?? "-", totalMeter: d.totalMeter, lots: d.lots });
+  }
+
   const allIds = allContracts.map((c) => c.id);
   const allWarpRows = allIds.length
     ? await db
@@ -106,6 +123,7 @@ export default async function GreySaleAvgPage({
     const rateMtr = c.ratePerMtr ?? 0;
     const amount = c.amount ?? round2(qty * rateMtr);
     const despatch = despatchByContNo.get(c.contractNo ?? "") ?? 0;
+    const despatchDetail = despatchDetailByContNo.get(c.contractNo ?? "") ?? [];
     const balance = round2(qty - despatch);
     return {
       id: c.id,
@@ -122,6 +140,7 @@ export default async function GreySaleAvgPage({
       width: c.width ?? 0,
       production: qty,
       despatch,
+      despatchDetail,
       balance,
       estRate: c.totalCostRate ?? 0,
       rateMtr,
@@ -150,6 +169,7 @@ export default async function GreySaleAvgPage({
     width: r.width,
     production: r.production,
     despatch: r.despatch,
+    despatchTo: r.despatchDetail.map((d) => `${d.party}: ${d.totalMeter}m (${d.lots})`).join("; "),
     balance: r.balance,
     estRate: r.estRate,
     rateMtr: r.rateMtr,
@@ -181,6 +201,7 @@ export default async function GreySaleAvgPage({
                 { key: "width", label: "Width" },
                 { key: "production", label: "Qty Mtr" },
                 { key: "despatch", label: "Despatch" },
+                { key: "despatchTo", label: "Despatch To" },
                 { key: "balance", label: "Balance" },
                 { key: "estRate", label: "Estimates Rate" },
                 { key: "rateMtr", label: "Rate/Mtr" },
@@ -278,7 +299,18 @@ export default async function GreySaleAvgPage({
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.width || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.production)}</td>
-                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.despatch)}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">
+                      {r.despatch ? (
+                        <div>
+                          <div className="font-bold">{fmt2(r.despatch)}</div>
+                          {r.despatchDetail.map((d, di) => (
+                            <div key={di} className="text-[10px] text-[var(--muted)] text-left" style={{ lineHeight: 1.4 }}>
+                              {d.party} — {fmt2(d.totalMeter)} ({d.lots})
+                            </div>
+                          ))}
+                        </div>
+                      ) : ""}
+                    </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold">{fmt2(r.balance)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.estRate ? fmt2(r.estRate) : "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rateMtr ? fmt2(r.rateMtr) : "-"}</td>
