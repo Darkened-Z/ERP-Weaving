@@ -455,9 +455,9 @@ export default async function GodownStockPage({
       cells: {
         cont: c.contNo,
         desc: prd,
+        party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
-        convRate: fmtN(c.convRatePerMtr, 2),
-        grayRate: fmtN(c.grayRatePerMtr, 2),
+        rate: fmtN(c.grayRatePerMtr, 2),
         date: c.contDate ?? "",
         status: c.status ?? "",
       },
