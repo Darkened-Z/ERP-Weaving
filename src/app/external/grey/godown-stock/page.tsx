@@ -161,9 +161,9 @@ export default async function GodownStockPage({
   const contractColumns = [
     { key: "cont", label: "Cont #", width: 88 },
     { key: "desc", label: "Prd. Desc" },
-    { key: "qty", label: "Qty Mtr", width: 84, align: "right" as const },
-    { key: "convRate", label: "Conv Rate", width: 78, align: "right" as const },
-    { key: "grayRate", label: "Gray Rate", width: 78, align: "right" as const },
+    { key: "party", label: "Party" },
+    { key: "qty", label: "Qty", width: 84, align: "right" as const },
+    { key: "rate", label: "Rate", width: 78, align: "right" as const },
     { key: "date", label: "Date", width: 86 },
     { key: "status", label: "St", width: 34 },
   ];
@@ -177,9 +177,9 @@ export default async function GodownStockPage({
       cells: {
         cont: c.contNo,
         desc: prd,
+        party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
-        convRate: fmtN(c.convRatePerMtr, 2),
-        grayRate: fmtN(c.grayRatePerMtr, 2),
+        rate: fmtN(c.grayRatePerMtr, 2),
         date: c.contDate ?? "",
         status: c.status ?? "",
       },
@@ -254,25 +254,21 @@ export default async function GodownStockPage({
   const convRateByNo = new Map<string, number | null>(
     convOnlyContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const)
   );
-  const convSaleMap: Record<string, Record<string, string | number | null>> = Object.fromEntries([
-    ...convOnlyContracts.map((c) => [
+  const convSaleMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    convOnlyContracts.map((c) => [
       c.contNo,
       { rate: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
     ] as const),
-    ...saleConvContracts.map((c) => [
-      c.contNo,
-      { rate: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
-    ] as const),
-  ]);
+  );
 
   // Full-page F9 finder rows for the grey PURCHASE / SALE contracts — rich
   // Oracle-style LOV columns (Prd. Desc, qty, rate, term, date, status).
   const greyPurColumns = [
     { key: "cont", label: "Cont #", width: 88 },
     { key: "desc", label: "Prd. Desc" },
+    { key: "party", label: "Party" },
     { key: "qty", label: "Qty", width: 84, align: "right" as const },
     { key: "rate", label: "Rate", width: 70, align: "right" as const },
-    { key: "term", label: "Term", width: 70 },
     { key: "date", label: "Date", width: 86 },
     { key: "status", label: "St", width: 34 },
   ];
@@ -287,9 +283,9 @@ export default async function GodownStockPage({
       cells: {
         cont: c.contractNo,
         desc: prd,
+        party: c.party ?? "",
         qty: fmtN(c.quantityMtr),
         rate: fmtN(c.ratePerMtr, 2),
-        term: c.paymentTerm ?? "",
         date: c.contractDate ?? "",
         status: c.status ?? "",
       },
@@ -305,16 +301,14 @@ export default async function GodownStockPage({
       cells: {
         cont: c.contractNo,
         desc: prd,
+        party: c.party ?? "",
         qty: fmtN(c.quantityMtr),
         rate: fmtN(c.ratePerMtr, 2),
-        term: c.paymentTerm ?? "",
         date: c.contractDate ?? "",
         status: c.status ?? "",
       },
     };
   });
-  // SALE-type conv contracts, shaped for the sale-contract LOV, then merged with the
-  // grey-sale contracts so both feed the Sal Cont # / Grey Sale Cont pickers.
   const saleConvFindRows = saleConvContracts.map((c) => {
     const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
     return {
@@ -325,9 +319,9 @@ export default async function GodownStockPage({
       cells: {
         cont: c.contNo,
         desc: prd,
+        party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
         rate: fmtN(c.grayRatePerMtr, 2),
-        term: "",
         date: c.contDate ?? "",
         status: c.status ?? "",
       },
@@ -1296,11 +1290,11 @@ export default async function GodownStockPage({
                   {/* Two different contract lists: Conv Cont # → conversion contracts,
                       Grey Sale Cont → sale contracts. Each shows its rate beside it. */}
                   <div className="col-span-4">
-                    <label className="label block mb-1">Conv Cont # <span className="text-[9px] text-[var(--muted)]">(conv + sale contracts)</span></label>
+                    <label className="label block mb-1">Conv Cont #</label>
                     <FindingPicker
                       name="sal_cont_no"
                       defaultValue={formStock?.salContNo ?? ""}
-                      rows={[...contractFindRows, ...saleConvFindRows]}
+                      rows={contractFindRows}
                       columns={contractColumns}
                       title="GREY CONVERSION CONTRACT LIST"
                       placeholder="Conv contract #…"
@@ -1329,7 +1323,7 @@ export default async function GodownStockPage({
                       defaultValue={formStock?.greySaleCont ?? ""}
                       rows={saleAllFindRows}
                       columns={greySaleColumns}
-                      title="SALE CONTRACT LIST (conv-sale + grey-sale)"
+                      title="GREY SALE CONTRACT LIST"
                       placeholder="Grey sale contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
                     />
