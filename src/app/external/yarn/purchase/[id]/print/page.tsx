@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 
 export const dynamic = "force-dynamic";
@@ -69,9 +70,14 @@ export default async function YarnPurchaseVoucherPrint({
           <Link href={`/external/yarn/purchase?id=${vid}`} className="btn btn-outline btn-sm">
             Back
           </Link>
-          <PrintButton label="Print" />
+          <div className="flex gap-2">
+            <ExportPdfButton contentId="yarn-pur-voucher-print" filename={`Yarn-Purchase-Voucher-${voucher.vNo ?? vid}.pdf`} />
+            <WaPdfButton contentId="yarn-pur-voucher-print" filename={`Yarn-Purchase-Voucher-${voucher.vNo ?? vid}.pdf`} />
+            <PrintButton label="Print" />
+          </div>
         </div>
 
+        <div id="yarn-pur-voucher-print">
         <PrintHeader
           title="YARN PURCHASE VOUCHER"
           right={
@@ -167,6 +173,7 @@ export default async function YarnPurchaseVoucherPrint({
         ) : null}
 
         <SignatureRow labels={["Prepared By", "Store Incharge", "Authorized Signatory"]} />
+        </div>
       </div>
     </>
   );

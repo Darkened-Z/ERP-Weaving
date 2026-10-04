@@ -10,7 +10,7 @@ import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { wovenThisCycle } from "@/lib/beam-cycle";
 import { and, eq, sql, desc, inArray } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { RowErase } from "@/components/production-calc";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
@@ -258,6 +258,7 @@ export default async function WarpedBeamReceivingPage({
     try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/inventory/warped-beam?id=${id}` : "/inventory/warped-beam?adding=1");
     const vDate = txt(formData.get("vDate")) ?? today();
     await assertPeriodOpen(vDate, "INVENTORY");
     // An edit can't move a voucher out of a locked period either.
@@ -880,6 +881,16 @@ export default async function WarpedBeamReceivingPage({
             Cannot delete — beams from this voucher have daily production entries. Delete the production entries first.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1219,15 +1230,12 @@ export default async function WarpedBeamReceivingPage({
               </div>
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">Save</button>
                 <a href="/inventory/warped-beam?adding=1" className="btn btn-outline btn-sm">New</a>
                 <PrintButton />
                 <a href="/inventory/warped-beam" className="btn btn-outline btn-sm">Exit</a>
                 <div className="ml-auto flex items-end gap-4">
-                  <div>
-                    <label className="label block mb-1">Pswd</label>
-                    <input className="input-box mono" placeholder="password" type="password" />
-                  </div>
                   {editing ? (
                     <form action={deleteAction} className="inline">
                       <input type="hidden" name="id" value={editing.id} />

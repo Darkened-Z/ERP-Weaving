@@ -11,7 +11,7 @@ import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -208,6 +208,7 @@ export default async function BeamContractExtWsPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
     const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
+    await verifySavePassword(formData.get("save_password") as string, `/inventory/contracts/beam-ext-ws${backQ}`);
 
     const contDate = txt(formData.get("cont_date")) ?? today();
     await assertPeriodOpen(contDate, "INVENTORY");
@@ -445,6 +446,16 @@ export default async function BeamContractExtWsPage({
             {ERROR_MESSAGES[params.error]}
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <datalist id="ibws-count-list">
           {countList.map((c) => (
@@ -469,12 +480,12 @@ export default async function BeamContractExtWsPage({
                 : "Beam Contract Ext W/S"}
             </div>
             <div className="flex gap-2 no-print flex-wrap">
-              <button type="submit" form="ibws-save-form" className="btn btn-sm">
-                Save
-              </button>
               <a href="/inventory/contracts/beam-ext-ws?adding=1" className="btn btn-outline btn-sm">
                 New
               </a>
+              <button type="submit" form="ibws-save-form" className="btn btn-sm">
+                Save
+              </button>
               <PrintButton label="Print" />
               {formContract ? (
                 <form action={deleteContract} className="inline">
@@ -839,20 +850,17 @@ export default async function BeamContractExtWsPage({
               </div>
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
-                <button type="submit" className="btn btn-sm">
-                  Save
-                </button>
                 <a href="/inventory/contracts/beam-ext-ws?adding=1" className="btn btn-outline btn-sm">
                   New
                 </a>
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
+                <button type="submit" className="btn btn-sm">
+                  Save
+                </button>
                 <PrintButton label="Print" />
                 <a href="/inventory/contracts/beam-ext-ws" className="btn btn-outline btn-sm">
                   Exit
                 </a>
-                <div className="ml-auto">
-                  <label className="label block mb-1">Alt-S Password</label>
-                  <input className="input-box mono" placeholder="password" type="password" />
-                </div>
               </div>
             </form>
           )}

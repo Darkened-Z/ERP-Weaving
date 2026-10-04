@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { PrintHeader } from "@/components/print-shell";
 import { db, schema } from "@/db";
-import { getSession, requireSession } from "@/lib/auth";
+import { getSession, requireSession, verifySavePassword } from "@/lib/auth";
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -18,6 +18,8 @@ const ERR_MSG: Record<string, string> = {
   missing_name: "Company name is required.",
   missing_fy: "Current fiscal year, start date and end date are required.",
   bad_fy: "Selected fiscal year does not exist.",
+  no_password: "Password is required to save.",
+  wrong_password: "Incorrect password.",
 };
 
 async function saveProfile(formData: FormData) {
@@ -241,7 +243,8 @@ export default async function CompanyProfilePage({
                 </div>
 
                 {isAdmin && (
-                  <div className="flex justify-end pt-2">
+                  <div className="flex justify-end pt-2 gap-2">
+                    <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                     <button type="submit" className="btn">
                       Save Profile
                     </button>

@@ -3,7 +3,7 @@ import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { today } from "@/lib/time";
 import { loadChequeRegister, type ChequeDisplay, type ChequeEntry } from "@/lib/cheque-register";
@@ -34,6 +34,7 @@ async function saveBook(formData: FormData) {
   const leaves = intVal(formData.get("leaves"));
 
   const ctx = isEdit ? `edit=${id}` : "adding=1";
+  await verifySavePassword(formData.get("save_password") as string, `${BASE}?${ctx}`);
   if (!name || !bankAcc || startNo === null || leaves === null || leaves <= 0) {
     redirect(`${BASE}?error=invalid&${ctx}`);
   }
@@ -143,6 +144,8 @@ export default async function ChequeBooksPage({
     invalid: "Name, bank account, start number and a positive leaves count are required.",
     exists: "A cheque book with this name already exists.",
     forbidden: "Only ADMIN can delete.",
+    no_password: "Password is required to save.",
+    wrong_password: "Incorrect password.",
   };
   const errorMsg = params.error ? ERR[params.error] ?? "" : "";
   const showForm = isAdding || isEditing;
@@ -296,6 +299,7 @@ export default async function ChequeBooksPage({
                   <input name="leaves" type="number" step="1" min="1" className="input-box mono" defaultValue={editBook?.leaves ?? ""} placeholder="e.g. 50" required />
                 </div>
                 <div className="lg:col-span-3 flex items-end gap-2">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn btn-sm flex-1">{isEditing ? "Update" : "Create"}</button>
                   <a href={BASE} className="btn btn-outline btn-sm">Cancel</a>
                 </div>

@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { AccountPicker } from "@/components/account-picker";
@@ -73,6 +73,7 @@ export default async function ChartOfAccountPage({
   async function saveAccount(formData: FormData) {
     "use server";
     const submittedCode = (formData.get("code") as string)?.trim();
+    await verifySavePassword(formData.get("save_password") as string, "/accounts?adding=1");
     const accHead = (formData.get("acc_head") as string)?.trim();
     const description = (formData.get("tittle") as string)?.trim();
     if (!description) return;
@@ -231,6 +232,12 @@ export default async function ChartOfAccountPage({
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Parent must be a Level 1–4 head. A Level 5 party cannot host children.
           </div>
+        )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
         )}
         <div className="hidden">
           <ExcelExportButton
@@ -511,6 +518,7 @@ export default async function ChartOfAccountPage({
                 </div>
 
                 <div className="flex gap-2 mt-6">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href="/accounts" className="btn btn-outline btn-sm">Cancel</a>
                 </div>

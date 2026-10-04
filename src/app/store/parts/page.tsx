@@ -1,7 +1,7 @@
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -25,6 +25,7 @@ async function savePart(formData: FormData) {
   const location = ((formData.get("location") as string) ?? "").trim() || null;
 
   const back = isNew ? "?adding=1" : `?id=${id}`;
+  await verifySavePassword(formData.get("save_password") as string, `/store/parts${back}`);
   if (!description) redirect(`/store/parts${back}`);
 
   const dup = await db
@@ -206,6 +207,12 @@ export default async function PartsPage({
             Only ADMIN users can delete parts.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+        )}
 
         <div className="border border-black p-4 mb-8">
           <div className="flex items-center justify-between mb-4 pb-2 border-b border-black">
@@ -335,6 +342,7 @@ export default async function PartsPage({
             </div>
 
             <div className="flex gap-2">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">
                 Save
               </button>

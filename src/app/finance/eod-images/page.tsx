@@ -3,7 +3,7 @@ import { today as todayPk } from "@/lib/time";
 import { ImageAttach } from "@/components/image-attach";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { requireSession, getSession, requireAdmin } from "@/lib/auth";
+import { requireSession, getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -24,6 +24,7 @@ const today = () => todayPk();
 
 async function saveImage(formData: FormData) {
   "use server";
+  await verifySavePassword(formData.get("save_password") as string, BASE);
   const session = await getSession();
   const img = trim(formData.get("img"));
   if (!img) redirect(`${BASE}?error=no_image`);
@@ -56,6 +57,8 @@ async function deleteImage(formData: FormData) {
 
 const ERR_MSG: Record<string, string> = {
   no_image: "Attach a photo before saving.",
+  no_password: "Password is required to save.",
+  wrong_password: "Incorrect password.",
 };
 
 export default async function EodImagesPage({
@@ -146,6 +149,7 @@ export default async function EodImagesPage({
               </div>
             </div>
             <div className="mt-4 flex gap-2">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
             </div>
           </form>

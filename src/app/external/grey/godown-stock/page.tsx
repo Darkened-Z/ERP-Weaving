@@ -16,7 +16,7 @@ import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { normQuality as gqNormQuality, countLabelMap, richConstruction as gqRichConstruction } from "@/lib/grey-quality";
 import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { num, intVal, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -540,6 +540,8 @@ export default async function GodownStockPage({
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
 
+    await verifySavePassword(formData.get("save_password") as string, "/external/grey/godown-stock");
+
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const kpNo = txt(formData.get("kp_no"));
     const type = txt(formData.get("type")) ?? "STOCK";
@@ -1009,6 +1011,16 @@ export default async function GodownStockPage({
             Only ADMIN can delete records.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <form id="gdn-find-form" method="GET" action="/external/grey/godown-stock" className="hidden"></form>
 
@@ -1031,13 +1043,6 @@ export default async function GodownStockPage({
                     Save
                   </button>
                   <PrintButton label="Print" />
-                  <a href="/external/grey/godown-stock" className="btn btn-outline btn-sm">
-                    Exit
-                  </a>
-                  <div>
-                    <label className="label block mb-1">Alt-S Password</label>
-                    <input className="input-box mono" placeholder="password" type="password" style={{ maxWidth: 130 }} />
-                  </div>
                   {formStock ? (
                     <form action={deleteStock} className="inline">
                       <input type="hidden" name="id" value={formStock.id} />
@@ -1054,6 +1059,9 @@ export default async function GodownStockPage({
                       Delete
                     </button>
                   )}
+                  <a href="/external/grey/godown-stock" className="btn btn-outline btn-sm">
+                    Exit
+                  </a>
                 </div>
               </div>
 
@@ -1504,6 +1512,10 @@ export default async function GodownStockPage({
                 </div>
 
                 <GodownCalc godownParty={godownParty} countMap={countMap} wvgCountMap={wvgCountFillMap} countLabel={Object.fromEntries(countLabelByCode)} />
+
+                <div className="flex items-end gap-2 mt-4 no-print">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
+                </div>
               </form>
             </div>
           </div>

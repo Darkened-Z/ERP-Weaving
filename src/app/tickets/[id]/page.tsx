@@ -3,7 +3,7 @@ import { db, schema } from "@/db";
 import { eq, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
-import { requireSession } from "@/lib/auth";
+import { requireSession, verifySavePassword } from "@/lib/auth";
 import {
   TICKET_STATUSES,
   TICKET_PRIORITIES,
@@ -29,10 +29,10 @@ export default async function TicketDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { from } = await searchParams;
+  const { from, error: pageError } = await searchParams;
   if (!/^\d+$/.test(id)) notFound();
   const ticketId = parseInt(id, 10);
   if (!Number.isFinite(ticketId)) notFound();
@@ -289,6 +289,17 @@ export default async function TicketDetailPage({
           <h1 className="page-title">{ticket.title}</h1>
         </div>
 
+        {pageError === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {pageError === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 mb-8">
           <span className={statusChipCls}>{getStatusLabel(ticket.status)}</span>
           <span className={priorityChipCls}>{getPriorityLabel(ticket.priority)}</span>
@@ -344,7 +355,10 @@ export default async function TicketDetailPage({
                   placeholder="Write a comment..."
                   required
                 />
-                <button type="submit" className="btn btn-sm">Post Comment</button>
+                <div className="flex gap-2">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
+                  <button type="submit" className="btn btn-sm">Post Comment</button>
+                </div>
               </form>
             </div>
 

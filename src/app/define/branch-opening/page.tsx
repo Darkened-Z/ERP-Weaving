@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { ConfirmButton } from "@/components/confirm-button";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -27,6 +27,8 @@ export default async function BranchOpeningPage({
   async function save(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
+    const ctx = id ? `id=${id}` : "";
+    await verifySavePassword(formData.get("save_password") as string, `/define/branch-opening?${ctx}`);
     const branchCode = (formData.get("branchCode") as string)?.trim();
     const branchName = (formData.get("branchName") as string)?.trim();
     const fyCode = (formData.get("fyCode") as string)?.trim();
@@ -122,6 +124,16 @@ export default async function BranchOpeningPage({
                 </div>
               </div>
 
+              {params.error === "no_password" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  Password is required to save.
+                </div>
+              )}
+              {params.error === "wrong_password" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  Incorrect password.
+                </div>
+              )}
               {params.error === "code_exists" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   That branch code already exists.
@@ -213,7 +225,16 @@ export default async function BranchOpeningPage({
                   </div>
                 </div>
 
-                <div className="flex gap-2 mt-6">
+                <div className="flex items-end gap-2 mt-6">
+                  <input
+                    type="password"
+                    name="save_password"
+                    placeholder="Password"
+                    required
+                    className="input-box mono"
+                    style={{ width: 120, height: 28 }}
+                    autoComplete="off"
+                  />
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href="/define/branch-opening" className="btn btn-outline btn-sm">Cancel</a>
                 </div>

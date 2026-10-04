@@ -12,6 +12,7 @@ import { FindingPicker } from "@/components/finding-picker";
 import { BrokerRateCalc } from "@/components/broker-rate-calc";
 import { CountPicker } from "@/components/count-picker";
 import { ConfirmButton } from "@/components/confirm-button";
+import { AutoSubmit } from "@/components/auto-submit";
 import { GreyConvCalc } from "@/components/grey-conv-calc";
 import { db, schema } from "@/db";
 import { and, eq, or, sql } from "drizzle-orm";
@@ -19,7 +20,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { num, txt, round } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -326,6 +327,8 @@ export default async function GreyConvContractPage({
     const isUpdate = Number.isFinite(idParsed);
     const backQ = isUpdate ? `?id=${idParsed}` : `?adding=1`;
 
+    await verifySavePassword(formData.get("save_password") as string, `/external/contracts/grey-conversion${backQ}`);
+
     const ratePerPick = num(formData.get("rate_per_pick"));
     const rateMtr = num(formData.get("rate_mtr"));
     const readVal = num(formData.get("read"));
@@ -587,6 +590,16 @@ export default async function GreyConvContractPage({
             {ERROR_MESSAGES[params.error]}
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <div className="border border-black p-5 mb-6">
           <datalist id="gc-yarn-counts">
@@ -616,6 +629,7 @@ export default async function GreyConvContractPage({
           />
           <form action={saveContract}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
+            <AutoSubmit watch="party" />
             <GreyConvCalc />
             <BrokerRateCalc />
             <AutoFill
@@ -976,8 +990,9 @@ export default async function GreyConvContractPage({
             </div>
 
             <div className="flex items-end gap-2 mt-5 flex-wrap">
-              <button type="submit" className="btn btn-sm">Save</button>
               <a href="/external/contracts/grey-conversion?adding=1" className="btn btn-outline btn-sm">New</a>
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
+              <button type="submit" className="btn btn-sm">Save</button>
               <PrintButton />
               {formItem && (
                 <a
@@ -989,10 +1004,6 @@ export default async function GreyConvContractPage({
                 </a>
               )}
               <a href="/external/contracts/grey-conversion" className="btn btn-outline btn-sm">Exit</a>
-              <div className="ml-auto">
-                <label className="label block mb-1">Alt-S Password</label>
-                <input className="input-box mono" placeholder="password" type="password" />
-              </div>
             </div>
           </form>
 

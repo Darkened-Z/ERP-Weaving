@@ -110,26 +110,41 @@ export async function CountsAccountsReport({
     .groupBy(schema.extYarnPurVoucher.party, schema.extYarnPurVoucherLine.count);
 
   type Row = { party: string; count: string; desc: string; blend: string; purLbs: number; salLbs: number; totalLbs: number; bags: number; consumedLbs: number; balLbs: number; rate: number; amount: number };
-  // Party Counts seed: every party that has counts in party_counts, crossed
-  // with those counts — a party appears even when no yarn has moved yet.
+  // Conversion-contract seed: every party on an external conversion contract,
+  // crossed with the warp/weft counts on that contract.
   const scopedSeedRows: { party: string; count: string }[] = [];
   let scopedParties: Set<string> | null = null;
   if (partyScope === "grey-sale-contract" || partyScope === "grey-conv-contract") {
-    const coa = await db
-      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
-      .from(schema.chartOfAccounts);
-    const coaNameByCode = new Map(coa.map((a) => [a.code, (a.description ?? "").trim()]));
-    const pcRows = await db.select().from(schema.partyCounts);
-    const codeById = new Map(allCounts.map((c) => [c.id, String(c.countCode)]));
+    const contracts = await db
+      .select({ id: schema.extGreyConvContract.id, party: schema.extGreyConvContract.party })
+      .from(schema.extGreyConvContract);
+    const contractIds = contracts.filter((c) => c.party).map((c) => c.id);
+    const partyById = new Map(contracts.map((c) => [c.id, (c.party ?? "").trim()]));
+
+    const warpRows = contractIds.length
+      ? await db
+          .select({ contractId: schema.extGreyConvWarp.contractId, count: schema.extGreyConvWarp.count })
+          .from(schema.extGreyConvWarp)
+      : [];
+    const weftRows = contractIds.length
+      ? await db
+          .select({ contractId: schema.extGreyConvWeft.contractId, count: schema.extGreyConvWeft.count })
+          .from(schema.extGreyConvWeft)
+      : [];
+
     const partySet = new Set<string>();
-    for (const pc of pcRows) {
-      const partyName = coaNameByCode.get(pc.partyCode) ?? "";
-      if (!partyName) continue;
-      if (party && !partyName.toLowerCase().includes(party.toLowerCase())) continue;
-      const cc = codeById.get(pc.countCode as unknown as number) ?? String(pc.countCode);
+    const seen = new Set<string>();
+    for (const row of [...warpRows, ...weftRows]) {
+      const pt = partyById.get(row.contractId) ?? "";
+      const cc = (row.count ?? "").trim();
+      if (!pt || !cc) continue;
+      if (party && !pt.toLowerCase().includes(party.toLowerCase())) continue;
       if (count && cc !== count) continue;
-      partySet.add(partyName);
-      scopedSeedRows.push({ party: partyName, count: cc });
+      const k = `${pt}||${cc}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      partySet.add(pt);
+      scopedSeedRows.push({ party: pt, count: cc });
     }
     scopedParties = partySet;
   }
@@ -292,7 +307,7 @@ export async function CountsAccountsReport({
                 <tr>
                   <td colSpan={7} className="text-center text-[var(--muted)] py-8">
                     {partyScope !== "activity" && (scopedParties?.size ?? 0) === 0
-                      ? "No parties found in Party Counts. Add a party with counts in the Party Count form first."
+                      ? "No parties found in Conversion Contracts. Add a conversion contract with warp/weft counts first."
                       : "No count activity in period"}
                   </td>
                 </tr>

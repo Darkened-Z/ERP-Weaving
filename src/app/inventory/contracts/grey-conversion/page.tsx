@@ -19,7 +19,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { num, txt, round, intVal } from "@/lib/form";
 import { conversionDebtorPrefixes, underAnyPrefix } from "@/lib/coa-heads";
 import { DateBox } from "@/components/date-box";
@@ -326,6 +326,7 @@ export default async function IntGreyConversionContractPage({
     const idParsed = idStr ? parseInt(idStr, 10) : NaN;
     const isUpdate = Number.isFinite(idParsed);
     const backQ = isUpdate ? `?id=${idParsed}` : `?adding=1`;
+    await verifySavePassword(formData.get("save_password") as string, `/inventory/contracts/grey-conversion${backQ}`);
 
     const ratePerPick = num(formData.get("rate_per_pick"));
     const rateMtr = num(formData.get("rate_mtr"));
@@ -586,6 +587,16 @@ export default async function IntGreyConversionContractPage({
         {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             {ERROR_MESSAGES[params.error]}
+          </div>
+        )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
           </div>
         )}
 
@@ -966,8 +977,9 @@ export default async function IntGreyConversionContractPage({
             </div>
 
             <div className="flex items-end gap-2 mt-5 flex-wrap">
-              <button type="submit" className="btn btn-sm">Save</button>
               <a href="/inventory/contracts/grey-conversion?adding=1" className="btn btn-outline btn-sm">New</a>
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
+              <button type="submit" className="btn btn-sm">Save</button>
               <PrintButton />
               {formItem && (
                 <a
@@ -979,10 +991,6 @@ export default async function IntGreyConversionContractPage({
                 </a>
               )}
               <a href="/inventory/contracts/grey-conversion" className="btn btn-outline btn-sm">Exit</a>
-              <div className="ml-auto">
-                <label className="label block mb-1">Alt-S Password</label>
-                <input className="input-box mono" placeholder="password" type="password" />
-              </div>
             </div>
           </form>
 

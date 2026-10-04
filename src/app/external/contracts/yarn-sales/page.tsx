@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { num, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -133,6 +133,7 @@ export default async function YarnSalesContractPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     // Keep the operator on the record they were editing when a check fails.
     const back = Number.isFinite(id) && id > 0 ? `id=${id}&` : "adding=1&";
+    await verifySavePassword(formData.get("save_password") as string, `/external/contracts/yarn-sales?${back.slice(0, -1)}`);
     const contDate = ((formData.get("cont_date") as string) || "").trim() || today();
     const expdDate = ((formData.get("expd_date") as string) || "").trim() || null;
     const refno = ((formData.get("refno") as string) || "").trim() || null;
@@ -388,6 +389,16 @@ export default async function YarnSalesContractPage({
         {params.error === "admin_only" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Only ADMIN can delete contracts.
+          </div>
+        )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
           </div>
         )}
 
@@ -768,16 +779,13 @@ export default async function YarnSalesContractPage({
             </div>
 
             <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">
                 Save
               </button>
               <a href="/external/contracts/yarn-sales" className="btn btn-outline btn-sm">
                 Exit
               </a>
-              <div className="ml-auto">
-                <label className="label block mb-1">Alt-S Password</label>
-                <input className="input-box mono" placeholder="password" type="password" />
-              </div>
             </div>
           </form>
         </div>

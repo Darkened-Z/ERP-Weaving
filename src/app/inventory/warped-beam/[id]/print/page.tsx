@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 
 export const dynamic = "force-dynamic";
@@ -58,9 +59,14 @@ export default async function WarpedBeamBillPrint({
           <Link href={`/inventory/warped-beam?id=${vid}`} className="btn btn-outline btn-sm">
             Back
           </Link>
-          <PrintButton label="Print" />
+          <div className="flex gap-2">
+            <ExportPdfButton contentId="warped-beam-print" filename={`Warped-Beam-Bill-${bill.vNo ?? vid}.pdf`} />
+            <WaPdfButton contentId="warped-beam-print" filename={`Warped-Beam-Bill-${bill.vNo ?? vid}.pdf`} />
+            <PrintButton label="Print" />
+          </div>
         </div>
 
+        <div id="warped-beam-print">
         <PrintHeader
           title="WARPED BEAM RECEIVING"
           subtitle="Sizing / Warping Bill"
@@ -163,6 +169,7 @@ export default async function WarpedBeamBillPrint({
         ) : null}
 
         <SignatureRow labels={["Prepared By", "Store Incharge", "Authorized Signatory"]} />
+        </div>
       </div>
     </>
   );

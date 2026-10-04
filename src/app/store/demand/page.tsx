@@ -7,7 +7,7 @@ import { db, schema } from "@/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { assertPeriodOpen, assertPeriodsOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { today } from "@/lib/time";
 import {
@@ -37,6 +37,7 @@ async function saveDemand(formData: FormData) {
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   const isNew = !Number.isFinite(id);
   const back = isNew ? "?adding=1" : `?id=${id}`;
+  await verifySavePassword(formData.get("save_password") as string, `/store/demand${back}`);
 
   const demandDate = txt(formData.get("demand_date")) ?? today();
   await assertPeriodOpen(demandDate, "STORE");
@@ -513,6 +514,12 @@ export default async function DemandPage({
             This demand is POSTED to Finance. Revert the approval first — deleting it now would leave orphan GL entries.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+        )}
 
         {showForm && (
           <div className="border border-black p-4 mb-3">
@@ -748,6 +755,7 @@ export default async function DemandPage({
               </div>
 
               <div className="flex gap-2">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">
                   Save
                 </button>

@@ -3,7 +3,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { isUniqueViolation } from "@/lib/db-errors";
 import bcrypt from "bcryptjs";
 
@@ -153,6 +153,16 @@ export default async function UsersPage({
                   Password is required for new users.
                 </div>
               )}
+              {params.error === "no_password" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  Password is required to save.
+                </div>
+              )}
+              {params.error === "wrong_password" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  Incorrect password.
+                </div>
+              )}
 
               <form action={save}>
                 {selected && <input type="hidden" name="id" value={selected.id} />}
@@ -221,6 +231,7 @@ export default async function UsersPage({
                 </div>
 
                 <div className="flex gap-2 mt-6">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href={BASE} className="btn btn-outline btn-sm">Cancel</a>
                 </div>

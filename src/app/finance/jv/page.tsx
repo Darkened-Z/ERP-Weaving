@@ -11,7 +11,7 @@ import { JvBalanceBar } from "./balance-bar";
 import { GrowRows } from "@/components/grow-rows";
 import { db, schema } from "@/db";
 import { eq, and, sql, desc, gte } from "drizzle-orm";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
@@ -56,13 +56,14 @@ type ParsedLine = {
 async function saveVoucher(formData: FormData) {
   "use server";
   try {
-  const session = await getSession();
-  const utCode = session?.userId ?? null;
-
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   const editing = Number.isFinite(id) && id > 0;
   const ctx = editing ? `id=${id}` : "adding=1";
+
+  const session = await verifySavePassword(formData.get("save_password") as string, `/finance/jv?${ctx}`);
+  const utCode = session.userId;
+
   await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "FINANCE");
 
   const profile = await db
@@ -409,6 +410,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   no_fy: "No current fiscal year set in Company Profile. Cannot save vouchers.",
   forbidden: "Only ADMIN can delete vouchers.",
   period_locked: "Period is locked. Cannot save vouchers for this date.",
+  no_password: "Password is required to save.",
+  wrong_password: "Incorrect password.",
 };
 
 export default async function JournalVoucherPage({
@@ -944,13 +947,22 @@ export default async function JournalVoucherPage({
               </div>
 
               <div className="flex items-end gap-3 mt-6 flex-wrap">
-                <div className="flex gap-2 no-print">
+                <div className="flex gap-2 items-end no-print">
                   <a
                     href="/finance/jv?adding=1"
                     className="btn btn-outline btn-sm"
                   >
                     New
                   </a>
+                  <input
+                    type="password"
+                    name="save_password"
+                    placeholder="Password"
+                    required
+                    className="input-box mono"
+                    style={{ width: 120, height: 28 }}
+                    autoComplete="off"
+                  />
                   <button type="submit" className="btn btn-sm">
                     Save
                   </button>

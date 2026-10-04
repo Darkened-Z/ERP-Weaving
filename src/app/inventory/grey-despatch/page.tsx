@@ -11,7 +11,7 @@ import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, inArray, isNotNull, ne, or, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
@@ -400,6 +400,7 @@ export default async function GreyDespatchPage({
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
+    await verifySavePassword(formData.get("save_password") as string, isUpdate ? `/inventory/grey-despatch?id=${id}` : "/inventory/grey-despatch?adding=1");
     await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "INVENTORY");
     // An edit can't move a voucher out of a locked period either.
     if (isUpdate) {
@@ -1038,6 +1039,16 @@ export default async function GreyDespatchPage({
             Only ADMIN can delete vouchers or switch them between Edit and Final.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <form id="gd-find-form" method="GET" action="/inventory/grey-despatch" className="hidden"></form>
 
@@ -1527,15 +1538,12 @@ export default async function GreyDespatchPage({
             </div>
 
             <div className="flex items-end gap-2 mt-5 flex-wrap">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
               <a href="/inventory/grey-despatch?adding=1" className="btn btn-outline btn-sm">New</a>
               <PrintButton />
               <a href="/inventory/grey-despatch" className="btn btn-outline btn-sm">Exit</a>
               <div className="ml-auto flex items-end gap-2">
-                <div>
-                  <label className="label block mb-1">Password</label>
-                  <input className="input-box mono" placeholder="password" type="password" />
-                </div>
                 {formItem ? (
                   <form action={deleteDespatch} className="inline">
                     <input type="hidden" name="id" value={formItem.id} />

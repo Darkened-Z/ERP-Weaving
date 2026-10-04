@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { num, intVal, txt, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -178,6 +178,8 @@ export default async function GreyTransferPage({
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
 
+    await verifySavePassword(formData.get("save_password") as string, "/external/grey/transfer");
+
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const greyType = txt(formData.get("grey_type")) ?? "FRS";
     const partyFrom = txt(formData.get("party_from"));
@@ -336,6 +338,16 @@ export default async function GreyTransferPage({
             Only ADMIN can delete records.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <form id="gt-find-form" method="GET" action="/external/grey/transfer" className="hidden"></form>
 
@@ -356,9 +368,6 @@ export default async function GreyTransferPage({
                 Save
               </button>
               <PrintButton label="Print" />
-              <a href="/external/grey/transfer" className="btn btn-outline btn-sm">
-                Exit
-              </a>
               {formTransfer ? (
                 <form action={deleteTransfer} className="inline">
                   <input type="hidden" name="id" value={formTransfer.id} />
@@ -375,6 +384,9 @@ export default async function GreyTransferPage({
                   Del
                 </button>
               )}
+              <a href="/external/grey/transfer" className="btn btn-outline btn-sm">
+                Exit
+              </a>
             </div>
           </div>
 
@@ -497,18 +509,14 @@ export default async function GreyTransferPage({
                   <label className="label block mb-1">Remarks</label>
                   <input name="remarks" className="input-box" defaultValue={formTransfer?.remarks ?? ""} />
                 </div>
-                <div className="col-span-4">
-                  <label className="label block mb-1">Alt-S Password</label>
-                  <input className="input-box mono" placeholder="password" type="password" />
-                </div>
               </div>
             </div>
 
             <div className="flex gap-2 flex-wrap no-print">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
               <a href="/external/grey/transfer?adding=1" className="btn btn-outline btn-sm">New</a>
               <PrintButton label="Print" />
-              <a href="/external/grey/transfer" className="btn btn-outline btn-sm">Exit</a>
               {formTransfer ? (
                 <form action={deleteTransfer} className="inline">
                   <input type="hidden" name="id" value={formTransfer.id} />
@@ -525,6 +533,7 @@ export default async function GreyTransferPage({
                   Del
                 </button>
               )}
+              <a href="/external/grey/transfer" className="btn btn-outline btn-sm">Exit</a>
             </div>
           </form>
         </div>

@@ -15,7 +15,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { acc } from "@/lib/gl-accounts";
 import { countLabelMap, wfPart as gqWfPart, richConstruction as gqRichConstruction, fullConstruction as gqFullConstruction, normQuality as gqNormQuality } from "@/lib/grey-quality";
 import { num, intVal, txt, escLike } from "@/lib/form";
@@ -438,6 +438,9 @@ export default async function PackiParchiPage({
     const dueDate = termSal === "DUE" ? txt(formData.get("due_date")) : null;
     const typeRej = txt(formData.get("type_rej"));
     const imgNo = txt(formData.get("img_no"));
+
+    const backUrl = `/external/grey/packi-parchi${Number.isFinite(id) && id > 0 ? `?id=${id}` : ""}`;
+    await verifySavePassword(formData.get("save_password") as string, backUrl);
 
     const errPath = (slug: string) =>
       `/external/grey/packi-parchi?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}error=${slug}`;
@@ -1058,6 +1061,16 @@ export default async function PackiParchiPage({
             Only ADMIN can delete records.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <form id="pp-find-form" method="GET" action="/external/grey/packi-parchi" className="hidden"></form>
 
@@ -1092,7 +1105,6 @@ export default async function PackiParchiPage({
                   </a>
                 </>
               )}
-              <a href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Exit</a>
               {formItem ? (
                 <form action={deleteParchi} className="inline">
                   <input type="hidden" name="id" value={formItem.id} />
@@ -1109,6 +1121,7 @@ export default async function PackiParchiPage({
                   Del
                 </button>
               )}
+              <a href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Exit</a>
               <button type="button" className="btn btn-outline btn-sm">Conv Rate</button>
             </div>
           </div>
@@ -1724,10 +1737,6 @@ export default async function PackiParchiPage({
                 <label className="label block mb-1">Due Date</label>
                 <DateBox name="due_date" className="input-box mono" defaultValue={formItem?.dueDate ?? ""} />
               </div>
-              <div className="lg:col-span-3">
-                <label className="label block mb-1">Alt-S Password</label>
-                <input className="input-box mono" placeholder="password" type="password" />
-              </div>
               <div className="lg:col-span-6">
                 <label className="label block mb-1">Find</label>
                 <div className="flex gap-2">
@@ -1835,6 +1844,7 @@ export default async function PackiParchiPage({
 
             <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
               <a href="/external/grey/packi-parchi?adding=1" className="btn btn-outline btn-sm">New</a>
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
               <a href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Exit</a>

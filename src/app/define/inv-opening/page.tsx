@@ -5,7 +5,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, FieldCalc } from "@/components/auto-fill";
 import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
 import { ContractInfoPanel } from "@/components/contract-info-panel";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -146,6 +146,7 @@ export default async function InventoryOpeningPage({
   async function saveEntry(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
+    await verifySavePassword(formData.get("save_password") as string, `/define/inv-opening?tab=${TAB_MAP[formData.get("item_type") as string] || "yarn"}${id ? `&id=${id}` : ""}`);
     const itemType = (formData.get("item_type") as string)?.trim();
     const itemCode = (formData.get("item_code") as string)?.trim();
     const description = (formData.get("description") as string)?.trim();
@@ -361,6 +362,12 @@ export default async function InventoryOpeningPage({
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               Only ADMIN users can delete opening balance entries.
             </div>
+          )}
+          {params.error === "no_password" && (
+            <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+          )}
+          {params.error === "wrong_password" && (
+            <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
           )}
 
           <form action={saveEntry}>
@@ -736,6 +743,7 @@ export default async function InventoryOpeningPage({
             )}
 
             <div className="flex gap-2 mt-4">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
               <a href={`/define/inv-opening?tab=${tab}`} className="btn btn-outline btn-sm">Exit</a>
             </div>

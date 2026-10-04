@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
@@ -33,6 +33,7 @@ export default async function StaffPage({
   async function save(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
+    await verifySavePassword(formData.get("save_password") as string, `/define/staff${id ? `?id=${id}` : ""}`);
     const code = parseInt(formData.get("code") as string);
     const name = (formData.get("name") as string)?.trim();
     if (!code || !name) return;
@@ -161,6 +162,12 @@ export default async function StaffPage({
                   That code already exists.
                 </div>
               )}
+              {params.error === "no_password" && (
+                <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+              )}
+              {params.error === "wrong_password" && (
+                <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+              )}
               <form action={save}>
                 {selected && <input type="hidden" name="id" value={selected.id} />}
                 <datalist id="staff-sheds">
@@ -253,6 +260,7 @@ export default async function StaffPage({
                 </div>
 
                 <div className="flex gap-2 mt-6">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href="/define/staff" className="btn btn-outline btn-sm">Cancel</a>
                 </div>

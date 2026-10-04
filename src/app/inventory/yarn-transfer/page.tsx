@@ -11,7 +11,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -30,6 +30,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   period_locked: "Period is locked. Cannot save for this date.",
   admin_only: "Only ADMIN can delete vouchers.",
   over_stock: "Qty is more than the yarn lying at Location From for this count.",
+  no_password: "Password is required to save.",
+  wrong_password: "Incorrect password.",
 };
 
 export default async function YarnTransferPage({
@@ -231,6 +233,7 @@ export default async function YarnTransferPage({
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isUpdate = Number.isFinite(id) && id > 0;
     const backQ = isUpdate ? `?id=${id}` : `?adding=1`;
+    await verifySavePassword(formData.get("save_password") as string, `/inventory/yarn-transfer${backQ}`);
 
     const vDate = txt(formData.get("vDate")) ?? today();
     await assertPeriodOpen(vDate, "INVENTORY");
@@ -720,14 +723,9 @@ export default async function YarnTransferPage({
               </div>
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">Save</button>
                 <a href="/inventory/yarn-transfer" className="btn btn-outline btn-sm">Exit</a>
-                <div className="ml-auto flex items-end gap-4">
-                  <div>
-                    <label className="label block mb-1">Password</label>
-                    <input className="input-box mono" placeholder="password" type="password" />
-                  </div>
-                </div>
               </div>
             </form>
           )}

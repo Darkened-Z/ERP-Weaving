@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today } from "@/lib/time";
 import { assertPeriodOpen } from "@/lib/period-lock";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { num, escLike } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 
@@ -177,6 +177,7 @@ export default async function GreyPurchaseContractPage({
     const idRaw = formData.get("id") as string;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
     const isNew = !Number.isFinite(id);
+    await verifySavePassword(formData.get("save_password") as string, `/external/contracts/grey-purchase?${isNew ? "adding=1" : `id=${id}`}`);
 
     let contractNo = (formData.get("contract_no") as string)?.trim();
     if (isNew || !contractNo) {
@@ -446,6 +447,12 @@ export default async function GreyPurchaseContractPage({
           <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
             Only ADMIN can delete contracts.
           </div>
+        )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 mb-8">
@@ -847,14 +854,11 @@ export default async function GreyPurchaseContractPage({
               </div>
 
               <div className="flex items-end gap-2 mt-4 flex-wrap">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">Save</button>
                 <a href="/external/contracts/grey-purchase?adding=1" className="btn btn-outline btn-sm">New</a>
                 <PrintButton />
                 <a href="/external/contracts/grey-purchase" className="btn btn-outline btn-sm">Exit</a>
-                <div className="ml-auto">
-                  <label className="label block mb-1">Alt-S Password</label>
-                  <input className="input-box mono" placeholder="password" type="password" />
-                </div>
               </div>
             </form>
           </div>

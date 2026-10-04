@@ -19,7 +19,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
 import { assertPeriodOpen, refuseIfLocked } from "@/lib/period-lock";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { RowClear } from "@/components/row-clear";
 import { num, txt, escLike } from "@/lib/form";
@@ -616,6 +616,7 @@ export default async function YarnSaleVoucherPage({
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/external/yarn/sale?id=${id}` : "/external/yarn/sale?adding=1");
 
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const loomType = txt(formData.get("loom_type"));
@@ -1246,6 +1247,16 @@ export default async function YarnSaleVoucherPage({
         {params.error === "admin_only" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Only ADMIN can delete vouchers.
+          </div>
+        )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
           </div>
         )}
 
@@ -1900,6 +1911,7 @@ export default async function YarnSaleVoucherPage({
                   <a href="/external/yarn/sale?adding=1" className="btn btn-outline btn-sm">
                     New
                   </a>
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn btn-sm">
                     Save
                   </button>
@@ -1913,12 +1925,6 @@ export default async function YarnSaleVoucherPage({
                       <ConfirmButton>Del</ConfirmButton>
                     </form>
                   )}
-                  <div className="ml-auto flex items-end gap-2">
-                    <div>
-                      <label className="label block mb-1">Alt-S Password</label>
-                      <input className="input-box mono" placeholder="password" type="password" />
-                    </div>
-                  </div>
                 </div>
               </form>
 

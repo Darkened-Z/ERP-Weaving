@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, or } from "drizzle-orm";
@@ -42,6 +42,7 @@ export default async function YarnCountsPage({
   async function saveCount(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
+    await verifySavePassword(formData.get("save_password") as string, `/define/yarn-counts${id ? `?id=${id}` : ""}`);
     const description = (formData.get("desc") as string)?.trim();
     if (!description) return;
 
@@ -200,6 +201,12 @@ export default async function YarnCountsPage({
                   This yarn count is referenced by contracts, party counts, or voucher lines and cannot be deleted.
                 </div>
               )}
+              {params.error === "no_password" && (
+                <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+              )}
+              {params.error === "wrong_password" && (
+                <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+              )}
               <form action={saveCount}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
                 <div className="grid grid-cols-1 gap-y-3 gform">
@@ -228,6 +235,7 @@ export default async function YarnCountsPage({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href="/define/yarn-counts" className="btn btn-outline btn-sm">Exit</a>
                 </div>

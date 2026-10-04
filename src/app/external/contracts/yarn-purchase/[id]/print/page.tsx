@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 
 export const dynamic = "force-dynamic";
@@ -74,9 +75,11 @@ export default async function YarnPurchaseContractPrint({
         <a href={`/external/contracts/yarn-purchase?id=${id}`} className="btn btn-outline btn-sm">
           Back
         </a>
+        <ExportPdfButton contentId="yarn-pur-contract-print" filename={`Yarn-Purchase-Contract-${contract.contNo ?? id}.pdf`} />
+        <WaPdfButton contentId="yarn-pur-contract-print" filename={`Yarn-Purchase-Contract-${contract.contNo ?? id}.pdf`} />
         <PrintButton label="Print" />
       </div>
-      <div className="p-6 mx-auto" style={{ maxWidth: 900 }}>
+      <div id="yarn-pur-contract-print" className="p-6 mx-auto" style={{ maxWidth: 900 }}>
         <PrintHeader title="YARN PURCHASE CONTRACT" right={rightBlock} />
 
         <div className="grid grid-cols-2 gap-6 mb-4 text-[12px]">

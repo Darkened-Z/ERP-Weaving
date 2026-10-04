@@ -12,7 +12,7 @@ import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { inCurrentBeamCycle } from "@/lib/beam-cycle";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { acc } from "@/lib/gl-accounts";
 import { revalidatePath } from "next/cache";
@@ -40,6 +40,10 @@ async function saveKnotting(formData: FormData) {
   try {
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
+  const backUrl = Number.isFinite(id) && id > 0
+    ? `/inventory/knotting?id=${id}`
+    : `/inventory/knotting?adding=1`;
+  await verifySavePassword(formData.get("save_password") as string, backUrl);
   await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "INVENTORY");
   // An edit can't move a voucher out of a locked period either.
   if (Number.isFinite(id) && id > 0) {
@@ -1036,6 +1040,16 @@ export default async function KnottingPage({
             Cannot delete — beams from this voucher have daily production entries. Delete the production entries first.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <form
           id="ks-find-form"
@@ -1559,6 +1573,7 @@ export default async function KnottingPage({
               <KnottingCalc />
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">
                   Save
                 </button>
