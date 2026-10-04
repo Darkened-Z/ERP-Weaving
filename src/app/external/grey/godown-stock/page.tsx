@@ -229,6 +229,19 @@ export default async function GodownStockPage({
       },
     ])
   );
+  const purContractInfoMap: Record<string, { label: string; value: string }[]> = {};
+  for (const c of purContracts) {
+    const qlty = qualityFull(c.greyCode);
+    purContractInfoMap[c.contractNo] = [
+      { label: "Party", value: c.party ?? "" },
+      { label: "Quality", value: qlty },
+      { label: "Qty Mtr", value: fmtN(c.quantityMtr) },
+      { label: "Rate", value: fmtN(c.ratePerMtr, 2) },
+      { label: "Term", value: c.paymentTerm ?? "" },
+      { label: "Date", value: c.contractDate ?? "" },
+      { label: "Status", value: c.status ?? "" },
+    ];
+  }
   const salContracts = await db
     .select()
     .from(schema.extGreySalContract)
@@ -1220,6 +1233,9 @@ export default async function GodownStockPage({
                   </div>
                   <div className="col-span-12">
                     <ContractInfoPanel watch="conv_cont_wvg" map={intContractInfoMap} title="CONV CONTRACT WVG — INFO" />
+                  </div>
+                  <div className="col-span-12">
+                    <ContractInfoPanel watch="pur_cont_no" map={purContractInfoMap} title="PUR GREY CONTRACT — INFO" />
                   </div>
 
                   {/* Measurements — one dense row */}
