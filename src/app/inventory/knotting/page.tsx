@@ -848,7 +848,7 @@ export default async function KnottingPage({
   const beamPickerRows = loadedBeams.map((b) => ({
     value: b.beamNo,
     code: b.beamNo,
-    description: b.setNo ?? b.beamSetNo ?? "",
+    description: b.beamNo,
     cells: {
       beamNo: b.beamNo,
       setNo: b.setNo ?? "",

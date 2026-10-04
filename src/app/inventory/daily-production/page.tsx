@@ -306,7 +306,7 @@ export default async function DailyProductionPage({
   const beamPickerRows = runningBeams.map((b) => ({
     value: b.beamNo as string,
     code: b.beamNo as string,
-    description: b.setNo ?? b.beamSetNo ?? "",
+    description: b.beamNo as string,
     // Scoped to the header Loom# — the list must offer only the beams mounted on
     // THAT loom. A beam missing its shed/loom stamp carries no key and stays
     // visible, so a half-recorded beam is never silently unpickable.
