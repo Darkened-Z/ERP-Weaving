@@ -56,7 +56,7 @@ export default async function GreyConvSaleAvgPage({
     .orderBy(schema.chartOfAccounts.description);
   const partyCodeByDesc = new Map(parties.map((p) => [p.description, p.code]));
 
-  const despatchRows = await db
+  const despatchA = await db
     .select({
       contNo: schema.extPackiParchi.convContNo,
       totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
@@ -64,7 +64,46 @@ export default async function GreyConvSaleAvgPage({
     .from(schema.extPackiParchi)
     .where(sql`conv_cont_no is not null and conv_cont_no != ''`)
     .groupBy(schema.extPackiParchi.convContNo);
-  const despatchByContNo = new Map(despatchRows.map((d) => [d.contNo, d.totalMeter]));
+  const despatchB = await db
+    .select({
+      contNo: schema.extPackiParchi.convContSale2,
+      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
+    })
+    .from(schema.extPackiParchi)
+    .where(sql`conv_cont_sale2 is not null and conv_cont_sale2 != ''`)
+    .groupBy(schema.extPackiParchi.convContSale2);
+  const despatchByContNo = new Map<string, number>();
+  for (const d of [...despatchA, ...despatchB]) {
+    const k = d.contNo ?? "";
+    despatchByContNo.set(k, (despatchByContNo.get(k) ?? 0) + d.totalMeter);
+  }
+
+  const detailA = await db
+    .select({
+      contNo: schema.extPackiParchi.convContNo,
+      party: schema.extPackiParchi.purchaseParty,
+      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
+      lots: sql<number>`count(*)`,
+    })
+    .from(schema.extPackiParchi)
+    .where(sql`conv_cont_no is not null and conv_cont_no != ''`)
+    .groupBy(schema.extPackiParchi.convContNo, schema.extPackiParchi.purchaseParty);
+  const detailB = await db
+    .select({
+      contNo: schema.extPackiParchi.convContSale2,
+      party: schema.extPackiParchi.saleParty,
+      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
+      lots: sql<number>`count(*)`,
+    })
+    .from(schema.extPackiParchi)
+    .where(sql`conv_cont_sale2 is not null and conv_cont_sale2 != ''`)
+    .groupBy(schema.extPackiParchi.convContSale2, schema.extPackiParchi.saleParty);
+  const despatchDetailByContNo = new Map<string, { party: string; totalMeter: number; lots: number }[]>();
+  for (const d of [...detailA, ...detailB]) {
+    const key = d.contNo ?? "";
+    if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
+    despatchDetailByContNo.get(key)!.push({ party: d.party ?? "-", totalMeter: d.totalMeter, lots: d.lots });
+  }
 
   const usedParties = [...new Set(allContracts.map((c) => c.party).filter(Boolean))].sort() as string[];
 
@@ -97,6 +136,7 @@ export default async function GreyConvSaleAvgPage({
     const totalAmt = round2(qty * sRate);
     const mainDesc = c.productName ? productMainDesc.get(c.productName) ?? "" : "";
     const despatch = despatchByContNo.get(c.contNo ?? "") ?? 0;
+    const despatchDetail = despatchDetailByContNo.get(c.contNo ?? "") ?? [];
     const balance = round2(qty - despatch);
     return {
       id: c.id,
@@ -110,6 +150,7 @@ export default async function GreyConvSaleAvgPage({
       width: c.width ?? 0,
       production: qty,
       despatch,
+      despatchDetail,
       balance,
       pick: pickVal,
       rPick,
@@ -146,6 +187,7 @@ export default async function GreyConvSaleAvgPage({
     width: r.width,
     production: r.production,
     despatch: r.despatch,
+    despatchTo: r.despatchDetail.map((d) => `${d.party}: ${d.totalMeter}m (${d.lots})`).join("; "),
     balance: r.balance,
     pick: r.pick,
     rPick: r.rPick,
@@ -186,6 +228,7 @@ export default async function GreyConvSaleAvgPage({
                 { key: "width", label: "Width" },
                 { key: "production", label: "Production" },
                 { key: "despatch", label: "Despatch" },
+                { key: "despatchTo", label: "Despatch To" },
                 { key: "balance", label: "Balance" },
                 { key: "pick", label: "Pick" },
                 { key: "rPick", label: "R/Pick" },
@@ -310,7 +353,18 @@ export default async function GreyConvSaleAvgPage({
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.width || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.production)}</td>
-                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.despatch)}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">
+                      {r.despatch ? (
+                        <div>
+                          <div className="font-bold">{fmt2(r.despatch)}</div>
+                          {r.despatchDetail.map((d, di) => (
+                            <div key={di} className="text-[10px] text-[var(--muted)] text-left" style={{ lineHeight: 1.4 }}>
+                              {d.party} — {fmt2(d.totalMeter)} ({d.lots})
+                            </div>
+                          ))}
+                        </div>
+                      ) : ""}
+                    </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold">{fmt2(r.balance)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.pick || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rPick || "-"}</td>
