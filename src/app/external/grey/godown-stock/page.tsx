@@ -158,9 +158,19 @@ export default async function GodownStockPage({
   // rich Oracle-style LOV (date, party, quality, read×pick×width, qty, rate, status).
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+  const qualityFull = (code: string | null | undefined) => {
+    if (!code) return "";
+    const c = constrByCode.get(code);
+    if (!c) return code;
+    const rp = c.reed && c.pick ? `${c.reed}×${c.pick}` : "";
+    const warp = [c.warpCount, c.warp2].filter(Boolean).join("/");
+    const weft = [c.weftCount, c.weft2].filter(Boolean).join("/");
+    const yarn = warp && weft ? `${warp} ${weft}` : warp || weft || "";
+    return [code, rp, yarn].filter(Boolean).join(" ");
+  };
   const contractColumns = [
     { key: "cont", label: "Cont #", width: 88 },
-    { key: "desc", label: "Prd. Desc" },
+    { key: "quality", label: "Quality" },
     { key: "party", label: "Party" },
     { key: "qty", label: "Qty", width: 84, align: "right" as const },
     { key: "rate", label: "Rate", width: 78, align: "right" as const },
@@ -168,15 +178,15 @@ export default async function GodownStockPage({
     { key: "status", label: "St", width: 34 },
   ];
   const contractFindRows = convOnlyContracts.map((c) => {
-    const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
+    const qlty = qualityFull(c.grayQltyCode);
     return {
       value: c.contNo,
       code: c.contNo,
-      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      description: `${c.party ?? ""}${qlty ? ` · ${qlty}` : ""}`,
       filterKey: c.party ?? "",
       cells: {
         cont: c.contNo,
-        desc: prd,
+        quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
         rate: fmtN(c.grayRatePerMtr, 2),
@@ -263,26 +273,18 @@ export default async function GodownStockPage({
 
   // Full-page F9 finder rows for the grey PURCHASE / SALE contracts — rich
   // Oracle-style LOV columns (Prd. Desc, qty, rate, term, date, status).
-  const greyPurColumns = [
-    { key: "cont", label: "Cont #", width: 88 },
-    { key: "desc", label: "Prd. Desc" },
-    { key: "party", label: "Party" },
-    { key: "qty", label: "Qty", width: 84, align: "right" as const },
-    { key: "rate", label: "Rate", width: 70, align: "right" as const },
-    { key: "date", label: "Date", width: 86 },
-    { key: "status", label: "St", width: 34 },
-  ];
-  const greySaleColumns = greyPurColumns;
+  const greyPurColumns = contractColumns;
+  const greySaleColumns = contractColumns;
   const purFindRows = purContracts.filter((c) => isRunning(c.status)).map((c) => {
-    const prd = (c.greyCode ? qualityByCode[c.greyCode] : "") || c.greyCode || "";
+    const qlty = qualityFull(c.greyCode);
     return {
       value: c.contractNo,
       code: c.contractNo,
-      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      description: `${c.party ?? ""}${qlty ? ` · ${qlty}` : ""}`,
       filterKey: c.party ?? "",
       cells: {
         cont: c.contractNo,
-        desc: prd,
+        quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.quantityMtr),
         rate: fmtN(c.ratePerMtr, 2),
@@ -292,15 +294,15 @@ export default async function GodownStockPage({
     };
   });
   const salFindRows = salContracts.map((c) => {
-    const prd = (c.greyCode ? qualityByCode[c.greyCode] : "") || c.greyCode || "";
+    const qlty = qualityFull(c.greyCode);
     return {
       value: c.contractNo,
       code: c.contractNo,
-      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      description: `${c.party ?? ""}${qlty ? ` · ${qlty}` : ""}`,
       filterKey: c.party ?? "",
       cells: {
         cont: c.contractNo,
-        desc: prd,
+        quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.quantityMtr),
         rate: fmtN(c.ratePerMtr, 2),
@@ -310,15 +312,15 @@ export default async function GodownStockPage({
     };
   });
   const saleConvFindRows = saleConvContracts.map((c) => {
-    const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
+    const qlty = qualityFull(c.grayQltyCode);
     return {
       value: c.contNo,
       code: c.contNo,
-      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      description: `${c.party ?? ""}${qlty ? ` · ${qlty}` : ""}`,
       filterKey: c.party ?? "",
       cells: {
         cont: c.contNo,
-        desc: prd,
+        quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
         rate: fmtN(c.grayRatePerMtr, 2),
@@ -446,15 +448,15 @@ export default async function GodownStockPage({
   for (const w of intWarpRows) pushIntCount(w.contractId, "WARP", w);
   for (const w of intWeftRows) pushIntCount(w.contractId, "WEFT", w);
   const intFindRows = intConvContracts.map((c) => {
-    const prd = (c.grayQltyCode ? qualityByCode[c.grayQltyCode] : "") || c.grayCode || "";
+    const qlty = qualityFull(c.grayQltyCode);
     return {
       value: c.contNo,
       code: c.contNo,
-      description: `${c.party ?? ""}${prd ? ` · ${prd}` : ""}`,
+      description: `${c.party ?? ""}${qlty ? ` · ${qlty}` : ""}`,
       filterKey: c.party ?? "",
       cells: {
         cont: c.contNo,
-        desc: prd,
+        quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
         rate: fmtN(c.grayRatePerMtr, 2),
