@@ -28,14 +28,7 @@ const AMOUNT_LABEL = "Cr";
 const LINE_ROWS = 4;
 const CONTRA_BASE = 50;
 
-const TRN_TYPES = [
-  "CHEQUE",
-  "ONLINE TRANSFER",
-  "PAY ORDER",
-  "DEMAND DRAFT",
-  "CASH DEPOSIT",
-  "RTGS",
-];
+const TRN_TYPES = ["", "ADJUSTMENT"];
 
 async function saveVoucher(formData: FormData) {
   "use server";

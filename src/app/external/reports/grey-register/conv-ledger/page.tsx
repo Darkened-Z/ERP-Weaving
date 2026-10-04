@@ -160,6 +160,7 @@ export default async function GreyRegisterConvLedgerPage({
             inArray(schema.transDetail.vtype, [...FINANCE_TYPES]),
             gte(schema.transMain.vdate, from),
             lte(schema.transMain.vdate, to),
+            sql`COALESCE(${schema.transMain.trnType}, '') != 'ADJUSTMENT'`,
           ),
         )
     : [];
