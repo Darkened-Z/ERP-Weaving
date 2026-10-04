@@ -27,6 +27,7 @@ export function GodownCalc({
   useEffect(() => {
     const form = document.getElementById("gdn-save-form") as HTMLFormElement | null;
     if (!form) return;
+    const codeDigits = (raw: string) => { const m = raw.match(/^\d+/); return m ? m[0] : raw; };
     const field = (name: string) => form.querySelector<HTMLInputElement>(`[name="${name}"]`);
     const fields = (name: string) => Array.from(form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`));
     const num = (name: string) => {
@@ -145,9 +146,9 @@ export function GodownCalc({
               setEl(tr.querySelector<HTMLInputElement>(`[name="${name}"]`), v == null ? "" : String(v));
             const row = rows[i];
             if (row) {
-              cell("count_code", row.code);
-              const ckey = row.code ? String(row.code).trim() : "";
-              cell("count_desc", ckey ? (countLabel[ckey] ?? countLabel[ckey.replace(/[^0-9]+$/, "")] ?? "") : "");
+              const ckey = row.code ? codeDigits(String(row.code).trim()) : "";
+              cell("count_code", ckey);
+              cell("count_desc", ckey ? (countLabel[ckey] ?? "") : "");
               cell("count_type", row.type);
               cell("count_cal_count", row.calCount);
               cell("count_ends", row.ends);
@@ -179,9 +180,9 @@ export function GodownCalc({
           setEl(tr.querySelector<HTMLInputElement>(`[name="${name}"]`), v == null ? "" : String(v));
         const row = rows[i];
         if (row) {
-          cell("count_code", row.code);
-          const ckey = row.code ? String(row.code).trim() : "";
-          cell("count_desc", ckey ? (countLabel[ckey] ?? countLabel[ckey.replace(/[^0-9]+$/, "")] ?? "") : "");
+          const ckey = row.code ? codeDigits(String(row.code).trim()) : "";
+          cell("count_code", ckey);
+          cell("count_desc", ckey ? (countLabel[ckey] ?? "") : "");
           cell("count_type", row.type);
           cell("count_cal_count", row.calCount);
           cell("count_ends", row.ends);

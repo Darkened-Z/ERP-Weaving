@@ -136,7 +136,8 @@ export default async function GodownStockPage({
   for (const c of allCountRows) {
     if (!c.code) continue;
     const raw = String(c.code).trim();
-    const clean = raw.replace(/[^0-9]+$/, "").trim();
+    const m = raw.match(/^\d+/);
+    const clean = m ? m[0] : raw;
     const lbl = countLabelByCode.get(raw) ?? countLabelByCode.get(clean) ?? raw;
     const prev = countDetailByStockId.get(c.stockId);
     const entry = `${lbl} (${c.type ?? ""})`;
@@ -177,7 +178,8 @@ export default async function GodownStockPage({
   const countDesc = (raw: string | null | undefined) => {
     if (!raw) return "";
     const key = String(raw).trim();
-    return countLabelByCode.get(key) ?? key;
+    const km = key.match(/^\d+/);
+    return countLabelByCode.get(key) ?? (km ? countLabelByCode.get(km[0]) : undefined) ?? key;
   };
   const qualityFull = (code: string | null | undefined) => {
     if (!code) return "";
@@ -398,7 +400,7 @@ export default async function GodownStockPage({
         : "";
     const cnts = countMap[c.contNo] ?? [];
     // Show the warp/weft yarn-count DESCRIPTION ("30/S MVS PV 65;35"), not the bare code.
-    const dlbl = (code: string | null) => (code ? countLabelByCode.get(String(code)) || String(code) : "");
+    const dlbl = (code: string | null) => { if (!code) return ""; const s = String(code).trim(); const dm = s.match(/^\d+/); return countLabelByCode.get(s) ?? (dm ? countLabelByCode.get(dm[0]) : undefined) ?? s; };
     const warp = cnts.filter((x) => x.type === "WARP").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
     const weft = cnts.filter((x) => x.type === "WEFT").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
     const wf = warp || weft ? ` [W:${warp || "-"} F:${weft || "-"}]` : "";
@@ -417,8 +419,9 @@ export default async function GodownStockPage({
     // Show each warp/weft count with its full description (Oracle: "2" → "2 — 30/S MVS PV 65;35").
     const lbl = (code: string | null) => {
       if (!code) return "";
-      const l = countLabelByCode.get(String(code));
-      return l ? `${code} — ${l}` : String(code);
+      const s = String(code).trim(); const lm = s.match(/^\d+/); const clean = lm ? lm[0] : s;
+      const l = countLabelByCode.get(s) ?? countLabelByCode.get(clean);
+      return l ? `${clean} — ${l}` : clean;
     };
     const warp = cnts.filter((x) => x.type === "WARP").map((x) => lbl(x.code)).filter(Boolean).join(", ");
     const weft = cnts.filter((x) => x.type === "WEFT").map((x) => lbl(x.code)).filter(Boolean).join(", ");
@@ -497,8 +500,9 @@ export default async function GodownStockPage({
     const cnts = wvgCountFillMap[c.contNo] ?? [];
     const lbl = (code: string | null) => {
       if (!code) return "";
-      const l = countLabelByCode.get(String(code));
-      return l ? `${code} — ${l}` : String(code);
+      const s = String(code).trim(); const lm = s.match(/^\d+/); const clean = lm ? lm[0] : s;
+      const l = countLabelByCode.get(s) ?? countLabelByCode.get(clean);
+      return l ? `${clean} — ${l}` : clean;
     };
     const warp = cnts.filter((x) => x.type === "WARP").map((x) => lbl(x.code)).filter(Boolean).join(", ");
     const weft = cnts.filter((x) => x.type === "WEFT").map((x) => lbl(x.code)).filter(Boolean).join(", ");
@@ -533,7 +537,7 @@ export default async function GodownStockPage({
   );
   for (const c of intConvContracts) {
     const cnts = wvgCountFillMap[c.contNo] ?? [];
-    const dlbl = (code: string | null) => (code ? countLabelByCode.get(String(code)) || String(code) : "");
+    const dlbl = (code: string | null) => { if (!code) return ""; const s = String(code).trim(); const dm = s.match(/^\d+/); return countLabelByCode.get(s) ?? (dm ? countLabelByCode.get(dm[0]) : undefined) ?? s; };
     const warp = cnts.filter((x) => x.type === "WARP").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
     const weft = cnts.filter((x) => x.type === "WEFT").map((x) => dlbl(x.code)).filter(Boolean).join(", ");
     const wf = warp || weft ? ` [W:${warp || "-"} F:${weft || "-"}]` : "";
@@ -676,7 +680,9 @@ export default async function GodownStockPage({
       cRates.length, cWts.length, cCosts.length, cTots.length
     );
     for (let i = 0; i < cntRows; i++) {
-      const code = (cCodes[i] || "").trim().replace(/[^0-9]+$/, "").trim();
+      const cRaw = (cCodes[i] || "").trim();
+      const cM = cRaw.match(/^\d+/);
+      const code = cM ? cM[0] : cRaw;
       const cType = (cTypes[i] || "").trim();
       const cal = num(cCals[i]);
       const e = intVal(cEnds[i]);
@@ -1506,7 +1512,7 @@ export default async function GodownStockPage({
                               <input name="count_code" list="gs-yarn-counts" className={gridCellCls} defaultValue={r?.code ?? ""} style={{ width: 60 }} />
                             </td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name="count_desc" className={gridCellCls} defaultValue={r?.code ? (gsCountDescByCode.get(String(r.code).trim()) ?? gsCountDescByCode.get(String(r.code).replace(/[^0-9]+$/, "").trim()) ?? "") : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
+                              <input name="count_desc" className={gridCellCls} defaultValue={r?.code ? (() => { const rc = String(r.code).trim(); const rm = rc.match(/^\d+/); return gsCountDescByCode.get(rc) ?? (rm ? gsCountDescByCode.get(rm[0]) : undefined) ?? ""; })() : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
                             </td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                               <input name="count_type" className={gridCellCls} defaultValue={r?.type ?? ""} style={{ width: 80 }} />
