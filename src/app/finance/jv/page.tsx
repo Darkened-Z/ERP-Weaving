@@ -30,15 +30,7 @@ const VTYPE = "JV";
 // filled (GrowRows) — twenty blank lines for a two-line entry is just scrolling.
 const LINE_ROWS = 50;
 
-const TRN_TYPES = [
-  "",
-  "GENERAL",
-  "ADJUSTMENT",
-  "PROVISION",
-  "DEPRECIATION",
-  "ACCRUAL",
-  "TRANSFER",
-];
+const TRN_TYPES = ["", "ADJUSTMENT"];
 
 type ParsedLine = {
   srno: number;
