@@ -254,12 +254,16 @@ export default async function GodownStockPage({
   const convRateByNo = new Map<string, number | null>(
     convOnlyContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const)
   );
-  const convSaleMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
-    convOnlyContracts.map((c) => [
+  const convSaleMap: Record<string, Record<string, string | number | null>> = Object.fromEntries([
+    ...convOnlyContracts.map((c) => [
       c.contNo,
       { rate: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
-    ])
-  );
+    ] as const),
+    ...saleConvContracts.map((c) => [
+      c.contNo,
+      { rate: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
+    ] as const),
+  ]);
 
   // Full-page F9 finder rows for the grey PURCHASE / SALE contracts — rich
   // Oracle-style LOV columns (Prd. Desc, qty, rate, term, date, status).
@@ -1213,7 +1217,7 @@ export default async function GodownStockPage({
                       watch="pur_cont_no"
                       map={purMap}
                       combos={["purchase_party"]}
-                      inputs={["contact_quality", "rate"]}
+                      inputs={["contact_quality", "dsp_quality", "rate"]}
                     />
                   </div>
 
@@ -1292,11 +1296,11 @@ export default async function GodownStockPage({
                   {/* Two different contract lists: Conv Cont # → conversion contracts,
                       Grey Sale Cont → sale contracts. Each shows its rate beside it. */}
                   <div className="col-span-4">
-                    <label className="label block mb-1">Conv Cont # <span className="text-[9px] text-[var(--muted)]">(conversion contracts)</span></label>
+                    <label className="label block mb-1">Conv Cont # <span className="text-[9px] text-[var(--muted)]">(conv + sale contracts)</span></label>
                     <FindingPicker
                       name="sal_cont_no"
                       defaultValue={formStock?.salContNo ?? ""}
-                      rows={contractFindRows}
+                      rows={[...contractFindRows, ...saleConvFindRows]}
                       columns={contractColumns}
                       title="GREY CONVERSION CONTRACT LIST"
                       placeholder="Conv contract #…"
