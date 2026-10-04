@@ -9,7 +9,7 @@ import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray, isNotNull } from "drizzle-orm";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
@@ -40,12 +40,13 @@ const TRN_TYPES = [
 async function saveVoucher(formData: FormData) {
   "use server";
   try {
-  const session = await getSession();
-  const utCode = session?.userId ?? null;
-
   const idRaw = formData.get("id") as string | null;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   const isEdit = Number.isFinite(id) && id > 0;
+  const ctx = isEdit ? `id=${id}` : "adding=1";
+
+  const session = await verifySavePassword(formData.get("save_password") as string, `${BASE}?${ctx}`);
+  const utCode = session.userId;
 
   const bankAcc = txt(formData.get("bank_acc"));
   const splitting = formData.get("splitting") ? "Y" : "N";
@@ -95,8 +96,6 @@ async function saveVoucher(formData: FormData) {
   }
 
   const total = postable.reduce((s, l) => s + l.amount, 0);
-
-  const ctx = isEdit ? `id=${id}` : "adding=1";
 
   if (!bankAcc || postable.length < 1 || total <= 0) {
     redirect(`${BASE}?error=invalid&${ctx}`);
@@ -581,6 +580,8 @@ export default async function BankPaymentPage({
     bad_account: "One or more account codes are unknown or not a detail (level 4+) account.",
     forbidden: "Only ADMIN can delete vouchers.",
     period_locked: "Period is locked. Cannot save vouchers for this date.",
+    no_password: "Password is required to save.",
+    wrong_password: "Incorrect password.",
   };
   const errorMsg = params.error ? ERROR_MESSAGES[params.error] ?? "" : "";
 
@@ -922,6 +923,15 @@ export default async function BankPaymentPage({
               </div>
 
               <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
+                <input
+                  type="password"
+                  name="save_password"
+                  placeholder="Password"
+                  required
+                  className="input-box mono"
+                  style={{ width: 120, height: 28 }}
+                  autoComplete="off"
+                />
                 <button type="submit" className="btn btn-sm">
                   Save
                 </button>

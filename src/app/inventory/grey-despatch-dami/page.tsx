@@ -4,7 +4,7 @@ import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { ConfirmButton } from "@/components/confirm-button";
 import { revalidatePath } from "next/cache";
@@ -124,6 +124,7 @@ export default async function GreyDespatchDamiPage({
       const idRaw = formData.get("id") as string | null;
       const id = idRaw ? parseInt(idRaw, 10) : NaN;
       const isUpdate = Number.isFinite(id) && id > 0;
+      await verifySavePassword(formData.get("save_password") as string, isUpdate ? `/inventory/grey-despatch-dami?id=${id}` : "/inventory/grey-despatch-dami?adding=1");
       const vDate = txt(formData.get("v_date")) ?? today();
       await assertPeriodOpen(vDate, "INVENTORY");
 
@@ -331,6 +332,8 @@ export default async function GreyDespatchDamiPage({
         {params.error === "code_exists" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">V.No already exists.</div>}
         {params.error === "period_locked" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Period is locked{params.thru && <> — through <span className="mono">{params.thru}</span></>}.</div>}
         {params.error === "admin_only" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Only ADMIN can delete.</div>}
+        {params.error === "no_password" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Password is required to save.</div>}
+        {params.error === "wrong_password" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Incorrect password.</div>}
 
         <form id="dami-find-form" method="GET" action="/inventory/grey-despatch-dami" className="hidden"></form>
 
@@ -497,6 +500,7 @@ export default async function GreyDespatchDamiPage({
 
               {/* Save buttons */}
               <div className="flex items-end gap-2 mt-4 flex-wrap no-print">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">Save</button>
                 <a href="/inventory/grey-despatch-dami?adding=1" className="btn btn-outline btn-sm">New</a>
                 <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>

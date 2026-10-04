@@ -10,7 +10,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { VoucherBalance } from "@/components/voucher-balance";
 import { db, schema } from "@/db";
 import { and, eq, gte, sql, desc } from "drizzle-orm";
-import { getSession, requireAdmin } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { assertPeriodOpen, parseLockedThroughFromError, lockedThrough } from "@/lib/period-lock";
 import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime } from "@/lib/time";
@@ -30,13 +30,14 @@ const TRN_TYPES = ["CASH", "CHEQUE", "ONLINE", "ADJUSTMENT"];
 async function saveVoucher(formData: FormData) {
   "use server";
   try {
-  const session = await getSession();
-  const utCode = session?.userId ?? null;
   const idRaw = formData.get("id") as string | null;
   const idParsed = idRaw ? parseInt(idRaw, 10) : NaN;
   const editing = Number.isFinite(idParsed) && idParsed > 0;
   const id = editing ? idParsed : 0;
   const back = editing ? `&id=${id}` : "&adding=1";
+
+  const session = await verifySavePassword(formData.get("save_password") as string, `${BASE}?${editing ? `id=${id}` : "adding=1"}`);
+  const utCode = session.userId;
   await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "FINANCE");
 
   // A voucher belongs to the fiscal year its date falls in (an edit keeps the
@@ -355,6 +356,8 @@ const ERR_MSG: Record<string, string> = {
   bad_account: "A line has an account name that does not match the Chart of Accounts.",
   admin_only: "Only ADMIN can delete vouchers.",
   period_locked: "Period is locked. Cannot save vouchers for this date.",
+  no_password: "Password is required to save.",
+  wrong_password: "Incorrect password.",
 };
 
 export default async function CashReceiptPage({
@@ -806,6 +809,15 @@ export default async function CashReceiptPage({
               <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
                 New
               </a>
+              <input
+                type="password"
+                name="save_password"
+                placeholder="Password"
+                required
+                className="input-box mono"
+                style={{ width: 120, height: 28 }}
+                autoComplete="off"
+              />
               <button type="submit" className="btn btn-sm">
                 Save
               </button>

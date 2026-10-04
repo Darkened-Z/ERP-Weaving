@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 import { countLabelMap, fullConstruction, normQuality } from "@/lib/grey-quality";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
@@ -329,10 +330,14 @@ export default async function PackiBillPage({
       <div className="bv-wrap">
         <div className="bv-toolbar no-print">
           <Link href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Back</Link>
-          <PrintButton label="Print Bill" />
+          <div className="flex gap-2">
+            <ExportPdfButton contentId="packi-bill" filename={`Packi-Bill-${pp.vNo ?? pid}.pdf`} />
+            <WaPdfButton contentId="packi-bill" filename={`Packi-Bill-${pp.vNo ?? pid}.pdf`} />
+            <PrintButton label="Print Bill" />
+          </div>
         </div>
 
-        <div className="bv-page">
+        <div className="bv-page" id="packi-bill">
           <div className="bv-stamp">
             <span>{printedAt}</span>
             <span>Page 1 of 1</span>

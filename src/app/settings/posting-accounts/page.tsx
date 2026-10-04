@@ -1,7 +1,7 @@
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
-import { getSession, requireSession } from "@/lib/auth";
+import { getSession, requireSession, verifySavePassword } from "@/lib/auth";
 import { invalidateGlCache } from "@/lib/gl-accounts";
 import { today } from "@/lib/time";
 import { and, eq, gte, inArray } from "drizzle-orm";
@@ -16,6 +16,8 @@ const ERR_MSG: Record<string, string> = {
   admin_only: "Only ADMIN can edit posting accounts.",
   no_changes: "No account codes were changed.",
   bad_account: "Every posting account must be an existing ledger account (level 4 or below). Nothing was saved.",
+  no_password: "Password is required to save.",
+  wrong_password: "Incorrect password.",
 };
 
 async function saveAccounts(formData: FormData) {
@@ -190,7 +192,8 @@ export default async function PostingAccountsPage({
               </div>
 
               {isAdmin && (
-                <div className="flex justify-end mt-4">
+                <div className="flex justify-end mt-4 gap-2">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn">
                     Save Posting Accounts
                   </button>

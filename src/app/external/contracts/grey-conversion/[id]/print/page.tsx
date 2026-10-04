@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 
 export const dynamic = "force-dynamic";
@@ -80,9 +81,11 @@ export default async function GreyConversionContractPrint({
         <a href={`/external/contracts/grey-conversion?id=${id}`} className="btn btn-outline btn-sm">
           Back
         </a>
+        <ExportPdfButton contentId="ext-grey-conv-print" filename={`Grey-Conversion-Contract-${contract.contNo ?? id}.pdf`} />
+        <WaPdfButton contentId="ext-grey-conv-print" filename={`Grey-Conversion-Contract-${contract.contNo ?? id}.pdf`} />
         <PrintButton label="Print" />
       </div>
-      <div className="p-6 mx-auto" style={{ maxWidth: 900 }}>
+      <div id="ext-grey-conv-print" className="p-6 mx-auto" style={{ maxWidth: 900 }}>
         <PrintHeader title="GREY CONVERSION CONTRACT" right={rightBlock} />
 
         <div className="grid grid-cols-2 gap-6 mb-4 text-[12px]">

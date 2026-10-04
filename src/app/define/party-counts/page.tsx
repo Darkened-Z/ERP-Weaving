@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { AutoFill } from "@/components/auto-fill";
@@ -67,6 +67,7 @@ export default async function PartyCountsPage({
   async function savePartyCount(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
+    await verifySavePassword(formData.get("save_password") as string, `/define/party-counts${id ? `?id=${id}` : ""}`);
     const partyCode = (formData.get("party") as string)?.trim();
     const countCode = parseInt(formData.get("count") as string);
     if (!partyCode || !countCode) return;
@@ -165,6 +166,12 @@ export default async function PartyCountsPage({
                   That party account does not exist in the chart. Pick a party from the F9 list.
                 </div>
               )}
+              {params.error === "no_password" && (
+                <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+              )}
+              {params.error === "wrong_password" && (
+                <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+              )}
               <form action={savePartyCount}>
                 {formItem && <input type="hidden" name="id" value={formItem.id} />}
                 <AutoFill
@@ -234,6 +241,7 @@ export default async function PartyCountsPage({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                   <button type="submit" className="btn btn-sm">Save</button>
                   <a href="/define/party-counts" className="btn btn-outline btn-sm">Exit</a>
                 </div>

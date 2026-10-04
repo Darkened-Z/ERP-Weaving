@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill } from "@/components/auto-fill";
@@ -324,6 +324,16 @@ export default async function LoomsPage({
               </a>
             </div>
           )}
+          {params.error === "no_password" && (
+            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold">
+              Password is required to save.
+            </div>
+          )}
+          {params.error === "wrong_password" && (
+            <div className="mb-3 border border-[var(--danger)] text-[var(--danger)] px-3 py-2 text-[12px] font-semibold">
+              Incorrect password.
+            </div>
+          )}
           <form action={saveLoom}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             {/* AutoFill fires whenever shed changes — in both add AND edit modes.
@@ -411,6 +421,7 @@ export default async function LoomsPage({
               </div>
             </div>
             <div className="flex gap-2 mt-4">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
               <a href="/weaving/looms" className="btn btn-outline btn-sm">Exit</a>
             </div>

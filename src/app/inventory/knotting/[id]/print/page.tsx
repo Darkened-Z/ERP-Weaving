@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { requireSession } from "@/lib/auth";
 import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 
 export const dynamic = "force-dynamic";
@@ -53,9 +54,14 @@ export default async function KnottingBillPrint({
           <Link href={`/inventory/knotting?id=${vid}`} className="btn btn-outline btn-sm">
             Back
           </Link>
-          <PrintButton label="Print" />
+          <div className="flex gap-2">
+            <ExportPdfButton contentId="knotting-print" filename={`Knotting-Bill-${bill.vNo ?? vid}.pdf`} />
+            <WaPdfButton contentId="knotting-print" filename={`Knotting-Bill-${bill.vNo ?? vid}.pdf`} />
+            <PrintButton label="Print" />
+          </div>
         </div>
 
+        <div id="knotting-print">
         <PrintHeader
           title="KNOTTING / SARNING BILL"
           right={
@@ -141,6 +147,7 @@ export default async function KnottingBillPrint({
         ) : null}
 
         <SignatureRow labels={["Prepared By", "Checked By", "Authorized Signatory"]} />
+        </div>
       </div>
     </>
   );

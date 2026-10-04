@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -24,13 +24,16 @@ export default async function ChartDefinePage({
 
   async function saveChart(formData: FormData) {
     "use server";
+    const editId = formData.get("id") as string;
+    const backUrl = `/define/chart-define${editId ? `?id=${editId}` : ""}`;
+    await verifySavePassword(formData.get("save_password") as string, backUrl);
+
     const code = parseInt(formData.get("code") as string, 10);
     const description = (formData.get("description") as string)?.trim();
     if (!code || Number.isNaN(code) || !description) return;
 
     const srnoRaw = parseInt(formData.get("srno") as string, 10);
     const srno = Number.isNaN(srnoRaw) ? null : srnoRaw;
-    const editId = formData.get("id") as string;
 
     try {
       if (editId) {
@@ -117,6 +120,16 @@ export default async function ChartDefinePage({
               That code already exists.
             </div>
           )}
+          {params.error === "no_password" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              Password is required to save.
+            </div>
+          )}
+          {params.error === "wrong_password" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              Incorrect password.
+            </div>
+          )}
           <form action={saveChart}>
             {selected && <input type="hidden" name="id" value={selected.id} />}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 gform">
@@ -150,6 +163,7 @@ export default async function ChartDefinePage({
               </div>
             </div>
             <div className="flex gap-2 mt-6">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
             </div>
           </form>

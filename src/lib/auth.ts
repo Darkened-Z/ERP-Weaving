@@ -95,3 +95,20 @@ export async function requireAdmin(back: string): Promise<Session> {
   }
   return session;
 }
+
+export async function verifySavePassword(password: string | null | undefined, back: string): Promise<Session> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (!password || !password.trim()) {
+    redirect(`${back}${back.includes("?") ? "&" : "?"}error=no_password`);
+  }
+  const [user] = await db
+    .select({ password: schema.users.password })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.userId))
+    .limit(1);
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    redirect(`${back}${back.includes("?") ? "&" : "?"}error=wrong_password`);
+  }
+  return session;
+}

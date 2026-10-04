@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -23,10 +23,12 @@ export default async function BeamStatusPage({
 
   async function saveStatus(formData: FormData) {
     "use server";
+    const editId = formData.get("id") as string;
+    const ctx = editId ? `id=${editId}` : "";
+    await verifySavePassword(formData.get("save_password") as string, `/define/beam-status?${ctx}`);
+
     const status = (formData.get("status") as string)?.trim();
     if (!status) return;
-
-    const editId = formData.get("id") as string;
 
     try {
       if (editId) {
@@ -108,6 +110,16 @@ export default async function BeamStatusPage({
             </div>
           </div>
 
+          {params.error === "no_password" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              Password is required to save.
+            </div>
+          )}
+          {params.error === "wrong_password" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              Incorrect password.
+            </div>
+          )}
           {params.error === "in_use" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               This beam status is currently assigned to beams and cannot be deleted.
@@ -131,7 +143,16 @@ export default async function BeamStatusPage({
                 />
               </div>
             </div>
-            <div className="flex gap-2 mt-6">
+            <div className="flex items-end gap-2 mt-6">
+              <input
+                type="password"
+                name="save_password"
+                placeholder="Password"
+                required
+                className="input-box mono"
+                style={{ width: 120, height: 28 }}
+                autoComplete="off"
+              />
               <button type="submit" className="btn btn-sm">Save</button>
             </div>
           </form>

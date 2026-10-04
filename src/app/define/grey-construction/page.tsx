@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -72,6 +72,8 @@ export default async function GreyConstructionPage({
   async function saveConstruction(formData: FormData) {
     "use server";
     const id = formData.get("id") as string;
+    const ctx = id ? `id=${id}` : "adding=1";
+    await verifySavePassword(formData.get("save_password") as string, `/define/grey-construction?${ctx}`);
     const code = (formData.get("gray_code") as string)?.trim();
     const description = (formData.get("description") as string)?.trim() || code || "";
     if (!code) return;
@@ -269,6 +271,16 @@ export default async function GreyConstructionPage({
               Gray Code already exists. Choose a different code.
             </div>
           )}
+          {params.error === "no_password" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              Password is required to save.
+            </div>
+          )}
+          {params.error === "wrong_password" && (
+            <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+              Incorrect password.
+            </div>
+          )}
           {params.error === "in_use" && (
             <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
               This gray construction is referenced by contracts, production, or despatch records and cannot be deleted.
@@ -340,9 +352,18 @@ export default async function GreyConstructionPage({
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button type="submit" className="btn btn-sm">Save</button>
+            <div className="flex items-end gap-2">
               <a href="/define/grey-construction?adding=1" className="btn btn-outline btn-sm">New</a>
+              <input
+                type="password"
+                name="save_password"
+                placeholder="Password"
+                required
+                className="input-box mono"
+                style={{ width: 120, height: 28 }}
+                autoComplete="off"
+              />
+              <button type="submit" className="btn btn-sm">Save</button>
               <a href="/define/grey-construction" className="btn btn-outline btn-sm">Exit</a>
             </div>
           </form>

@@ -1,7 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { requireSession, getSession } from "@/lib/auth";
+import { requireSession, getSession, verifySavePassword } from "@/lib/auth";
 import { and, eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -78,6 +78,8 @@ const ERR_MSG: Record<string, string> = {
   admin_only: "Only ADMIN can delete period locks.",
   missing: "Fiscal year, module and locked-through date are required.",
   bad_module: "Module must be FINANCE, INVENTORY, STORE or ALL.",
+  no_password: "Password is required to save.",
+  wrong_password: "Incorrect password.",
 };
 
 export default async function LockingPage({
@@ -268,8 +270,9 @@ export default async function LockingPage({
                   <label className="label block mb-1">Remarks</label>
                   <input name="remarks" className="input-box mono" />
                 </div>
-                <div className="md:col-span-2 flex items-end">
-                  <button type="submit" className="btn btn-sm w-full">
+                <div className="md:col-span-2 flex items-end gap-2">
+                  <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
+                  <button type="submit" className="btn btn-sm">
                     Save Lock
                   </button>
                 </div>

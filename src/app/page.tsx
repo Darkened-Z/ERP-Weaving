@@ -57,7 +57,7 @@ export default async function Dashboard() {
     running: sql<number>`count(case when status = 'R' then 1 end)`,
     total: sql<number>`count(*)`,
     production: sql<number>`coalesce(sum(case when status = 'R' then qty_mtr else 0 end), 0)`,
-  }).from(schema.extGreyConvContract);
+  }).from(schema.extGreyConvContract).where(sql`${schema.extGreyConvContract.grayQltyCode} is not null and ${schema.extGreyConvContract.grayQltyCode} != ''`);
   const [extGscRow] = await db.select({
     running: sql<number>`count(case when status = 'R' then 1 end)`,
     total: sql<number>`count(*)`,

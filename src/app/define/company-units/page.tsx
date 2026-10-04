@@ -1,5 +1,5 @@
 import { Shell } from "@/components/shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, verifySavePassword } from "@/lib/auth";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -25,10 +25,11 @@ export default async function CompanyUnitsPage({
     "use server";
     const code = (formData.get("code") as string)?.trim();
     const description = (formData.get("description") as string)?.trim();
+    const editCode = formData.get("edit_code") as string;
+    await verifySavePassword(formData.get("save_password") as string, `/define/company-units${editCode ? `?code=${editCode}` : ""}`);
     if (!code || !description) return;
 
     const srno = parseInt(formData.get("srno") as string) || null;
-    const editCode = formData.get("edit_code") as string;
 
     try {
       if (editCode) {
@@ -101,6 +102,12 @@ export default async function CompanyUnitsPage({
               That code already exists.
             </div>
           )}
+          {params.error === "no_password" && (
+            <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+          )}
+          {params.error === "wrong_password" && (
+            <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+          )}
           <form action={saveUnit}>
             {selected && <input type="hidden" name="edit_code" value={selected.code} />}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 gform">
@@ -133,6 +140,7 @@ export default async function CompanyUnitsPage({
               </div>
             </div>
             <div className="flex gap-2 mt-6">
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
               <button type="submit" className="btn btn-sm">Save</button>
             </div>
           </form>

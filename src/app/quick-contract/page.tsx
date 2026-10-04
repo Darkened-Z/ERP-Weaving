@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { requireSession, verifySavePassword } from "@/lib/auth";
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -22,7 +22,7 @@ function waLink(c: { party: string; greyQuality: string | null; quantity: number
 export default async function QuickContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
   const session = await requireSession();
   const params = await searchParams;
@@ -31,6 +31,7 @@ export default async function QuickContractPage({
     "use server";
     const s = await requireSession();
     const party = (formData.get("party") as string)?.trim();
+    await verifySavePassword(formData.get("save_password") as string, "/quick-contract");
     if (!party) redirect("/quick-contract");
     const num = (v: FormDataEntryValue | null) => {
       const n = parseFloat((v as string) ?? "");
@@ -87,8 +88,14 @@ export default async function QuickContractPage({
 
         {params.saved && (
           <div className="mb-4 border border-[var(--border-light)] bg-[var(--surface)] px-4 py-3 text-[13px] font-semibold">
-            ✓ Contract saved — pending for accounts.
+            Contract saved — pending for accounts.
           </div>
+        )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
         )}
 
         <form action={saveQuickContract} className="space-y-4">
@@ -114,6 +121,7 @@ export default async function QuickContractPage({
             <label className="label block mb-1">Notes</label>
             <textarea name="notes" rows={3} className="input-box mono py-3 text-[15px]" placeholder="Any details…" />
           </div>
+          <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
           <button type="submit" className="btn w-full py-3 text-[15px]">Save Contract</button>
         </form>
 

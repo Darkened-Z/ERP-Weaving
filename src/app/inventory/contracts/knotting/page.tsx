@@ -6,7 +6,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySavePassword } from "@/lib/auth";
 import { today } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -68,6 +68,10 @@ export default async function KnottingContractPage({
     try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
+    const backUrl = Number.isFinite(id) && id > 0
+      ? `/inventory/contracts/knotting?id=${id}`
+      : `/inventory/contracts/knotting?adding=1`;
+    await verifySavePassword(formData.get("save_password") as string, backUrl);
     const contDate = txt(formData.get("cont_date")) ?? today();
     await assertPeriodOpen(contDate, "INVENTORY");
     const expDate = txt(formData.get("exp_date"));
@@ -248,6 +252,16 @@ export default async function KnottingContractPage({
             Only ADMIN can delete contracts.
           </div>
         )}
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
 
         <form
           id="ikc-find-form"
@@ -266,12 +280,12 @@ export default async function KnottingContractPage({
                 : "Knotting / Sarning / Maroori"}
             </div>
             <div className="flex gap-2 no-print flex-wrap">
-              <button type="submit" form="ikc-save-form" className="btn btn-sm">
-                Save
-              </button>
               <a href="/inventory/contracts/knotting?adding=1" className="btn btn-outline btn-sm">
                 New
               </a>
+              <button type="submit" form="ikc-save-form" className="btn btn-sm">
+                Save
+              </button>
               <PrintButton label="Print" />
               <a href="/inventory/contracts/knotting" className="btn btn-outline btn-sm">
                 Exit
@@ -416,20 +430,17 @@ export default async function KnottingContractPage({
             </div>
 
             <div className="flex items-end gap-2 mt-6 no-print flex-wrap">
-              <button type="submit" className="btn btn-sm">
-                Save
-              </button>
               <a href="/inventory/contracts/knotting?adding=1" className="btn btn-outline btn-sm">
                 New
               </a>
+              <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
+              <button type="submit" className="btn btn-sm">
+                Save
+              </button>
               <PrintButton label="Print" />
               <a href="/inventory/contracts/knotting" className="btn btn-outline btn-sm">
                 Exit
               </a>
-              <div className="ml-auto">
-                <label className="label block mb-1">Alt-S Password</label>
-                <input className="input-box mono" placeholder="password" type="password" />
-              </div>
             </div>
           </form>
 

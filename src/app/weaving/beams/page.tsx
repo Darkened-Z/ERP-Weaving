@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { loadConvContracts } from "@/lib/conv-contracts";
+import { verifySavePassword } from "@/lib/auth";
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
@@ -121,6 +122,7 @@ export default async function BeamsPage({
 
   async function createBeam(formData: FormData) {
     "use server";
+    await verifySavePassword(formData.get("save_password") as string, "/weaving/beams?adding=1");
     const txt = (k: string) => ((formData.get(k) as string) || "").trim() || null;
     const beamNo = txt("beam_no");
     if (!beamNo) return;
@@ -161,6 +163,7 @@ export default async function BeamsPage({
     "use server";
     const id = parseInt(formData.get("id") as string);
     if (!id) return;
+    await verifySavePassword(formData.get("save_password") as string, `/weaving/beams?id=${id}`);
     const txt = (k: string) => ((formData.get(k) as string) || "").trim() || null;
     const int = (k: string) => {
       const n = parseInt(formData.get(k) as string);
@@ -293,6 +296,12 @@ export default async function BeamsPage({
                 That beam number already exists. Choose a different one.
               </div>
             )}
+            {params.error === "no_password" && (
+              <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+            )}
+            {params.error === "wrong_password" && (
+              <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+            )}
             <form action={createBeam}>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3 gform">
                 <div><label className="label block mb-1">Beams No</label><input name="beam_no" className="input-box mono" required autoFocus /></div>
@@ -307,6 +316,7 @@ export default async function BeamsPage({
                 <div><label className="label block mb-1">Beam Set No</label><input name="beam_set_no" className="input-box mono" /></div>
               </div>
               <div className="flex gap-2 mt-4">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">Save</button>
                 <a href="/weaving/beams" className="btn btn-outline btn-sm">Cancel</a>
               </div>
@@ -320,6 +330,12 @@ export default async function BeamsPage({
               <span>Edit Beam — {selected.beamNo}</span>
               <a href="/weaving/beams" className="text-[var(--muted)] hover:text-[var(--fg)] no-underline">✕ Close</a>
             </div>
+            {params.error === "no_password" && (
+              <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Password is required to save.</div>
+            )}
+            {params.error === "wrong_password" && (
+              <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">Incorrect password.</div>
+            )}
             <form action={saveBeam}>
               <input type="hidden" name="id" value={selected.id} />
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3 gform">
@@ -340,6 +356,7 @@ export default async function BeamsPage({
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
+                <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
                 <button type="submit" className="btn btn-sm">Save</button>
                 <a href="/weaving/beams" className="btn btn-outline btn-sm">Cancel</a>
               </div>

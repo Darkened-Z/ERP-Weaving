@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
+import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
 
@@ -296,10 +297,14 @@ export default async function GreyDespatchChalanPage({
           <Link href="/inventory/grey-despatch" className="btn btn-outline btn-sm no-print">
             Back
           </Link>
-          <PrintButton label="Print Delivery Voucher" />
+          <div className="flex gap-2">
+            <ExportPdfButton contentId="grey-despatch-chalan" filename={`Delivery-Voucher-${despatch.vNo ?? despatchId}.pdf`} />
+            <WaPdfButton contentId="grey-despatch-chalan" filename={`Delivery-Voucher-${despatch.vNo ?? despatchId}.pdf`} />
+            <PrintButton label="Print Delivery Voucher" />
+          </div>
         </div>
 
-        <div className="chalan-page">
+        <div className="chalan-page" id="grey-despatch-chalan">
 
           {/* ── Title + Logo/QR ── */}
           <div className="title-row">

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
-import { requireSession } from "@/lib/auth";
+import { requireSession, verifySavePassword } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { sql } from "drizzle-orm";
@@ -20,6 +20,7 @@ type SP = {
   party?: string;
   grey?: string;
   beam?: string;
+  error?: string;
 };
 
 export default async function NewTicketPage({
@@ -182,6 +183,17 @@ export default async function NewTicketPage({
           </Link>
         </div>
 
+        {params.error === "no_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Password is required to save.
+          </div>
+        )}
+        {params.error === "wrong_password" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Incorrect password.
+          </div>
+        )}
+
         <form action={createTicket} className="border border-black p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 gform">
             <div className="md:col-span-2 gform-full">
@@ -322,6 +334,7 @@ export default async function NewTicketPage({
           </div>
 
           <div className="flex gap-2 mt-6">
+            <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />
             <button type="submit" className="btn btn-sm">
               Create Ticket
             </button>
