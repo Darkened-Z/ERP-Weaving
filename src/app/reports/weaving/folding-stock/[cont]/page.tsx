@@ -43,6 +43,8 @@ export default async function FoldingStockDetailPage({
       cp: schema.intDailyProductionSet.cpCount,
       total: schema.intDailyProductionSet.totalCount,
       than: schema.intDailyProductionSet.mmThanSrNo,
+      loomNo: schema.intDailyProductionSet.loomNo,
+      shed: schema.intDailyProduction.shedNo,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id))
@@ -97,7 +99,7 @@ export default async function FoldingStockDetailPage({
     date: string; vNo: string; kind: "P" | "D";
     a?: number | null; b?: number | null; c?: number | null; cp?: number | null;
     inQty: number; outQty: number; than: string;
-    despVNo: string; despDate: string;
+    despVNo: string; despDate: string; loom: string;
   };
 
   const rows: Row[] = prodRows.map((r) => {
@@ -117,6 +119,7 @@ export default async function FoldingStockDetailPage({
       than,
       despVNo: d?.vNo ?? "",
       despDate: d?.date ?? "",
+      loom: r.loomNo != null ? `${r.shed ?? ""}|${r.loomNo}` : "",
     };
   });
 
@@ -134,6 +137,7 @@ export default async function FoldingStockDetailPage({
       than: d.than,
       despVNo: d.vNo,
       despDate: d.date,
+      loom: "",
     });
   }
 
@@ -157,6 +161,12 @@ export default async function FoldingStockDetailPage({
           </div>
         </div>
 
+        <style>{`@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  .overflow-x-auto { overflow: visible !important; }
+  .overflow-x-auto table { min-width: 0 !important; width: 100% !important; font-size: 11px; }
+  .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
+}`}</style>
         <div className="overflow-x-auto">
           <table style={{ minWidth: 1040 }}>
             <thead>
@@ -172,18 +182,19 @@ export default async function FoldingStockDetailPage({
                 <th className="text-right">Despatch</th>
                 <th>Than Sr#</th>
                 <th>Desp V.No</th>
+                <th>Loom#</th>
                 <th className="text-right">Balance</th>
               </tr>
             </thead>
             <tbody>
               <tr style={{ background: "#f1f5f9", fontWeight: 700 }}>
                 <td className="mono text-[12px]">{from}</td>
-                <td colSpan={9} className="text-[11px]">OPENING</td>
+                <td colSpan={10} className="text-[11px]">OPENING</td>
                 <td></td>
                 <td className="mono text-right">{fmt(opening)}</td>
               </tr>
               {rows.length === 0 ? (
-                <tr><td colSpan={12} className="text-center text-[var(--muted)] py-8">No production or despatch for this contract in period.</td></tr>
+                <tr><td colSpan={13} className="text-center text-[var(--muted)] py-8">No production or despatch for this contract in period.</td></tr>
               ) : (
                 rows.map((e, i) => {
                   bal += e.inQty - e.outQty;
@@ -202,6 +213,7 @@ export default async function FoldingStockDetailPage({
                       <td className="mono text-[12px] font-bold" title={e.despDate ? `Despatched ${e.despDate}` : undefined}>
                         {e.despVNo || ""}
                       </td>
+                      <td className="mono text-[11px]">{e.loom || ""}</td>
                       <td className="mono text-right font-bold">{fmt(bal)}</td>
                     </tr>
                   );
@@ -213,6 +225,7 @@ export default async function FoldingStockDetailPage({
                 <td colSpan={7} className="text-right pr-2">TOTAL</td>
                 <td className="mono text-right">{fmt(totIn)}</td>
                 <td className="mono text-right">{fmt(totOut)}</td>
+                <td></td>
                 <td></td>
                 <td></td>
                 <td className="mono text-right">{fmt(opening + totIn - totOut)}</td>
