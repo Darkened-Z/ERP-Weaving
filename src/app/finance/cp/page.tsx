@@ -801,6 +801,15 @@ export default async function CashPaymentPage({
               <a href={`${BASE}?adding=1`} className="btn btn-outline btn-sm">
                 New
               </a>
+              <input
+                type="password"
+                name="save_password"
+                placeholder="Password"
+                required
+                className="input-box mono"
+                style={{ width: 120, height: 28 }}
+                autoComplete="off"
+              />
               <button type="submit" className="btn btn-sm">
                 Save
               </button>
