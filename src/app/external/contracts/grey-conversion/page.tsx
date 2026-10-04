@@ -1,4 +1,3 @@
-import { GuardSubmit } from "@/components/guard-submit";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -334,15 +333,6 @@ export default async function GreyConvContractPage({
     const readVal = num(formData.get("read"));
     const pickVal = num(formData.get("pick"));
     const widthVal = num(formData.get("width"));
-    const isAutoSave = formData.get("_auto_save") === "1";
-
-    if (!isAutoSave) {
-      if (!((ratePerPick ?? 0) > 0 || (rateMtr ?? 0) > 0))
-        redirect(`/external/contracts/grey-conversion${backQ}&error=rate_required`);
-      if (!((readVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=read_required`);
-      if (!((pickVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=pick_required`);
-      if (!((widthVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=width_required`);
-    }
 
     const party = txt(formData.get("party"));
     const designNo = txt(formData.get("design_no"));
@@ -633,18 +623,6 @@ export default async function GreyConvContractPage({
               <option key={b.name} value={b.name} />
             ))}
           </datalist>
-          {/* These four are checked on the server too, but a server rejection
-              redirects and the form comes back blank — which cost the operator
-              everything they had typed. Caught here, nothing is sent and
-              nothing is lost. */}
-          <GuardSubmit
-            rules={[
-              { any: ["rate_per_pick", "rate_mtr"], message: "Give a Rate per Pick or a Rate/Mtr." },
-              { field: "read", message: "Read must be greater than 0." },
-              { field: "pick", message: "Pick must be greater than 0." },
-              { field: "width", message: "Width must be greater than 0." },
-            ]}
-          />
           <form action={saveContract}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <AutoSubmit watch="party" />
