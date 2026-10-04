@@ -18,6 +18,7 @@ export default async function GreyConvSaleAvgPage({
     to?: string;
     fparty?: string;
     fstatus?: string;
+    ftype?: string;
     floom?: string;
     find?: string;
   }>;
@@ -25,6 +26,7 @@ export default async function GreyConvSaleAvgPage({
   const params = await searchParams;
   const fParty = (params.fparty ?? "").trim();
   const fStatus = (params.fstatus ?? "R").trim();
+  const fType = (params.ftype ?? "").trim();
   const fLoom = (params.floom ?? "").trim();
   const from = (params.from ?? "").trim();
   const to = (params.to ?? "").trim();
@@ -68,6 +70,7 @@ export default async function GreyConvSaleAvgPage({
 
   const contracts = allContracts.filter((c) => {
     if (fStatus && c.status !== fStatus) return false;
+    if (fType && (c.type ?? "CONV").toUpperCase() !== fType) return false;
     if (fParty && c.party !== fParty) return false;
     if (fLoom && c.loomType !== fLoom) return false;
     if (from && (c.contDate ?? "") < from) return false;
@@ -229,6 +232,14 @@ export default async function GreyConvSaleAvgPage({
               <option value="R">Running</option>
               <option value="C">Completed</option>
               <option value="">All</option>
+            </select>
+          </div>
+          <div>
+            <label className="label block mb-1">Type</label>
+            <select name="ftype" defaultValue={fType} className="input-box mono text-[13px]" style={{ minWidth: 100 }}>
+              <option value="">All</option>
+              <option value="SALE">Sale</option>
+              <option value="CONV">Conv</option>
             </select>
           </div>
           <div>

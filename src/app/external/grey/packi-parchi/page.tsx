@@ -1776,6 +1776,7 @@ export default async function PackiParchiPage({
                   <thead>
                     <tr>
                       <th style={{ width: "30px" }}>#</th>
+                      <th style={{ width: "20px" }}></th>
                       <th>Count Code</th>
                       <th>Count Desc</th>
                       <th>Brand</th>
@@ -1793,6 +1794,14 @@ export default async function PackiParchiPage({
                     {countGrid.map((row, i) => (
                       <tr key={row?.id ?? `ec-${i}`}>
                         <td className="mono text-[11px] text-center text-[var(--muted)]">{i + 1}</td>
+                        <td>
+                          <button type="button" className="text-[var(--danger)] cursor-pointer text-[13px] font-bold leading-none" title="Clear row" onClick={(e) => {
+                            const tr = (e.target as HTMLElement).closest("tr");
+                            if (!tr) return;
+                            tr.querySelectorAll<HTMLInputElement>("input").forEach((inp) => { inp.value = ""; inp.dispatchEvent(new Event("input", { bubbles: true })); });
+                            tr.querySelectorAll<HTMLSelectElement>("select").forEach((sel) => { sel.value = ""; });
+                          }}>✕</button>
+                        </td>
                         <td><input name="count_code" list="pp-yarn-counts" className={gridCellCls} defaultValue={row?.code ?? ""} style={{ width: 60 }} /></td>
                         <td><input name="count_desc" className={gridCellCls} defaultValue={row?.descr ?? (row?.code ? (ppCountDescByCode.get(String(row.code)) ?? "") : "")} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} /></td>
                         <td><input name="count_brand" className={gridCellCls} defaultValue={row?.brand ?? ""} style={{ minWidth: 100 }} /></td>
