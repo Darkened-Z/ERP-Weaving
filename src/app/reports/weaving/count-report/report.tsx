@@ -137,6 +137,12 @@ export async function CountsAccountsReport({
       : [];
 
     const partySet = new Set<string>();
+    for (const c of contracts) {
+      const pt = (c.party ?? "").trim();
+      if (!pt) continue;
+      if (party && !pt.toLowerCase().includes(party.toLowerCase())) continue;
+      partySet.add(pt);
+    }
     const seen = new Set<string>();
     for (const row of [...warpRows, ...weftRows]) {
       const pt = partyById.get(row.contractId) ?? "";
@@ -147,7 +153,6 @@ export async function CountsAccountsReport({
       const k = `${pt}||${cc}`;
       if (seen.has(k)) continue;
       seen.add(k);
-      partySet.add(pt);
       scopedSeedRows.push({ party: pt, count: cc });
     }
     scopedParties = partySet;
