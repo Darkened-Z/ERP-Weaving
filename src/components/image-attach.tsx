@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 
 /** Max photos per field — keeps the stored text column a sane size. */
 const MAX_IMAGES = 6;
@@ -60,8 +60,15 @@ export function ImageAttach({
 }) {
   const [images, setImages] = useState<string[]>(parseStored(defaultValue));
   const [busy, setBusy] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+  const lbRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    if (lightbox) lbRef.current?.showModal();
+    else lbRef.current?.close();
+  }, [lightbox]);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -93,10 +100,11 @@ export function ImageAttach({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => galleryRef.current?.click()}
-            className="btn btn-outline btn-xs"
+            onClick={() => images.length ? setLightbox(true) : galleryRef.current?.click()}
+            className={`btn btn-xs ${images.length ? "btn-primary" : "btn-outline"}`}
             disabled={busy}
-            title={images.length ? `${images.length} attached — add another` : "Attach a photo"}
+            title={images.length ? `View ${images.length} photo(s)` : "Attach a photo"}
+            style={images.length ? { border: "2px solid var(--primary)", fontWeight: 700 } : undefined}
           >
             {busy ? "…" : images.length ? `IMG ${images.length}` : "IMG"}
           </button>
@@ -110,6 +118,42 @@ export function ImageAttach({
             >
               ✕
             </button>
+          )}
+          {lightbox && (
+            <dialog
+              ref={lbRef}
+              onClose={() => setLightbox(false)}
+              onClick={(e) => { if (e.target === e.currentTarget) setLightbox(false); }}
+              style={{ padding: 0, border: "none", background: "rgba(0,0,0,0.85)", maxWidth: "90vw", maxHeight: "90vh", width: "auto" }}
+            >
+              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                  {images.map((src, i) => (
+                    <div key={i} style={{ position: "relative" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt={`photo ${i + 1}`} style={{ maxHeight: "70vh", maxWidth: "80vw", objectFit: "contain", border: "2px solid #fff" }} />
+                      <button
+                        type="button"
+                        onClick={() => { removeAt(i); if (images.length <= 1) setLightbox(false); }}
+                        style={{ position: "absolute", top: 4, right: 4, background: "var(--danger)", color: "#fff", border: "none", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {!full && (
+                    <button type="button" onClick={() => { setLightbox(false); galleryRef.current?.click(); }} className="btn btn-sm" style={{ background: "#fff", color: "#000" }}>
+                      Add more
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setLightbox(false)} className="btn btn-sm" style={{ background: "transparent", color: "#fff", border: "1px solid #fff" }}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </dialog>
           )}
         </div>
       ) : (
