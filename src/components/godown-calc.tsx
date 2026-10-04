@@ -146,7 +146,8 @@ export function GodownCalc({
             const row = rows[i];
             if (row) {
               cell("count_code", row.code);
-              cell("count_desc", row.code ? countLabel[String(row.code)] ?? "" : "");
+              const ckey = row.code ? String(row.code).trim() : "";
+              cell("count_desc", ckey ? (countLabel[ckey] ?? countLabel[ckey.replace(/[^0-9]+$/, "")] ?? "") : "");
               cell("count_type", row.type);
               cell("count_cal_count", row.calCount);
               cell("count_ends", row.ends);
@@ -157,7 +158,7 @@ export function GodownCalc({
               for (const n of CNT) cell(n, "");
             }
           });
-          recalc(); // TOT Lbs per row + the rate/profit chain
+          recalc();
         }
       }
       if (d?.name === "conv_cont_wvg") return;
@@ -168,10 +169,9 @@ export function GodownCalc({
       }
       if (d?.name !== "cont_no") return;
       const rows = countMap[d.value ?? ""] ?? [];
-      if (!rows.length) return; // this contract carries no counts — leave the grid alone
+      if (!rows.length) return;
       const codes = fields("count_code");
       const CNT = ["count_code", "count_desc", "count_type", "count_cal_count", "count_ends", "count_rate_per_lbs", "count_wt_per_mtr", "count_cost_per_mtr", "count_tot_lbs"];
-      // Picking a contract DISTRIBUTES its warp/weft counts onto the grid (overwrite; clear extra rows).
       codes.forEach((codeEl, i) => {
         const tr = codeEl.closest("tr");
         if (!tr) return;
@@ -180,7 +180,8 @@ export function GodownCalc({
         const row = rows[i];
         if (row) {
           cell("count_code", row.code);
-          cell("count_desc", row.code ? countLabel[String(row.code)] ?? "" : ""); // e.g. "2" → "30/S MVS PV 65;35"
+          const ckey = row.code ? String(row.code).trim() : "";
+          cell("count_desc", ckey ? (countLabel[ckey] ?? countLabel[ckey.replace(/[^0-9]+$/, "")] ?? "") : "");
           cell("count_type", row.type);
           cell("count_cal_count", row.calCount);
           cell("count_ends", row.ends);
@@ -188,10 +189,10 @@ export function GodownCalc({
           cell("count_wt_per_mtr", row.wtPerMtr);
           cell("count_cost_per_mtr", row.costPerMtr);
         } else {
-          for (const n of CNT) cell(n, ""); // clear rows beyond this contract's counts
+          for (const n of CNT) cell(n, "");
         }
       });
-      recalc(); // recomputes each count's TOT Lbs = wt/mtr × net meter (the quantity distribution)
+      recalc();
     };
     document.addEventListener("combobox:change", onCombo);
 

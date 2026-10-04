@@ -135,7 +135,9 @@ export default async function GodownStockPage({
   const countDetailByStockId = new Map<number, string>();
   for (const c of allCountRows) {
     if (!c.code) continue;
-    const lbl = countLabelByCode.get(String(c.code).trim()) ?? c.code;
+    const raw = String(c.code).trim();
+    const clean = raw.replace(/[^0-9]+$/, "").trim();
+    const lbl = countLabelByCode.get(raw) ?? countLabelByCode.get(clean) ?? raw;
     const prev = countDetailByStockId.get(c.stockId);
     const entry = `${lbl} (${c.type ?? ""})`;
     countDetailByStockId.set(c.stockId, prev ? `${prev}, ${entry}` : entry);
@@ -674,7 +676,7 @@ export default async function GodownStockPage({
       cRates.length, cWts.length, cCosts.length, cTots.length
     );
     for (let i = 0; i < cntRows; i++) {
-      const code = (cCodes[i] || "").trim();
+      const code = (cCodes[i] || "").trim().replace(/[^0-9]+$/, "").trim();
       const cType = (cTypes[i] || "").trim();
       const cal = num(cCals[i]);
       const e = intVal(cEnds[i]);
@@ -1504,7 +1506,7 @@ export default async function GodownStockPage({
                               <input name="count_code" list="gs-yarn-counts" className={gridCellCls} defaultValue={r?.code ?? ""} style={{ width: 60 }} />
                             </td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
-                              <input name="count_desc" className={gridCellCls} defaultValue={r?.code ? (gsCountDescByCode.get(String(r.code)) ?? "") : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
+                              <input name="count_desc" className={gridCellCls} defaultValue={r?.code ? (gsCountDescByCode.get(String(r.code).trim()) ?? gsCountDescByCode.get(String(r.code).replace(/[^0-9]+$/, "").trim()) ?? "") : ""} readOnly tabIndex={-1} style={{ minWidth: 140, background: "#f3f4f6" }} />
                             </td>
                             <td className="px-0.5 py-0.5 border-b border-[var(--border-light)]">
                               <input name="count_type" className={gridCellCls} defaultValue={r?.type ?? ""} style={{ width: 80 }} />
