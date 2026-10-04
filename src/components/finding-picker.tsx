@@ -163,6 +163,21 @@ export function FindingPicker({
     }
   };
 
+  useEffect(() => {
+    const el = hiddenRef.current;
+    if (!el) return;
+    const onClear = () => {
+      setValue("");
+      setOpen(false);
+      el.value = "";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      el.dispatchEvent(new CustomEvent("combobox:change", { bubbles: true, detail: { value: "", name } }));
+    };
+    el.addEventListener("picker:clear", onClear);
+    return () => el.removeEventListener("picker:clear", onClear);
+  }, [name]);
+
   const onSearchKey = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }

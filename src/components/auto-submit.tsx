@@ -9,7 +9,14 @@ export function AutoSubmit({ watch }: { watch: string }) {
       if (!t || t.name !== watch) return;
       if (!t.value?.trim()) return;
       const form = t.closest("form");
-      if (form) form.requestSubmit();
+      if (!form) return;
+      const flag = document.createElement("input");
+      flag.type = "hidden";
+      flag.name = "_auto_save";
+      flag.value = "1";
+      form.appendChild(flag);
+      form.requestSubmit();
+      setTimeout(() => flag.remove(), 0);
     };
     document.addEventListener("change", handler, true);
     return () => document.removeEventListener("change", handler, true);

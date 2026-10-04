@@ -334,12 +334,15 @@ export default async function GreyConvContractPage({
     const readVal = num(formData.get("read"));
     const pickVal = num(formData.get("pick"));
     const widthVal = num(formData.get("width"));
+    const isAutoSave = formData.get("_auto_save") === "1";
 
-    if (!((ratePerPick ?? 0) > 0 || (rateMtr ?? 0) > 0))
-      redirect(`/external/contracts/grey-conversion${backQ}&error=rate_required`);
-    if (!((readVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=read_required`);
-    if (!((pickVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=pick_required`);
-    if (!((widthVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=width_required`);
+    if (!isAutoSave) {
+      if (!((ratePerPick ?? 0) > 0 || (rateMtr ?? 0) > 0))
+        redirect(`/external/contracts/grey-conversion${backQ}&error=rate_required`);
+      if (!((readVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=read_required`);
+      if (!((pickVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=pick_required`);
+      if (!((widthVal ?? 0) > 0)) redirect(`/external/contracts/grey-conversion${backQ}&error=width_required`);
+    }
 
     const party = txt(formData.get("party"));
     const designNo = txt(formData.get("design_no"));
@@ -547,17 +550,26 @@ export default async function GreyConvContractPage({
 
   const fmtNum = (n: number | null | undefined) => (n == null ? "" : Number(n).toLocaleString("en-US"));
 
-  const excelRows = contracts.map((c) => ({
-    contNo: c.contNo,
-    party: c.party,
-    grayCode: c.grayCode,
-    productName: c.productName,
-    loomType: c.loomType,
-    qtyMtr: c.qtyMtr,
-    rateMtr: c.rateMtr,
-    costPerMtr: c.costPerMtr,
-    status: c.status,
-  }));
+  const excelRows = contracts.map((c) => {
+    const cc = c.grayQltyCode ?? c.grayCode ?? "";
+    return {
+      contNo: c.contNo,
+      type: c.type ?? "CONV",
+      party: c.party,
+      grayCode: cc,
+      reedPick: cc ? greyReedPickByCode.get(cc) ?? "" : "",
+      productName: c.productName,
+      loomType: c.loomType,
+      qtyMtr: c.qtyMtr,
+      ratePerPick: c.ratePerPick,
+      rateMtr: c.rateMtr,
+      convRatePerMtr: c.convRatePerMtr,
+      grayRatePerMtr: c.grayRatePerMtr,
+      contDate: c.contDate,
+      expDate: c.expDate,
+      status: c.status,
+    };
+  });
 
   return (
     <Shell active="ext-gcc">
@@ -571,13 +583,19 @@ export default async function GreyConvContractPage({
             rows={excelRows}
             columns={[
               { key: "contNo", label: "Cont No" },
+              { key: "type", label: "Type" },
               { key: "party", label: "Party" },
-              { key: "grayCode", label: "Gray Code" },
-              { key: "productName", label: "Product Name" },
-              { key: "loomType", label: "Loom Type" },
+              { key: "grayCode", label: "Grey Code" },
+              { key: "reedPick", label: "Reed×Pick" },
+              { key: "productName", label: "Product" },
+              { key: "loomType", label: "Loom" },
               { key: "qtyMtr", label: "Qty Mtr" },
+              { key: "ratePerPick", label: "Rate/Pick" },
               { key: "rateMtr", label: "Rate/Mtr" },
-              { key: "costPerMtr", label: "Cost/Mtr" },
+              { key: "convRatePerMtr", label: "Conv Rate" },
+              { key: "grayRatePerMtr", label: "Gray Rate" },
+              { key: "contDate", label: "Date" },
+              { key: "expDate", label: "Exp Date" },
               { key: "status", label: "Status" },
             ]}
             filename="grey-conv-contracts"
@@ -1101,13 +1119,19 @@ export default async function GreyConvContractPage({
               <thead>
                 <tr>
                   <th>Cont No</th>
+                  <th>Type</th>
                   <th>Party</th>
+                  <th>Grey Code</th>
+                  <th>Reed×Pick</th>
                   <th>Product</th>
-                  <th style={{ minWidth: 280 }}>Prd. Desc</th>
+                  <th>Loom</th>
                   <th className="text-right">Qty Mtr</th>
+                  <th className="text-right">Rate/Pick</th>
+                  <th className="text-right">Rate/Mtr</th>
                   <th className="text-right">Conv Rate</th>
                   <th className="text-right">Gray Rate</th>
                   <th>Date</th>
+                  <th>Exp Date</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -1118,10 +1142,10 @@ export default async function GreyConvContractPage({
                   const href = `/external/contracts/grey-conversion?id=${c.id}`;
                   const constrCode = c.grayQltyCode ?? c.grayCode ?? null;
                   const quality = constrCode ? greyReedPickByCode.get(constrCode) ?? "" : "";
-                  const prdMainDesc = c.productName ? productDescInfo.get(c.productName)?.mainDesc ?? "" : "";
                   return (
                     <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                       <td className="mono font-bold"><a href={href} className="no-underline block" style={linkStyle}>{c.contNo}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{c.type ?? "CONV"}</a></td>
                       <td className="text-[13px]">
                         <a href={href} className="no-underline block" style={linkStyle}>
                           {c.party ?? "-"}
@@ -1130,25 +1154,24 @@ export default async function GreyConvContractPage({
                           )}
                         </a>
                       </td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{constrCode ?? "-"}</a></td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{quality || "-"}</a></td>
                       <td className="text-[13px] mono"><a href={href} className="no-underline block" style={linkStyle}>{c.productName ?? "-"}</a></td>
-                      <td className="text-[13px]" style={{ minWidth: 280 }}>
-                        <a href={href} className="no-underline block" style={linkStyle}>
-                          {quality && <span className="font-bold">{quality}</span>}
-                          {prdMainDesc && <span className="block text-[11px] opacity-80">{prdMainDesc}</span>}
-                          {!quality && !prdMainDesc && (constrCode ?? "-")}
-                        </a>
-                      </td>
+                      <td className="mono text-[12px]"><a href={href} className="no-underline block" style={linkStyle}>{c.loomType ?? "-"}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.qtyMtr) || "-"}</a></td>
+                      <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.ratePerPick) || "-"}</a></td>
+                      <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.rateMtr) || "-"}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.convRatePerMtr) || "-"}</a></td>
                       <td className="text-right mono"><a href={href} className="no-underline block" style={linkStyle}>{fmtNum(c.grayRatePerMtr) || "-"}</a></td>
                       <td className="mono text-[12px] whitespace-nowrap"><a href={href} className="no-underline block" style={linkStyle}>{c.contDate ?? "-"}</a></td>
+                      <td className="mono text-[12px] whitespace-nowrap"><a href={href} className="no-underline block" style={linkStyle}>{c.expDate ?? "-"}</a></td>
                       <td className="mono text-[13px]"><a href={href} className="no-underline block" style={linkStyle}>{c.status}</a></td>
                     </tr>
                   );
                 })}
                 {contracts.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center text-[var(--muted)] py-6 text-[13px]">
+                    <td colSpan={15} className="text-center text-[var(--muted)] py-6 text-[13px]">
                       No contracts. Click New to add one.
                     </td>
                   </tr>

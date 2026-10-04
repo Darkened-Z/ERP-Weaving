@@ -5,6 +5,7 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { ContractInfoPanel } from "@/components/contract-info-panel";
 import { FindingPicker } from "@/components/finding-picker";
+import { ExclusivePickers } from "@/components/exclusive-pickers";
 import { TermSelect } from "@/components/term-select";
 import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
@@ -1159,6 +1160,7 @@ export default async function GodownStockPage({
                     <input type="hidden" name="gdn_party" defaultValue={formStock?.gdnParty || godownParty} />
                   </div>
 
+                  <ExclusivePickers fields={["conv_cont_wvg", "cont_no", "pur_cont_no"]} />
                   <div className="col-span-6" style={{ borderLeft: "4px solid #2563eb", background: "#eff6ff", padding: "8px" }}>
                     <label className="label block mb-1">Conv Contract WVG <span className="text-[9px] text-[var(--muted)]">(F9 — Inventory &gt; Grey Conversion — one at a time)</span></label>
                     <FindingPicker
