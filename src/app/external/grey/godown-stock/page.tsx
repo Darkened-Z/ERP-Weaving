@@ -161,7 +161,8 @@ export default async function GodownStockPage({
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
   const countDesc = (raw: string | null | undefined) => {
     if (!raw) return "";
-    return countLabelByCode.get(String(raw)) ?? String(raw);
+    const key = String(raw).trim();
+    return countLabelByCode.get(key) ?? key;
   };
   const qualityFull = (code: string | null | undefined) => {
     if (!code) return "";
