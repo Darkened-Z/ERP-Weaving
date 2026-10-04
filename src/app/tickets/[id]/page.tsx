@@ -317,6 +317,31 @@ export default async function TicketDetailPage({
               </div>
             </div>
 
+            {(() => {
+              const raw = (ticket.img ?? "").trim();
+              if (!raw) return null;
+              let imgs: string[] = [];
+              if (raw.startsWith("[")) {
+                try { const a = JSON.parse(raw); if (Array.isArray(a)) imgs = a.filter((x: unknown) => typeof x === "string" && x); } catch {}
+              }
+              if (!imgs.length) imgs = [raw];
+              return (
+                <div className="border border-black p-6">
+                  <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4">
+                    Attachments ({imgs.length})
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {imgs.map((src, i) => (
+                      <a key={i} href={src} target="_blank" rel="noopener noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={`attachment ${i + 1}`} className="h-32 w-32 object-cover border border-black" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="border border-black p-6">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-4">
                 Comments ({comments.length})
@@ -445,10 +470,6 @@ export default async function TicketDetailPage({
                   }
                   mono
                 />
-                <DetailRow label="Contract" value={ticket.contractNo ?? "-"} mono />
-                <DetailRow label="Party" value={ticket.partyCode ?? "-"} mono />
-                <DetailRow label="Grey Code" value={ticket.greyCode ?? "-"} mono />
-                <DetailRow label="Beam No" value={ticket.beamNo ?? "-"} mono />
                 <DetailRow label="Labels" value={ticket.labels ?? "-"} />
               </dl>
             </div>
