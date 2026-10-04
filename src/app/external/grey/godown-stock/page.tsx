@@ -233,10 +233,8 @@ export default async function GodownStockPage({
     .select()
     .from(schema.extGreySalContract)
     .orderBy(desc(schema.extGreySalContract.id));
-  // Sale-side contracts = grey-sale contracts + the SALE-type conv contracts. Picking
-  // either flows its rate into the locked Rate Sal and the display box beside the picker.
-  const salMap: Record<string, Record<string, string | number | null>> = Object.fromEntries([
-    ...salContracts.map((c) => [
+  const salMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
+    salContracts.map((c) => [
       c.contractNo,
       {
         grey_sale_rate_disp: c.ratePerMtr ?? "",
@@ -245,27 +243,17 @@ export default async function GodownStockPage({
         _dsp_quality_pick: c.greyCode ?? "",
       },
     ] as const),
-    ...saleConvContracts.map((c) => [
-      c.contNo,
-      {
-        grey_sale_rate_disp: c.grayRatePerMtr ?? "",
-        grey_sale_cont: c.contNo,
-        _contact_quality_pick: c.grayQltyCode ?? "",
-        _dsp_quality_pick: c.grayQltyCode ?? "",
-      },
-    ] as const),
-  ]);
-  const salRateByNo = new Map<string, number | null>([
-    ...salContracts.map((c) => [c.contractNo, c.ratePerMtr] as const),
-    ...saleConvContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const),
-  ]);
+  );
+  const salRateByNo = new Map<string, number | null>(
+    salContracts.map((c) => [c.contractNo, c.ratePerMtr] as const),
+  );
   // Sal Cont # opens the grey CONVERSION contracts; picking one fills the sale rate from
   // its grey rate. (Grey Sale Cont opens the grey SALE contracts — different list.)
   const convRateByNo = new Map<string, number | null>(
-    convOnlyContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const)
+    saleConvContracts.map((c) => [c.contNo, c.grayRatePerMtr] as const)
   );
   const convSaleMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
-    convOnlyContracts.map((c) => [
+    saleConvContracts.map((c) => [
       c.contNo,
       { rate: c.grayRatePerMtr ?? "", sal_cont_rate_disp: c.grayRatePerMtr ?? "" },
     ] as const),
@@ -329,7 +317,7 @@ export default async function GodownStockPage({
       },
     };
   });
-  const saleAllFindRows = [...saleConvFindRows, ...salFindRows];
+
 
   const warpRows = await db
     .select()
@@ -1296,9 +1284,9 @@ export default async function GodownStockPage({
                     <FindingPicker
                       name="sal_cont_no"
                       defaultValue={formStock?.salContNo ?? ""}
-                      rows={contractFindRows}
+                      rows={saleConvFindRows}
                       columns={contractColumns}
-                      title="GREY CONVERSION CONTRACT LIST"
+                      title="GREY CONVERSION CONTRACT LIST (SALE TYPE)"
                       placeholder="Conv contract #…"
                       className="input-box mono text-[13px] cursor-pointer"
                     />
@@ -1323,7 +1311,7 @@ export default async function GodownStockPage({
                     <FindingPicker
                       name="grey_sale_cont"
                       defaultValue={formStock?.greySaleCont ?? ""}
-                      rows={saleAllFindRows}
+                      rows={salFindRows}
                       columns={greySaleColumns}
                       title="GREY SALE CONTRACT LIST"
                       placeholder="Grey sale contract #…"
