@@ -159,13 +159,17 @@ export default async function GodownStockPage({
   // rich Oracle-style LOV (date, party, quality, read×pick×width, qty, rate, status).
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
+  const countDesc = (raw: string | null | undefined) => {
+    if (!raw) return "";
+    return countLabelByCode.get(String(raw)) ?? String(raw);
+  };
   const qualityFull = (code: string | null | undefined) => {
     if (!code) return "";
     const c = constrByCode.get(code);
     if (!c) return code;
     const rp = c.reed && c.pick ? `${c.reed}×${c.pick}` : "";
-    const warp = [c.warpCount, c.warp2].filter(Boolean).join("/");
-    const weft = [c.weftCount, c.weft2].filter(Boolean).join("/");
+    const warp = [c.warpCount, c.warp2].filter(Boolean).map(countDesc).join("/");
+    const weft = [c.weftCount, c.weft2].filter(Boolean).map(countDesc).join("/");
     const yarn = warp && weft ? `${warp} ${weft}` : warp || weft || "";
     return [code, rp, yarn].filter(Boolean).join(" ");
   };

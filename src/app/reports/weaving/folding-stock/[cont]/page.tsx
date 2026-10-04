@@ -102,6 +102,11 @@ export default async function FoldingStockDetailPage({
     despVNo: string; despDate: string; loom: string;
   };
 
+  const loomByVNo = new Map<string, string>();
+  for (const r of prodRows) {
+    if (r.loomNo != null && !loomByVNo.has(r.vNo))
+      loomByVNo.set(r.vNo, `${r.shed ?? ""}|${r.loomNo}`);
+  }
   const rows: Row[] = prodRows.map((r) => {
     const than = ((r.than as string) ?? "").trim();
     const d = than ? despByThan.get(than) : undefined;
@@ -119,7 +124,7 @@ export default async function FoldingStockDetailPage({
       than,
       despVNo: d?.vNo ?? "",
       despDate: d?.date ?? "",
-      loom: r.loomNo != null ? `${r.shed ?? ""}|${r.loomNo}` : "",
+      loom: r.loomNo != null ? `${r.shed ?? ""}|${r.loomNo}` : loomByVNo.get(r.vNo) ?? "",
     };
   });
 
