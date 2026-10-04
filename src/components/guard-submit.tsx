@@ -31,6 +31,9 @@ export function GuardSubmit({ rules }: { rules: Rule[] }) {
       const form = e.target as HTMLFormElement | null;
       if (!form || form.tagName !== "FORM") return;
 
+      const auto = form.querySelector<HTMLInputElement>('[name="_auto_save"]');
+      if (auto?.value === "1") return;
+
       for (const rule of rules) {
         const names = "any" in rule ? rule.any : [rule.field];
         // A rule whose fields are not on this form is not this form's rule.
