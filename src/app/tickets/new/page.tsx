@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { Shell } from "@/components/shell";
-import { Combobox } from "@/components/combobox";
 import { db, schema } from "@/db";
+import { sql } from "drizzle-orm";
 import { requireSession, verifySavePassword } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { sql } from "drizzle-orm";
 import { DateBox } from "@/components/date-box";
+import { ImageAttach } from "@/components/image-attach";
 import {
   TICKET_PRIORITIES,
   TICKET_TYPES,
@@ -16,10 +16,6 @@ export const dynamic = "force-dynamic";
 
 type SP = {
   loom?: string;
-  contract?: string;
-  party?: string;
-  grey?: string;
-  beam?: string;
   error?: string;
 };
 
@@ -41,35 +37,6 @@ export default async function NewTicketPage({
     const hit = looms.find((l) => String(l.loomNo) === p);
     return hit ? `${hit.shed}|${hit.loomNo}` : "";
   })();
-  const greyConstructions = await db.select().from(schema.greyConstruction);
-
-  const [convContracts, purContracts, salContracts, coaParties] = await Promise.all([
-    db.select({ no: schema.extGreyConvContract.contNo }).from(schema.extGreyConvContract),
-    db.select({ no: schema.extGreyPurContract.contractNo }).from(schema.extGreyPurContract),
-    db.select({ no: schema.extGreySalContract.contractNo }).from(schema.extGreySalContract),
-    db
-      .select({
-        code: schema.chartOfAccounts.code,
-        description: schema.chartOfAccounts.description,
-        level: schema.chartOfAccounts.level,
-      })
-      .from(schema.chartOfAccounts),
-  ]);
-
-  const contractOptions = Array.from(
-    new Set(
-      [...convContracts, ...purContracts, ...salContracts]
-        .map((r) => r.no)
-        .filter((v): v is string => !!v)
-    )
-  )
-    .sort()
-    .map((no) => ({ value: no, label: no }));
-
-  const partyOptions = coaParties
-    .filter((a) => (a.level ?? 0) >= 4)
-    .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}`, desc: a.description }))
-    .sort((a, b) => a.value.localeCompare(b.value));
 
   async function createTicket(formData: FormData) {
     "use server";
@@ -96,12 +63,13 @@ export default async function NewTicketPage({
     }
     const loomNo = loomNumStr ? parseInt(loomNumStr, 10) : null;
     const safeLoomNo = Number.isFinite(loomNo) ? loomNo : null;
-    const contractNo = (formData.get("contract_no") as string)?.trim() || null;
-    const partyCode = (formData.get("party_code") as string)?.trim() || null;
-    const greyCode = (formData.get("grey_code") as string)?.trim() || null;
-    const beamNo = (formData.get("beam_no") as string)?.trim() || null;
+    const contractNo = null;
+    const partyCode = null;
+    const greyCode = null;
+    const beamNo = null;
     const dueDate = (formData.get("due_date") as string)?.trim() || null;
     const labels = (formData.get("labels") as string)?.trim() || null;
+    const img = (formData.get("img") as string)?.trim() || null;
 
     const now = new Date().toISOString();
 
@@ -120,6 +88,7 @@ export default async function NewTicketPage({
       greyCode,
       beamNo,
       labels,
+      img,
       dueDate,
       createdAt: now,
       updatedAt: now,
@@ -274,51 +243,6 @@ export default async function NewTicketPage({
             </div>
 
             <div>
-              <label className="label block mb-1">Contract #</label>
-              <Combobox
-                name="contract_no"
-                options={contractOptions}
-                defaultValue={params.contract ?? ""}
-                placeholder="Contract #"
-              />
-            </div>
-
-            <div>
-              <label className="label block mb-1">Party Code</label>
-              <Combobox
-                name="party_code"
-                options={partyOptions}
-                defaultValue={params.party ?? ""}
-                placeholder="Party Code"
-              />
-            </div>
-
-            <div>
-              <label className="label block mb-1">Grey Code</label>
-              <select
-                name="grey_code"
-                className="input-box mono"
-                defaultValue={params.grey ?? ""}
-              >
-                <option value="">--</option>
-                {greyConstructions.map((g) => (
-                  <option key={g.id} value={g.code}>
-                    {g.code} - {g.description}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label block mb-1">Beam No</label>
-              <input
-                name="beam_no"
-                className="input-box mono"
-                defaultValue={params.beam ?? ""}
-              />
-            </div>
-
-            <div>
               <label className="label block mb-1">Due Date</label>
               <DateBox name="due_date" className="input-box mono" />
             </div>
@@ -330,6 +254,11 @@ export default async function NewTicketPage({
                 className="input-box"
                 placeholder="comma,separated,labels"
               />
+            </div>
+
+            <div className="md:col-span-2 gform-full">
+              <label className="label block mb-1">Attachments</label>
+              <ImageAttach name="img" max={5} compact />
             </div>
           </div>
 

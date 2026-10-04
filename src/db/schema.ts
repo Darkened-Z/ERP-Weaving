@@ -779,6 +779,7 @@ export const tickets = sqliteTable("tickets", {
   greyCode: text("grey_code"),
   beamNo: text("beam_no"),
   labels: text("labels"),
+  img: text("img"),
   dueDate: text("due_date"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
