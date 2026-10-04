@@ -291,7 +291,6 @@ export default async function GreyConvSaleAvgPage({
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)]">
                       <div className="text-[13px]">{r.party}</div>
-                      {r.partyCode && <div className="text-[11px] text-[var(--muted)]">{r.partyCode}</div>}
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)]">
                       <div className="font-bold">{r.productName}</div>
