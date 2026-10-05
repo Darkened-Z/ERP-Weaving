@@ -124,6 +124,8 @@ export default async function GreySaleAvgPage({
     const amount = c.amount ?? round2(qty * rateMtr);
     const despatch = despatchByContNo.get(c.contractNo ?? "") ?? 0;
     const despatchDetail = despatchDetailByContNo.get(c.contractNo ?? "") ?? [];
+    const estRate = c.totalCostRate ?? 0;
+    const profitLoss = rateMtr && estRate ? round2(rateMtr - estRate) : 0;
     const balance = round2(qty - despatch);
     return {
       id: c.id,
@@ -142,8 +144,9 @@ export default async function GreySaleAvgPage({
       despatch,
       despatchDetail,
       balance,
-      estRate: c.totalCostRate ?? 0,
+      estRate,
       rateMtr,
+      profitLoss,
       amount,
       loomType: c.loomType ?? "",
       broker: c.broker ?? "",
@@ -158,6 +161,7 @@ export default async function GreySaleAvgPage({
   const totAmount = round2(rows.reduce((s, r) => s + r.amount, 0));
   const avgEstRate = n ? round2(rows.reduce((s, r) => s + r.estRate, 0) / n) : 0;
   const avgRateMtr = n ? round2(rows.reduce((s, r) => s + r.rateMtr, 0) / n) : 0;
+  const avgProfitLoss = n ? round2(rows.reduce((s, r) => s + r.profitLoss, 0) / n) : 0;
 
   const fmt = (v: number) => v ? v.toLocaleString("en-US") : "";
   const fmt2 = (v: number) => v ? v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
@@ -173,6 +177,7 @@ export default async function GreySaleAvgPage({
     balance: r.balance,
     estRate: r.estRate,
     rateMtr: r.rateMtr,
+    profitLoss: r.profitLoss,
     amount: r.amount,
     status: r.status === "R" ? "Running" : r.status === "C" ? "Closed" : r.status,
   }));
@@ -205,6 +210,7 @@ export default async function GreySaleAvgPage({
                 { key: "balance", label: "Balance" },
                 { key: "estRate", label: "Estimates Rate" },
                 { key: "rateMtr", label: "Rate/Mtr" },
+                { key: "profitLoss", label: "Profit/Loss" },
                 { key: "amount", label: "Amount" },
                 { key: "status", label: "Status" },
               ]}
@@ -275,6 +281,7 @@ export default async function GreySaleAvgPage({
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Balance</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Est. Rate</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Rate/Mtr</th>
+                  <th className="px-2 py-2 text-right border-r border-blue-900/30">P/L</th>
                   <th className="px-2 py-2 text-right border-r border-blue-900/30">Amount</th>
                   <th className="px-2 py-2 text-left">Status</th>
                 </tr>
@@ -314,6 +321,7 @@ export default async function GreySaleAvgPage({
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold">{fmt2(r.balance)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.estRate ? fmt2(r.estRate) : "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.rateMtr ? fmt2(r.rateMtr) : "-"}</td>
+                    <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold" style={{ color: r.profitLoss > 0 ? "#16a34a" : r.profitLoss < 0 ? "#dc2626" : "inherit" }}>{r.rateMtr && r.estRate ? fmt2(r.profitLoss) : "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.amount ? fmt(r.amount) : "-"}</td>
                     <td className="px-2 py-1.5">
                       {r.status === "R" ? (
@@ -325,7 +333,7 @@ export default async function GreySaleAvgPage({
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={11} className="text-center text-[var(--muted)] py-8 text-[13px]">No contracts match the selected filters.</td></tr>
+                  <tr><td colSpan={12} className="text-center text-[var(--muted)] py-8 text-[13px]">No contracts match the selected filters.</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (
@@ -337,6 +345,7 @@ export default async function GreySaleAvgPage({
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(totBalance)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgEstRate)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt2(avgRateMtr)}</td>
+                    <td className="px-2 py-2 border-r border-blue-900/30 mono text-right" style={{ color: avgProfitLoss > 0 ? "#16a34a" : avgProfitLoss < 0 ? "#dc2626" : "white" }}>{fmt2(avgProfitLoss)}</td>
                     <td className="px-2 py-2 border-r border-blue-900/30 mono text-right">{fmt(totAmount)}</td>
                     <td className="px-2 py-2"></td>
                   </tr>
