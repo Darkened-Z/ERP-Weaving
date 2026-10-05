@@ -3,7 +3,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { requireAdmin, verifySavePassword } from "@/lib/auth";
+import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { isUniqueViolation } from "@/lib/db-errors";
 import bcrypt from "bcryptjs";
 
@@ -59,7 +59,9 @@ export default async function UsersPage({
 }: {
   searchParams: Promise<{ id?: string; error?: string }>;
 }) {
-  await requireAdmin(BASE);
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (session.roleName !== "ADMIN") redirect("/");
   const params = await searchParams;
 
   const users = (await db
