@@ -47,7 +47,7 @@ export async function login(loginId: string, password: string): Promise<Session 
   const rows = await db
     .select()
     .from(schema.users)
-    .where(eq(schema.users.login, loginId));
+    .where(eq(schema.users.login, key));
 
   const user = rows[0];
   if (!user || user.status !== "A" || !(await bcrypt.compare(password, user.password))) {
