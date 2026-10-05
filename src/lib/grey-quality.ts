@@ -24,8 +24,19 @@ export function countLabelMap(
   );
 }
 
-const lbl = (code: string | number | null | undefined, labels: Map<string, string>) =>
-  code == null || code === "" ? "" : labels.get(String(code)) || String(code);
+const lbl = (code: string | number | null | undefined, labels: Map<string, string>): string => {
+  if (code == null || code === "") return "";
+  const s = String(code);
+  const direct = labels.get(s);
+  if (direct) return direct;
+  const sep = s.indexOf(" — ");
+  if (sep >= 0) {
+    const head = s.slice(0, sep).trim();
+    const tail = s.slice(sep + 3).trim();
+    return labels.get(head) || tail || s;
+  }
+  return s;
+};
 
 /**
  * Warp/weft count description, no reed×pick. **Collapses** an identical warp and
