@@ -108,16 +108,26 @@ export function GreyQualityPicker({
   };
 
   const selected = rows.find((r) => r.code === value);
-  const selectedDisplay = selected
-    ? displayMode === "warp"
-      ? // Owner (IBWS): after the code show ONLY the warp count info, e.g.
-        // "GC-001 — 2. 30/S MVS PV 65:35" (count code. description blend).
-        `${selected.code} — ${
-          selected.warpCounts.filter(Boolean).map((c) => label(c).replace(" — ", ". ")).join(" · ") ||
-          selected.description
-        }`
-      : `${selected.code} — R${selected.reed ?? "-"} P${selected.pick ?? "-"}${selected.width ? ` · ${selected.width}"` : ""} · ${selected.description}`
-    : value;
+  const selectedDisplay = (() => {
+    if (!selected) return value;
+    if (displayMode === "warp") {
+      return `${selected.code} — ${
+        selected.warpCounts.filter(Boolean).map((c) => label(c).replace(" — ", ". ")).join(" · ") ||
+        selected.description
+      }`;
+    }
+    const descOnly = (c: string) => {
+      const full = label(c);
+      const idx = full.indexOf(" — ");
+      return idx >= 0 ? full.slice(idx + 3) : full;
+    };
+    const warpDescs = selected.warpCounts.filter(Boolean).map(descOnly).filter(Boolean);
+    const weftDescs = selected.weftCounts.filter(Boolean).map(descOnly).filter(Boolean);
+    const quality = warpDescs.length || weftDescs.length
+      ? [warpDescs.join(" · "), weftDescs.join(" · ")].filter(Boolean).join(" x ")
+      : selected.description;
+    return `${selected.code} — R${selected.reed ?? "-"}×P${selected.pick ?? "-"} · ${quality}`;
+  })();
 
   return (
     <div className="relative" data-quality-picker={name}>
