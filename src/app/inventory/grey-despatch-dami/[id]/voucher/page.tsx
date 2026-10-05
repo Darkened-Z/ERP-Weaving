@@ -329,7 +329,7 @@ export default async function DamiVoucherPage({
               </div>
             </div>
             <div className="dv-head-right">
-              <img src="/sk-logo.png" alt={company?.name ?? "Logo"} style={{ height: 72, objectFit: "contain" }} />
+              <img src="/sk-logo.png" alt={company?.name ?? "Logo"} style={{ height: 96, objectFit: "contain" }} />
             </div>
           </div>
           <hr className="dv-rule" />
