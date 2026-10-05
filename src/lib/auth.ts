@@ -90,7 +90,7 @@ export async function logout() {
 export async function requireAdmin(back: string): Promise<Session> {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.roleName !== "ADMIN") {
+  if (session.roleName !== "ADMIN" && session.roleName !== "superadmin") {
     redirect(`${back}${back.includes("?") ? "&" : "?"}error=admin_only`);
   }
   return session;

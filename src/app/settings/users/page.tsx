@@ -61,7 +61,7 @@ export default async function UsersPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.roleName !== "ADMIN") redirect("/");
+  if (session.roleName !== "ADMIN" && session.roleName !== "superadmin") redirect("/");
   const params = await searchParams;
 
   const users = (await db
