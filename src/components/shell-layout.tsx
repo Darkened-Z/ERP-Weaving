@@ -93,7 +93,7 @@ export function ShellLayout({
         <div className="sticky top-0 z-30 bg-white border-b border-[var(--border-light)] px-6 py-3 hidden lg:flex items-center justify-end gap-3">
           <CommandPaletteTrigger />
         </div>
-        <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
+        <div className="p-4 sm:p-6 lg:p-8">
           {children}
         </div>
       </main>
