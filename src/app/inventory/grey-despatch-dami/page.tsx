@@ -104,19 +104,18 @@ export default async function GreyDespatchDamiPage({
     constructionDesc[g.code] = [rich || g.description, w].filter(Boolean).join("  ");
   }
 
-  // Pakki Parchi list for linking
   const pakkiParchis = await db
     .select({
-      id: schema.greyPakiParchi.id,
-      ppNo: schema.greyPakiParchi.ppNo,
-      ppDate: schema.greyPakiParchi.ppDate,
-      party: schema.greyPakiParchi.party,
-      qtyThan: schema.greyPakiParchi.qtyThan,
-      qtyMtrs: schema.greyPakiParchi.qtyMtrs,
-      contractNo: schema.greyPakiParchi.contractNo,
+      id: schema.extPackiParchi.id,
+      ppNo: schema.extPackiParchi.vNo,
+      ppDate: schema.extPackiParchi.vDate,
+      party: schema.extPackiParchi.saleParty,
+      qtyThan: schema.extPackiParchi.than,
+      qtyMtrs: schema.extPackiParchi.meterNet,
+      contractNo: schema.extPackiParchi.convContNoSale,
     })
-    .from(schema.greyPakiParchi)
-    .orderBy(sql`pp_date DESC`);
+    .from(schema.extPackiParchi)
+    .orderBy(sql`v_date DESC`);
 
   async function saveDami(formData: FormData) {
     "use server";
