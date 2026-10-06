@@ -321,8 +321,10 @@ export default async function GreyDespatchDamiPage({
         </div>
 
         {/* ── Stats ── */}
-        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-4 no-print">
-          <div className="bg-white p-3"><div className="mono text-xl font-bold">{damis.length}</div><div className="stat-label">Total Slips</div></div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-black border border-black mb-4 no-print">
+          <div className="bg-white p-3"><div className="mono text-xl font-bold">{damis.length}</div><div className="stat-label">Total Parchi</div></div>
+          <div className="bg-white p-3"><div className="mono text-xl font-bold text-red-600">{damis.filter(d => d.pakki_parchi_id == null).length}</div><div className="stat-label text-red-600 font-semibold">Unlink Parchi</div></div>
+          <div className="bg-white p-3"><div className="mono text-xl font-bold text-green-600">{damis.filter(d => d.pakki_parchi_id != null).length}</div><div className="stat-label text-green-600 font-semibold">Link Parchi</div></div>
           <div className="bg-white p-3"><div className="mono text-xl font-bold">{formatNum(totals.than)}</div><div className="stat-label">Total Than</div></div>
           <div className="bg-white p-3"><div className="mono text-xl font-bold">{formatNum(totals.mtrs)}</div><div className="stat-label">Total Mtrs</div></div>
         </div>
@@ -648,7 +650,7 @@ export default async function GreyDespatchDamiPage({
                   const st = { color: isSel ? "white" : "inherit" } as const;
                   return (
                     <tr key={d.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                      <td className="mono font-bold text-[13px]"><a href={href} className="no-underline block" style={st}>{d.vNo}</a></td>
+                      <td className="mono font-bold text-[13px]"><a href={href} className="no-underline flex items-center gap-2" style={st}>{d.vNo}{d.pakki_parchi_id == null && <span className="text-[9px] px-1 bg-red-100 text-red-600 rounded border border-red-200 uppercase tracking-widest no-print">Unlinked</span>}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={st}>{fmtDate(d.vDate)}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.subParty ?? d.party ?? d.saleParty ?? "—"}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.printingLocation ?? "—"}</a></td>
