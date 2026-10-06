@@ -401,7 +401,7 @@ export default async function GreyDespatchDamiPage({
                 <div className="col-span-3">
                   <label className="label block mb-1">Find</label>
                   <div className="flex gap-1">
-                    <input form="dami-find-form" name="find" className="input-box mono flex-1" defaultValue={params.find ?? ""} placeholder="V.No / party" />
+                    <input form="dami-find-form" name="find" className="input-box mono flex-1" defaultValue={params.find ?? ""} />
                     <button form="dami-find-form" type="submit" className="btn btn-outline btn-sm">Go</button>
                   </div>
                 </div>
@@ -418,7 +418,7 @@ export default async function GreyDespatchDamiPage({
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
                 <div className="col-span-12">
                   <label className="label block mb-1">Sale Party</label>
-                  <input name="sale_party" className="input-box" defaultValue={formItem?.saleParty ?? ""} placeholder="Sale party name..." />
+                  <input name="sale_party" className="input-box" defaultValue={formItem?.saleParty ?? ""} />
                 </div>
                 <input type="hidden" name="sub_party" defaultValue={formItem?.subParty ?? ""} />
               </div>
@@ -438,7 +438,7 @@ export default async function GreyDespatchDamiPage({
                 </div>
                 <div className="col-span-9">
                   <label className="label block mb-1">Grey Construction</label>
-                  <input name="dsp_quality_desc" className="input-box mono text-[11px]" defaultValue={formItem?.dspQualityDesc ?? constructionDesc[formItem?.dspQuality ?? ""] ?? ""} placeholder="71 X 56  30/S MVS  PV 65;35 X 20/S PVT  PV 80;20" />
+                  <input name="dsp_quality_desc" className="input-box mono text-[11px]" defaultValue={formItem?.dspQualityDesc ?? constructionDesc[formItem?.dspQuality ?? ""] ?? ""} />
                   <SelectFill watch="dsp_quality" target="dsp_quality_desc" map={constructionDesc} />
                 </div>
               </div>
@@ -447,7 +447,7 @@ export default async function GreyDespatchDamiPage({
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
                 <div className="col-span-2">
                   <label className="label block mb-1">Width</label>
-                  <input name="width" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.width ?? ""} placeholder='61"' />
+                  <input name="width" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.width ?? ""} />
                 </div>
                 <div className="col-span-2">
                   <label className="label block mb-1">Product Code</label>
@@ -455,7 +455,7 @@ export default async function GreyDespatchDamiPage({
                 </div>
                 <div className="col-span-8">
                   <label className="label block mb-1">Product Name</label>
-                  <input name="product_desc" className="input-box" defaultValue={formItem?.productDesc ?? ""} placeholder="OUDH SUTTING / SAMI SAB..." />
+                  <input name="product_desc" className="input-box" defaultValue={formItem?.productDesc ?? ""} />
                 </div>
               </div>
 
@@ -480,11 +480,11 @@ export default async function GreyDespatchDamiPage({
               <div className="grid grid-cols-12 gap-2 mb-3 gform">
                 <div className="col-span-4">
                   <label className="label block mb-1">Printing Name</label>
-                  <input name="printing_name" className="input-box" defaultValue={formItem?.printingName ?? ""} placeholder="GHIDY" />
+                  <input name="printing_name" className="input-box" defaultValue={formItem?.printingName ?? ""} />
                 </div>
                 <div className="col-span-8">
                   <label className="label block mb-1">Printing Location</label>
-                  <input name="printing_location" className="input-box" defaultValue={formItem?.printingLocation ?? ""} placeholder="GHOSIA DYING LAHORE" />
+                  <input name="printing_location" className="input-box" defaultValue={formItem?.printingLocation ?? ""} />
                 </div>
                 <input type="hidden" name="broker_name" defaultValue={formItem?.brokerName ?? ""} />
               </div>
