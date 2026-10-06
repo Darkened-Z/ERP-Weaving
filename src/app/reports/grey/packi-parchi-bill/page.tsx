@@ -61,6 +61,24 @@ export default async function PackiParchiBillPage({
   const totComm = enriched.reduce((s, r) => s + r.commissionTotal, 0);
   const totNet = enriched.reduce((s, r) => s + r.net, 0);
 
+  // Load all Dami vouchers linked to these Packi Parchis
+  const damiLinks = await db
+    .select({
+      id: schema.intGreyDespatchDami.id,
+      vNo: schema.intGreyDespatchDami.vNo,
+      vDate: schema.intGreyDespatchDami.vDate,
+      pakki_parchi_id: schema.intGreyDespatchDami.pakki_parchi_id,
+    })
+    .from(schema.intGreyDespatchDami)
+    .where(sql`${schema.intGreyDespatchDami.pakki_parchi_id} IS NOT NULL`);
+    
+  const damiByPP = new Map<number, typeof damiLinks>();
+  for (const d of damiLinks) {
+    if (d.pakki_parchi_id == null) continue;
+    if (!damiByPP.has(d.pakki_parchi_id)) damiByPP.set(d.pakki_parchi_id, []);
+    damiByPP.get(d.pakki_parchi_id)!.push(d);
+  }
+
   const excelRows = enriched.map((r) => ({
     vNo: r.vNo,
     vDate: r.vDate,
@@ -176,33 +194,66 @@ export default async function PackiParchiBillPage({
                 <th className="text-right">Sal Amt</th>
                 <th className="text-right">Commission</th>
                 <th className="text-right">Net</th>
+                <th>Dami Voucher</th>
               </tr>
             </thead>
             <tbody>
               {enriched.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="text-center text-[var(--muted)] py-8">
+                  <td colSpan={12} className="text-center text-[var(--muted)] py-8">
                     No packi parchi records for filters
                   </td>
                 </tr>
               ) : (
-                enriched.map((r) => (
-                  <tr key={r.id}>
-                    <td className="mono font-bold">{r.vNo}</td>
-                    <td className="mono">{r.vDate}</td>
-                    <td className="mono">{r.ppNo ?? "-"}</td>
-                    <td>{r.purchaseParty ?? "-"}</td>
-                    <td>{r.saleParty ?? "-"}</td>
-                    <td>{r.quality ?? "-"}</td>
-                    <td className="mono text-right">{fmt2(r.meterNet ?? 0)}</td>
-                    <td className="mono text-right">{fmt2(r.greyRateKp ?? r.greyRate ?? 0)}</td>
-                    <td className="mono text-right">{fmt(r.greyAmtSal)}</td>
-                    <td className="mono text-right">{fmt(r.commissionTotal)}</td>
-                    <td className={`mono text-right ${r.net < 0 ? "italic underline" : "font-bold"}`}>
-                      {fmt(r.net)}
-                    </td>
-                  </tr>
-                ))
+                enriched.map((r) => {
+                  const damis = damiByPP.get(r.id) ?? [];
+                  return (
+                    <tr key={r.id} className={damis.length > 0 ? "bg-green-50" : ""}>
+                      <td className="mono font-bold">
+                        <a href={`/external/grey/packi-parchi?id=${r.id}`} className="hover:underline">{r.vNo}</a>
+                      </td>
+                      <td className="mono">{r.vDate}</td>
+                      <td className="mono">{r.ppNo ?? "-"}</td>
+                      <td>{r.purchaseParty ?? "-"}</td>
+                      <td>{r.saleParty ?? "-"}</td>
+                      <td>{r.quality ?? "-"}</td>
+                      <td className="mono text-right">{fmt2(r.meterNet ?? 0)}</td>
+                      <td className="mono text-right">{fmt2(r.greyRateKp ?? r.greyRate ?? 0)}</td>
+                      <td className="mono text-right">{fmt(r.greyAmtSal)}</td>
+                      <td className="mono text-right">{fmt(r.commissionTotal)}</td>
+                      <td className={`mono text-right ${r.net < 0 ? "italic underline" : "font-bold"}`}>
+                        {fmt(r.net)}
+                      </td>
+                      <td>
+                        {damis.length === 0 ? (
+                          <span className="text-[11px] text-[var(--muted)]">—</span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {damis.map((d) => (
+                              <div key={d.id} className="flex items-center gap-2">
+                                <span className="inline-block w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                                <a
+                                  href={`/inventory/grey-despatch-dami?id=${d.id}`}
+                                  className="text-[var(--accent)] font-bold text-[12px] mono hover:underline"
+                                >
+                                  {d.vNo}
+                                </a>
+                                <span className="text-[11px] text-[var(--muted)]">{d.vDate}</span>
+                                <a
+                                  href={`/inventory/grey-despatch-dami/${d.id}/voucher`}
+                                  target="_blank"
+                                  className="text-[10px] px-2 py-0.5 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
+                                >
+                                  Voucher
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
             {enriched.length > 0 && (

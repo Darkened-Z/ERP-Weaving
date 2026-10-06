@@ -11,22 +11,6 @@ export default async function PakiParchiPage() {
     .from(schema.greyPakiParchi)
     .orderBy(sql`pp_date DESC`);
 
-  // Load all Dami vouchers that are linked to a Pakki Parchi
-  const damiLinks = await db
-    .select({
-      id: schema.intGreyDespatchDami.id,
-      vNo: schema.intGreyDespatchDami.vNo,
-      vDate: schema.intGreyDespatchDami.vDate,
-      pakki_parchi_id: schema.intGreyDespatchDami.pakki_parchi_id,
-      subParty: schema.intGreyDespatchDami.subParty,
-      than: schema.intGreyDespatchDami.than,
-      mtrs: schema.intGreyDespatchDami.mtrs,
-      printingLocation: schema.intGreyDespatchDami.printingLocation,
-    })
-    .from(schema.intGreyDespatchDami)
-    .where(sql`${schema.intGreyDespatchDami.pakki_parchi_id} IS NOT NULL`)
-    .orderBy(desc(schema.intGreyDespatchDami.id));
-
   // Grey cloth despatches for the same conversion contract. A Pakki Parchi and a
   // despatch meet on the contract, so the parchi can show what has gone out
   // against it without the operator opening the despatch register separately.
@@ -50,21 +34,12 @@ export default async function PakiParchiPage() {
     despByContract.get(k)!.push(d);
   }
 
-  // Build a map: pakki_parchi_id → list of dami vouchers
-  const damiByPP = new Map<number, typeof damiLinks>();
-  for (const d of damiLinks) {
-    if (d.pakki_parchi_id == null) continue;
-    if (!damiByPP.has(d.pakki_parchi_id)) damiByPP.set(d.pakki_parchi_id, []);
-    damiByPP.get(d.pakki_parchi_id)!.push(d);
-  }
-
   const formatNum = (n: number) =>
     new Intl.NumberFormat("en-PK").format(Math.round(n));
 
   const totalThan = rows.reduce((s, r) => s + (r.qtyThan ?? 0), 0);
   const totalNet = rows.reduce((s, r) => s + (r.qtyMtrsNet ?? 0), 0);
   const totalAmt = rows.reduce((s, r) => s + (r.amount ?? 0), 0);
-  const linkedCount = rows.filter((r) => damiByPP.has(r.id)).length;
 
   return (
     <Shell active="paki-parchi">
@@ -72,8 +47,7 @@ export default async function PakiParchiPage() {
         <div className="mb-6">
           <h1 className="page-title">Grey Paki Parchi</h1>
           <p className="text-[13px] text-[var(--muted)] mt-2">
-            {rows.length} delivery receipts &nbsp;·&nbsp;
-            <span className="text-green-600 font-semibold">{linkedCount} linked to Dami Vouchers</span>
+            {rows.length} delivery receipts
           </p>
         </div>
 
@@ -100,14 +74,12 @@ export default async function PakiParchiPage() {
                 <th className="text-right">Rate</th>
                 <th className="text-right">Amount</th>
                 <th>Grey Despatch</th>
-                <th>Dami Voucher</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
-                const damis = damiByPP.get(r.id) ?? [];
                 return (
-                  <tr key={r.id} className={damis.length > 0 ? "bg-green-50" : ""}>
+                  <tr key={r.id}>
                     <td className="mono text-[13px]">{r.ppDate}</td>
                     <td className="mono font-bold">{r.ppNo}</td>
                     <td className="text-[13px]">
@@ -151,33 +123,6 @@ export default async function PakiParchiPage() {
                           </div>
                         );
                       })()}
-                    </td>
-                    <td>
-                      {damis.length === 0 ? (
-                        <span className="text-[11px] text-[var(--muted)]">—</span>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          {damis.map((d) => (
-                            <div key={d.id} className="flex items-center gap-2">
-                              <span className="inline-block w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                              <Link
-                                href={`/inventory/grey-despatch-dami?id=${d.id}`}
-                                className="text-[var(--accent)] font-bold text-[12px] mono hover:underline"
-                              >
-                                {d.vNo}
-                              </Link>
-                              <span className="text-[11px] text-[var(--muted)]">{d.vDate}</span>
-                              <Link
-                                href={`/inventory/grey-despatch-dami/${d.id}/voucher`}
-                                target="_blank"
-                                className="text-[10px] px-2 py-0.5 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
-                              >
-                                Voucher
-                              </Link>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </td>
                   </tr>
                 );
