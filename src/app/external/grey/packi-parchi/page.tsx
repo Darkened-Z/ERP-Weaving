@@ -225,6 +225,8 @@ export default async function PackiParchiPage({
   // Grey Sale picker carries a Term column (the sale term lives on the sale contract).
   const saleContractColumns = [
     { key: "cont", label: "Cont #", width: 88 },
+    { key: "product", label: "Product Code", width: 100 },
+    { key: "qty", label: "meter contract", width: 94, align: "right" as const },
     { key: "quality", label: "Quality (read×pick warp×weft)" },
     { key: "rate", label: "Rate", width: 70, align: "right" as const },
     { key: "term", label: "Term", width: 74 },
@@ -232,6 +234,8 @@ export default async function PackiParchiPage({
   ];
   const convContractColumns = [
     { key: "cont", label: "Cont #", width: 88 },
+    { key: "product", label: "Product Code", width: 100 },
+    { key: "qty", label: "meter contract", width: 94, align: "right" as const },
     { key: "quality", label: "Quality (read×pick warp×weft)" },
     { key: "rate", label: "Rate", width: 70, align: "right" as const },
     { key: "date", label: "Date", width: 86 },
@@ -248,14 +252,14 @@ export default async function PackiParchiPage({
     const con = c.greyCode ? constByCode.get(c.greyCode) : undefined;
     return {
       value: c.contractNo, code: c.contractNo, description: c.party ?? "", filterKey: c.party ?? "",
-      cells: { cont: c.contractNo, quality: con ? richConstruction(con) : (c.greyCode ?? ""), rate: fmtN(c.ratePerMtr, 2), term: saleTermText(c), date: c.contractDate ?? "" },
+      cells: { cont: c.contractNo, product: c.greyCode ?? "", qty: fmtN(c.quantityMtr), quality: con ? richConstruction(con) : (c.greyCode ?? ""), rate: fmtN(c.ratePerMtr, 2), term: saleTermText(c), date: c.contractDate ?? "" },
     };
   });
   const convContractFindRows = convContracts.map((c) => {
     const con = c.grayQltyCode ? constByCode.get(c.grayQltyCode) : undefined;
     return {
       value: c.contNo, code: c.contNo, description: c.party ?? "", filterKey: c.party ?? "",
-      cells: { cont: c.contNo, quality: con ? richConstruction(con) : (c.grayQltyCode ?? ""), rate: fmtN(c.grayRatePerMtr, 2), date: c.contDate ?? "" },
+      cells: { cont: c.contNo, product: c.productName ?? "", qty: fmtN(c.qtyMtr), quality: con ? richConstruction(con) : (c.grayQltyCode ?? ""), rate: fmtN(c.grayRatePerMtr, 2), date: c.contDate ?? "" },
     };
   });
   const salContractMap: Record<string, Record<string, string | number | null>> = Object.fromEntries(
