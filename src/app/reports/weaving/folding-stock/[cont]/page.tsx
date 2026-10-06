@@ -173,7 +173,7 @@ export default async function FoldingStockDetailPage({
   .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
 }`}</style>
         <div className="overflow-x-auto">
-          <table className="w-auto mx-auto sm:mx-0 text-[12px] print:text-[10px]">
+          <table className="w-full text-[12px] print:text-[10px]">
             <thead>
               <tr>
                 <th>Date</th>
