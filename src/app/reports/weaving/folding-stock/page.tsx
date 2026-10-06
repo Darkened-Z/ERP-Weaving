@@ -285,7 +285,7 @@ export default async function FoldingStockPage({
   .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
 }`}</style>
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 1300 }}>
+          <table className="w-full">
             <thead>
               <tr>
                 <th>Quality</th>
