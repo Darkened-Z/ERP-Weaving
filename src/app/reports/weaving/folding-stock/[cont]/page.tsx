@@ -167,13 +167,13 @@ export default async function FoldingStockDetailPage({
         </div>
 
         <style>{`@media print {
-  @page { size: A4 landscape; margin: 10mm; }
+  @page { size: A4 portrait; margin: 10mm; }
   .overflow-x-auto { overflow: visible !important; }
-  .overflow-x-auto table { min-width: 0 !important; width: 100% !important; font-size: 11px; }
+  .overflow-x-auto table { min-width: 0 !important; width: 100% !important; font-size: 10px; }
   .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
 }`}</style>
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 1040 }}>
+          <table className="w-auto mx-auto sm:mx-0 text-[12px] print:text-[10px]">
             <thead>
               <tr>
                 <th>Date</th>
