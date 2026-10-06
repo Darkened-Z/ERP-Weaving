@@ -193,6 +193,7 @@ export default async function GodownStockPage({
   };
   const contractColumns = [
     { key: "cont", label: "Cont #", width: 88 },
+    { key: "product", label: "Product Code", width: 100 },
     { key: "quality", label: "Quality" },
     { key: "party", label: "Party" },
     { key: "qty", label: "Qty", width: 84, align: "right" as const },
@@ -209,7 +210,8 @@ export default async function GodownStockPage({
       filterKey: c.party ?? "",
       cells: {
         cont: c.contNo,
-        quality: qlty,
+          product: c.productName ?? "",
+          quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
         rate: fmtN(c.grayRatePerMtr, 2),
@@ -308,7 +310,8 @@ export default async function GodownStockPage({
       filterKey: c.party ?? "",
       cells: {
         cont: c.contractNo,
-        quality: qlty,
+          product: "",
+          quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.quantityMtr),
         rate: fmtN(c.ratePerMtr, 2),
@@ -326,7 +329,8 @@ export default async function GodownStockPage({
       filterKey: c.party ?? "",
       cells: {
         cont: c.contractNo,
-        quality: qlty,
+          product: "",
+          quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.quantityMtr),
         rate: fmtN(c.ratePerMtr, 2),
@@ -344,7 +348,8 @@ export default async function GodownStockPage({
       filterKey: c.party ?? "",
       cells: {
         cont: c.contNo,
-        quality: qlty,
+          product: c.productName ?? "",
+          quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
         rate: fmtN(c.grayRatePerMtr, 2),
@@ -481,7 +486,8 @@ export default async function GodownStockPage({
       filterKey: c.party ?? "",
       cells: {
         cont: c.contNo,
-        quality: qlty,
+          product: c.productName ?? "",
+          quality: qlty,
         party: c.party ?? "",
         qty: fmtN(c.qtyMtr),
         rate: fmtN(c.grayRatePerMtr, 2),
