@@ -58,21 +58,31 @@ export default async function GreySaleAvgPage({
   const despatchByContNo = new Map(despatchRows.map((d) => [d.contNo, d.totalMeter]));
 
   const despatchDetailRows = await db
-    .select({
-      contNo: schema.extPackiParchi.convContNoSale,
-      party: schema.extPackiParchi.saleParty,
-      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
-      lots: sql<number>`count(*)`,
-    })
-    .from(schema.extPackiParchi)
-    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != ''`)
-    .groupBy(schema.extPackiParchi.convContNoSale, schema.extPackiParchi.saleParty);
-  const despatchDetailByContNo = new Map<string, { party: string; totalMeter: number; lots: number }[]>();
-  for (const d of despatchDetailRows) {
-    const key = d.contNo ?? "";
-    if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
-    despatchDetailByContNo.get(key)!.push({ party: d.party ?? "-", totalMeter: d.totalMeter, lots: d.lots });
-  }
+      .select({
+        contNo: schema.extPackiParchi.convContNoSale,
+        party: schema.extPackiParchi.saleParty,
+        vNo: schema.extPackiParchi.vNo,
+        meterNet: schema.extPackiParchi.meterNet,
+      })
+      .from(schema.extPackiParchi)
+      .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != '`);
+  type LotSummary = { party: string; totalMeter: number; lots: number; lotsList: { vNo: string; meter: number }[] };
+    const despatchDetailByContNo = new Map<string, LotSummary[]>();
+    for (const d of despatchDetailRows) {
+      const key = d.contNo ?? "";
+      const party = d.party ?? "-";
+      if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
+      let arr = despatchDetailByContNo.get(key)!;
+      let partyObj = arr.find((x) => x.party === party);
+      if (!partyObj) {
+        partyObj = { party, totalMeter: 0, lots: 0, lotsList: [] };
+        arr.push(partyObj);
+      }
+      const m = d.meterNet ?? 0;
+      partyObj.totalMeter += m;
+      partyObj.lots += 1;
+      if (d.vNo) partyObj.lotsList.push({ vNo: d.vNo, meter: m });
+    }
 
   const allIds = allContracts.map((c) => c.id);
   const allWarpRows = allIds.length
@@ -310,11 +320,19 @@ export default async function GreySaleAvgPage({
                       {r.despatch ? (
                         <div>
                           <div className="font-bold">{fmt2(r.despatch)}</div>
-                          {r.despatchDetail.map((d, di) => (
-                            <div key={di} className="text-[10px] text-[var(--muted)] text-left" style={{ lineHeight: 1.4 }}>
-                              {d.party} — {fmt2(d.totalMeter)} ({d.lots})
-                            </div>
-                          ))}
+{r.despatchDetail.map((d: any, di: number) => (
+                              <div key={di} className="text-[10px] text-[var(--muted)] text-left mt-1" style={{ lineHeight: 1.4 }}>
+                                <div className="font-semibold text-gray-800">{d.party}</div>
+                                {d.lotsList.map((l: any, li: number) => (
+                                  <div key={li} className="pl-1 text-gray-600">
+                                    <span className="font-semibold text-gray-700">{l.vNo}</span>: {fmt2(l.meter)}
+                                  </div>
+                                ))}
+                                <div className="border-t border-gray-200 mt-0.5 pt-0.5 font-semibold text-gray-700">
+                                  Total: {fmt2(d.totalMeter)} ({d.lots})
+                                </div>
+                              </div>
+                            ))}
                         </div>
                       ) : ""}
                     </td>

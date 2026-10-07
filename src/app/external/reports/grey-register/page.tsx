@@ -163,21 +163,32 @@ export default async function GreyRegisterPage({
     .select({
       contNo: schema.extPackiParchi.convContNoSale,
       party: schema.extPackiParchi.saleParty,
-      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
-      lots: sql<number>`count(*)`,
+      vNo: schema.extPackiParchi.vNo,
+      meterNet: schema.extPackiParchi.meterNet,
     })
     .from(schema.extPackiParchi)
-    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != ''`)
-    .groupBy(schema.extPackiParchi.convContNoSale, schema.extPackiParchi.saleParty);
+    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != '`);
 
-  const despatchDetailByContNo = new Map<string, { party: string; totalMeter: number; lots: number }[]>();
+  type LotSummary = { party: string; totalMeter: number; lots: number; lotsList: { vNo: string; meter: number }[] };
+  const despatchDetailByContNo = new Map<string, LotSummary[]>();
   const despatchTotalByContNo = new Map<string, number>();
 
   for (const d of despatchDetailRows) {
     const key = d.contNo ?? "";
+    const party = d.party ?? "-";
     if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
-    despatchDetailByContNo.get(key)!.push({ party: d.party ?? "-", totalMeter: d.totalMeter, lots: d.lots });
-    despatchTotalByContNo.set(key, (despatchTotalByContNo.get(key) ?? 0) + d.totalMeter);
+    let arr = despatchDetailByContNo.get(key)!;
+    let partyObj = arr.find((x) => x.party === party);
+    if (!partyObj) {
+      partyObj = { party, totalMeter: 0, lots: 0, lotsList: [] };
+      arr.push(partyObj);
+    }
+    const m = d.meterNet ?? 0;
+    partyObj.totalMeter += m;
+    partyObj.lots += 1;
+    if (d.vNo) partyObj.lotsList.push({ vNo: d.vNo, meter: m });
+
+    despatchTotalByContNo.set(key, (despatchTotalByContNo.get(key) ?? 0) + m);
   }
 
   const purRows = await db.select().from(schema.extGreyPurContract).where(and(...purConditions));
@@ -468,11 +479,19 @@ export default async function GreyRegisterPage({
                         {r.despatch ? (
                           <div>
                             <div className="font-bold">{fmt2(r.despatch)}</div>
-                            {r.despatchDetail?.map((d, di) => (
-                              <div key={di} className="text-[10px] text-[var(--muted)] text-left" style={{ lineHeight: 1.4 }}>
-                                {d.party} - {fmt2(d.totalMeter)} ({d.lots})
-                              </div>
-                            ))}
+{r.despatchDetail?.map((d: any, di: number) => (
+                                <div key={di} style={{ fontSize: "10px", color: "#333", textAlign: "left", lineHeight: 1.4, marginTop: "4px" }}>
+                                  <div style={{ fontWeight: 600 }}>{d.party}</div>
+                                  {d.lotsList.map((l: any, li: number) => (
+                                    <div key={li} style={{ paddingLeft: "4px", color: "#666" }}>
+                                      <span style={{ fontWeight: 600 }}>{l.vNo}</span>: {fmt2(l.meter)}
+                                    </div>
+                                  ))}
+                                  <div style={{ borderTop: "1px solid #ddd", marginTop: "2px", paddingTop: "2px", fontWeight: 600 }}>
+                                    Total: {fmt2(d.totalMeter)} ({d.lots})
+                                  </div>
+                                </div>
+                              ))}
                           </div>
                         ) : "-"}
                       </td>
