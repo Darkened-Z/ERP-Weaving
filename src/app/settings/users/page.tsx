@@ -52,7 +52,7 @@ async function save(formData: FormData) {
     }
   } catch (e) {
     if (isUniqueViolation(e)) redirect(`${BASE}?${id ? `id=${id}&` : ""}error=exists`);
-    throw e;
+    redirect(BASE + "?error=" + encodeURIComponent((e as any).message || "Unknown error"));
   }
 }
 
@@ -71,7 +71,7 @@ async function remove(formData: FormData) {
     if (e.message?.includes("FOREIGN KEY")) {
       redirect(BASE + "?error=in_use");
     }
-    throw e;
+    console.error("Remove Error:", e); throw e;
   }
   revalidatePath(BASE);
   redirect(BASE);
@@ -171,6 +171,11 @@ export default async function UsersPage({
               {params.error === "in_use" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   Cannot delete user because they have created or interacted with records (tickets, vouchers, etc).
+                </div>
+              )}
+              {params.error && !["in_use", "self_delete", "admin_only", "pw_required", "exists"].includes(params.error) && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px] break-all">
+                  System Error: {params.error}
                 </div>
               )}
               {params.error === "exists" && (
