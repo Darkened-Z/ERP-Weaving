@@ -1,4 +1,5 @@
-import { Shell } from "@/components/shell";
+import { Shell, SECTIONS } from "@/components/shell";
+import { ModuleSelector } from "./module-selector";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
@@ -22,9 +23,12 @@ async function save(formData: FormData) {
   const roleName = (formData.get("roleName") as string).trim().toUpperCase();
   const status = (formData.get("status") as string) || "A";
   const password = (formData.get("password") as string) || "";
-  let allowedModules = (formData.get("allowedModules") as string) || "";
-  allowedModules = allowedModules.trim();
-  if (allowedModules === "") allowedModules = null as any; // Store NULL if empty
+  const accessMode = formData.get("accessMode") as string;
+  let allowedModules: string | null = null;
+  if (accessMode === "RESTRICTED") {
+    const mods = formData.getAll("allowedModules") as string[];
+    allowedModules = mods.join(",");
+  }
 
   if (!login || !fullName || !roleName) redirect(`${BASE}?error=required`);
 
@@ -222,15 +226,7 @@ export default async function UsersPage({
                     </select>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="label block mb-1">
-                      Allowed Modules (Keys separated by comma, e.g. "dash,tickets". Leave blank for all)
-                    </label>
-                    <input
-                      name="allowedModules"
-                      type="text"
-                      className="input-box mono"
-                      defaultValue={selected?.allowedModules ?? ""}
-                    />
+                    <ModuleSelector sections={SECTIONS} initialAllowed={selected?.allowedModules ?? null} />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="label block mb-1">

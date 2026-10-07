@@ -2,7 +2,7 @@ import { requireSession, logout } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ShellLayout } from "./shell-layout";
 
-const SECTIONS = [
+export const SECTIONS = [
   {
     label: null,
     items: [
