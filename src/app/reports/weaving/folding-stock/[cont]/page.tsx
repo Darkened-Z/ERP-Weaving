@@ -166,8 +166,20 @@ export default async function FoldingStockDetailPage({
           </div>
         </div>
 
-        <style>{`@media print {
-  @page { size: A4 portrait; margin: 10mm; }
+        
+        <div className="hidden print:block mb-4 border-2 border-black p-2 mt-4 mx-2">
+          <div className="text-center font-bold text-[16px] uppercase tracking-wide">PENDING FOLDING PRODUCTION LEDGER</div>
+          <div className="text-center text-[12px] mb-2 uppercase">FROM: {from} TO: {to}</div>
+          <div className="flex justify-between font-bold border-t border-black pt-1">
+            <div className="text-blue-700 text-[14px] uppercase">{contract?.party ?? ""}</div>
+            <div className="text-[12px] text-blue-700 uppercase flex gap-4">
+              <span>{contract?.quality ?? ""}</span>
+              <span className="text-red-600">{cont}</span>
+            </div>
+          </div>
+        </div>
+
+        <style>{`@media print {\n  @page { size: A4 portrait; margin: 10mm; }
   .overflow-x-auto { overflow: visible !important; }
   .overflow-x-auto table { min-width: 0 !important; width: 100% !important; font-size: 10px; }
   .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
@@ -208,10 +220,10 @@ export default async function FoldingStockDetailPage({
                       <td className="mono text-[12px]">{e.date}</td>
                       <td className="mono text-[12px] font-bold">{e.vNo}</td>
                       <td className="text-[11px] font-semibold">{e.kind === "P" ? "PROD" : "DESP"}</td>
-                      <td className="mono text-right">{e.kind === "P" ? fmt2(e.a ?? 0) : ""}</td>
-                      <td className="mono text-right">{e.kind === "P" ? fmt2(e.b ?? 0) : ""}</td>
-                      <td className="mono text-right">{e.kind === "P" ? fmt2(e.c ?? 0) : ""}</td>
-                      <td className="mono text-right">{e.kind === "P" ? fmt2(e.cp ?? 0) : ""}</td>
+                      <td className="mono text-right">{e.kind === "P" && e.a ? fmt2(e.a) : ""}</td>
+                      <td className="mono text-right">{e.kind === "P" && e.b ? fmt2(e.b) : ""}</td>
+                      <td className="mono text-right">{e.kind === "P" && e.c ? fmt2(e.c) : ""}</td>
+                      <td className="mono text-right">{e.kind === "P" && e.cp ? fmt2(e.cp) : ""}</td>
                       <td className="mono text-right">{e.inQty ? fmt(e.inQty) : ""}</td>
                       <td className="mono text-right">{e.outQty ? fmt(e.outQty) : ""}</td>
                       <td className="mono text-[12px]">{e.than || "—"}</td>
