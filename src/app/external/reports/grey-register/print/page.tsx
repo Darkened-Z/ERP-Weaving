@@ -143,7 +143,7 @@ export default async function GreyRegisterPrintPage({
       lots: sql<number>`count(*)`,
     })
     .from(schema.extPackiParchi)
-    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != '`)
+    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != ''`)
     .groupBy(schema.extPackiParchi.convContNoSale, schema.extPackiParchi.saleParty);
 
   const despatchDetailByContNo = new Map<string, { party: string; totalMeter: number; lots: number }[]>();
