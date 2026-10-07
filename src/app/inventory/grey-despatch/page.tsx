@@ -29,7 +29,7 @@ const VTYPE = "GDP";
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-const LINE_ROWS = 20;
+const LINE_ROWS = 500;
 const COUNT_ROWS = 5;
 
 export default async function GreyDespatchPage({
