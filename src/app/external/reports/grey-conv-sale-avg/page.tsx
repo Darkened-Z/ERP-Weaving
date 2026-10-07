@@ -86,7 +86,7 @@ export default async function GreyConvSaleAvgPage({
         meterNet: schema.extPackiParchi.meterNet,
       })
       .from(schema.extPackiParchi)
-      .where(sql`conv_cont_no is not null and conv_cont_no != '`);
+      .where(sql`conv_cont_no is not null and conv_cont_no != ''`);
     const detailB = await db
       .select({
         contNo: schema.extPackiParchi.convContSale2,
@@ -95,7 +95,7 @@ export default async function GreyConvSaleAvgPage({
         meterNet: schema.extPackiParchi.meterNet,
       })
       .from(schema.extPackiParchi)
-      .where(sql`conv_cont_sale2 is not null and conv_cont_sale2 != '`);
+      .where(sql`conv_cont_sale2 is not null and conv_cont_sale2 != ''`);
   type LotSummary = { party: string; totalMeter: number; lots: number; lotsList: { vNo: string; meter: number }[] };
     const despatchDetailByContNo = new Map<string, LotSummary[]>();
     for (const d of [...detailA, ...detailB]) {
