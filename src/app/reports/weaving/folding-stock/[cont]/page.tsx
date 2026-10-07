@@ -166,24 +166,27 @@ export default async function FoldingStockDetailPage({
           </div>
         </div>
 
-        
-        <div className="hidden print:block mb-4 border-2 border-black p-2 mt-4 mx-2" style={{ pageBreakInside: "avoid" }}>
-          <div className="text-center font-bold text-[16px] uppercase tracking-wide">PENDING FOLDING PRODUCTION LEDGER</div>
-          <div className="text-center text-[12px] mb-2 uppercase">FROM: {from} TO: {to}</div>
-          <div className="font-bold border-t border-black pt-1" style={{ display: "table", width: "100%" }}>
-            <div className="text-blue-700 text-[14px] uppercase" style={{ display: "table-cell", textAlign: "left" }}>{contract?.party ?? ""}</div>
-            <div className="text-[12px] text-blue-700 uppercase" style={{ display: "table-cell", textAlign: "right" }}>
-              <span style={{ marginRight: "16px" }}>{contract?.quality ?? ""}</span>
-              <span className="text-red-600">{cont}</span>
-            </div>
-          </div>
-        </div>
-
-        <style>{`@media print {\n  @page { size: A4 portrait; margin: 10mm; }\n  body, html, main, .flex { display: block !important; height: auto !important; min-height: 0 !important; }
+        <style>{`@media print {
+  @page { size: A4 portrait; margin: 10mm; }
   .overflow-x-auto { overflow: visible !important; }
   .overflow-x-auto table { min-width: 0 !important; width: 100% !important; font-size: 10px; }
   .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
 }`}</style>
+        
+        <div className="hidden print:block mb-2 text-black">
+          <div className="text-center font-bold text-[16px]">PENDING FOLDING PRODUCTION LEDGER</div>
+          <div className="text-center text-[12px] mb-2">FROM: {from} TO: {to}</div>
+          <table className="w-full border-t border-b border-black text-[12px] font-bold">
+            <tbody>
+              <tr>
+                <td className="text-left py-1 text-blue-700">{contract?.party ?? ""}</td>
+                <td className="text-right py-1 text-blue-700">
+                  {contract?.quality ?? ""} &nbsp;&nbsp; <span className="text-red-600">{cont}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[12px] print:text-[10px]">
             <thead>
