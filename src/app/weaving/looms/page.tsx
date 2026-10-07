@@ -481,7 +481,7 @@ export default async function LoomsPage({
                 return (
                   <Fragment key={l.id}>
                     {showShedHeader && (
-                      <tr key={`h-${l.shed}`} style={{ background: "#0f172a", color: "white" }}>
+                      <tr key={`h-${l.shed}`} className="bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                         <td colSpan={10} className="mono text-[11px] font-bold uppercase tracking-wide px-3 py-1">
                           Shed {l.shed} · {shedCount} looms
                         </td>

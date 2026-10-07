@@ -333,7 +333,7 @@ export default async function WeavingCountLedgerPage({
                 <tr><td colSpan={14} className="text-center text-[var(--muted)] py-8">No consumption for this party + count in period</td></tr>
               ) : (
                 contGroups.flatMap((g) => [
-                  <tr key={`h-${g.cont}`} style={{ background: "#0f172a", color: "white" }}>
+                  <tr key={`h-${g.cont}`} className="bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                     <td colSpan={14} className="mono font-bold text-[12px] px-2 py-1">
                       <span>CONV.C# {g.cont}</span>
                       {g.info.construction && <span className="ml-3 font-normal">{g.info.construction}</span>}
