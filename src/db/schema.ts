@@ -7,6 +7,7 @@ export const users = sqliteTable("users", {
   fullName: text("full_name").notNull(),
   roleName: text("role_name").notNull(),
   status: text("status").notNull().default("A"),
+  allowedModules: text("allowed_modules"),
 });
 
 export const companyProfile = sqliteTable("company_profile", {

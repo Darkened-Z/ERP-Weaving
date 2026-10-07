@@ -66,6 +66,7 @@ export default async function GreyStockAccountLedgerPage({
       vDate: schema.extPackiParchi.vDate,
       party: schema.extPackiParchi.saleParty,
       quality: schema.extPackiParchi.quality,
+      qualityPrint: schema.extPackiParchi.qualityPrint,
       than: schema.extPackiParchi.than,
       meterNet: schema.extPackiParchi.meterNet,
       greyRate: schema.extPackiParchi.greyRate,
@@ -103,7 +104,7 @@ export default async function GreyStockAccountLedgerPage({
         vNo: s.vNo ?? "",
         kind: "CR" as const,
         party: s.party ?? "—",
-        narration: `${s.than ?? 0} THAN ${fmt(mtr)} MTR @ ${s.greyRate ?? 0}${s.quality ? ` , ${s.quality}` : ""} (PACKI SALE)`,
+        narration: `${s.than ?? 0} THAN ${fmt(mtr)} MTR @ ${s.greyRate ?? 0}${(s.qualityPrint || s.quality) ? ` , ${s.qualityPrint || s.quality}` : ""} (PACKI SALE)`,
         dr: 0,
         cr: Math.round(mtr * (s.greyRate ?? 0)),
       };

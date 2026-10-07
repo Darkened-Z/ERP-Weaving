@@ -17,6 +17,7 @@ export type Session = {
   login: string;
   fullName: string;
   roleName: string;
+  allowedModules?: string[] | null;
 };
 
 function sign(payload: string): Buffer {
