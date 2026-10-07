@@ -45,7 +45,7 @@ export function verifyToken(raw: string | undefined | null): Session | null {
   try {
     const data = JSON.parse(Buffer.from(payload, "base64").toString("utf-8")) as Session & { exp?: number };
     if (typeof data.exp !== "number" || data.exp * 1000 < Date.now()) return null;
-    return { userId: data.userId, login: data.login, fullName: data.fullName, roleName: data.roleName };
+    return { userId: data.userId, login: data.login, fullName: data.fullName, roleName: data.roleName, allowedModules: data.allowedModules };
   } catch {
     return null;
   }
