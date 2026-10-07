@@ -4,6 +4,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { isUniqueViolation } from "@/lib/db-errors";
 import bcrypt from "bcryptjs";
@@ -37,6 +38,7 @@ async function save(formData: FormData) {
       const set: any = { login, fullName, roleName, status, allowedModules };
       if (password) set.password = await bcrypt.hash(password, 10);
       await db.update(schema.users).set(set).where(eq(schema.users.id, Number(id)));
+      revalidatePath(BASE);
       redirect(`${BASE}?id=${id}`);
     } else {
       if (!password) redirect(`${BASE}?error=pw_required`);
@@ -45,6 +47,7 @@ async function save(formData: FormData) {
         .insert(schema.users)
         .values({ login, password: hashed, fullName, roleName, status, allowedModules })
         .returning();
+      revalidatePath(BASE);
       redirect(`${BASE}?id=${row.id}`);
     }
   } catch (e) {
@@ -55,9 +58,22 @@ async function save(formData: FormData) {
 
 async function remove(formData: FormData) {
   "use server";
-  await requireAdmin(BASE);
+  const session = await requireAdmin(BASE);
   const id = Number(formData.get("id"));
-  await db.delete(schema.users).where(eq(schema.users.id, id));
+  
+  if (session.userId === id) {
+    redirect(BASE + "?error=self_delete");
+  }
+
+  try {
+    await db.delete(schema.users).where(eq(schema.users.id, id));
+  } catch (e: any) {
+    if (e.message?.includes("FOREIGN KEY")) {
+      redirect(BASE + "?error=in_use");
+    }
+    throw e;
+  }
+  revalidatePath(BASE);
   redirect(BASE);
 }
 
@@ -147,6 +163,16 @@ export default async function UsersPage({
                 </div>
               </div>
 
+              {params.error === "self_delete" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  You cannot delete your own account.
+                </div>
+              )}
+              {params.error === "in_use" && (
+                <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
+                  Cannot delete user because they have created or interacted with records (tickets, vouchers, etc).
+                </div>
+              )}
               {params.error === "exists" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
                   That login already exists.
