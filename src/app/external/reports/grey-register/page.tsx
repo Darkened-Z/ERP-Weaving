@@ -30,6 +30,7 @@ const STATUS_OPTIONS = [
 ];
 
 type Row = {
+  
   type: "PUR" | "SAL";
   id: number;
   contractNo: string;
@@ -42,6 +43,9 @@ type Row = {
   amount: number | null;
   extMtr: number | null;
   status: string;
+
+  despatch?: number | null;
+  despatchDetail?: { party: string; totalMeter: number; lots: number }[];
 };
 
 export default async function GreyRegisterPage({
@@ -154,7 +158,30 @@ export default async function GreyRegisterPage({
   const partyCodeByName = new Map(accountRows.map((r) => [r.description, r.code]));
   const greyDescMap = new Map(greyRows.map((r) => [r.code, r.description]));
 
+  
+  const despatchDetailRows = await db
+    .select({
+      contNo: schema.extPackiParchi.convContNoSale,
+      party: schema.extPackiParchi.saleParty,
+      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
+      lots: sql<number>`count(*)`,
+    })
+    .from(schema.extPackiParchi)
+    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != '`)
+    .groupBy(schema.extPackiParchi.convContNoSale, schema.extPackiParchi.saleParty);
+
+  const despatchDetailByContNo = new Map<string, { party: string; totalMeter: number; lots: number }[]>();
+  const despatchTotalByContNo = new Map<string, number>();
+
+  for (const d of despatchDetailRows) {
+    const key = d.contNo ?? "";
+    if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
+    despatchDetailByContNo.get(key)!.push({ party: d.party ?? "-", totalMeter: d.totalMeter, lots: d.lots });
+    despatchTotalByContNo.set(key, (despatchTotalByContNo.get(key) ?? 0) + d.totalMeter);
+  }
+
   const purRows = await db.select().from(schema.extGreyPurContract).where(and(...purConditions));
+
   const salRows = await db.select().from(schema.extGreySalContract).where(and(...salConditions));
 
   const combined: Row[] = [
@@ -171,6 +198,8 @@ export default async function GreyRegisterPage({
       amount: r.amount,
       extMtr: r.extMtr,
       status: r.status,
+      despatch: despatchTotalByContNo.get(r.contractNo) ?? 0,
+      despatchDetail: despatchDetailByContNo.get(r.contractNo) ?? [],
     })),
     ...salRows.map((r) => ({
       type: "SAL" as const,
@@ -185,6 +214,8 @@ export default async function GreyRegisterPage({
       amount: r.amount,
       extMtr: r.extMtr,
       status: r.status,
+      despatch: despatchTotalByContNo.get(r.contractNo) ?? 0,
+      despatchDetail: despatchDetailByContNo.get(r.contractNo) ?? [],
     })),
   ].sort((a, b) => (b.contractDate ?? "").localeCompare(a.contractDate ?? ""));
 
@@ -252,6 +283,7 @@ export default async function GreyRegisterPage({
                 { key: "greyCode", label: "Grey Code" },
                 { key: "weave", label: "Weave" },
                 { key: "quantityMtr", label: "Qty Mtr" },
+                { key: "despatch", label: "Despatch" },
                 { key: "ratePerMtr", label: "Rate/Mtr" },
                 { key: "amount", label: "Amount" },
                 { key: "extMtr", label: "Ext Mtr" },
@@ -400,7 +432,8 @@ export default async function GreyRegisterPage({
                 <th className="text-right">Qty Mtr</th>
                 <th className="text-right">Rate/Mtr</th>
                 <th className="text-right">Amount</th>
-                <th className="text-right">Ext Mtr</th>
+                <th className="text-right">Despatch</th>
+                  <th className="text-right">Ext Mtr</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -431,7 +464,19 @@ export default async function GreyRegisterPage({
                     <td className="mono text-right">{r.quantityMtr != null ? fmt(r.quantityMtr) : "-"}</td>
                     <td className="mono text-right">{r.ratePerMtr != null ? fmt2(r.ratePerMtr) : "-"}</td>
                     <td className="mono text-right font-bold">{r.amount != null ? fmt(r.amount) : "-"}</td>
-                    <td className="mono text-right">{r.extMtr != null ? fmt(r.extMtr) : "-"}</td>
+                    <td className="mono text-right">
+                        {r.despatch ? (
+                          <div>
+                            <div className="font-bold">{fmt2(r.despatch)}</div>
+                            {r.despatchDetail?.map((d, di) => (
+                              <div key={di} className="text-[10px] text-[var(--muted)] text-left" style={{ lineHeight: 1.4 }}>
+                                {d.party} - {fmt2(d.totalMeter)} ({d.lots})
+                              </div>
+                            ))}
+                          </div>
+                        ) : "-"}
+                      </td>
+                      <td className="mono text-right">{r.extMtr != null ? fmt(r.extMtr) : "-"}</td>
                     <td>{statusBadge(r.status)}</td>
                   </tr>
                 ))
