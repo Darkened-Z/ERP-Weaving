@@ -1828,7 +1828,7 @@ export default async function DailyProductionPage({
                 <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black mono">
                   Row 1 here = Row 1 in BEAM DETAILS above. Than serial auto-fills per row — /A, /B, /C by row, one beam can weave many thans.
                 </div>              </div>
-              <div className="space-y-6">
+              <div className="space-y-6 min-w-0">
                   <div className="border border-black p-4">
                     <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-3 text-[var(--muted)]">PRODUCT</div>
                     <div className="grid grid-cols-1 gap-3 gform">
@@ -1860,7 +1860,8 @@ export default async function DailyProductionPage({
                     {/* One box per party, each carrying its own yarn spec. Plain
                         grids — a gform here would force label-left, 2 per row. */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="border border-black p-3 space-y-2">
+                    {/* min-w-0 added to prevent grid blowout */}
+                      <div className="border border-black p-3 space-y-2 min-w-0">
                         <div>
                           <label className="label block mb-1">Beam Cost Party <span className="text-[9px] text-[var(--muted)]">(weaving)</span></label>
                           <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
@@ -1870,7 +1871,7 @@ export default async function DailyProductionPage({
                           <input name="beamWeftInfo" className={infoCls} defaultValue={editingSpec.beamWeftInfo} readOnly tabIndex={-1} />
                         </div>
                       </div>
-                      <div className="border border-black p-3 space-y-2">
+                      <div className="border border-black p-3 space-y-2 min-w-0">
                         <div>
                           <label className="label block mb-1">Yarn Cost Party</label>
                           <Combobox name="convContParty" options={convPartyOpts} defaultValue={editing?.convContParty ?? ""} placeholder="Select party" />
@@ -1888,7 +1889,7 @@ export default async function DailyProductionPage({
                           <input name="yarnReadPick" className={infoCls} defaultValue={editingSpec.yarnReadPick} readOnly tabIndex={-1} />
                         </div>
                       </div>
-                      <div className="border border-black p-3 space-y-2">
+                      <div className="border border-black p-3 space-y-2 min-w-0">
                         <div>
                           <label className="label block mb-1">Szg Party</label>
                           <Combobox name="szgParty" options={szgPartyOpts} defaultValue={editing?.szgParty ?? ""} placeholder="Select sizing party" />
