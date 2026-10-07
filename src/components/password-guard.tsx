@@ -1,4 +1,3 @@
-
 "use client";
 import { useEffect } from "react";
 
@@ -43,7 +42,7 @@ export function PasswordGuard({
              box.style.color = "var(--danger)";
              form.parentElement?.insertBefore(box, form);
            }
-           box.textContent = "Incorrect password. Nothing was sent — what you typed is still here.";
+           box.textContent = "Incorrect password. Nothing was sent - what you typed is still here.";
            box.scrollIntoView({ block: "center", behavior: "smooth" });
            passEl.focus();
            return;
@@ -70,4 +69,3 @@ export function PasswordGuard({
 
   return null;
 }
-
