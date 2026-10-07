@@ -225,7 +225,7 @@ export default async function AgingDebtorsPage({
             <tbody>
               {groups.map((g) => (
                 <Fragment key={g.head}>
-                  <tr style={{ background: "#0f172a", color: "white" }}>
+                  <tr className="bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                     <td colSpan={8} className="font-bold text-[12px] px-2 py-1">
                       <span className="mono opacity-70">{g.head}</span> {g.name}
                     </td>

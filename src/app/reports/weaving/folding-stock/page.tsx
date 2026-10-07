@@ -313,7 +313,7 @@ export default async function FoldingStockPage({
                     { opening: 0, production: 0, rejection: 0, despatch: 0, total: 0, balance: 0, thanOpen: 0, thanDesp: 0, thanBal: 0, totalThanBal: 0 },
                   );
                   return [
-                    <tr key={`h-${party}`} style={{ background: "#0f172a", color: "white" }}>
+                    <tr key={`h-${party}`} className="bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                       <td colSpan={16} className="mono font-bold text-[12px] px-2 py-1">{party}</td>
                     </tr>,
                     ...prs.map((r) => (

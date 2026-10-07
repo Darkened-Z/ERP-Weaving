@@ -187,8 +187,7 @@ export default async function CashBookDayPage({
           days.map((day) => (
             <div key={day.date} className="mb-8">
               <div
-                className="px-3 py-1.5 mb-3 border-2 border-black font-bold text-[13px] uppercase tracking-[0.08em]"
-                style={{ background: "#0f172a", color: "white" }}
+                className="px-3 py-1.5 mb-3 border-2 border-black font-bold text-[13px] uppercase tracking-[0.08em] bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black"
               >
                 For the date {day.date}
               </div>

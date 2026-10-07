@@ -282,7 +282,7 @@ export async function CountsAccountsPartyWiseReport({
                 </thead>
                 {partyBlocks.map((pb) => (
                   <tbody key={pb.party}>
-                    <tr style={{ background: "#0f172a", color: "white" }}>
+                    <tr className="bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                       <td className="px-2 py-1.5 font-bold text-[13px]" colSpan={5}>
                         {pb.party} <span className="opacity-70">· {pb.counts.length}</span>
                         <span className="float-right">{n2(pb.total.amount)}</span>

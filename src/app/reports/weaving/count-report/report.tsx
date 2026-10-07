@@ -329,7 +329,7 @@ export async function CountsAccountsReport({
                   );
                   return (
                     <tbody key={pt}>
-                      <tr style={{ background: "#0f172a", color: "white" }}>
+                      <tr className="bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                         <td className="font-bold text-[16px] px-3 py-2" colSpan={2}>
                           {pt}
                           <a
