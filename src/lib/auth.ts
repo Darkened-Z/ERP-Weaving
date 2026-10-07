@@ -61,6 +61,7 @@ export async function login(loginId: string, password: string): Promise<Session 
     login: user.login,
     fullName: user.fullName,
     roleName: user.roleName,
+    allowedModules: user.allowedModules ? user.allowedModules.split(",") : null,
   };
 
   const signed = createToken(session);

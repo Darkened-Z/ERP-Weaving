@@ -692,7 +692,7 @@ export default async function PackiParchiPage({
     const brokerSaleCoa = resolvePartyCoa(brokerNameSale);
     const brokerageExpCode = canPostGl && brokerSaleCoa && brokerAmtSal > 0 ? await acc("SALE_BROKERAGE_EXP") : "";
     // Ledger description (mill convention): "<than> THAN <mtr> MTR @ <rate>, <quality> (PACKI SALE)".
-    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${quality ?? ""} (PACKI SALE)`.trim();
+    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${qualityPrint || quality || ""} (PACKI SALE)`.trim();
 
     const parseVno = (v: string | null | undefined): number => {
       if (!v) return 0;

@@ -22,12 +22,15 @@ async function save(formData: FormData) {
   const roleName = (formData.get("roleName") as string).trim().toUpperCase();
   const status = (formData.get("status") as string) || "A";
   const password = (formData.get("password") as string) || "";
+  let allowedModules = (formData.get("allowedModules") as string) || "";
+  allowedModules = allowedModules.trim();
+  if (allowedModules === "") allowedModules = null as any; // Store NULL if empty
 
   if (!login || !fullName || !roleName) redirect(`${BASE}?error=required`);
 
   try {
     if (id) {
-      const set: Record<string, string> = { login, fullName, roleName, status };
+      const set: any = { login, fullName, roleName, status, allowedModules };
       if (password) set.password = await bcrypt.hash(password, 10);
       await db.update(schema.users).set(set).where(eq(schema.users.id, Number(id)));
       redirect(`${BASE}?id=${id}`);
@@ -36,7 +39,7 @@ async function save(formData: FormData) {
       const hashed = await bcrypt.hash(password, 10);
       const [row] = await db
         .insert(schema.users)
-        .values({ login, password: hashed, fullName, roleName, status })
+        .values({ login, password: hashed, fullName, roleName, status, allowedModules })
         .returning();
       redirect(`${BASE}?id=${row.id}`);
     }
@@ -217,6 +220,17 @@ export default async function UsersPage({
                       <option value="A">A - Active</option>
                       <option value="B">B - Blocked</option>
                     </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label block mb-1">
+                      Allowed Modules (Keys separated by comma, e.g. "dash,tickets". Leave blank for all)
+                    </label>
+                    <input
+                      name="allowedModules"
+                      type="text"
+                      className="input-box mono"
+                      defaultValue={selected?.allowedModules ?? ""}
+                    />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="label block mb-1">
