@@ -7,6 +7,7 @@ import { today as todayFn, monthsAgo } from "@/lib/time";
 export const dynamic = "force-dynamic";
 
 const fmt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
+const fmt2 = (n: number) => new Intl.NumberFormat("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 function escLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => "\\" + m);
@@ -17,6 +18,7 @@ function sixMonthsAgo(): string {
 }
 
 type Row = {
+  
   type: "PUR" | "SAL";
   contractNo: string;
   contractDate: string;
@@ -27,6 +29,9 @@ type Row = {
   ratePerMtr: number | null;
   amount: number | null;
   status: string;
+
+  despatch?: number | null;
+  despatchDetail?: { party: string; totalMeter: number; lots: number }[];
 };
 
 export default async function GreyRegisterPrintPage({
@@ -129,7 +134,30 @@ export default async function GreyRegisterPrintPage({
     salConditions.push(sql`${schema.extGreySalContract.remarks} LIKE ${pat} ESCAPE '\\'`);
   }
 
+  
+  const despatchDetailRows = await db
+    .select({
+      contNo: schema.extPackiParchi.convContNoSale,
+      party: schema.extPackiParchi.saleParty,
+      totalMeter: sql<number>`coalesce(sum(meter_net), 0)`,
+      lots: sql<number>`count(*)`,
+    })
+    .from(schema.extPackiParchi)
+    .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != '`)
+    .groupBy(schema.extPackiParchi.convContNoSale, schema.extPackiParchi.saleParty);
+
+  const despatchDetailByContNo = new Map<string, { party: string; totalMeter: number; lots: number }[]>();
+  const despatchTotalByContNo = new Map<string, number>();
+
+  for (const d of despatchDetailRows) {
+    const key = d.contNo ?? "";
+    if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
+    despatchDetailByContNo.get(key)!.push({ party: d.party ?? "-", totalMeter: d.totalMeter, lots: d.lots });
+    despatchTotalByContNo.set(key, (despatchTotalByContNo.get(key) ?? 0) + d.totalMeter);
+  }
+
   const [purRows, salRows, companyRows, partyRows, greyRows] = await Promise.all([
+
     db.select().from(schema.extGreyPurContract).where(and(...purConditions)),
     db.select().from(schema.extGreySalContract).where(and(...salConditions)),
     db.select().from(schema.companyProfile).limit(1),
@@ -152,6 +180,8 @@ export default async function GreyRegisterPrintPage({
       ratePerMtr: r.ratePerMtr,
       amount: r.amount,
       status: r.status,
+      despatch: despatchTotalByContNo.get(r.contractNo) ?? 0,
+      despatchDetail: despatchDetailByContNo.get(r.contractNo) ?? [],
     })),
     ...salRows.map((r) => ({
       type: "SAL" as const,
@@ -164,6 +194,8 @@ export default async function GreyRegisterPrintPage({
       ratePerMtr: r.ratePerMtr,
       amount: r.amount,
       status: r.status,
+      despatch: despatchTotalByContNo.get(r.contractNo) ?? 0,
+      despatchDetail: despatchDetailByContNo.get(r.contractNo) ?? [],
     })),
   ].sort((a, b) => (b.contractDate ?? "").localeCompare(a.contractDate ?? ""));
 
@@ -278,7 +310,8 @@ export default async function GreyRegisterPrintPage({
                 <th>Weave</th>
                 <th className="num" style={{ width: "80px" }}>Qty Mtr</th>
                 <th className="num" style={{ width: "70px" }}>Rate/Mtr</th>
-                <th className="num" style={{ width: "110px" }}>Amount</th>
+                <th className="num" style={{ width: "90px" }}>Amount</th>
+                <th className="num" style={{ width: "100px" }}>Despatch</th>
                 <th style={{ width: "50px" }}>Status</th>
               </tr>
             </thead>
@@ -301,6 +334,18 @@ export default async function GreyRegisterPrintPage({
                     <td className="num">{r.quantityMtr != null ? fmt(r.quantityMtr) : "-"}</td>
                     <td className="num">{r.ratePerMtr != null ? fmt(r.ratePerMtr) : "-"}</td>
                     <td className="num">{r.amount != null ? fmt(r.amount) : "-"}</td>
+                    <td className="num" style={{ textAlign: "right" }}>
+                        {r.despatch ? (
+                          <div>
+                            <div><strong>{fmt2(r.despatch)}</strong></div>
+                            {r.despatchDetail?.map((d, di) => (
+                              <div key={di} style={{ fontSize: "9px", color: "#666", textAlign: "left", lineHeight: 1.2 }}>
+                                {d.party} - {fmt2(d.totalMeter)} ({d.lots})
+                              </div>
+                            ))}
+                          </div>
+                        ) : "-"}
+                      </td>
                     <td>{r.status || "-"}</td>
                   </tr>
                 ))
