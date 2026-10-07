@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { countLabelMap, wfPartFull, type GreyConstr } from "@/lib/grey-quality";
 import { fmt, fmt2, sixMonthsAgo, todayIso } from "../../../_shared";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ export default async function FoldingStockDetailPage({
       party: schema.intGreyConversionContract.party,
       quality: schema.intGreyConversionContract.productQuality,
       designNo: schema.intGreyConversionContract.designNo,
+        qCode: schema.intGreyConversionContract.grayQltyCode,
     })
     .from(schema.intGreyConversionContract)
     .where(eq(schema.intGreyConversionContract.contNo, cont));
