@@ -764,9 +764,9 @@ export default async function PackiParchiPage({
           vtype: "GPV",
           vno,
           srno: details.length + 1,
-          accCode: partyCoa,
-          partyCode: partyCoa,
-          narration: `${ppNarr} — bill adjustment`,
+          accCode: greyCommissionCode,
+            partyCode: partyCoa,
+            narration: `${ppNarr} - bill adjustment`,
           debit: clearDiff < 0 ? -clearDiff : 0,
           credit: clearDiff > 0 ? clearDiff : 0,
         });
