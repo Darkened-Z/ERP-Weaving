@@ -9,6 +9,8 @@ export type SaveError = {
 } | null;
 
 const msgs: Record<string, (e: SaveError) => string> = {
+  no_password: () => "Password is required to save.",
+  wrong_password: () => "Incorrect password. Nothing was sent � what you typed is still here.",
   code_exists: () => "Voucher number already exists. Try again.",
   period_locked: (e) =>
     `Period is locked. Cannot save vouchers for this date${e?.thru ? ` — locked through ${e.thru}` : ""}.`,

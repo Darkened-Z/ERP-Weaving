@@ -1,6 +1,8 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { PasswordGuard } from "@/components/password-guard";
+import { checkSavePasswordAction } from "./actions";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";
@@ -1165,6 +1167,7 @@ export default async function GreyDespatchPage({
             </div>
           </div>
 
+          <PasswordGuard formId="gd-save-form" checkAction={checkSavePasswordAction} />
           <form id="gd-save-form" action={saveDespatch}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
             <DespatchAmountCalc countRows={COUNT_ROWS} lineRows={LINE_ROWS} />
