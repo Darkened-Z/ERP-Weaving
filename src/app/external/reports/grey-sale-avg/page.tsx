@@ -65,7 +65,7 @@ export default async function GreySaleAvgPage({
         meterNet: schema.extPackiParchi.meterNet,
       })
       .from(schema.extPackiParchi)
-      .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != '`);
+      .where(sql`conv_cont_no_sale is not null and conv_cont_no_sale != ''`);
   type LotSummary = { party: string; totalMeter: number; lots: number; lotsList: { vNo: string; meter: number }[] };
     const despatchDetailByContNo = new Map<string, LotSummary[]>();
     for (const d of despatchDetailRows) {
