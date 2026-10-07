@@ -249,6 +249,8 @@ export default async function GreyDespatchDamiPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/grey-despatch-dami?error=admin_only");
     const id = parseInt(formData.get("id") as string, 10);
     if (!Number.isFinite(id)) return;
+    const [cur] = await db.select({ p: schema.intGreyDespatchDami.pakki_parchi_id }).from(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, id));
+    if (cur?.p != null) redirect("/inventory/grey-despatch-dami?id=" + id + "&error=linked");
     await db.transaction(async (tx) => {
       await tx.delete(schema.intGreyDespatchDamiLine).where(eq(schema.intGreyDespatchDamiLine.damiId, id));
       await tx.delete(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, id));
@@ -333,6 +335,7 @@ export default async function GreyDespatchDamiPage({
         {params.error === "code_exists" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">V.No already exists.</div>}
         {params.error === "period_locked" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Period is locked{params.thru && <> — through <span className="mono">{params.thru}</span></>}.</div>}
         {params.error === "admin_only" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Only ADMIN can delete.</div>}
+        {params.error === "linked" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Cannot delete: This voucher is linked to a Packi Parchi. Please unlink it first.</div>}
         {params.error === "no_password" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Password is required to save.</div>}
         {params.error === "wrong_password" && <div className="border-2 border-[var(--danger)] px-4 py-2 mb-3 text-[12px] text-[var(--danger)] font-semibold mono no-print">Incorrect password.</div>}
 
@@ -353,10 +356,14 @@ export default async function GreyDespatchDamiPage({
                 <PrintButton label="Print" />
                 <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
                 {formItem ? (
-                  <form action={deleteDami} className="inline">
-                    <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message={`Delete ${formItem.vNo}? Cannot be undone.`}>Delete</ConfirmButton>
-                  </form>
+                  formItem.pakki_parchi_id ? (
+                    <button type="button" className="btn btn-outline btn-sm opacity-50 cursor-not-allowed" onClick={(e) => { e.preventDefault(); alert("Cannot delete: This voucher is linked to a Packi Parchi."); }}>Delete</button>
+                  ) : (
+                    <form action={deleteDami} className="inline">
+                      <input type="hidden" name="id" value={formItem.id} />
+                      <ConfirmButton message={`Delete ${formItem.vNo}? Cannot be undone.`}>Delete</ConfirmButton>
+                    </form>
+                  )
                 ) : null}
               </div>
             </div>
@@ -506,10 +513,14 @@ export default async function GreyDespatchDamiPage({
                 <a href="/inventory/grey-despatch-dami?adding=1" className="btn btn-outline btn-sm">New</a>
                 <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
                 {formItem ? (
-                  <form action={deleteDami} className="inline">
-                    <input type="hidden" name="id" value={formItem.id} />
-                    <ConfirmButton message={`Delete ${formItem.vNo}?`}>Delete</ConfirmButton>
-                  </form>
+                  formItem.pakki_parchi_id ? (
+                    <button type="button" className="btn btn-outline btn-sm opacity-50 cursor-not-allowed" onClick={(e) => { e.preventDefault(); alert("Cannot delete: This voucher is linked to a Packi Parchi."); }}>Delete</button>
+                  ) : (
+                    <form action={deleteDami} className="inline">
+                      <input type="hidden" name="id" value={formItem.id} />
+                      <ConfirmButton message={`Delete ${formItem.vNo}? Cannot be undone.`}>Delete</ConfirmButton>
+                    </form>
+                  )
                 ) : null}
               </div>
 
