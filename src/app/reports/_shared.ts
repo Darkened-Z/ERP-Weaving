@@ -5,13 +5,11 @@ import { today, monthsAgo } from "@/lib/time";
 export const fmt = (n: number | null | undefined) =>
   n == null ? "—" : new Intl.NumberFormat("en-PK").format(Math.round(n));
 
-export const fmt2 = (n: number | null | undefined) =>
-  n == null
-    ? "—"
-    : new Intl.NumberFormat("en-PK", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(n);
+export const fmt2 = (n: number | null | undefined) => {
+  if (n == null) return "-";
+  if (n % 1 === 0) return new Intl.NumberFormat("en-PK").format(n);
+  return new Intl.NumberFormat("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+};
 
 export function escLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => "\\" + m);
