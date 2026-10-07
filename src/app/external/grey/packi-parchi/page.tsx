@@ -1,6 +1,9 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
+import { PasswordGuard } from "@/components/password-guard";
+import { checkSavePasswordAction } from "./actions";
+import { GuardSubmit } from "@/components/guard-submit";
 import { Combobox } from "@/components/combobox";
 import { QualityStockStrip } from "./quality-stock-strip";
 import { FindingPicker } from "@/components/finding-picker";
@@ -1131,7 +1134,22 @@ export default async function PackiParchiPage({
             </div>
           </div>
 
-          <form id="pp-save-form" action={saveParchi}>
+          
+        <GuardSubmit
+          rules={[
+            { field: "than", message: "Than is mandatory." },
+            { field: "meter_re", message: "Meter RE is mandatory." },
+            { field: "grey_rate", message: "Purchase Rate is mandatory." },
+            { field: "sale_party", message: "Sale Party is mandatory." },
+            { any: ["conv_cont_no_sale", "conv_cont_sale2"], message: "Either Grey Sale Contract or Conversion Contract is mandatory." },
+            { field: "commission_sale", message: "Commission is mandatory. Enter 0 if none." },
+            { field: "checkery_sale", message: "Checkery is mandatory. Enter 0 if none." },
+            { field: "printing_name", message: "Printing Name is mandatory." },
+            { field: "broker_name_sale", message: "Broker Name is mandatory." }
+          ]}
+        />
+        <PasswordGuard formId="pp-save-form" checkAction={checkSavePasswordAction} />
+<form id="pp-save-form" action={saveParchi}>
             {formItem && <input type="hidden" name="id" value={formItem.id} />}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">
@@ -1582,7 +1600,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less %)</span></label>
-                <input name="commission_sale" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.commissionSale ?? ""} />
+                <input name="commission_sale" tabIndex={7} type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.commissionSale ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission Amount</label>
@@ -1590,7 +1608,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Checkery</label>
-                <input name="checkery_sale" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.checkerySale ?? ""} />
+                <input name="checkery_sale" tabIndex={8} type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.checkerySale ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Checkery Amount</label>

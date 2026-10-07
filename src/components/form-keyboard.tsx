@@ -19,7 +19,15 @@ function isVisible(el: HTMLElement) {
 }
 
 function fieldsIn(form: HTMLFormElement) {
-  return Array.from(form.querySelectorAll<HTMLElement>(FIELD_SELECTOR)).filter(isVisible);
+  const fields = Array.from(form.querySelectorAll<HTMLElement>(FIELD_SELECTOR))
+    .filter(isVisible)
+    .filter(el => el.tabIndex >= 0);
+  return fields.sort((a, b) => {
+    const ta = a.tabIndex > 0 ? a.tabIndex : 999999;
+    const tb = b.tabIndex > 0 ? b.tabIndex : 999999;
+    if (ta !== tb) return ta - tb;
+    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  });
 }
 
 function focusAndSelect(el: HTMLElement | undefined | null) {

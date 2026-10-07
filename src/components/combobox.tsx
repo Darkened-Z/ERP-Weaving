@@ -18,9 +18,15 @@ function advanceToNextField(from: HTMLElement | null) {
   if (!from) return;
   const form = from.closest("form");
   if (!form) return;
-  const fields = Array.from(form.querySelectorAll<HTMLElement>(NEXT_FIELD_SELECTOR)).filter(
-    (el) => el.offsetParent !== null || el.getClientRects().length > 0
-  );
+  const fields = Array.from(form.querySelectorAll<HTMLElement>(NEXT_FIELD_SELECTOR))
+    .filter((el) => el.offsetParent !== null || el.getClientRects().length > 0)
+    .filter(el => el.tabIndex >= 0)
+    .sort((a, b) => {
+      const ta = a.tabIndex > 0 ? a.tabIndex : 999999;
+      const tb = b.tabIndex > 0 ? b.tabIndex : 999999;
+      if (ta !== tb) return ta - tb;
+      return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
   const i = fields.indexOf(from);
   const next = i >= 0 ? fields[i + 1] : undefined;
   if (!next) return;
@@ -44,7 +50,9 @@ export function Combobox({
   className = "input-box mono",
   descTargetId,
   filterByField,
+  tabIndex,
 }: {
+  tabIndex?: number;
   name: string;
   options: Opt[];
   defaultValue?: string;
@@ -211,6 +219,7 @@ export function Combobox({
       <input ref={hiddenRef} type="hidden" name={name} value={val} readOnly />
       <input
         ref={inputRef}
+        tabIndex={tabIndex}
         className={`${className} pr-7`}
         value={display}
         placeholder={placeholder}
