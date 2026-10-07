@@ -678,7 +678,13 @@ export default async function GreyShrinkagePage({
               if (!setGroups.has(k)) setGroups.set(k, []);
               setGroups.get(k)!.push(b);
             }
-            return Array.from(setGroups.entries()).map(([sNo, sBlocks]) => {
+            return Array.from(setGroups.entries())
+              .sort((a, b) => {
+                const numA = Number(a[0]) || 0;
+                const numB = Number(b[0]) || 0;
+                return numB - numA;
+              })
+              .map(([sNo, sBlocks]) => {
               const sMtr = sBlocks.reduce((s, b) => s + b.totalMtr, 0);
               const sLen = sBlocks.reduce((s, b) => s + b.beamLength, 0);
               const sBal = sLen - sMtr;
