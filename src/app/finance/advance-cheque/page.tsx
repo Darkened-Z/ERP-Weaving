@@ -530,7 +530,7 @@ export default async function AdvanceChequePage({
   });
   const partyOpts = accounts.filter((a) => a.level >= 4).map(opt);
   const advOpts = accounts.filter((a) => a.code.startsWith(ADV_PREFIX)).map(opt);
-  const bankOpts = accounts.filter((a) => a.code.startsWith(BANK_PREFIX) || a.description.toUpperCase().includes("CASH")).map(opt);
+  const bankOpts = accounts.filter((a) => a.level >= 5 && (a.code.startsWith(BANK_PREFIX) || a.description.toUpperCase().includes("CASH"))).map(opt);
   const dishonourOpts = accounts.filter((a) => a.code.startsWith(DISHONOUR_PREFIX)).map(opt);
   
   // Load ADV vouchers + detail for the register.
