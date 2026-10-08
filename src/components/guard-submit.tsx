@@ -23,8 +23,17 @@ export function GuardSubmit({ rules, tabIndex }: { rules: Rule[]; tabIndex?: num
   useEffect(() => {
     const val = (form: HTMLFormElement, name: string) => {
       const el = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
-      const n = Number((el?.value ?? "").trim());
-      return { el, ok: Number.isFinite(n) && n > 0 };
+      const text = (el?.value ?? "").trim();
+      let ok = false;
+      if (text) {
+        const n = Number(text);
+        if (!Number.isNaN(n)) {
+          ok = n > 0;
+        } else {
+          ok = true;
+        }
+      }
+      return { el, ok };
     };
 
     const onSubmit = (e: Event) => {
