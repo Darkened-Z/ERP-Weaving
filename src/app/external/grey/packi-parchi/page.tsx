@@ -1141,11 +1141,8 @@ export default async function PackiParchiPage({
             { field: "kp_meter", message: "Meter is mandatory." },
             { field: "grey_rate", message: "Purchase Rate is mandatory." },
             { field: "sale_party", message: "Sale Party is mandatory." },
-            { any: ["conv_cont_no_sale", "conv_cont_sale2"], message: "Either Grey Sale Contract or Conversion Contract is mandatory." },
-            { field: "commission_sale", message: "Commission is mandatory. Enter 0 if none." },
-            { field: "checkery_sale", message: "Checkery is mandatory. Enter 0 if none." },
-            { field: "printing_name", message: "Printing Name is mandatory." },
-            { field: "broker_name_sale", message: "Broker Name is mandatory." }
+            { field: "grey_rate_kp", message: "Rate (Grey Sale Rate) is mandatory." },
+            { field: "printing_name", message: "Printing Name is mandatory." }
           ]}
         />
         <PasswordGuard formId="pp-save-form" checkAction={checkSavePasswordAction} />
@@ -1534,7 +1531,7 @@ export default async function PackiParchiPage({
                   filterByField="sale_party"
                   title="GREY SALE CONTRACT"
                   placeholder="Grey sale contract…"
-                  className="input-box mono text-[13px] cursor-pointer bg-[#fefce8] border-[#eab308]"
+                  className="input-box mono text-[13px] cursor-pointer"
                 />
                 <AutoFill
                   watch="conv_cont_no_sale"
@@ -1559,7 +1556,7 @@ export default async function PackiParchiPage({
                   filterByField="sale_party"
                   title="CONVERSION CONTRACT"
                   placeholder="Conversion contract…"
-                  className="input-box mono text-[13px] cursor-pointer bg-[#fefce8] border-[#eab308]"
+                  className="input-box mono text-[13px] cursor-pointer"
                 />
                 <AutoFill
                   watch="conv_cont_sale2"
@@ -1573,7 +1570,7 @@ export default async function PackiParchiPage({
                   Commission → Commission Amount, Checkery → Checkery Amount, Net Amount. */}
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Rate <span className="text-[9px] text-[var(--muted)]">(grey sale rate)</span></label>
-                <input name="grey_rate_kp" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.greyRateKp ?? ""} />
+                <input required name="grey_rate_kp" type="number" step="any" className="input-box mono text-right bg-[#fefce8] border-[#eab308]" defaultValue={formItem?.greyRateKp ?? ""} />
               </div>
 
               {/* Conversion billing runs on its own rate. The mill agrees a conv
@@ -1600,7 +1597,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less %)</span></label>
-                <input required tabIndex={7} name="commission_sale" type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.commissionSale ?? ""} />
+                <input tabIndex={7} name="commission_sale" type="number" step="any" className={"input-box mono text-right"} defaultValue={formItem?.commissionSale ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission Amount</label>
@@ -1608,7 +1605,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Checkery</label>
-                <input required tabIndex={8} name="checkery_sale" type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.checkerySale ?? ""} />
+                <input tabIndex={8} name="checkery_sale" type="number" step="any" className={"input-box mono text-right"} defaultValue={formItem?.checkerySale ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Checkery Amount</label>
@@ -1642,7 +1639,7 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Broker Name</label>
                 <Combobox
-                  required tabIndex={10} className="input-box mono bg-[#fefce8] border-[#eab308]" name="broker_name_sale"
+                  tabIndex={10} className="input-box mono" name="broker_name_sale"
                   options={partyOpts}
                   defaultValue={formItem?.brokerNameSale ?? ""}
                   placeholder="Select broker…"
