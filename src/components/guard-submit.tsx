@@ -21,7 +21,7 @@ type Rule =
  */
 export function GuardSubmit({
   tabIndex,
- rules }: { rules: Rule[] }) {
+ rules, tabIndex }: { rules: Rule[]; tabIndex?: number }) {
   useEffect(() => {
     const val = (form: HTMLFormElement, name: string) => {
       const el = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
