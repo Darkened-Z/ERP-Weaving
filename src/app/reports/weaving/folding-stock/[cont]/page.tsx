@@ -172,7 +172,7 @@ export default async function FoldingStockDetailPage({
   @page { size: A4 portrait; margin: 10mm; }
   .overflow-x-auto { overflow: visible !important; }
   .overflow-x-auto table { min-width: 0 !important; width: 100% !important; font-size: 10px; }
-  .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
+  .overflow-x-auto th, .overflow-x-auto td { padding: 2px 4px !important; line-height: 1.1 !important; white-space: nowrap !important; }
 }`}</style>
         
         <div className="hidden print:block mb-2 text-black">
@@ -222,8 +222,8 @@ export default async function FoldingStockDetailPage({
                   bal += e.inQty - e.outQty;
                   return (
                     <tr key={i} style={e.kind === "D" ? { background: "#f8fafc" } : undefined}>
-                      <td className="mono text-[12px]">{e.date}</td>
-                      <td className="mono text-[12px] font-bold">{e.vNo}</td>
+                      <td className="mono text-[12px] whitespace-nowrap">{e.date}</td>
+                      <td className="mono text-[12px] font-bold whitespace-nowrap">{e.vNo}</td>
                       <td className="text-[11px] font-semibold">{e.kind === "P" ? "PROD" : "DESP"}</td>
                       <td className="mono text-right">{e.kind === "P" && e.a ? fmt2(e.a) : ""}</td>
                       <td className="mono text-right">{e.kind === "P" && e.b ? fmt2(e.b) : ""}</td>
