@@ -28,6 +28,7 @@ type Row = {
  */
 export function FindingPicker({
   name,
+  tabIndex,
   defaultValue,
   rows,
   title = "FINDING LIST",
@@ -36,6 +37,7 @@ export function FindingPicker({
   extraLabel,
   filterByField,
   columns,
+  required,
 }: {
   name: string;
   defaultValue: string;
@@ -46,6 +48,8 @@ export function FindingPicker({
   extraLabel?: string;
   /** Name of another field whose value must equal a row's filterKey for it to show (empty other-field = show all). */
   filterByField?: string;
+  tabIndex?: number;
+  required?: boolean;
   /** Optional Oracle-style columns; when set, the table renders these instead of Code/Description/[Extra]. */
   columns?: Column[];
 }) {
@@ -198,6 +202,8 @@ export function FindingPicker({
           readOnly
           data-lov-picker
           className={className}
+          tabIndex={tabIndex}
+          required={required}
           // In a narrow grid cell the flex row used to crush this box down to a
           // few pixels, leaving only the ✕ and F9 buttons visible. min-width:0
           // lets it shrink below its content instead of fighting the buttons,

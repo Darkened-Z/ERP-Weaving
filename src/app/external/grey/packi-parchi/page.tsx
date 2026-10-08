@@ -1135,7 +1135,7 @@ export default async function PackiParchiPage({
           </div>
 
           
-        <GuardSubmit
+        <GuardSubmit tabIndex={11}
           rules={[
             { field: "than", message: "Than is mandatory." },
             { field: "meter_re", message: "Meter RE is mandatory." },
@@ -1276,20 +1276,20 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Than</label>
                 <input
-                  name="than"
+                  required tabIndex={1} name="than"
                   type="number"
                   step="1"
-                  className="input-box mono text-right"
+                  className="input-box mono text-right bg-[#fefce8] border-[#eab308]"
                   defaultValue={formItem?.than ?? ""}
                 />
               </div>
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Meter <span className="text-[9px] text-[var(--muted)]">(from godown stock)</span></label>
                 <input
-                  name="kp_meter"
+                  required tabIndex={2} name="kp_meter"
                   type="number"
                   step="any"
-                  className="input-box mono text-right"
+                  className="input-box mono text-right bg-[#fefce8] border-[#eab308]"
                   defaultValue={formItem?.kpMeter ?? ""}
                 />
               </div>
@@ -1427,10 +1427,10 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-2">
                 <label className="label block mb-1">Purchase Rate <span className="text-[9px] text-[var(--muted)]">(see avg rate)</span></label>
                 <input
-                  name="grey_rate"
+                  required tabIndex={3} name="grey_rate"
                   type="number"
                   step="any"
-                  className="input-box mono text-right"
+                  className="input-box mono text-right bg-[#fefce8] border-[#eab308]"
                   defaultValue={formItem?.greyRate ?? ""}
                 />
               </div>
@@ -1516,7 +1516,7 @@ export default async function PackiParchiPage({
                 <div className="grid grid-cols-[100px_1fr] gap-2">
                   <input id="pp-sale-party-code" className={roCls} placeholder="Code" readOnly tabIndex={-1} />
                   <Combobox
-                    name="sale_party"
+                    required tabIndex={4} className="input-box mono bg-[#fefce8] border-[#eab308]" name="sale_party"
                     options={partyOpts}
                     defaultValue={formItem?.saleParty ?? ""}
                     placeholder="Select party…"
@@ -1527,14 +1527,14 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Grey Sale Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
                 <FindingPicker
-                  name="conv_cont_no_sale"
+                  required tabIndex={5} name="conv_cont_no_sale"
                   defaultValue={formItem?.convContNoSale ?? ""}
                   rows={salContractFindRows}
                   columns={saleContractColumns}
                   filterByField="sale_party"
                   title="GREY SALE CONTRACT"
                   placeholder="Grey sale contract…"
-                  className="input-box mono text-[13px] cursor-pointer"
+                  className="input-box mono text-[13px] cursor-pointer bg-[#fefce8] border-[#eab308]"
                 />
                 <AutoFill
                   watch="conv_cont_no_sale"
@@ -1552,14 +1552,14 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Conversion Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
                 <FindingPicker
-                  name="conv_cont_sale2"
+                  required tabIndex={6} name="conv_cont_sale2"
                   defaultValue={formItem?.convContSale2 ?? ""}
                   rows={convContractFindRows}
                   columns={convContractColumns}
                   filterByField="sale_party"
                   title="CONVERSION CONTRACT"
                   placeholder="Conversion contract…"
-                  className="input-box mono text-[13px] cursor-pointer"
+                  className="input-box mono text-[13px] cursor-pointer bg-[#fefce8] border-[#eab308]"
                 />
                 <AutoFill
                   watch="conv_cont_sale2"
@@ -1600,7 +1600,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission <span className="text-[9px] text-[var(--muted)]">(+add / −less %)</span></label>
-                <input name="commission_sale" tabIndex={7} type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.commissionSale ?? ""} />
+                <input required tabIndex={7} name="commission_sale" type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.commissionSale ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Commission Amount</label>
@@ -1608,7 +1608,7 @@ export default async function PackiParchiPage({
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Checkery</label>
-                <input name="checkery_sale" tabIndex={8} type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.checkerySale ?? ""} />
+                <input required tabIndex={8} name="checkery_sale" type="number" step="any" className={"input-box mono text-right" + " bg-[#fefce8] border-[#eab308]"} defaultValue={formItem?.checkerySale ?? ""} />
               </div>
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Checkery Amount</label>
@@ -1633,7 +1633,7 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Printing Name <span className="text-[9px] text-[var(--muted)]">(printing parties)</span></label>
                 <Combobox
-                  name="printing_name"
+                  required tabIndex={9} className="input-box mono bg-[#fefce8] border-[#eab308]" name="printing_name"
                   options={printingOpts}
                   defaultValue={formItem?.printingName ?? ""}
                   placeholder="Select printing party…"
@@ -1642,7 +1642,7 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Broker Name</label>
                 <Combobox
-                  name="broker_name_sale"
+                  required tabIndex={10} className="input-box mono bg-[#fefce8] border-[#eab308]" name="broker_name_sale"
                   options={partyOpts}
                   defaultValue={formItem?.brokerNameSale ?? ""}
                   placeholder="Select broker…"

@@ -19,7 +19,9 @@ type Rule =
  * Catching it here keeps everything they typed on screen and puts the message
  * above the form, with the offending field focused.
  */
-export function GuardSubmit({ rules }: { rules: Rule[] }) {
+export function GuardSubmit({
+  tabIndex,
+ rules }: { rules: Rule[] }) {
   useEffect(() => {
     const val = (form: HTMLFormElement, name: string) => {
       const el = form.querySelector<HTMLInputElement>(`[name="${name}"]`);

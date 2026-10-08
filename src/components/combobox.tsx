@@ -51,8 +51,10 @@ export function Combobox({
   descTargetId,
   filterByField,
   tabIndex,
+  required,
 }: {
   tabIndex?: number;
+  required?: boolean;
   name: string;
   options: Opt[];
   defaultValue?: string;
@@ -220,6 +222,7 @@ export function Combobox({
       <input
         ref={inputRef}
         tabIndex={tabIndex}
+            required={required}
         className={`${className} pr-7`}
         value={display}
         placeholder={placeholder}
