@@ -1231,31 +1231,31 @@ export default async function GreyDespatchPage({
               <RowAutoFill key={`uc-cf-${i}`} watch={`uc_code_${i}`} map={ucCountFillMap} />
             ))}
 
-            <div className="grid grid-cols-12 gap-3 mb-2 gform">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-2 gform">
+              <div className="lg:col-span-2">
                 <label className="label block mb-1">Date</label>
                 <DateBox name="v_date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
               </div>
-              <div className="col-span-1">
+              <div className="lg:col-span-1">
                 <label className="label block mb-1">Time</label>
                 <input name="time" className="input-box mono" defaultValue={formItem?.time ?? nowTime()} />
               </div>
-              <div className="col-span-2">
+              <div className="lg:col-span-2">
                 <label className="label block mb-1">V.No</label>
                 <input name="v_no" className="input-box mono bg-gray-100" defaultValue={formItem?.vNo ?? upcomingVNo} readOnly />
               </div>
-              <div className="col-span-1">
+              <div className="lg:col-span-1">
                 <label className="label block mb-1">LNo</label>
                 <input name="l_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lNo || nextLNoDisplay} readOnly tabIndex={-1} />
               </div>
-              <div className="col-span-1 flex items-end">
+              <div className="lg:col-span-1 flex items-end">
                 <button type="button" className="btn btn-outline btn-sm w-full" title="Clear OK">OK</button>
               </div>
-              <div className="col-span-2">
+              <div className="lg:col-span-2">
                 <label className="label block mb-1">Posted Date</label>
                 <input className="input-box mono bg-gray-100 text-[11px]" defaultValue={formItem?.postedDate?.slice(0, 10) ?? ""} readOnly tabIndex={-1} />
               </div>
-              <div className="col-span-3">
+              <div className="lg:col-span-3">
                 <label className="label block mb-1">Find</label>
                 <div className="flex gap-2">
                   <input form="gd-find-form" name="find" className="input-box mono flex-1" defaultValue={params.find ?? ""} placeholder="V.No / party / GP" />
@@ -1264,10 +1264,10 @@ export default async function GreyDespatchPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-12 gap-4 mb-2 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-2 items-stretch">
               {/* flex column so the panel grows into the space the taller right
                   column leaves under it instead of stranding a blank gap */}
-              <div className="col-span-7 flex flex-col min-h-0">
+              <div className="lg:col-span-7 flex flex-col min-h-0">
                 {/* The thaans panel IS the line list (owner) — the separate editable
                     grid repeated the same rows, so it is gone. Its inputs stay as
                     hidden fields: DesignThansFill writes the picked thaans into them
@@ -1294,7 +1294,7 @@ export default async function GreyDespatchPage({
                 })}
               </div>
 
-              <div className="col-span-5 space-y-2">
+              <div className="lg:col-span-5 space-y-2">
                 {/* Party FIRST (owner): it scopes the contract list under it. Post
                     Lot No and Shed No are off the form; kept as hidden fields so a
                     saved voucher does not lose them on an edit. */}
@@ -1304,7 +1304,7 @@ export default async function GreyDespatchPage({
                     <Combobox name="party" options={partyOpts} defaultValue={formItem?.party ?? ""} placeholder="Select party" className="input-box mono text-[12px]" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 gform">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch To</label>
                     <input name="despatch_to" className="input-box mono text-[12px]" defaultValue={formItem?.despatchTo ?? ""} />
@@ -1331,7 +1331,7 @@ export default async function GreyDespatchPage({
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 gform">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Despatch From</label>
                     <Combobox name="despatch_from" options={godownOpts} defaultValue={formItem?.despatchFrom ?? "1.01.25.01.0037"} placeholder="Select godown" className="input-box mono text-[12px]" />
@@ -1346,7 +1346,7 @@ export default async function GreyDespatchPage({
                 </div>
                 <input type="hidden" name="post_lot_no" defaultValue={formItem?.postLotNo ?? ""} />
                 <input type="hidden" name="shed_no" defaultValue={formItem?.shedNo ?? ""} />
-                <div className="grid grid-cols-4 gap-2 gform">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Than / Qty</label>
                     <input name="than_qty" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.thanQty ?? ""} readOnly tabIndex={-1} title="Auto: number of filled than rows in the grid" />
@@ -1364,7 +1364,7 @@ export default async function GreyDespatchPage({
                     <input name="amnt" type="number" step="any" className="input-box mono text-right text-[12px] bg-gray-100" defaultValue={formItem?.amnt ?? ""} readOnly tabIndex={-1} />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-2 gform">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 gform">
                   <div>
                     <label className="label block mb-1">GST %</label>
                     <input name="gst_rate" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={rateOf(formItem?.gst)} />
@@ -1394,7 +1394,7 @@ export default async function GreyDespatchPage({
                     <input name="gp_no" list="gp-list" className="input-box mono text-[12px]" defaultValue={formItem?.gpNo ?? ""} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 gform">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 gform">
                   <div>
                     <label className="label block mb-1">Date From</label>
                     <DateBox name="date_from" className="input-box mono text-[12px]" defaultValue={formItem?.dateFrom ?? "2020-11-01"} />
@@ -1414,24 +1414,24 @@ export default async function GreyDespatchPage({
                 %age, Comm, Loom Type, Bill No/Date/Status are off the form. They
                 stay as hidden inputs so a saved voucher keeps its values through
                 an edit; the DB columns are untouched. */}
-            <div className="grid grid-cols-12 gap-3 mb-3 gform">
-              <div className="col-span-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 gform">
+              <div className="lg:col-span-4">
                 <label className="label block mb-1">Product Brand</label>
                 <input name="product_brand" list="gd-brands" className="input-box mono text-[12px]" defaultValue={formItem?.productBrand ?? ""} />
               </div>
-              <div className="col-span-4">
+              <div className="lg:col-span-4">
                 <label className="label block mb-1">Blend</label>
                 <input name="blend" list="gd-blends" className="input-box mono text-[12px]" defaultValue={formItem?.blend ?? ""} />
               </div>
-              <div className="col-span-4">
+              <div className="lg:col-span-4">
                 <label className="label block mb-1">Width</label>
                 <input name="width" type="number" step="any" className="input-box mono text-right text-[12px]" defaultValue={formItem?.width ?? ""} />
               </div>
-              <div className="col-span-6">
+              <div className="lg:col-span-6">
                 <label className="label block mb-1">Gray Code</label>
                 <GreyQualityPicker name="grey_code" defaultValue={formItem?.greyCode ?? ""} rows={greyPickerRows} countLabels={greyCountLabels} />
               </div>
-              <div className="col-span-6">
+              <div className="lg:col-span-6">
                 <label className="label block mb-1">Quality (from contract)</label>
                 <input
                   name="grey_quality_disp"
@@ -1442,7 +1442,7 @@ export default async function GreyDespatchPage({
                   placeholder="124 X 88  36/s PV 90;10 - 36/s PV 90;10"
                 />
               </div>
-              <div className="col-span-12">
+              <div className="lg:col-span-12">
                 <label className="label block mb-1">Remarks</label>
                 <input name="remarks" className="input-box text-[12px]" defaultValue={formItem?.remarks ?? ""} />
               </div>
