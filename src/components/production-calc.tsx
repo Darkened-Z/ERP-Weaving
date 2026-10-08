@@ -562,13 +562,14 @@ type ThanRow = {
 };
 
 function fillLineGrid(selected: ThanRow[], maxRows: number) {
+  let changed = false;
   for (let i = 1; i <= maxRows; i++) {
     const r = selected[i - 1] ?? null;
     const setField = (name: string, val: string) => {
       const el = document.querySelector<HTMLInputElement>(`[name="${name}"]`);
-      if (!el) return;
+      if (!el || el.value === val) return;
       el.value = val;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
+      changed = true;
     };
     setField(`line_t_sr_${i}`, r?.mm ?? "");
     setField(`line_len_${i}`, r?.totalCount != null ? String(r.totalCount) : "");
@@ -577,6 +578,10 @@ function fillLineGrid(selected: ThanRow[], maxRows: number) {
     setField(`line_c_${i}`, r?.cCount != null ? String(r.cCount) : "");
     setField(`line_cp_${i}`, r?.cpCount != null ? String(r.cpCount) : "");
     setField(`line_rej_${i}`, r?.rejCount != null ? String(r.rejCount) : "");
+  }
+  if (changed) {
+    const el = document.querySelector(`[name="line_len_1"]`);
+    if (el) el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 }
 
@@ -813,6 +818,7 @@ export function CountGridFiller({
     const fill = (contNo: string) => {
       const src = contractRows[contNo];
       if (!src || !src.length) return;
+      let changed = false;
       for (let i = 1; i <= rows; i++) {
         const r = src[i - 1];
         if (!r) break;
@@ -820,7 +826,7 @@ export function CountGridFiller({
           const el = document.querySelector<HTMLInputElement>(`[name="${name}"]`);
           if (el && !el.value && val) {
             el.value = val;
-            el.dispatchEvent(new Event("input", { bubbles: true }));
+            changed = true;
           }
         };
         setIfEmpty(`uc_code_${i}`, r.count ?? "");
@@ -829,6 +835,10 @@ export function CountGridFiller({
         setIfEmpty(`uc_rate_${i}`, r.ratePerLbs != null ? String(r.ratePerLbs) : "");
         setIfEmpty(`uc_wt_${i}`, r.wtPerMtr != null ? String(r.wtPerMtr) : "");
         setIfEmpty(`uc_cost_${i}`, r.costPerMtr != null ? String(r.costPerMtr) : "");
+      }
+      if (changed) {
+        const el = document.querySelector(`[name="uc_wt_1"]`);
+        if (el) el.dispatchEvent(new Event("input", { bubbles: true }));
       }
     };
     const onCombo = (e: Event) => {
