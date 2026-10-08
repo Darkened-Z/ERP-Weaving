@@ -2,6 +2,7 @@ import { AccountCodeHint } from "@/components/account-code-hint";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { GrowRows } from "@/components/grow-rows";
 import { RowClearButton } from "@/components/row-clear-button";
 import { VoucherBalance } from "@/components/voucher-balance";
 import { Combobox } from "@/components/combobox";
@@ -25,7 +26,7 @@ const BASE = "/finance/br";
 const TITLE = "BANK\u00A0\u00A0RECEIPTS (WVG)";
 const IS_RECEIPT = true;
 const AMOUNT_LABEL = "Cr";
-const LINE_ROWS = 4;
+const LINE_ROWS = 50;
 const CONTRA_BASE = 50;
 
 const TRN_TYPES = ["", "ADJUSTMENT"];
@@ -776,6 +777,7 @@ export default async function BankReceiptPage({
                   Line Items
                 </div>
                 <div className="overflow-x-auto border border-black">
+                  <GrowRows tbodyId="line-rows" initial={2} />
                   <AccountCodeHint field="line_acc" />
                   <table className="mono text-[12px]" style={{ minWidth: 1440 }}>
                     <thead>
@@ -795,7 +797,7 @@ export default async function BankReceiptPage({
                         <th style={{ width: 40 }}></th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="line-rows">
                       {Array.from({ length: rowsToShow }).map((_, i) => {
                         const l = gridDetail[i];
                         const amt = l ? (IS_RECEIPT ? l.credit : l.debit) : null;
