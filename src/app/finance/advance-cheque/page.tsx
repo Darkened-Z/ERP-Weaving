@@ -532,8 +532,7 @@ export default async function AdvanceChequePage({
   const advOpts = accounts.filter((a) => a.code.startsWith(ADV_PREFIX)).map(opt);
   const bankOpts = accounts.filter((a) => a.code.startsWith(BANK_PREFIX) || a.description.toUpperCase().includes("CASH")).map(opt);
   const dishonourOpts = accounts.filter((a) => a.code.startsWith(DISHONOUR_PREFIX)).map(opt);
-  const advTitleMap = Object.fromEntries(advOpts.map((o) => [o.value, { line_adv_title: o.desc }]));
-
+  
   // Load ADV vouchers + detail for the register.
   const mains = fyCode
     ? await db
@@ -777,12 +776,11 @@ export default async function AdvanceChequePage({
               </div>
 
               <div className="overflow-x-auto border border-black">
-                <table className="mono text-[12px]" style={{ minWidth: 1280 }}>
+                <table className="mono text-[12px]" style={{ minWidth: 1050 }}>
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}>Sr#</th>
-                      <th style={{ width: 170 }}>Bank Advance A/C (Cr)</th>
-                      <th style={{ width: 230 }}>Advance Title</th>
+                      <th style={{ width: 350 }}>Advance Title <span className="text-[10px] font-normal text-[var(--muted)]">/ Bank A/C (Cr)</span></th>
                       <th style={{ width: 130 }}>Chq No</th>
                       <th style={{ width: 150 }}>Chq Date</th>
                       <th style={{ width: 130 }} className="text-right">Chq Amount</th>
@@ -801,10 +799,10 @@ export default async function AdvanceChequePage({
                           <td>
                             <select name="line_adv" className="input-box mono text-[12px]" defaultValue={pf?.bankAdv ?? ""}>
                               <option value="">— select —</option>
-                              {advOpts.map((o) => (<option key={o.value} value={o.value}>{o.value} — {o.desc}</option>))}
+                              {advOpts.map((o) => (<option key={o.value} value={o.value}>{o.desc} ({o.value})</option>))}
                             </select>
                           </td>
-                          <td><input name="line_adv_title" className="input-box text-[12px] bg-gray-50" defaultValue={pf ? descMap.get(pf.bankAdv) ?? "" : ""} readOnly tabIndex={-1} /></td>
+                          
                           {/* Carry the bounced number back. A bounced cheque physically
                               returns, so the same leaf is usually re-presented — and the
                               issue guard already allows it (bounces >= issues). Leaving
