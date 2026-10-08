@@ -817,7 +817,7 @@ export default async function BankPaymentPage({
                 <div className="overflow-x-auto border border-black">
                   <GrowRows tbodyId="line-rows" initial={2} />
                   <AccountCodeHint field="line_acc" />
-                  <table className="mono text-[12px]" style={{ minWidth: 1440 }}>
+                  <table className="mono text-[12px]" style={{ minWidth: 1100 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
