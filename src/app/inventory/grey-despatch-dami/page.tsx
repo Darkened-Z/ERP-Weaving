@@ -342,7 +342,7 @@ export default async function GreyDespatchDamiPage({
         <form id="dami-find-form" method="GET" action="/inventory/grey-despatch-dami" className="hidden"></form>
 
         {/* ── MAIN LAYOUT: Form (left 2/3) + Line Grid (right 1/3) ── */}
-        <div className="flex gap-4 items-start">
+        <div className="flex flex-col xl:flex-row gap-4 items-start">
 
           {/* ─── LEFT: Form ─── */}
           <div className="flex-1 border border-black p-4 mb-4">
@@ -390,24 +390,24 @@ export default async function GreyDespatchDamiPage({
               </div>
 
               {/* Row 1: Date, V.No, LvNo, Find */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-1 sm:col-span-2">
                   <label className="label block mb-1">V.Date</label>
                   <DateBox name="v_date" className="input-box mono" defaultValue={formItem?.vDate ?? today()} required />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-2">
                   <label className="label block mb-1">V.No</label>
                   <input name="v_no" className="input-box mono bg-gray-100" defaultValue={formItem?.vNo ?? upcomingVNo} readOnly />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-2">
                   <label className="label block mb-1">Lv No</label>
                   <input name="lv_no" type="number" className="input-box mono bg-gray-100 text-center" defaultValue={formItem?.lvNo ?? upcomingLvNo} readOnly />
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-1 sm:col-span-3">
                   <label className="label block mb-1">Sal Date</label>
                   <DateBox name="sal_date" className="input-box mono" defaultValue={formItem?.salDate ?? ""} />
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-1 sm:col-span-3">
                   <label className="label block mb-1">Find</label>
                   <div className="flex gap-1">
                     <input form="dami-find-form" name="find" className="input-box mono flex-1" defaultValue={params.find ?? ""} />
@@ -424,8 +424,8 @@ export default async function GreyDespatchDamiPage({
               <input type="hidden" name="term" defaultValue={formItem?.term ?? ""} />
 
               {/* Row 3: Sale Party only. Sub Party removed. */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-12">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-1 sm:col-span-12">
                   <label className="label block mb-1">Sale Party</label>
                   <input name="sale_party" className="input-box" defaultValue={formItem?.saleParty ?? ""} />
                 </div>
@@ -433,8 +433,8 @@ export default async function GreyDespatchDamiPage({
               </div>
 
               {/* Row 4: DSP Quality (Grey Construction) */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-3">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-1 sm:col-span-3">
                   <label className="label block mb-1">Dsp. Quality Code</label>
                   <select name="dsp_quality" className="input-box mono text-[11px]" defaultValue={formItem?.dspQuality ?? ""}>
                     <option value="">— select —</option>
@@ -445,7 +445,7 @@ export default async function GreyDespatchDamiPage({
                     ))}
                   </select>
                 </div>
-                <div className="col-span-9">
+                <div className="col-span-1 sm:col-span-9">
                   <label className="label block mb-1">Grey Construction</label>
                   <input name="dsp_quality_desc" className="input-box mono text-[11px]" defaultValue={formItem?.dspQualityDesc ?? constructionDesc[formItem?.dspQuality ?? ""] ?? ""} />
                   <SelectFill watch="dsp_quality" target="dsp_quality_desc" map={constructionDesc} />
@@ -453,16 +453,16 @@ export default async function GreyDespatchDamiPage({
               </div>
 
               {/* Row 5: Width, Product */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-1 sm:col-span-2">
                   <label className="label block mb-1">Width</label>
                   <input name="width" type="number" step="any" className="input-box mono text-right" defaultValue={formItem?.width ?? ""} />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-2">
                   <label className="label block mb-1">Product Code</label>
                   <input name="product" className="input-box mono" defaultValue={formItem?.product ?? ""} />
                 </div>
-                <div className="col-span-8">
+                <div className="col-span-1 sm:col-span-8">
                   <label className="label block mb-1">Product Name</label>
                   <input name="product_desc" className="input-box" defaultValue={formItem?.productDesc ?? ""} />
                 </div>
@@ -471,12 +471,12 @@ export default async function GreyDespatchDamiPage({
               {/* Row 6: Than + Meter (both auto). Rate / Rate Per / Rate Sal removed.
                   The three rate fields stay as hidden inputs so any existing values
                   survive an edit. */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-6">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-1 sm:col-span-6">
                   <label className="label block mb-1">Than (auto)</label>
                   <input id="dami-than" name="than" type="number" className="input-box mono text-right bg-blue-50" defaultValue={formItem?.than ?? ""} readOnly />
                 </div>
-                <div className="col-span-6">
+                <div className="col-span-1 sm:col-span-6">
                   <label className="label block mb-1">Meter (auto)</label>
                   <input id="dami-mtrs" name="mtrs" type="number" step="any" className="input-box mono text-right bg-blue-50" defaultValue={formItem?.mtrs ?? ""} readOnly />
                 </div>
@@ -486,12 +486,12 @@ export default async function GreyDespatchDamiPage({
               </div>
 
               {/* Row 7: Printing Name / Location. Broker Name removed. */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-4">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-1 sm:col-span-4">
                   <label className="label block mb-1">Printing Name</label>
                   <input name="printing_name" className="input-box" defaultValue={formItem?.printingName ?? ""} />
                 </div>
-                <div className="col-span-8">
+                <div className="col-span-1 sm:col-span-8">
                   <label className="label block mb-1">Printing Location</label>
                   <input name="printing_location" className="input-box" defaultValue={formItem?.printingLocation ?? ""} />
                 </div>
@@ -499,8 +499,8 @@ export default async function GreyDespatchDamiPage({
               </div>
 
               {/* Row 8: Remarks */}
-              <div className="grid grid-cols-12 gap-2 mb-3 gform">
-                <div className="col-span-12">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 gform">
+                <div className="col-span-1 sm:col-span-12">
                   <label className="label block mb-1">Remarks</label>
                   <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
                 </div>
@@ -562,14 +562,14 @@ export default async function GreyDespatchDamiPage({
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[12px] mb-3">
                   <div><span className="text-[var(--muted)]">Sale Party: </span><b>{formItem.saleParty ?? "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Sal Date: </span><b>{formItem.salDate ?? "—"}</b></div>
-                  <div className="col-span-2"><span className="text-[var(--muted)]">Dsp. Quality: </span><b>{formItem.dspQuality}{formItem.dspQualityDesc ? ` | ${formItem.dspQualityDesc}` : ""}</b></div>
+                  <div className="col-span-1 sm:col-span-2"><span className="text-[var(--muted)]">Dsp. Quality: </span><b>{formItem.dspQuality}{formItem.dspQualityDesc ? ` | ${formItem.dspQualityDesc}` : ""}</b></div>
                   <div><span className="text-[var(--muted)]">Product: </span><b>{formItem.product}{formItem.productDesc ? ` | ${formItem.productDesc}` : ""}</b></div>
                   <div><span className="text-[var(--muted)]">Width: </span><b>{formItem.width ? `${formItem.width}"` : "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Than: </span><b className="text-[var(--accent)]">{formatNum(formItem.than)}</b></div>
                   <div><span className="text-[var(--muted)]">Meter: </span><b className="text-[var(--accent)]">{formatNum(formItem.mtrs)}</b></div>
                   <div><span className="text-[var(--muted)]">Printing Name: </span><b>{formItem.printingName ?? "—"}</b></div>
                   <div><span className="text-[var(--muted)]">Printing Location: </span><b>{formItem.printingLocation ?? "—"}</b></div>
-                  {formItem.remarks && <div className="col-span-2"><span className="text-[var(--muted)]">Remarks: </span><b>{formItem.remarks}</b></div>}
+                  {formItem.remarks && <div className="col-span-1 sm:col-span-2"><span className="text-[var(--muted)]">Remarks: </span><b>{formItem.remarks}</b></div>}
                 </div>
 
                 {/* Link to print/voucher page */}
@@ -587,7 +587,7 @@ export default async function GreyDespatchDamiPage({
           </div>
 
           {/* ─── RIGHT: Piece Line Grid + the slip's own details ─── */}
-          <div className="w-72 shrink-0 border border-black p-3">
+          <div className="w-full xl:w-72 shrink-0 border border-black p-3">
             <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">Pieces (Than / Mtr)</div>
             <div className="text-[10px] text-[var(--muted)] mb-2">Press Enter to add next row</div>
             <DamiLineGrid
