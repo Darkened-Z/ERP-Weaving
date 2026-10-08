@@ -1138,7 +1138,7 @@ export default async function PackiParchiPage({
         <GuardSubmit tabIndex={11}
           rules={[
             { field: "than", message: "Than is mandatory." },
-            { field: "meter_re", message: "Meter RE is mandatory." },
+            { field: "kp_meter", message: "Meter is mandatory." },
             { field: "grey_rate", message: "Purchase Rate is mandatory." },
             { field: "sale_party", message: "Sale Party is mandatory." },
             { any: ["conv_cont_no_sale", "conv_cont_sale2"], message: "Either Grey Sale Contract or Conversion Contract is mandatory." },
@@ -1527,7 +1527,7 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Grey Sale Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
                 <FindingPicker
-                  required tabIndex={5} name="conv_cont_no_sale"
+                  tabIndex={5} name="conv_cont_no_sale"
                   defaultValue={formItem?.convContNoSale ?? ""}
                   rows={salContractFindRows}
                   columns={saleContractColumns}
@@ -1552,7 +1552,7 @@ export default async function PackiParchiPage({
               <div className="lg:col-span-3">
                 <label className="label block mb-1">Conversion Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
                 <FindingPicker
-                  required tabIndex={6} name="conv_cont_sale2"
+                  tabIndex={6} name="conv_cont_sale2"
                   defaultValue={formItem?.convContSale2 ?? ""}
                   rows={convContractFindRows}
                   columns={convContractColumns}
