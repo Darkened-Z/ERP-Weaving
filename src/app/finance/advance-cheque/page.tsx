@@ -826,7 +826,7 @@ export default async function AdvanceChequePage({
                 <span className="text-[11px] text-[var(--muted)] ml-2">Har line = ek cheque (Dr party / Cr bank-advance). Khali lines chhod dein.</span>
               </div>
 
-                            <RowAutoFill watch="line_adv" map={advTitleMap} />
+                            
               <datalist id="adv-party-accts">
                 {partyOpts.map((o) => (<option key={o.value} value={o.value}>{o.desc}</option>))}
               </datalist>
