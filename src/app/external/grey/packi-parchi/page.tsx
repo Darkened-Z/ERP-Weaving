@@ -578,11 +578,11 @@ export default async function PackiParchiPage({
     // screen is read-only and a posted form could otherwise carry anything.
     const convRate = num(formData.get("conv_rate"));
     const convAmount = convRate != null ? rnd(meterNetC * convRate) : null;
-    const salAmtTot = greyAmtSal + commissionSaleAmt - kaatSalAmt - checkerySalAmt;
+    const salAmtTot = greyAmtSal - kaatSalAmt - checkerySalAmt;
 
     const brokerAmtSal = rnd((greyAmtSal * (brokerPercentSale ?? 0)) / 100);
     const salAmtDiffC = salAmtTot - purBal;
-    const commissionTotalC = rnd(salAmtDiffC - brokerAmtSal - brokerAmtPv);
+    const commissionTotalC = rnd(salAmtDiffC - brokerAmtSal - brokerAmtPv + commissionSaleAmt);
     const diffC = commissionTotalC - ((woc ?? 0) + (wc ?? 0) + (wck ?? 0));
 
     const warpQuality = txt(formData.get("warp_quality"));

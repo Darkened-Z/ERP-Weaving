@@ -85,11 +85,11 @@ function recompute() {
   const kaatSalAmt = r((greyAmtSal * (numOf("kaat_percent_sale") ?? 0)) / 100);
   // Rate per METER (see the server note) — the /40 understated it 40-fold.
   const checkerySalAmt = r(meterNet * (numOf("checkery_sale") ?? 0));
-  const salAmtTot = greyAmtSal + commissionSaleAmt - kaatSalAmt - checkerySalAmt;
+  const salAmtTot = greyAmtSal - kaatSalAmt - checkerySalAmt;
 
   const brokerAmtSal = r((greyAmtSal * (numOf("broker_percent_sale") ?? 0)) / 100);
   const salAmtDiff = salAmtTot - purBal;
-  const commissionTotal = r(salAmtDiff - brokerAmtSal - brokerAmtPv);
+  const commissionTotal = r(salAmtDiff - brokerAmtSal - brokerAmtPv + commissionSaleAmt);
   const diff =
     commissionTotal - ((numOf("woc") ?? 0) + (numOf("wc") ?? 0) + (numOf("wck") ?? 0));
 
