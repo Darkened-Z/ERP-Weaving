@@ -530,7 +530,7 @@ export default async function AdvanceChequePage({
   });
   const partyOpts = accounts.filter((a) => a.level >= 4).map(opt);
   const advOpts = accounts.filter((a) => a.code.startsWith(ADV_PREFIX)).map(opt);
-  const bankOpts = accounts.filter((a) => a.code.startsWith(BANK_PREFIX)).map(opt);
+  const bankOpts = accounts.filter((a) => a.code.startsWith(BANK_PREFIX) || a.description.toUpperCase().includes("CASH")).map(opt);
   const dishonourOpts = accounts.filter((a) => a.code.startsWith(DISHONOUR_PREFIX)).map(opt);
   const advTitleMap = Object.fromEntries(advOpts.map((o) => [o.value, { line_adv_title: o.desc }]));
 
@@ -847,7 +847,7 @@ export default async function AdvanceChequePage({
               <input type="hidden" name="id" value={target.issueId} />
               <input type="hidden" name="chq" value={target.chqNo} />
               <div className="lg:col-span-6">
-                <label className="label block mb-1">Bank A/C (Cr — jahan se paisa gaya)</label>
+                <label className="label block mb-1">Bank / Cash A/C (Cr — jahan se paisa gaya)</label>
                 <Combobox name="bank_acc" options={bankOpts} defaultValue="" placeholder="1.01.15.02.*" />
               </div>
               <div className="lg:col-span-3">
