@@ -154,6 +154,12 @@ export default async function DailyProductionPage({
         .filter((p) => String(p.code).startsWith(sizingPrefix))
         .map((p) => ({ value: p.description, label: `${p.code} — ${p.description}` }))
     : convPartyOpts;
+  const justDesc = (str: string | null | undefined) => {
+  if (!str) return null;
+  const parts = str.split(/ - | — | � /);
+  if (parts.length > 1) return parts.slice(1).join(" - ").trim();
+  return str.trim();
+};
   const descByCode = new Map(parties.map((p) => [String(p.code), p.description]));
   // Beams carry no party of their own yet — the warped-beam receiving bill that
   // brought the beam in holds both (sizing party = who sized it, bm sale party =
@@ -179,10 +185,10 @@ export default async function DailyProductionPage({
       }
     }
     for (const r of recv) {
-      const saleDesc = r.sale ? descByCode.get(r.sale) ?? r.sale : null;
+      const saleDesc = r.sale ? descByCode.get(r.sale) ?? justDesc(r.sale) : null;
       const contParty = r.sizingContNo ? sizContParty.get(r.sizingContNo) ?? null : null;
       receivingParties.set(r.vNo, {
-        szg: r.from ? descByCode.get(r.from) ?? r.from : null,
+        szg: r.from ? descByCode.get(r.from) ?? justDesc(r.from) : null,
         sale: saleDesc || contParty,
       });
     }
@@ -285,8 +291,8 @@ export default async function DailyProductionPage({
   const partiesOfBeam = (b: (typeof beamCatalog)[number]) => {
     const recv = b.brVno ? receivingParties.get(b.brVno) : undefined;
     return {
-      beamContParty: b.partyTrade ?? recv?.sale ?? null,
-      szgParty: b.szgParty ?? recv?.szg ?? null,
+      beamContParty: (b.partyTrade ? descByCode.get(b.partyTrade) ?? justDesc(b.partyTrade) : null) ?? recv?.sale ?? null,
+      szgParty: (b.szgParty ? descByCode.get(b.szgParty) ?? justDesc(b.szgParty) : null) ?? recv?.szg ?? null,
     };
   };
   const beamPartyMap: Record<string, { beamContParty: string | null; szgParty: string | null; contNo: string | null }> = {};
@@ -481,7 +487,7 @@ export default async function DailyProductionPage({
   for (const [bn, bp] of Object.entries(beamPartyMap)) {
     if (!bp.beamContParty && bp.contNo) {
       const cp = partyByContNo.get(bp.contNo);
-      if (cp) bp.beamContParty = descByCode.get(cp) ?? cp;
+      if (cp) bp.beamContParty = descByCode.get(cp) ?? justDesc(cp);
     }
   }
 
