@@ -2,6 +2,7 @@ import { acc } from "@/lib/gl-accounts";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { GrowRows } from "@/components/grow-rows";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { AccountCodeHint } from "@/components/account-code-hint";
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
 const VTYPE = "CR";
 const BASE = "/finance/cr";
 const TITLE = "CASH\u00A0\u00A0RECEIPTS (WVG)";
-const LINE_ROWS = 4;
+const LINE_ROWS = 50;
 const TRN_TYPES = ["CASH", "CHEQUE", "ONLINE", "ADJUSTMENT"];
 
 async function saveVoucher(formData: FormData) {
@@ -702,6 +703,7 @@ export default async function CashReceiptPage({
               </div>
               <RowAutoFill watch="line_acc" map={accDescMap} />
               <div className="overflow-x-auto border border-black">
+                  <GrowRows tbodyId="line-rows" initial={2} />
                 <AccountCodeHint field="line_acc" />
                   <table className="mono text-[12px]" style={{ minWidth: 1400 }}>
                   <thead>
@@ -719,7 +721,7 @@ export default async function CashReceiptPage({
                       <th style={{ width: 40 }}></th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody id="line-rows">
                     {Array.from({ length: rowsToShow }).map((_, i) => {
                       const l = gridLines[i];
                       return (
