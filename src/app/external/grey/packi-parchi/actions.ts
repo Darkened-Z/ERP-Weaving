@@ -3,6 +3,7 @@
 import { getSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 export async function checkSavePasswordAction(password: string): Promise<boolean> {
   const session = await getSession();
@@ -13,6 +14,6 @@ export async function checkSavePasswordAction(password: string): Promise<boolean
     .from(schema.users)
     .where(eq(schema.users.id, session.userId))
     .limit(1);
-  return !!user && user.password === password.trim();
+  return !!user && await bcrypt.compare(password.trim(), user.password);
 }
 
