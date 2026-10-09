@@ -285,10 +285,10 @@ export default async function FoldingStockPage({
   .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
 }`}</style>
         <div className="overflow-x-auto">
-          <table className="w-full text-[11px]" style={{ minWidth: 900 }}>
+          <table className="w-full text-[11px]" style={{ minWidth: 1100 }}>
             <thead>
               <tr>
-                <th>Quality</th>
+                <th style={{ minWidth: 160 }}>Quality</th>
                 <th>Contract</th>
                 <th>Design#</th>
                 <th>Godown</th>
@@ -299,7 +299,7 @@ export default async function FoldingStockPage({
                 <th className="text-right">Despatch</th>
                 <th className="text-right">Balance</th>
                 <th className="text-right no-print" style={{ borderLeft: "2px solid #cbd5e1" }}>Tot.Lm</th>
-                <th className="no-print">Loom#</th>
+                <th className="no-print" style={{ minWidth: 140 }}>Loom#</th>
                 <th className="no-print"></th>
               </tr>
             </thead>
