@@ -229,8 +229,8 @@ export default async function FoldingStockDetailPage({
                       <td className="mono text-right">{e.kind === "P" && e.b ? fmt2(e.b) : ""}</td>
                       <td className="mono text-right">{e.kind === "P" && e.c ? fmt2(e.c) : ""}</td>
                       <td className="mono text-right">{e.kind === "P" && e.cp ? fmt2(e.cp) : ""}</td>
-                      <td className="mono text-right">{e.inQty ? fmt(e.inQty) : ""}</td>
-                      <td className="mono text-right">{e.outQty ? fmt(e.outQty) : ""}</td>
+                      <td className="mono text-right">{e.inQty ? fmt2(e.inQty) : ""}</td>
+                      <td className="mono text-right">{e.outQty ? fmt2(e.outQty) : ""}</td>
                       <td className="mono text-[12px]">{e.than || "—"}</td>
                       <td className="mono text-[12px] font-bold" title={e.despDate ? `Despatched ${e.despDate}` : undefined}>
                         {e.despVNo || ""}
