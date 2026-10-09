@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { and, eq, gte, inArray, like, lte, lt, sql } from "drizzle-orm";
-import { fmt, sixMonthsAgo, todayIso } from "../../_shared";
+import { fmt, fmt2, sixMonthsAgo, todayIso } from "../../_shared";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { DateBox } from "@/components/date-box";
@@ -330,15 +330,15 @@ export default async function FoldingStockPage({
                           ))}
                         </td>
                         <td className="mono text-right">
-                          {fmt(r.opening)}
+                          {fmt2(r.opening)}
                           {(r.thanOpen || r.thanDesp) ? <div style={{ fontSize: 9, color: "#64748b" }}>{r.thanOpen} than · {r.thanDesp} desp · {r.thanBal} bal</div> : null}
                         </td>
-                        <td className="mono text-right">{fmt(r.production)}</td>
-                        <td className="mono text-right">{fmt(r.rejection)}</td>
-                        <td className="mono text-right">{fmt(r.total)}</td>
-                        <td className="mono text-right">{fmt(r.despatch)}</td>
+                        <td className="mono text-right">{fmt2(r.production)}</td>
+                        <td className="mono text-right">{fmt2(r.rejection)}</td>
+                        <td className="mono text-right">{fmt2(r.total)}</td>
+                        <td className="mono text-right">{fmt2(r.despatch)}</td>
                         <td className="mono text-right font-bold">
-                          {fmt(r.balance)}
+                          {fmt2(r.balance)}
                           {r.totalThanBal ? <div style={{ fontSize: 9, color: "#dc2626", fontWeight: 400 }}>{r.totalThanBal} than</div> : null}
                         </td>
                         <td className="mono text-right no-print" style={{ borderLeft: "2px solid #cbd5e1" }}>{r.looms.length || ""}</td>
@@ -355,15 +355,15 @@ export default async function FoldingStockPage({
                     <tr key={`s-${party}`} style={{ background: "#f1f5f9", fontWeight: 700 }}>
                       <td colSpan={4} className="text-right pr-2">{party} TOTAL</td>
                       <td className="mono text-right">
-                        {fmt(sub.opening)}
+                        {fmt2(sub.opening)}
                         {(sub.thanOpen || sub.thanDesp) ? <div style={{ fontSize: 9, color: "#64748b" }}>{sub.thanOpen} than · {sub.thanDesp} desp · {sub.thanBal} bal</div> : null}
                       </td>
-                      <td className="mono text-right">{fmt(sub.production)}</td>
-                      <td className="mono text-right">{fmt(sub.rejection)}</td>
-                      <td className="mono text-right">{fmt(sub.total)}</td>
-                      <td className="mono text-right">{fmt(sub.despatch)}</td>
+                      <td className="mono text-right">{fmt2(sub.production)}</td>
+                      <td className="mono text-right">{fmt2(sub.rejection)}</td>
+                      <td className="mono text-right">{fmt2(sub.total)}</td>
+                      <td className="mono text-right">{fmt2(sub.despatch)}</td>
                       <td className="mono text-right">
-                        {fmt(sub.balance)}
+                        {fmt2(sub.balance)}
                         {sub.totalThanBal ? <div style={{ fontSize: 9, color: "#dc2626", fontWeight: 400 }}>{sub.totalThanBal} than</div> : null}
                       </td>
                       <td className="no-print" style={{ borderLeft: "2px solid #cbd5e1" }}></td>
@@ -379,15 +379,15 @@ export default async function FoldingStockPage({
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
                   <td colSpan={4} className="text-right pr-2">GRAND TOTAL</td>
                   <td className="mono text-right">
-                    {fmt(grand.opening)}
+                    {fmt2(grand.opening)}
                     {(grand.thanOpen || grand.thanDesp) ? <div style={{ fontSize: 9, color: "#64748b" }}>{grand.thanOpen} than · {grand.thanDesp} desp · {grand.thanBal} bal</div> : null}
                   </td>
-                  <td className="mono text-right">{fmt(grand.production)}</td>
-                  <td className="mono text-right">{fmt(grand.rejection)}</td>
-                  <td className="mono text-right">{fmt(grand.opening + grand.production)}</td>
-                  <td className="mono text-right">{fmt(grand.despatch)}</td>
+                  <td className="mono text-right">{fmt2(grand.production)}</td>
+                  <td className="mono text-right">{fmt2(grand.rejection)}</td>
+                  <td className="mono text-right">{fmt2(grand.opening + grand.production)}</td>
+                  <td className="mono text-right">{fmt2(grand.despatch)}</td>
                   <td className="mono text-right">
-                    {fmt(grand.balance)}
+                    {fmt2(grand.balance)}
                     {grand.totalThanBal ? <div style={{ fontSize: 9, color: "#dc2626", fontWeight: 400 }}>{grand.totalThanBal} than</div> : null}
                   </td>
                   <td className="no-print" style={{ borderLeft: "2px solid #cbd5e1" }}></td>
