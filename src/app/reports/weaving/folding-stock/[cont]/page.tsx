@@ -252,6 +252,7 @@ export default async function FoldingStockDetailPage({
                       <td className="mono text-right font-bold">{fmt2(bal)}</td>
                     </tr>
                   );
+                });
                 })()
               )}
             </tbody>
