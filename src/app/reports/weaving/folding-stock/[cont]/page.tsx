@@ -213,7 +213,7 @@ export default async function FoldingStockDetailPage({
                 <td className="mono text-[12px]">{from}</td>
                 <td colSpan={10} className="text-[11px]">OPENING</td>
                 <td></td>
-                <td className="mono text-right">{fmt(opening)}</td>
+                <td className="mono text-right">{fmt2(opening)}</td>
               </tr>
               {rows.length === 0 ? (
                 <tr><td colSpan={13} className="text-center text-[var(--muted)] py-8">No production or despatch for this contract in period.</td></tr>
@@ -236,7 +236,7 @@ export default async function FoldingStockDetailPage({
                         {e.despVNo || ""}
                       </td>
                       <td className="mono text-[11px]">{e.loom || ""}</td>
-                      <td className="mono text-right font-bold">{fmt(bal)}</td>
+                      <td className="mono text-right font-bold">{fmt2(bal)}</td>
                     </tr>
                   );
                 })
@@ -245,12 +245,12 @@ export default async function FoldingStockDetailPage({
             <tfoot>
               <tr style={{ borderTop: "2px solid black", fontWeight: 700 }}>
                 <td colSpan={7} className="text-right pr-2">TOTAL</td>
-                <td className="mono text-right">{fmt(totIn)}</td>
-                <td className="mono text-right">{fmt(totOut)}</td>
+                <td className="mono text-right">{fmt2(totIn)}</td>
+                <td className="mono text-right">{fmt2(totOut)}</td>
                 <td></td>
                 <td></td>
                 <td></td>
-                <td className="mono text-right">{fmt(opening + totIn - totOut)}</td>
+                <td className="mono text-right">{fmt2(opening + totIn - totOut)}</td>
               </tr>
             </tfoot>
           </table>
