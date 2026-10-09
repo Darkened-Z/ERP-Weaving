@@ -190,7 +190,7 @@ export default async function FoldingStockDetailPage({
           </table>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px] print:text-[10px]">
+          <table className="w-full text-[12px] print:text-[10px]" style={{ minWidth: 900 }}>
             <thead>
               <tr>
                 <th>Date</th>

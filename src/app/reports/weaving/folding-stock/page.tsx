@@ -227,7 +227,7 @@ export default async function FoldingStockPage({
   return (
     <Shell active="w-folding-stock">
       <div className="animate-in">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-4 gap-4 no-print">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-4 gap-4 no-print flex-wrap">
           <div>
             <h1 className="page-title">Daily Folding Stock</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
@@ -237,8 +237,8 @@ export default async function FoldingStockPage({
               {withZero ? " · with zero" : " · without zero"}
             </p>
           </div>
-          <div className="flex items-end gap-2">
-            <form method="GET" className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <form method="GET" className="flex flex-wrap items-end gap-2">
               <div>
                 <label className="label block mb-1">From</label>
                 <DateBox name="from" defaultValue={from} className="input-box mono" />
@@ -285,7 +285,7 @@ export default async function FoldingStockPage({
   .overflow-x-auto th, .overflow-x-auto td { padding: 4px 6px !important; }
 }`}</style>
         <div className="overflow-x-auto">
-          <table className="w-full text-[11px]">
+          <table className="w-full text-[11px]" style={{ minWidth: 900 }}>
             <thead>
               <tr>
                 <th>Quality</th>
