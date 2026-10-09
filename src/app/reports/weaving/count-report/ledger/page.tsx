@@ -309,7 +309,7 @@ export default async function WeavingCountLedgerPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table style={{ minWidth: 1180 }}>
+          <table className="w-full text-[12px] print:text-[10px]" style={{ minWidth: 1000 }}>
             <thead>
               <tr>
                 <th>V.No / Book</th>
@@ -342,7 +342,7 @@ export default async function WeavingCountLedgerPage({
                           Width <span className="font-bold">{fmt2(g.info.width)}&quot;</span>
                         </span>
                       )}
-                      {g.info.convRate != null && <span className="float-right font-normal">Conv Rate {fmt2(g.info.convRate)}</span>}
+                      {g.info.convRate != null && <span className="float-right sm:float-none sm:ml-4 font-normal">Conv Rate {fmt2(g.info.convRate)}</span>}
                     </td>
                   </tr>,
                   <tr key={`h2-${g.cont}`} style={{ background: "#e2e8f0" }}>
@@ -447,7 +447,7 @@ export default async function WeavingCountLedgerPage({
         {/* SUMMERY REPORT — Oracle footer: Send / Consumed / Balance in bags + lbs
             at the seed rate, with the party banner underneath. */}
         <div className="mt-6 flex justify-end">
-          <div className="border-2 border-black" style={{ minWidth: 420 }}>
+          <div className="border-2 border-black w-full md:w-auto" style={{ minWidth: "min(100%, 420px)" }}>
             <div className="px-3 py-1.5 border-b border-black flex justify-between items-baseline">
               <span className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: "#b91c1c" }}>Summery Report</span>
               {/* Count + description + BLEND — "21 36/s" alone does not say what
