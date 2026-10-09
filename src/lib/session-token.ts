@@ -10,7 +10,8 @@ const SECRET =
     : "dev-secret-change-in-production");
 
 /** Session lifetime; the cookie's maxAge and the embedded expiry agree. */
-export const SESSION_TTL_SECONDS = 60 * 60 * 24;
+export const SESSION_SHORT_TTL = 2 * 60 * 60; // 2 hours
+export const SESSION_LONG_TTL = 30 * 24 * 60 * 60; // 30 days
 
 export type Session = {
   userId: number;
@@ -24,8 +25,8 @@ function sign(payload: string): Buffer {
   return createHmac("sha256", SECRET).update(payload).digest();
 }
 
-export function createToken(session: Session): string {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
+export function createToken(session: Session, ttlSeconds: number): string {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const payload = Buffer.from(JSON.stringify({ ...session, exp })).toString("base64");
   return `${payload}.${sign(payload).toString("hex")}`;
 }

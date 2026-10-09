@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { createToken, verifyToken, SESSION_TTL_SECONDS, type Session } from "@/lib/session-token";
+import { createToken, verifyToken, SESSION_SHORT_TTL, SESSION_LONG_TTL, type Session } from "@/lib/session-token";
 
 export type { Session };
 
@@ -40,7 +40,7 @@ function noteFailure(key: string) {
   else f.count++;
 }
 
-export async function login(loginId: string, password: string): Promise<Session | null | "throttled"> {
+export async function login(loginId: string, password: string, remember: boolean = false): Promise<Session | null | "throttled"> {
   const key = (loginId ?? "").trim().toLowerCase();
   if (isThrottled(key)) return "throttled";
 
@@ -64,7 +64,8 @@ export async function login(loginId: string, password: string): Promise<Session 
     allowedModules: user.allowedModules ? user.allowedModules.split(",").map(s => s.trim()).filter(Boolean) : null,
   };
 
-  const signed = createToken(session);
+  const ttl = remember ? SESSION_LONG_TTL : SESSION_SHORT_TTL;
+  const signed = createToken(session, ttl);
 
   const isProd = process.env.NODE_ENV === "production";
   const cookieStore = await cookies();
@@ -73,7 +74,7 @@ export async function login(loginId: string, password: string): Promise<Session 
     sameSite: "lax",
     secure: isProd,
     path: "/",
-    maxAge: SESSION_TTL_SECONDS,
+    maxAge: ttl,
   });
 
   return session;
