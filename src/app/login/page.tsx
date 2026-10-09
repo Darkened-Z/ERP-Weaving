@@ -16,7 +16,8 @@ export default async function LoginPage({
     const loginId = formData.get("login") as string;
     const password = formData.get("password") as string;
 
-    const result = await login(loginId, password);
+    const remember = formData.get("remember") === "on";
+    const result = await login(loginId, password, remember);
     if (result === "throttled") redirect("/login?error=throttled");
     if (!result) {
       redirect("/login?error=1");
@@ -66,6 +67,11 @@ export default async function LoginPage({
                   : "Invalid credentials. Try again."}
               </p>
             )}
+
+            <div className="flex items-center gap-2 mt-4">
+              <input type="checkbox" id="remember" name="remember" className="h-4 w-4 border-gray-300 rounded" />
+              <label htmlFor="remember" className="text-[13px] text-gray-700 select-none cursor-pointer">Trust this device (keep me logged in)</label>
+            </div>
 
             <button type="submit" className="btn w-full justify-center mt-4">
               Sign In
