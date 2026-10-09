@@ -29,11 +29,18 @@ export default async function FoldingStockDetailPage({
       contNo: schema.intGreyConversionContract.contNo,
       party: schema.intGreyConversionContract.party,
       quality: schema.intGreyConversionContract.productQuality,
+      productName: schema.intGreyConversionContract.productName,
       designNo: schema.intGreyConversionContract.designNo,
         qCode: schema.intGreyConversionContract.grayQltyCode,
     })
     .from(schema.intGreyConversionContract)
     .where(eq(schema.intGreyConversionContract.contNo, cont));
+
+  let mainDesc = "";
+  if (contract?.productName) {
+    const [prod] = await db.select({ mainDesc: schema.products.mainDesc }).from(schema.products).where(eq(schema.products.description, contract.productName));
+    if (prod?.mainDesc) mainDesc = prod.mainDesc;
+  }
 
   const prodRows = await db
     .select({
@@ -181,8 +188,9 @@ export default async function FoldingStockDetailPage({
           <table className="w-full border-t border-b border-black text-[12px] font-bold">
             <tbody>
               <tr>
-                <td className="text-left py-1 text-blue-700">{contract?.party ?? ""}</td>
-                <td className="text-right py-1 text-blue-700">
+                <td className="text-left py-1 text-blue-700 w-1/3">{contract?.party ?? ""}</td>
+                <td className="text-center py-1 w-1/3 text-[11px] text-[var(--muted)]">{mainDesc}</td>
+                <td className="text-right py-1 text-blue-700 w-1/3">
                   {contract?.quality ?? ""} &nbsp;&nbsp; <span className="text-red-600">{cont}</span>
                 </td>
               </tr>
