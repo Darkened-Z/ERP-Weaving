@@ -226,8 +226,13 @@ export default async function FoldingStockDetailPage({
               {rows.length === 0 ? (
                 <tr><td colSpan={13} className="text-center text-[var(--muted)] py-8">No production or despatch for this contract in period.</td></tr>
               ) : (
-                rows.map((e, i) => {
+                (() => {
+                  let cumProd = 0;
+                  let cumDesp = 0;
+                  return rows.map((e, i) => {
                   bal += e.inQty - e.outQty;
+                    if (e.kind === "P") cumProd += e.inQty || 0;
+                    if (e.kind === "D") cumDesp += e.outQty || 0;
                   return (
                     <tr key={i} style={e.kind === "D" ? { background: "#f8fafc" } : undefined}>
                       <td className="mono text-[12px] whitespace-nowrap">{e.date}</td>
@@ -237,8 +242,8 @@ export default async function FoldingStockDetailPage({
                       <td className="mono text-right">{e.kind === "P" && e.b ? fmt2(e.b) : ""}</td>
                       <td className="mono text-right">{e.kind === "P" && e.c ? fmt2(e.c) : ""}</td>
                       <td className="mono text-right">{e.kind === "P" && e.cp ? fmt2(e.cp) : ""}</td>
-                      <td className="mono text-right">{e.inQty ? fmt2(e.inQty) : ""}</td>
-                      <td className="mono text-right">{e.outQty ? fmt2(e.outQty) : ""}</td>
+                      <td className="mono text-right">{e.kind === "P" ? fmt2(cumProd) : ""}</td>
+                      <td className="mono text-right">{e.kind === "D" ? fmt2(cumDesp) : ""}</td>
                       <td className="mono text-[12px]">{e.than || "—"}</td>
                       <td className="mono text-[12px] font-bold" title={e.despDate ? `Despatched ${e.despDate}` : undefined}>
                         {e.despVNo || ""}
@@ -247,7 +252,7 @@ export default async function FoldingStockDetailPage({
                       <td className="mono text-right font-bold">{fmt2(bal)}</td>
                     </tr>
                   );
-                })
+                })()
               )}
             </tbody>
             <tfoot>
