@@ -351,7 +351,7 @@ export default async function WeavingCountLedgerPage({
                           way the mill's sheet sets them out — ends beside the
                           lbs each metre takes, totalled down both columns. */}
                       <table
-                        className="inline-table align-middle border border-black mono text-[11px]"
+                        className="inline-table w-auto align-middle border border-black mono text-[11px]"
                         style={{ borderCollapse: "collapse" }}
                       >
                         <thead>
