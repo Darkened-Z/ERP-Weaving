@@ -219,11 +219,39 @@ async function saveKnotting(formData: FormData) {
     wantedLooms.add(k);
   }
   if (wantedLooms.size) {
+    // A beam is knotted straight out of the godown. A new line whose beam isn't
+    // LOADED used to save anyway with the mount silently skipped: the bill kept
+    // the line, the beam never reached its loom, and the loom stayed reserved.
+    const priorBeams = new Set<string>();
+    if (Number.isFinite(id) && id > 0) {
+      const prior = await db
+        .select({ beamNo: schema.intKnottingSarningLine.beamNo })
+        .from(schema.intKnottingSarningLine)
+        .where(eq(schema.intKnottingSarningLine.knottingId, id));
+      for (const p of prior) if (p.beamNo) priorBeams.add(p.beamNo.toUpperCase());
+    }
+    const newBeams = lines
+      .filter((l) => loomKeyOf(l) && l.beamNo && !priorBeams.has(l.beamNo.toUpperCase()))
+      .map((l) => l.beamNo as string);
+    if (newBeams.length) {
+      const found = await db
+        .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+        .from(schema.beams)
+        .where(sql`upper(${schema.beams.beamNo}) IN (${sql.join(newBeams.map((b) => sql`${b.toUpperCase()}`), sql`, `)})`);
+      const statusOf = new Map(found.map((b) => [b.beamNo.toUpperCase(), (b.statusWrk ?? "").toUpperCase()]));
+      const bad = newBeams.find((b) => statusOf.get(b.toUpperCase()) !== "LOADED");
+      if (bad) {
+        const st = statusOf.get(bad.toUpperCase()) || "NOT FOUND";
+        bail(`beam_not_loaded&beam=${encodeURIComponent(bad)}&st=${encodeURIComponent(st)}`);
+      }
+    }
+
     const ownBeams = new Set(lines.map((l) => l.beamNo).filter(Boolean) as string[]);
+    // LOADED means back in the godown, so a stale loom_no on it holds nothing.
     const onLooms = await db
       .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
       .from(schema.beams)
-      .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) <> 'EMPTY'`);
+      .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED')`);
     for (const b of onLooms) {
       const k = `${b.shed ?? ""}|${b.loomNo}`;
       if (wantedLooms.has(k) && !ownBeams.has(b.beamNo)) bail("loom_busy");
@@ -339,9 +367,9 @@ async function saveKnotting(formData: FormData) {
           .values(lines.map((l) => ({ ...l, knottingId: id })));
       }
 
-      // Mount each picked beam on its loom. Beams this bill still owned were
-      // reversed above; any beam already past knotting is left alone.
-      const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "RUNNING", "F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT"]);
+      // Mount each picked beam on its loom (LOADED → KNOTTING). Beams this bill
+      // still owned were reversed above; anything not LOADED now is already
+      // past knotting (or belongs to another bill) and is left alone.
       for (const l of lines) {
         const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
         if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
@@ -350,7 +378,7 @@ async function saveKnotting(formData: FormData) {
             .from(schema.beams)
             .where(eq(schema.beams.beamNo, l.beamNo))
             .limit(1);
-          if (MOUNTED.has((cur?.statusWrk ?? "").toUpperCase())) continue;
+          if ((cur?.statusWrk ?? "").toUpperCase() !== "LOADED") continue;
           await tx
             .update(schema.looms)
             .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -451,7 +479,9 @@ async function saveKnotting(formData: FormData) {
             .values(lines.map((l) => ({ ...l, knottingId: insertedId })));
         }
 
-        const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "RUNNING", "F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT"]);
+        // Mount each picked beam on its loom (LOADED → KNOTTING). A beam that
+        // isn't LOADED is already on a loom or empty; mounting it again would
+        // pull it out from under its current bill.
         for (const l of lines) {
           const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
           if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
@@ -460,7 +490,7 @@ async function saveKnotting(formData: FormData) {
               .from(schema.beams)
               .where(eq(schema.beams.beamNo, l.beamNo))
               .limit(1);
-            if (MOUNTED.has((cur?.statusWrk ?? "").toUpperCase())) continue;
+            if ((cur?.statusWrk ?? "").toUpperCase() !== "LOADED") continue;
             await tx
               .update(schema.looms)
               .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -725,6 +755,8 @@ export default async function KnottingPage({
     error?: string;
     find?: string;
     thru?: string;
+    beam?: string;
+    st?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -828,7 +860,7 @@ export default async function KnottingPage({
       shed: schema.beams.shed,
     })
     .from(schema.beams)
-    .where(sql`upper(${schema.beams.statusWrk}) IN ('LOADED', 'EMPTY')`)
+    .where(eq(schema.beams.statusWrk, "LOADED"))
     .orderBy(schema.beams.beamNo);
   const beamFillMap = Object.fromEntries(
     loadedBeams.map((b) => [
@@ -891,11 +923,12 @@ export default async function KnottingPage({
   // (L-ROLL) is posted and both loom and beam are freed. So the loom must be
   // off the pick list until then. Occupancy is read from three sources because
   // older rows may miss one: the beam's loom_no, the loom's current_beam, and
-  // any saved knotting line whose beam has not gone EMPTY.
+  // any saved knotting line whose beam is actually mounted. A LOADED beam sits
+  // in the godown, so an old bill line naming it reserves nothing.
   const beamsOnLooms = await db
     .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
     .from(schema.beams)
-    .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) <> 'EMPTY'`);
+    .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED')`);
   const knottedLooms = await db
     .select({
       beamNo: schema.intKnottingSarningLine.beamNo,
@@ -905,7 +938,7 @@ export default async function KnottingPage({
     })
     .from(schema.intKnottingSarningLine)
     .leftJoin(schema.beams, eq(schema.beams.beamNo, schema.intKnottingSarningLine.beamNo))
-    .where(sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY')`);
+    .where(sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'LOADED')`);
   const busyLooms = new Map<string, string>();
   for (const b of beamsOnLooms) busyLooms.set(`${b.shed ?? ""}|${b.loomNo}`, b.beamNo);
   for (const lm of loomRows) if (lm.currentBeam) busyLooms.set(`${lm.shed ?? ""}|${lm.loomNo}`, lm.currentBeam);
@@ -1030,7 +1063,16 @@ export default async function KnottingPage({
         )}
         {params.error === "beam_not_loaded" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
-            Cannot mount — the beam is not LOADED (it is empty, in production, or on another bill).
+            {params.beam ? (
+              <>
+                Beam <span className="mono">{params.beam}</span> is {params.st || "not LOADED"}.{" "}
+                {params.st === "EMPTY" || params.st === "NOT FOUND"
+                  ? "Save it on Warped Beam Receiving first — that marks it LOADED, then it can be knotted."
+                  : "It is already mounted on a loom. A beam can only be knotted from LOADED."}
+              </>
+            ) : (
+              "Cannot mount — the beam is not LOADED (it is empty, in production, or on another bill)."
+            )}
           </div>
         )}
         {params.error === "has_production" && (
