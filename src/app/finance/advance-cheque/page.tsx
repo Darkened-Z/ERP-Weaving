@@ -1,5 +1,6 @@
 import { Shell } from "@/components/shell";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { RowAutoFill } from "@/components/auto-fill";
@@ -529,6 +530,11 @@ export default async function AdvanceChequePage({
     desc: a.description ?? "",
   });
   const partyOpts = accounts.filter((a) => a.level >= 4).map(opt);
+  const partyFindingRows = accounts.filter((a) => a.level >= 4).map((a) => ({
+    value: a.code,
+    code: a.code,
+    description: a.description ?? "",
+  }));
   const advOpts = accounts.filter((a) => a.code.startsWith(ADV_PREFIX)).map(opt);
   const bankOpts = accounts.filter((a) => a.level >= 5 && (a.code.startsWith(BANK_PREFIX) || a.code.startsWith("1.01.11.01."))).map(opt);
   const dishonourOpts = accounts.filter((a) => a.code.startsWith(DISHONOUR_PREFIX)).map(opt);
@@ -751,12 +757,15 @@ export default async function AdvanceChequePage({
                 </div>
                 <div className="lg:col-span-5">
                   <label className="label block mb-1">Party (Dr)</label>
-                  <input
+                  <FindingPicker
                     name="party"
-                    list="adv-party-accts"
-                    className="input-box mono"
                     defaultValue={isEditForm || isReissue ? target?.party ?? "" : ""}
-                    placeholder="Party account…"
+                    rows={partyFindingRows}
+                    title="PARTY ACCOUNT (DR)"
+                    placeholder="F9 to pick a party account"
+                    className="input-box mono"
+                    showCodeBelow={true}
+                    required
                   />
                 </div>
                 <div className="lg:col-span-4">
