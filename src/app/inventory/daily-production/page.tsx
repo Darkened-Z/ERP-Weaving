@@ -1198,7 +1198,7 @@ export default async function DailyProductionPage({
                 await tx
                   .update(schema.looms)
                   .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed)));
+                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`));
               }
             }
           }
@@ -1288,7 +1288,7 @@ export default async function DailyProductionPage({
                 await tx
                   .update(schema.looms)
                   .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed)));
+                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`));
               }
             }
           }

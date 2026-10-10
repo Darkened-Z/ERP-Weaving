@@ -316,7 +316,7 @@ async function saveKnotting(formData: FormData) {
           await tx
             .update(schema.looms)
             .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-            .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash), eq(schema.looms.currentBeam, ol.beamNo)));
+            .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${ol.beamNo})`));
         }
         await tx
           .update(schema.beams)
@@ -618,7 +618,7 @@ async function deleteKnotting(formData: FormData) {
         await tx
           .update(schema.looms)
           .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-          .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash), eq(schema.looms.currentBeam, ol.beamNo)));
+          .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, ol.shdHash), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${ol.beamNo})`));
       }
       await tx
         .update(schema.beams)
