@@ -339,9 +339,9 @@ async function saveKnotting(formData: FormData) {
           .values(lines.map((l) => ({ ...l, knottingId: id })));
       }
 
-      // Mount each picked beam on its loom (LOADED → KNOTTING). Beams this bill
-      // still owned were reversed above; anything not LOADED now is already
-      // past knotting (or belongs to another bill) and is left alone.
+      // Mount each picked beam on its loom. Beams this bill still owned were
+      // reversed above; any beam already past knotting is left alone.
+      const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "RUNNING", "F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT"]);
       for (const l of lines) {
         const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
         if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
@@ -350,7 +350,7 @@ async function saveKnotting(formData: FormData) {
             .from(schema.beams)
             .where(eq(schema.beams.beamNo, l.beamNo))
             .limit(1);
-          if ((cur?.statusWrk ?? "").toUpperCase() !== "LOADED") continue;
+          if (MOUNTED.has((cur?.statusWrk ?? "").toUpperCase())) continue;
           await tx
             .update(schema.looms)
             .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -451,9 +451,7 @@ async function saveKnotting(formData: FormData) {
             .values(lines.map((l) => ({ ...l, knottingId: insertedId })));
         }
 
-        // Mount each picked beam on its loom (LOADED → KNOTTING). A beam that
-        // isn't LOADED is already on a loom or empty; mounting it again would
-        // pull it out from under its current bill.
+        const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "RUNNING", "F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT"]);
         for (const l of lines) {
           const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
           if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
@@ -462,7 +460,7 @@ async function saveKnotting(formData: FormData) {
               .from(schema.beams)
               .where(eq(schema.beams.beamNo, l.beamNo))
               .limit(1);
-            if ((cur?.statusWrk ?? "").toUpperCase() !== "LOADED") continue;
+            if (MOUNTED.has((cur?.statusWrk ?? "").toUpperCase())) continue;
             await tx
               .update(schema.looms)
               .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -830,7 +828,7 @@ export default async function KnottingPage({
       shed: schema.beams.shed,
     })
     .from(schema.beams)
-    .where(eq(schema.beams.statusWrk, "LOADED"))
+    .where(sql`upper(${schema.beams.statusWrk}) IN ('LOADED', 'EMPTY')`)
     .orderBy(schema.beams.beamNo);
   const beamFillMap = Object.fromEntries(
     loadedBeams.map((b) => [
