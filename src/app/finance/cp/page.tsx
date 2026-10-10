@@ -5,6 +5,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { GrowRows } from "@/components/grow-rows";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { AccountCodeHint } from "@/components/account-code-hint";
 import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -436,6 +437,12 @@ export default async function CashPaymentPage({
   const codeToAcc = new Map(accounts.map((a) => [a.code, a]));
   // Name in the box, code underneath. Typing a code still finds the account —
   // the picker searches the value as well as the label.
+  const accFindRows = accounts.map((a) => ({
+    value: a.code,
+    code: a.code,
+    description: a.description ?? a.code,
+  }));
+
   const accOpts = accounts.map((a) => ({
     value: a.code,
     label: a.description ?? a.code,
@@ -720,11 +727,13 @@ export default async function CashPaymentPage({
                         <tr key={i}>
                           <td className="text-center text-[var(--muted)]">{i + 1}</td>
                           <td>
-                            <Combobox
+                            <FindingPicker
                               name="line_acc"
-                              options={accOpts}
                               defaultValue={l?.accCode ?? ""}
-                              className="input-box text-[12px]"
+                              rows={accFindRows}
+                              title="CHART OF ACCOUNTS"
+                              placeholder="Account (F9)"
+                              className="input-box text-[12px] cursor-pointer"
                             />
                             <div
                               data-code-hint
