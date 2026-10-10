@@ -1,4 +1,3 @@
-import { AccountCodeHint } from "@/components/account-code-hint";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -817,7 +816,6 @@ export default async function BankPaymentPage({
                 </div>
                 <div className="overflow-x-auto border border-black">
                   <GrowRows tbodyId="line-rows" initial={2} />
-                  <AccountCodeHint field="line_acc" />
                   <table className="mono text-[12px]" style={{ minWidth: 1100 }}>
                     <thead>
                       <tr>
@@ -850,12 +848,7 @@ export default async function BankPaymentPage({
                                 defaultValue={l?.accCode ?? ""}
                                 className="input-box text-[12px]"
                               />
-                              <div
-                                data-code-hint
-                                className="mono text-[10px] text-[var(--muted)] mt-0.5 leading-none"
-                              >
-                                {l?.accCode ?? ""}
-                              </div>
+                              
                             </td>
                             <td className="hidden text-center text-[10px] text-[var(--muted)]">
                               {l?.statusOk === "Y" ? "✓" : ""}

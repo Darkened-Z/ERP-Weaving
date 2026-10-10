@@ -6,7 +6,6 @@ import { GrowRows } from "@/components/grow-rows";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
-import { AccountCodeHint } from "@/components/account-code-hint";
 import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { VoucherBalance } from "@/components/voucher-balance";
@@ -711,8 +710,7 @@ export default async function CashReceiptPage({
               <RowAutoFill watch="line_acc" map={accDescMap} />
               <div className="overflow-x-auto border border-black">
                   <GrowRows tbodyId="line-rows" initial={2} />
-                <AccountCodeHint field="line_acc" />
-                  <table className="mono text-[12px]" style={{ minWidth: 1086 }}>
+                <table className="mono text-[12px]" style={{ minWidth: 1086 }}>
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}>Sr#</th>
@@ -742,13 +740,9 @@ export default async function CashReceiptPage({
                               title="CHART OF ACCOUNTS"
                               placeholder="Account (F9)"
                               className="input-box text-[12px] cursor-pointer"
+                              showCodeBelow
                             />
-                            <div
-                              data-code-hint
-                              className="mono text-[10px] text-[var(--muted)] mt-0.5 leading-none"
-                            >
-                              {l?.accCode ?? ""}
-                            </div>
+                            
                           </td>
                           <td className="hidden text-center text-[10px] text-[var(--muted)]">
                             {l?.statusOk === "OK" ? "OK" : ""}

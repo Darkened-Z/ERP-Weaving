@@ -1,6 +1,5 @@
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
-import { AccountCodeHint } from "@/components/account-code-hint";
 import { ImageAttach } from "@/components/image-attach";
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -819,7 +818,6 @@ export default async function JournalVoucherPage({
                 </div>
                 <div className="overflow-x-auto border border-black">
                   <GrowRows tbodyId="jv-line-rows" initial={2} />
-                  <AccountCodeHint field="title" />
                   <table className="mono text-[12px]" style={{ minWidth: 1340 }}>
                     <thead>
                       <tr>
@@ -856,13 +854,9 @@ export default async function JournalVoucherPage({
                                 title="CHART OF ACCOUNTS"
                                 placeholder="Account (F9)"
                                 className={`${cell} cursor-pointer`}
+                                showCodeBelow
                               />
-                              <div
-                                data-code-hint
-                                className="mono text-[10px] text-[var(--muted)] mt-0.5 leading-none"
-                              >
-                                {l?.accCode ?? ""}
-                              </div>
+                              
                             </td>
                             <td className="hidden text-center text-[10px] text-[var(--muted)]">
                               {l?.statusOk === "Y" ? "✓" : ""}
