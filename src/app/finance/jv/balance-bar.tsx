@@ -41,10 +41,31 @@ export function JvBalanceBar({
         });
       setDr(d);
       setCr(c);
+      return { d, c };
     };
+
+    const onSubmit = (e: SubmitEvent) => {
+      const { d, c } = recalc();
+      const emptyTotals = Math.abs(d) < 0.005 && Math.abs(c) < 0.005;
+      if (emptyTotals) {
+         e.preventDefault();
+         alert("Cannot save an empty voucher.");
+         return;
+      }
+      if (Math.abs(d - c) > 0.01) {
+         e.preventDefault();
+         alert("Debit and Credit totals do not match! A journal voucher must balance before it can be saved.\n\nPlease adjust your Dr/Cr amounts.");
+         return;
+      }
+    };
+
     form.addEventListener("input", recalc);
+    form.addEventListener("submit", onSubmit);
     recalc();
-    return () => form.removeEventListener("input", recalc);
+    return () => {
+       form.removeEventListener("input", recalc);
+       form.removeEventListener("submit", onSubmit);
+    };
   }, []);
 
   const diff = dr - cr;
