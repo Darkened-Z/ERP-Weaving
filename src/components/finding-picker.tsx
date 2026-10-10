@@ -219,8 +219,7 @@ export function FindingPicker({
           onClick={() => setOpen(true)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
         />
-        {showCodeBelow && value && <div className='text-[10px] text-[var(--muted)] mono mt-1 ml-1 tracking-wide font-semibold'>{value}</div>}
-      {/* The display is readOnly and a click opens the list, so there was no
+              {/* The display is readOnly and a click opens the list, so there was no
             way at all to take a pick back — on a phone there is not even a
             Delete key to reach for. Only shown once something is picked. */}
         {value ? (
@@ -245,6 +244,7 @@ export function FindingPicker({
           F9
         </button>
       </div>
+      {showCodeBelow && value && <div className='text-[10px] text-[var(--muted)] mono mt-1 ml-1 tracking-wide font-semibold'>{value}</div>}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-8" style={{ background: "rgba(15,23,42,0.6)" }} onClick={() => setOpen(false)}>
