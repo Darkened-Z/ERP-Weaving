@@ -51,6 +51,7 @@ export function FindingPicker({
   filterByField?: string;
   tabIndex?: number;
   required?: boolean;
+  showCodeBelow?: boolean;
   /** Optional Oracle-style columns; when set, the table renders these instead of Code/Description/[Extra]. */
   columns?: Column[];
 }) {
