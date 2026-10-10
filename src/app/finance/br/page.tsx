@@ -6,6 +6,7 @@ import { GrowRows } from "@/components/grow-rows";
 import { RowClearButton } from "@/components/row-clear-button";
 import { VoucherBalance } from "@/components/voucher-balance";
 import { Combobox } from "@/components/combobox";
+import { FindingPicker } from "@/components/finding-picker";
 import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";

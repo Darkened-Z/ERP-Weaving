@@ -483,7 +483,7 @@ export default async function WarpedBeamReceivingPage({
             if (!l.beamNo) continue;
             const c = beamNow.get(l.beamNo);
             // Received again by a later bill: that bill owns the beam now.
-            if (c?.brVno && c.brVno !== vNo) continue;
+            if (c?.brVno && c.brVno !== vNo && c.status !== "EMPTY") continue;
             const advanced = ADVANCED.has(c?.status ?? "");
             // Woven out on this receiving (EMPTY with production in its cycle):
             // re-saving must not load it back.

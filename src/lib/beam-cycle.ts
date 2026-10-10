@@ -76,7 +76,7 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
       await tx
         .update(schema.looms)
         .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-        .where(and(eq(schema.looms.loomNo, beam.loomNo), eq(schema.looms.shed, beam.shed), eq(schema.looms.currentBeam, beamNo)));
+        .where(and(eq(schema.looms.loomNo, beam.loomNo), eq(schema.looms.shed, beam.shed), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`));
     }
     return;
   }
