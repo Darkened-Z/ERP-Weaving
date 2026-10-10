@@ -251,6 +251,15 @@ export const SECTIONS = [
   },
 ];
 
+export function firstAllowedHref(allowed: string[] | null): string {
+  if (!allowed || allowed.length === 0) return "/";
+  const flat = SECTIONS.flatMap(s => [
+    ...(s.items ?? []),
+    ...(s.subsections ?? []).flatMap(sub => sub.items),
+  ]);
+  const first = flat.find(item => allowed.includes(item.key));
+  return first?.href ?? "/";
+}
 
 function filterSections(sections: any[], allowed: string[] | null, role: string) {
   if (role === "ADMIN" || role === "superadmin") return sections;
@@ -260,10 +269,10 @@ function filterSections(sections: any[], allowed: string[] | null, role: string)
   return sections.map(section => {
     const filteredSub = section.subsections?.map((sub: any) => ({
       ...sub,
-      items: sub.items.filter((item: any) => allowed.includes(item.key) || item.key === "dash")
+      items: sub.items.filter((item: any) => allowed.includes(item.key))
     })).filter((sub: any) => sub.items.length > 0);
 
-    const filteredItems = section.items?.filter((item: any) => allowed.includes(item.key) || item.key === "dash");
+    const filteredItems = section.items?.filter((item: any) => allowed.includes(item.key));
 
     return {
       ...section,

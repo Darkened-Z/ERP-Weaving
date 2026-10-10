@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { login, getSession } from "@/lib/auth";
+import { firstAllowedHref } from "@/components/shell";
 
 export default async function LoginPage({
   searchParams,
@@ -7,7 +8,7 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const session = await getSession();
-  if (session) redirect("/");
+  if (session) redirect(firstAllowedHref(session.allowedModules ?? null));
 
   const params = await searchParams;
 
@@ -22,7 +23,7 @@ export default async function LoginPage({
     if (!result) {
       redirect("/login?error=1");
     }
-    redirect("/");
+    redirect(firstAllowedHref(result.allowedModules ?? null));
   }
 
   return (
