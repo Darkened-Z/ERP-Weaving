@@ -55,7 +55,7 @@ export default async function CashBookDayPage({
 
   // Everything that moved on these accounts today, and everything before today
   // so the opening is the real one rather than a figure someone typed.
-  const movements = codes.length
+  const movementsRaw = codes.length
     ? await db
         .select({
           accCode: schema.transDetail.accCode,
@@ -63,7 +63,8 @@ export default async function CashBookDayPage({
           vtype: schema.transDetail.vtype,
           vno: schema.transDetail.vno,
           vdate: schema.transMain.vdate,
-          img: schema.transMain.img,
+          lineImg: schema.transDetail.img,
+          mainImg: schema.transMain.img,
           narration: schema.transDetail.narration,
           debit: schema.transDetail.debit,
           credit: schema.transDetail.credit,
@@ -85,6 +86,11 @@ export default async function CashBookDayPage({
           ),
         )
     : [];
+
+  const movements = movementsRaw.map((r) => ({
+    ...r,
+    img: r.lineImg || (r.vtype !== "JV" && !r.lineImg ? r.mainImg : null),
+  }));
 
   const openingRows = codes.length
     ? await db

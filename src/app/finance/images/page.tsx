@@ -25,6 +25,7 @@ const SOURCES = [
   "BR",
   "CP",
   "CR",
+  "JV",
   "GCCI",
 ] as const;
 
@@ -42,6 +43,7 @@ const SOURCE_LABEL: Record<string, string> = {
   BR: "Bank Receipt Voucher",
   CP: "Cash Payment Voucher",
   CR: "Cash Receipt Voucher",
+  JV: "Journal Voucher",
   GCCI: "Internal Grey Conversion Contract",
 };
 
@@ -59,6 +61,7 @@ const SOURCE_HREF: Record<string, (id: number) => string | null> = {
   BR: (id) => `/finance/br?id=${id}`,
   CP: (id) => `/finance/cp?id=${id}`,
   CR: (id) => `/finance/cr?id=${id}`,
+  JV: (id) => `/finance/jv?id=${id}`,
   GCCI: (id) => `/inventory/contracts/grey-conversion?id=${id}`,
 };
 
@@ -298,6 +301,38 @@ export default async function ImagesPage({
       );
     for (const r of list) {
       rows.push({ key: `CR-${r.id}`, source: "CR", id: r.id, vno: String(r.vno), date: r.vdate, party: r.accCode ?? "", img: r.img! });
+    }
+  }
+  if (want("JV")) {
+    const list = await db
+      .select({
+        id: schema.transMain.id,
+        detailId: schema.transDetail.id,
+        vno: schema.transDetail.vno,
+        date: schema.transMain.vdate,
+        party: schema.transDetail.accCode,
+        img: schema.transDetail.img,
+      })
+      .from(schema.transDetail)
+      .innerJoin(
+        schema.transMain,
+        and(
+          eq(schema.transDetail.fyCode, schema.transMain.fyCode),
+          eq(schema.transDetail.vtype, schema.transMain.vtype),
+          eq(schema.transDetail.vno, schema.transMain.vno)
+        )
+      )
+      .where(
+        and(
+          eq(schema.transDetail.vtype, "JV"),
+          isNotNull(schema.transDetail.img),
+          ne(schema.transDetail.img, ""),
+          from ? gte(schema.transMain.vdate, from) : undefined,
+          to ? lte(schema.transMain.vdate, to) : undefined
+        )
+      );
+    for (const r of list) {
+      rows.push({ key: `JV-${r.detailId}`, source: "JV", id: r.id, vno: String(r.vno), date: r.date, party: r.party ?? "", img: r.img! });
     }
   }
   if (want("GCCI")) {

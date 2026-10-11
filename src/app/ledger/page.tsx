@@ -117,7 +117,8 @@ export default async function LedgerPage({
         fyCode: schema.transDetail.fyCode,
         vtype: schema.transDetail.vtype,
         vno: schema.transDetail.vno,
-        img: schema.transMain.img,
+        lineImg: schema.transDetail.img,
+        mainImg: schema.transMain.img,
         narration: schema.transDetail.narration,
         debit: schema.transDetail.debit,
         credit: schema.transDetail.credit,
@@ -137,7 +138,8 @@ export default async function LedgerPage({
     let running = openingBalance;
     entries = raw.map((r) => {
       running += r.debit - r.credit;
-      return { ...r, balance: running };
+      const img = r.lineImg || (r.vtype !== "JV" && !r.lineImg ? r.mainImg : null);
+      return { ...r, img, balance: running };
     });
   }
 
