@@ -128,6 +128,7 @@ export const transDetail = sqliteTable("trans_detail", {
   yarnCount: text("yarn_count"),
   contNo: text("cont_no"),
   statusOk: text("status_ok"),
+  trnType: text("trn_type"),
 }, (t) => ({
   uxFyVtypeVnoSrno: uniqueIndex("ux_trans_detail_fy_vtype_vno_srno").on(t.fyCode, t.vtype, t.vno, t.srno),
   ixAccCode: index("ix_trans_detail_acc").on(t.accCode),

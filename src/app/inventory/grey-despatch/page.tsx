@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { PasswordGuard } from "@/components/password-guard";
-import { checkSavePasswordAction } from "./actions";
+import { checkSavePasswordAction } from "@/lib/auth-actions";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { GreyQualityPicker } from "@/components/grey-quality-picker";

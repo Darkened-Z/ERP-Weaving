@@ -42,6 +42,7 @@ type ParsedLine = {
   contNo: string | null;
   ccCode: number | null;
   img: string | null;
+  trnType: string | null;
   debit: number;
   credit: number;
 };
@@ -138,6 +139,7 @@ async function saveVoucher(formData: FormData) {
   const titles = formData.getAll("title") as string[];
   const narrs = formData.getAll("narr") as string[];
   const imgs = formData.getAll("line_img") as string[];
+  const lineTrnTypes = formData.getAll("line_trn_type") as string[];
   const chqNos = formData.getAll("chq_no") as string[];
   const chqDates = formData.getAll("chq_date") as string[];
   const contNos = formData.getAll("cont_no") as string[];
@@ -182,6 +184,7 @@ async function saveVoucher(formData: FormData) {
       contNo: txt(contNos[i]),
       ccCode: resolveCc((ccs[i] ?? "").trim()),
       img: txt(imgs[i]),
+      trnType: (lineTrnTypes[i] ?? "").trim() === "ADJUSTMENT" ? "ADJUSTMENT" : null,
       debit,
       credit,
     });
@@ -195,6 +198,19 @@ async function saveVoucher(formData: FormData) {
     redirect(`/finance/jv?${ctx}&error=unbalanced`);
   }
 
+  const anyLineAdj = lines.some((l) => l.trnType === "ADJUSTMENT");
+  const allLinesAdj = lines.length > 0 && lines.every((l) => l.trnType === "ADJUSTMENT");
+  if (anyLineAdj && !allLinesAdj) {
+    for (const l of lines) {
+      if (!l.trnType) {
+        l.trnType = "NORMAL";
+      }
+    }
+  }
+
+  const formTrn = txt(formData.get("trn_type"));
+  const headerTrn = allLinesAdj ? "ADJUSTMENT" : (anyLineAdj ? null : formTrn);
+
   const partyCode = lines[0].accCode;
 
   const header = {
@@ -202,7 +218,7 @@ async function saveVoucher(formData: FormData) {
     narration: txt(formData.get("narration")),
     dueDate: txt(formData.get("due_date")),
     expDate: txt(formData.get("exp_date")),
-    trnType: txt(formData.get("trn_type")),
+    trnType: headerTrn,
     balanceAmount: sumDr,
     utCode,
   };
@@ -244,6 +260,7 @@ async function saveVoucher(formData: FormData) {
           chqDate: l.chqDate,
           contNo: l.contNo,
           img: l.img,
+          trnType: l.trnType,
         })),
       );
     });
@@ -295,6 +312,7 @@ async function saveVoucher(formData: FormData) {
           chqDate: l.chqDate,
           contNo: l.contNo,
           img: l.img,
+          trnType: l.trnType,
         })),
       );
       return insertedId;
@@ -820,8 +838,8 @@ export default async function JournalVoucherPage({
                   Voucher Lines — enter Dr and Cr on each line (must balance)
                 </div>
                 <div className="overflow-x-auto border border-black">
-                  <GrowRows tbodyId="jv-line-rows" initial={2} />
-                  <table className="mono text-[12px]" style={{ minWidth: 1340 }}>
+                  <GrowRows tbodyId="jv-line-rows" initial={2} skip={["line_trn_type"]} />
+                  <table className="mono text-[12px]" style={{ minWidth: 1440 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 40 }}>Sr#</th>
@@ -833,6 +851,7 @@ export default async function JournalVoucherPage({
                         <th style={{ width: 100 }}>Chq.Date</th>
                         <th style={{ width: 120 }}>Dr</th>
                         <th style={{ width: 120 }}>Cr</th>
+                        <th style={{ width: 100 }}>Type</th>
                         <th style={{ width: 190 }}>Cost Center / Jobs (F9)</th>
                         <th style={{ width: 34 }}></th>
                       </tr>
@@ -905,6 +924,24 @@ export default async function JournalVoucherPage({
                                   l && l.credit ? l.credit : ""
                                 }
                               />
+                            </td>
+                            <td>
+                              <select
+                                name="line_trn_type"
+                                className={cell}
+                                defaultValue={
+                                  l?.trnType === "ADJUSTMENT"
+                                    ? "ADJUSTMENT"
+                                    : l?.trnType === "NORMAL"
+                                    ? ""
+                                    : formMain?.trnType === "ADJUSTMENT"
+                                    ? "ADJUSTMENT"
+                                    : ""
+                                }
+                              >
+                                <option value="">Normal</option>
+                                <option value="ADJUSTMENT">Adjustment</option>
+                              </select>
                             </td>
                             <td>
                               <input
