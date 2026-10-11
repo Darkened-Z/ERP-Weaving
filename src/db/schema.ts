@@ -1752,6 +1752,7 @@ export const intYarnReceipt = sqliteTable("int_yarn_receipt", {
   amount: real("amount"),
   locationFrom: text("location_from"),
   imgBlock: text("img_block"),
+  imgGp: text("img_gp"),
   stockBag: real("stock_bag"),
   stockLbs: real("stock_lbs"),
   countCode: text("count_code"),

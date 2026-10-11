@@ -4,6 +4,8 @@ import { PrintButton } from "@/components/print-button";
 import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
+import { ImageAttach } from "@/components/image-attach";
+import { ImageLinks } from "@/components/image-links";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
 import { PartyCountRate } from "@/components/party-count-rate";
 import { AutoAmount } from "@/components/auto-amount";
@@ -452,6 +454,7 @@ export default async function YarnReceiptPage({
       amount,
       locationFrom: txt(formData.get("locationFrom")),
       imgBlock: txt(formData.get("imgBlock")),
+      imgGp: txt(formData.get("imgGp")),
       // stockBag / stockLbs are display-only, computed on read
       stockBag: null,
       stockLbs: null,
@@ -807,19 +810,22 @@ export default async function YarnReceiptPage({
                         <input name="ratePerLbsTo" type="number" step="0.01" className="input-box mono text-right" defaultValue={editing?.ratePerLbsTo ?? ""} />
                       </div>
 
-                      <div className="md:col-span-3">
+                      <div className="md:col-span-4">
                         <label className="label block mb-1">Amount</label>
                         <input name="amount" type="number" step="0.01" className="input-box mono text-right bg-gray-100" defaultValue={editing?.amount ?? ""} readOnly />
                       </div>
-                      <div className="md:col-span-6">
+                      <div className="md:col-span-8">
                         <label className="label block mb-1">Location From (F9)</label>
                         <Combobox name="locationFrom" options={locOpts} defaultValue={editing?.locationFrom ?? ""} placeholder="Type or select location" />
                       </div>
-                      <div className="md:col-span-3">
-                        <label className="label block mb-1">Imag Block</label>
-                        <div className="flex items-stretch gap-1">
-                          <input name="imgBlock" className="input-box mono flex-1" defaultValue={editing?.imgBlock ?? ""} placeholder="filename" />
-                        </div>
+
+                      <div className="md:col-span-6 border-t border-[var(--border)] pt-2 mt-1">
+                        <label className="label block mb-1 font-semibold text-[11px]">Gate Pass Image (GP)</label>
+                        <ImageAttach name="imgGp" defaultValue={editing?.imgGp ?? ""} />
+                      </div>
+                      <div className="md:col-span-6 border-t border-[var(--border)] pt-2 mt-1">
+                        <label className="label block mb-1 font-semibold text-[11px]">Bags Recv Image (Bags)</label>
+                        <ImageAttach name="imgBlock" defaultValue={editing?.imgBlock ?? ""} />
                       </div>
                     </div>
                   </div>
@@ -958,6 +964,7 @@ export default async function YarnReceiptPage({
                   <th className="text-right">Bags</th>
                   <th className="text-right">Qty Lbs</th>
                   <th className="text-right">Amount</th>
+                  <th className="text-center" style={{ width: 90 }}>Images</th>
                 </tr>
               </thead>
               <tbody>
@@ -992,11 +999,17 @@ export default async function YarnReceiptPage({
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.bags ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.qtyLbs ?? "-"}</a></td>
                       <td className="mono text-[12px] text-right"><a href={href} className="no-underline block" style={style}>{r.amount ?? "-"}</a></td>
+                      <td className="text-center">
+                        <div className="flex gap-1 justify-center items-center">
+                          <ImageLinks value={r.imgGp} label="GP" />
+                          <ImageLinks value={r.imgBlock} label="Bags" />
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
                 {list.length === 0 && (
-                  <tr><td colSpan={10} className="text-center text-[13px] text-[var(--muted)] py-6">No vouchers. Click <b>New</b> above to create one.</td></tr>
+                  <tr><td colSpan={11} className="text-center text-[13px] text-[var(--muted)] py-6">No vouchers. Click <b>New</b> above to create one.</td></tr>
                 )}
               </tbody>
             </table>
