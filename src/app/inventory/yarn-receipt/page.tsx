@@ -6,6 +6,8 @@ import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { ImageAttach } from "@/components/image-attach";
 import { ImageLinks } from "@/components/image-links";
+import { PasswordGuard } from "@/components/password-guard";
+import { checkSavePasswordAction } from "@/lib/auth-actions";
 import { AutoFill, RowCalc } from "@/components/auto-fill";
 import { PartyCountRate } from "@/components/party-count-rate";
 import { AutoAmount } from "@/components/auto-amount";
@@ -671,6 +673,7 @@ export default async function YarnReceiptPage({
 
           {showForm && (
             <form id="iyr-save-form" action={saveAction}>
+            <PasswordGuard formId="iyr-save-form" checkAction={checkSavePasswordAction} />
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <input type="hidden" name="one" defaultValue="1" readOnly />
               <AutoAmount qty="qtyLbs" rate="ratePerLbs" target="amount" />

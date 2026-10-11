@@ -5,6 +5,8 @@ import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
 import { WarpedBeamCalc } from "@/components/warped-beam-calc";
 import { ConfirmButton } from "@/components/confirm-button";
+import { PasswordGuard } from "@/components/password-guard";
+import { checkSavePasswordAction } from "@/lib/auth-actions";
 import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { wovenThisCycle } from "@/lib/beam-cycle";
@@ -923,6 +925,7 @@ export default async function WarpedBeamReceivingPage({
 
           {showForm && (
             <form id="iwb-save-form" action={saveAction}>
+            <PasswordGuard formId="iwb-save-form" checkAction={checkSavePasswordAction} />
               {editing && <input type="hidden" name="id" value={editing.id} />}
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">

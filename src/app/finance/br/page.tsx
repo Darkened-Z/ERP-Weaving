@@ -8,6 +8,8 @@ import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { RowAutoFill } from "@/components/auto-fill";
 import { ConfirmButton } from "@/components/confirm-button";
+import { PasswordGuard } from "@/components/password-guard";
+import { checkSavePasswordAction } from "@/lib/auth-actions";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
 import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
@@ -655,6 +657,7 @@ export default async function BankReceiptPage({
 
           {showForm ? (
             <form id="vf-save-form" action={saveVoucher}>
+            <PasswordGuard formId="vf-save-form" checkAction={checkSavePasswordAction} />
               {formVoucher && <input type="hidden" name="id" value={formVoucher.id} />}
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-3 gap-y-3 gform">

@@ -6,6 +6,8 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { RowClearButton } from "@/components/row-clear-button";
 
 import { ConfirmButton } from "@/components/confirm-button";
+import { PasswordGuard } from "@/components/password-guard";
+import { checkSavePasswordAction } from "@/lib/auth-actions";
 import { JvBalanceBar } from "./balance-bar";
 import { GrowRows } from "@/components/grow-rows";
 import { db, schema } from "@/db";
@@ -689,6 +691,7 @@ export default async function JournalVoucherPage({
 
           {showForm ? (
             <form id="jv-save-form" action={saveVoucher}>
+            <PasswordGuard formId="jv-save-form" checkAction={checkSavePasswordAction} />
               {formMain && (
                 <input type="hidden" name="id" value={formMain.id} />
               )}
@@ -971,7 +974,7 @@ export default async function JournalVoucherPage({
                 </div>
               </div>
             </form>
-          ) : (
+        ) : (
             <div className="text-[13px] text-[var(--muted)] py-6 text-center">
               Select a voucher from the list below, or click <b>New</b> to create
               one.
