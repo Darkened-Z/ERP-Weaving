@@ -308,7 +308,13 @@ export default async function DailyProductionPage({
   // leaving those out made it vanish from the picker mid-run. Only EMPTY (freed)
   // and LOADED (received, never knotted) are not mounted.
   const MOUNTED = new Set(["KNOTTING", "PRODUCTION", ...BEAM_STATUS_CHOICES.filter((s) => s !== "R-CUT")]);
-  const runningBeams = beamCatalog.filter((b) => MOUNTED.has((b.statusWrk ?? "").toUpperCase()));
+  const voucherBeamNos = new Set(
+    setRows.map((s) => (s.beamNo ?? "").trim()).filter(Boolean)
+  );
+  const runningBeams = beamCatalog.filter((b) => {
+    if (editing != null && voucherBeamNos.has((b.beamNo ?? "").trim())) return true;
+    return MOUNTED.has((b.statusWrk ?? "").toUpperCase());
+  });
   const beamPickerRows = runningBeams.map((b) => ({
     value: b.beamNo as string,
     code: b.beamNo as string,
@@ -316,7 +322,7 @@ export default async function DailyProductionPage({
     // Scoped to the header Loom# — the list must offer only the beams mounted on
     // THAT loom. A beam missing its shed/loom stamp carries no key and stays
     // visible, so a half-recorded beam is never silently unpickable.
-    filterKey: b.shed && b.loomNo != null ? `${b.shed}|${b.loomNo}` : "",
+    filterKey: (b.shed ?? editing?.shedNo) && (b.loomNo ?? setRows.find((s) => (s.beamNo ?? "").trim() === (b.beamNo ?? "").trim())?.loomNo) != null ? `${b.shed ?? editing?.shedNo}|${b.loomNo ?? setRows.find((s) => (s.beamNo ?? "").trim() === (b.beamNo ?? "").trim())?.loomNo}` : "",
     cells: {
       beamSetNo: b.beamSetNo ?? "",
       setNo: b.setNo ?? "",
@@ -345,12 +351,15 @@ export default async function DailyProductionPage({
   const beamsByLoom = new Map<string, (typeof runningBeams)[number][]>();
   const beamsByLoomNo = new Map<number, (typeof runningBeams)[number][]>();
   for (const b of runningBeams) {
-    if (b.loomNo == null) continue;
-    if (b.shed) {
-      const k = `${b.shed}|${b.loomNo}`;
+    const rowForBeam = setRows.find((s) => (s.beamNo ?? "").trim() === (b.beamNo ?? "").trim());
+    const shedKey = b.shed ?? editing?.shedNo ?? null;
+    const loomKey = b.loomNo ?? rowForBeam?.loomNo ?? null;
+    if (loomKey == null) continue;
+    if (shedKey) {
+      const k = `${shedKey}|${loomKey}`;
       (beamsByLoom.get(k) ?? beamsByLoom.set(k, []).get(k)!).push(b);
     }
-    (beamsByLoomNo.get(b.loomNo) ?? beamsByLoomNo.set(b.loomNo, []).get(b.loomNo)!).push(b);
+    (beamsByLoomNo.get(loomKey) ?? beamsByLoomNo.set(loomKey, []).get(loomKey)!).push(b);
   }
   // Loom numbers repeat across sheds, so the shed-scoped key is the answer. The
   // loomNo-only fallback exists ONLY for legacy beams that carry no shed stamp —
@@ -422,10 +431,18 @@ export default async function DailyProductionPage({
     // Use it as primary; supplement with beams.loomNo lookup for additional knotted beams.
     const primaryBeam = lm.currentBeam ? beamByNo.get(lm.currentBeam) : undefined;
     const byLoomNo = beamsForLoom(lm.shed, lm.loomNo);
+    const voucherBeamsForThisLoom = setRows
+      .filter((s) => s.loomNo === lm.loomNo && s.beamNo)
+      .map((s) => beamByNo.get(s.beamNo!))
+      .filter((b): b is (typeof runningBeams)[number] => !!b);
     const allForLoom = primaryBeam
       ? [primaryBeam, ...byLoomNo.filter((b) => b.beamNo !== primaryBeam.beamNo)]
       : byLoomNo;
-    loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = allForLoom
+    const combinedBeams = [
+      ...allForLoom,
+      ...voucherBeamsForThisLoom.filter((b) => !allForLoom.some((x) => x.beamNo === b.beamNo)),
+    ];
+    loomBeamsMap[`${lm.shed ?? ""}|${lm.loomNo}`] = combinedBeams
       .filter((b) => {
         if (editing != null && voucherBeamNos.has((b.beamNo ?? "").trim())) return true;
         return MOUNTED.has((b.statusWrk ?? "").toUpperCase());
@@ -564,6 +581,12 @@ export default async function DailyProductionPage({
   // contract off the first row that carries one, the loom off the first beam that
   // is actually mounted (a beam never knotted onto a loom still yields nothing).
   const editingLoom = (() => {
+    for (const r of setRows) {
+      if (r.loomNo != null) {
+        const shed = editing?.shedNo ?? (r.beamNo ? beamByNo.get(r.beamNo)?.shed : null) ?? "";
+        return shed ? `${shed}|${r.loomNo}` : String(r.loomNo);
+      }
+    }
     for (const r of setRows) {
       const b = r.beamNo ? beamByNo.get(r.beamNo) : undefined;
       if (b?.shed && b.loomNo != null) return `${b.shed}|${b.loomNo}`;
@@ -730,6 +753,24 @@ export default async function DailyProductionPage({
     const diffArr = formData.getAll("diff") as string[];
     const shrinkageArr = formData.getAll("shrinkage") as string[];
 
+    const headerLoomRaw = String(formData.get("headerLoom") ?? "").trim();
+    let headerLoomNo: number | null = null;
+    let headerShedNo: string | null = null;
+    if (headerLoomRaw) {
+      if (headerLoomRaw.includes("|")) {
+        const [sh, lm] = headerLoomRaw.split("|");
+        headerShedNo = sh.trim() || null;
+        const parsed = parseInt(lm.trim(), 10);
+        if (Number.isFinite(parsed)) headerLoomNo = parsed;
+      } else {
+        const parsed = parseInt(headerLoomRaw, 10);
+        if (Number.isFinite(parsed)) headerLoomNo = parsed;
+      }
+    }
+    if (!header.shedNo && headerShedNo) {
+      header.shedNo = headerShedNo;
+    }
+
     const validSets: {
       srNo: number;
       setHash: string | null;
@@ -778,9 +819,8 @@ export default async function DailyProductionPage({
       const bs = (beamStatusArr[i] || "").trim();
       const ww = num(wastWtKgArr[i]);
       const bn = (beamNoArr[i] || "").trim();
-      // Loom moved to the header (owner) — rows no longer carry a loom cell; the
-      // beam's loom stays whatever the knotting mount stamped on the beam.
-      const ln: number | null = null;
+      // Loom comes from the header (owner)
+      const ln: number | null = headerLoomNo;
       const cn = headerContract || (contNoArr[i] || "").trim();
       const en = intVal(endsArr[i]);
       const bl = num(bLengthArr[i]);
@@ -847,15 +887,40 @@ export default async function DailyProductionPage({
       const byBeam = new Map(beamRows.map((b) => [b.beamNo, b]));
       for (const st of validSets) {
         const b = byBeam.get((st.beamNo ?? "").trim());
-        if (!b) continue;
-        if (st.loomNo == null && b.loomNo != null) st.loomNo = b.loomNo;
+        if (st.loomNo == null && b?.loomNo != null) st.loomNo = b.loomNo;
+        else if (st.loomNo == null && headerLoomNo != null) st.loomNo = headerLoomNo;
       }
       if (!header.shedNo) {
         const firstShed = validSets
           .map((st) => byBeam.get((st.beamNo ?? "").trim())?.shed)
           .find((x) => !!x);
         if (firstShed) header.shedNo = firstShed;
+        else if (headerShedNo) header.shedNo = headerShedNo;
       }
+    }
+
+    if (Number.isFinite(id) && id > 0) {
+      const oldSets = await db
+        .select({ loomNo: schema.intDailyProductionSet.loomNo, beamNo: schema.intDailyProductionSet.beamNo })
+        .from(schema.intDailyProductionSet)
+        .where(eq(schema.intDailyProductionSet.productionId, id));
+      const [oldHead] = await db
+        .select({ shedNo: schema.intDailyProduction.shedNo })
+        .from(schema.intDailyProduction)
+        .where(eq(schema.intDailyProduction.id, id));
+      for (const st of validSets) {
+        if (st.loomNo == null) {
+          const matchedOld = oldSets.find((o) => o.beamNo === st.beamNo && o.loomNo != null);
+          if (matchedOld?.loomNo != null) st.loomNo = matchedOld.loomNo;
+          else if (oldSets[0]?.loomNo != null) st.loomNo = oldSets[0].loomNo;
+        }
+      }
+      if (!header.shedNo && oldHead?.shedNo) {
+        header.shedNo = oldHead.shedNo;
+      }
+    }
+    for (const st of validSets) {
+      if (st.loomNo == null && headerLoomNo != null) st.loomNo = headerLoomNo;
     }
 
     // ---- validations ----
