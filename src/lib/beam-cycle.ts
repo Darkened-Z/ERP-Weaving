@@ -46,7 +46,11 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
   if (voucherDate && beam.brDate && voucherDate < beam.brDate) return;
 
   const [latest] = await tx
-    .select({ beamStatus: schema.intDailyProductionSet.beamStatus, loomNo: schema.intDailyProductionSet.loomNo })
+    .select({
+      beamStatus: schema.intDailyProductionSet.beamStatus,
+      loomNo: schema.intDailyProductionSet.loomNo,
+      diff: schema.intDailyProductionSet.diff,
+    })
     .from(schema.intDailyProductionSet)
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
     .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
@@ -65,19 +69,29 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
       : beam.brVno
         ? "LOADED"
         : "EMPTY";
-  const offLoom = DONE.has(status) || status === "LOADED";
+  const offLoom = DONE.has(status) || status === "LOADED" || status === "R-CUT";
 
   if (offLoom) {
     await tx
       .update(schema.beams)
-      .set({ statusWrk: DONE.has(status) ? "EMPTY" : status, loomNo: null })
+      .set({
+        statusWrk: DONE.has(status) ? "EMPTY" : status,
+        loomNo: null,
+        ...(status === "R-CUT" && latest?.diff != null ? { length: latest.diff } : {}),
+      })
       .where(eq(schema.beams.beamNo, beamNo));
-    if (beam.shed && beam.loomNo != null) {
+    const shedToFree = beam.shed;
+    const loomToFree = beam.loomNo ?? latest?.loomNo ?? null;
+    if (shedToFree && loomToFree != null) {
       await tx
         .update(schema.looms)
         .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-        .where(and(eq(schema.looms.loomNo, beam.loomNo), eq(schema.looms.shed, beam.shed), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`));
+        .where(and(eq(schema.looms.loomNo, loomToFree), eq(schema.looms.shed, shedToFree), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`));
     }
+    await tx
+      .update(schema.looms)
+      .set({ statusWrk: "S", currentBeam: null, currentContract: null })
+      .where(sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`);
     return;
   }
 

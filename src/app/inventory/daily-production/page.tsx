@@ -307,7 +307,7 @@ export default async function DailyProductionPage({
   // (BEAM_STATUS_CHOICES) — a beam at L-ROLL is still on the loom being woven, so
   // leaving those out made it vanish from the picker mid-run. Only EMPTY (freed)
   // and LOADED (received, never knotted) are not mounted.
-  const MOUNTED = new Set(["KNOTTING", "PRODUCTION", ...BEAM_STATUS_CHOICES]);
+  const MOUNTED = new Set(["KNOTTING", "PRODUCTION", ...BEAM_STATUS_CHOICES.filter((s) => s !== "R-CUT")]);
   const runningBeams = beamCatalog.filter((b) => MOUNTED.has((b.statusWrk ?? "").toUpperCase()));
   const beamPickerRows = runningBeams.map((b) => ({
     value: b.beamNo as string,
