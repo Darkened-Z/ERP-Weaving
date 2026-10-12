@@ -248,22 +248,32 @@ async function saveKnotting(formData: FormData) {
 
     const ownBeams = new Set(lines.map((l) => l.beamNo).filter(Boolean) as string[]);
     // LOADED means back in the godown, so a stale loom_no on it holds nothing.
+    // L-ROLL or EMPTY means beam finished, so it holds nothing.
     const onLooms = await db
       .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
       .from(schema.beams)
-      .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED', 'R-CUT')`);
+      .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED', 'R-CUT') AND upper(coalesce(${schema.beams.statusLoc}, '')) NOT IN ('EMPTY', 'L-ROLL')`);
     for (const b of onLooms) {
       const k = `${b.shed ?? ""}|${b.loomNo}`;
       if (wantedLooms.has(k) && !ownBeams.has(b.beamNo)) bail("loom_busy");
     }
-    // Second source: the loom's own pointer. A beam whose beams-row lost its
-    // loom_no still shows up here, so production never gets two beams on one loom.
+    // Second source: the loom's own pointer. If the beam is already off the loom, ignore stale pointer.
     const mounted = await db
-      .select({ loomNo: schema.looms.loomNo, shed: schema.looms.shed, currentBeam: schema.looms.currentBeam })
+      .select({
+        loomNo: schema.looms.loomNo,
+        shed: schema.looms.shed,
+        currentBeam: schema.looms.currentBeam,
+        beamStatus: schema.beams.statusWrk,
+        beamStatusLoc: schema.beams.statusLoc,
+      })
       .from(schema.looms)
+      .leftJoin(schema.beams, eq(schema.beams.beamNo, schema.looms.currentBeam))
       .where(sql`${schema.looms.currentBeam} IS NOT NULL`);
     for (const lm of mounted) {
       const k = `${lm.shed ?? ""}|${lm.loomNo}`;
+      const bSt = (lm.beamStatus ?? "").toUpperCase();
+      const bLoc = (lm.beamStatusLoc ?? "").toUpperCase();
+      if (['EMPTY', 'LOADED', 'R-CUT'].includes(bSt) || ['EMPTY', 'L-ROLL'].includes(bLoc)) continue;
       if (wantedLooms.has(k) && !ownBeams.has(lm.currentBeam ?? "")) bail("loom_busy");
     }
   }
@@ -900,9 +910,14 @@ export default async function KnottingPage({
   ];
   // Status of every beam, so an already-picked beam shows its status on edit.
   const allBeamRows = await db
-    .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+    .select({
+      beamNo: schema.beams.beamNo,
+      statusWrk: schema.beams.statusWrk,
+      statusLoc: schema.beams.statusLoc,
+    })
     .from(schema.beams);
   const beamStatusByNo = new Map(allBeamRows.map((b) => [b.beamNo, b.statusWrk]));
+  const beamStatusLocByNo = new Map(allBeamRows.map((b) => [b.beamNo, b.statusLoc]));
 
   const loomRows = await db
     .select({
@@ -928,20 +943,37 @@ export default async function KnottingPage({
   const beamsOnLooms = await db
     .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
     .from(schema.beams)
-    .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED', 'R-CUT')`);
+    .where(
+      sql`${schema.beams.loomNo} IS NOT NULL 
+          AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED', 'R-CUT')
+          AND upper(coalesce(${schema.beams.statusLoc}, '')) NOT IN ('EMPTY', 'L-ROLL')`
+    );
   const knottedLooms = await db
     .select({
       beamNo: schema.intKnottingSarningLine.beamNo,
       shed: schema.intKnottingSarningLine.shdHash,
       loomNo: schema.intKnottingSarningLine.lmHash,
       status: schema.beams.statusWrk,
+      statusLoc: schema.beams.statusLoc,
     })
     .from(schema.intKnottingSarningLine)
     .leftJoin(schema.beams, eq(schema.beams.beamNo, schema.intKnottingSarningLine.beamNo))
-    .where(sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'LOADED', 'R-CUT')`);
+    .where(
+      sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL 
+          AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'LOADED', 'R-CUT')
+          AND upper(coalesce(${schema.beams.statusLoc}, '')) NOT IN ('EMPTY', 'L-ROLL')`
+    );
   const busyLooms = new Map<string, string>();
   for (const b of beamsOnLooms) busyLooms.set(`${b.shed ?? ""}|${b.loomNo}`, b.beamNo);
-  for (const lm of loomRows) if (lm.currentBeam) busyLooms.set(`${lm.shed ?? ""}|${lm.loomNo}`, lm.currentBeam);
+  for (const lm of loomRows) {
+    if (lm.currentBeam) {
+      const bStatus = (beamStatusByNo.get(lm.currentBeam) ?? "").toUpperCase();
+      const bLoc = (beamStatusLocByNo.get(lm.currentBeam) ?? "").toUpperCase();
+      if (!['EMPTY', 'LOADED', 'R-CUT'].includes(bStatus) && !['EMPTY', 'L-ROLL'].includes(bLoc)) {
+        busyLooms.set(`${lm.shed ?? ""}|${lm.loomNo}`, lm.currentBeam);
+      }
+    }
+  }
   for (const k of knottedLooms) busyLooms.set(`${k.shed ?? ""}|${k.loomNo}`, k.beamNo ?? "");
 
   const loomRowOf = (lm: (typeof loomRows)[number]) => ({

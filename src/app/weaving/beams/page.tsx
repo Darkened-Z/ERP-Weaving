@@ -7,7 +7,7 @@ import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { BeamStatusPicker, STATUS_LOC_CANONICAL } from "@/components/beam-status-picker";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -169,21 +169,54 @@ export default async function BeamsPage({
       const n = parseInt(formData.get(k) as string);
       return Number.isFinite(n) ? n : null;
     };
+    const [existing] = await db.select().from(schema.beams).where(eq(schema.beams.id, id)).limit(1);
+    const sl = (txt("status_loc") ?? "").toUpperCase();
+    const sw = (txt("status_wrk") ?? "").toUpperCase();
+    const isDone = sl === "L-ROLL" || sl === "EMPTY" || sw === "EMPTY" || sw === "L-ROLL";
+    const newLoomNo = isDone ? null : int("loom_no");
+    const newShed = isDone ? null : txt("shed");
+    const finalStatusWrk = isDone ? "EMPTY" : (txt("status_wrk") ?? "RUNNING");
+    const finalStatusLoc = isDone && sl !== "EMPTY" ? "L-ROLL" : txt("status_loc");
+
     await db.update(schema.beams).set({
       type: txt("type") ?? "WARP",
       partyTrade: txt("party_trade"),
       codeConv: txt("code_conv"),
       contractNo: txt("contract_no"),
-      statusLoc: txt("status_loc"),
+      statusLoc: finalStatusLoc,
       szgParty: txt("szg_party"),
-      shed: txt("shed"),
-      loomNo: int("loom_no"),
+      shed: newShed,
+      loomNo: newLoomNo,
       setNo: txt("set_no"),
       beamSetNo: txt("beam_set_no"),
       setStatus: txt("set_status"),
-      statusWrk: txt("status_wrk") ?? "RUNNING",
+      statusWrk: finalStatusWrk,
     }).where(eq(schema.beams.id, id));
+
+    if (existing) {
+      if (isDone) {
+        if (existing.loomNo != null && existing.shed) {
+          await db.update(schema.looms).set({ statusWrk: "S", currentBeam: null, currentContract: null })
+            .where(and(eq(schema.looms.loomNo, existing.loomNo), eq(schema.looms.shed, existing.shed)));
+        }
+        await db.update(schema.looms).set({ statusWrk: "S", currentBeam: null, currentContract: null })
+          .where(sql`LOWER(${schema.looms.currentBeam}) = LOWER(${existing.beamNo})`);
+      } else {
+        if (existing.loomNo != null && existing.shed && (existing.loomNo !== newLoomNo || existing.shed !== newShed)) {
+          await db.update(schema.looms).set({ statusWrk: "S", currentBeam: null, currentContract: null })
+            .where(and(eq(schema.looms.loomNo, existing.loomNo), eq(schema.looms.shed, existing.shed), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${existing.beamNo})`));
+        }
+        if (newLoomNo != null && newShed && (finalStatusWrk === "RUNNING" || finalStatusWrk === "KNOTTING")) {
+          await db.update(schema.looms).set({ statusWrk: "RUNNING", currentBeam: existing.beamNo })
+            .where(and(eq(schema.looms.loomNo, newLoomNo), eq(schema.looms.shed, newShed)));
+        }
+      }
+    }
+
     revalidatePath("/weaving/beams");
+    revalidatePath("/inventory/knotting");
+    revalidatePath("/weaving/looms");
+    revalidatePath("/inventory/daily-production");
     redirect(`/weaving/beams?id=${id}`);
   }
 

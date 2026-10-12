@@ -45,7 +45,32 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
   if (!beam) return;
   if (voucherDate && beam.brDate && voucherDate < beam.brDate) return;
 
-  const [latest] = await tx
+  // 1. If ANY production row in this cycle recorded L-ROLL or EMPTY, the beam
+  // has completed its last roll and must be taken off the loom.
+  const [doneRow] = await tx
+    .select({
+      beamStatus: schema.intDailyProductionSet.beamStatus,
+      loomNo: schema.intDailyProductionSet.loomNo,
+      diff: schema.intDailyProductionSet.diff,
+    })
+    .from(schema.intDailyProductionSet)
+    .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
+    .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
+    .where(
+      and(
+        eq(schema.intDailyProductionSet.beamNo, beamNo),
+        inCurrentBeamCycle,
+        sql`upper(trim(${schema.intDailyProductionSet.beamStatus})) IN ('L-ROLL', 'EMPTY')`
+      )
+    )
+    .orderBy(
+      desc(schema.intDailyProductionSet.rcvdMtr),
+      desc(schema.intDailyProductionSet.id)
+    )
+    .limit(1);
+
+  // 2. Otherwise find the latest production row (ordered by cumulative rcvdMtr, then date, then id)
+  const [latestRow] = await tx
     .select({
       beamStatus: schema.intDailyProductionSet.beamStatus,
       loomNo: schema.intDailyProductionSet.loomNo,
@@ -56,11 +81,14 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
     .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
     .where(and(eq(schema.intDailyProductionSet.beamNo, beamNo), inCurrentBeamCycle))
     .orderBy(
+      desc(schema.intDailyProductionSet.rcvdMtr),
       desc(schema.intDailyProduction.vDate),
       desc(schema.intDailyProduction.id),
-      desc(schema.intDailyProductionSet.id),
+      desc(schema.intDailyProductionSet.id)
     )
     .limit(1);
+
+  const latest = doneRow ?? latestRow;
 
   const status = latest?.beamStatus?.trim().toUpperCase()
     ? latest.beamStatus.trim().toUpperCase()
@@ -76,6 +104,7 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
       .update(schema.beams)
       .set({
         statusWrk: DONE.has(status) ? "EMPTY" : status,
+        ...(DONE.has(status) ? { statusLoc: "L-ROLL" } : status === "R-CUT" ? { statusLoc: "R-CUT" } : {}),
         loomNo: null,
         ...(status === "R-CUT" && latest?.diff != null ? { length: latest.diff } : {}),
       })
