@@ -251,6 +251,7 @@ export default async function GreyShrinkagePage({
       knVno: schema.beams.knVno,
       knDate: schema.beams.knDate,
       bShed: schema.beams.shed,
+      bLoomNo: schema.beams.loomNo,
       bSetNo: schema.beams.setNo,
       bBeamSetNo: schema.beams.beamSetNo,
       bYarnCount: schema.beams.yarnCount,
@@ -396,7 +397,7 @@ export default async function GreyShrinkagePage({
     const totalLines = designs.reduce((s, d) => s + d.lines.length, 0);
     const totalRej = rows.reduce((s, r) => s + (r.rejCount ?? 0), 0);
     const balMtr = beamLength - totalMtr;
-    const loomNo = f.loomNo ?? 0;
+    const loomNo = f.loomNo || f.bLoomNo || 0;
     const dates = rows.map((r) => r.vDate ?? "").filter(Boolean);
     const lastDate = dates.length ? dates.sort().pop()! : "";
     const lastStatus = rows[rows.length - 1]?.beamStatus ?? "";
@@ -414,11 +415,11 @@ export default async function GreyShrinkagePage({
 
     blocks.push({
       beamNo,
-      beamSetNo: f.pBeamSetNo ?? f.bBeamSetNo ?? "",
-      setNo: f.setNo ?? f.bSetNo ?? "",
-      ends,
-      beamLength,
-      shed: f.bShed ?? f.shedNo ?? "",
+      beamSetNo: (f.pBeamSetNo?.trim() || f.bBeamSetNo?.trim() || ""),
+      setNo: (f.setNo?.trim() || f.bSetNo?.trim() || ""),
+      ends: ends || f.bEnds || 0,
+      beamLength: beamLength || f.bLen || 0,
+      shed: (f.bShed?.trim() || f.shedNo?.trim() || ""),
       loomNo,
       szgParty: szg,
       szgName: nameByCode.get(szg) ?? szg,
