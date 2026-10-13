@@ -69,6 +69,16 @@ export async function GET(req: NextRequest) {
       ),
   ]);
 
+  // Thans already on a despatch are out of the list even if their delivered flag
+  // was lost; the caller's own voucher keeps its thans through `keep`.
+  const onDespatch = new Set(
+    (await db.select({ t: schema.intGreyDespatchLine.tSrNo }).from(schema.intGreyDespatchLine))
+      .map((r) => (r.t as unknown as string | null) ?? "")
+      .filter(Boolean),
+  );
+  for (const k of keep) onDespatch.delete(k);
+  const freeProdRows = prodRows.filter((r) => !onDespatch.has(r.mm ?? ""));
+
   const beamsOfVoucher = new Map<number, Set<string>>();
   for (const r of prodRows) {
     if (!r.beamNo) continue;
@@ -79,7 +89,7 @@ export async function GET(req: NextRequest) {
     if (r.beamNo && !setNoOfBeam.has(r.beamNo)) setNoOfBeam.set(r.beamNo, r.beamSetNo ?? null);
   }
 
-  const mapped = prodRows.map((r) => {
+  const mapped = freeProdRows.map((r) => {
     if (r.beamNo) return r;
     const only = beamsOfVoucher.get(r.productionId);
     if (!only || only.size !== 1) return r;

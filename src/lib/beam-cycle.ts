@@ -1,5 +1,5 @@
 import { db, schema } from "@/db";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -38,7 +38,8 @@ export class LoomTakenError extends Error {
  * Re-derive a beam's state from what is on record:
  *
  * 1. Rcvd/Mtr, Diff and Shrinkage are re-stamped on every production row of the
- *    current cycle as a running total in ENTRY order (production id). The form
+ *    current cycle as a running total in ENTRY order (production id), counting
+ *    the voucher's beam-less thans when it names only this beam. The form
  *    only knows an opening balance; editing an older voucher used to stamp it
  *    with the newest total plus its own meters, so it outranked the L-ROLL
  *    entered after it and put a finished beam back on its loom.
@@ -73,6 +74,7 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
   const rows = await tx
     .select({
       id: schema.intDailyProductionSet.id,
+      productionId: schema.intDailyProductionSet.productionId,
       beamStatus: schema.intDailyProductionSet.beamStatus,
       loomNo: schema.intDailyProductionSet.loomNo,
       shedNo: schema.intDailyProduction.shedNo,
@@ -89,20 +91,61 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
     .where(and(eq(schema.intDailyProductionSet.beamNo, beamNo), inCurrentBeamCycle))
     .orderBy(asc(schema.intDailyProduction.id), asc(schema.intDailyProductionSet.id));
 
+  // A voucher's thans are all woven on its beam, but only the than paired with
+  // the beam row carries beam_no — thans B, C… are stored without one. They
+  // count towards this beam whenever the voucher names no other beam; without
+  // them Rcvd/Mtr read about half the real meters and the beam never reached
+  // its length. (Same rule the despatch thans list uses.)
+  const unnamed = new Map<number, { meters: number; woven: number }>();
+  const pids = [...new Set(rows.map((r) => r.productionId))];
+  if (pids.length) {
+    const siblings = await tx
+      .select({
+        productionId: schema.intDailyProductionSet.productionId,
+        beamNo: schema.intDailyProductionSet.beamNo,
+        totalCount: schema.intDailyProductionSet.totalCount,
+        rejCount: schema.intDailyProductionSet.rejCount,
+      })
+      .from(schema.intDailyProductionSet)
+      .where(inArray(schema.intDailyProductionSet.productionId, pids));
+    const named = new Map<number, Set<string>>();
+    for (const s of siblings) {
+      const b = s.beamNo?.trim();
+      if (b) (named.get(s.productionId) ?? named.set(s.productionId, new Set()).get(s.productionId)!).add(b);
+    }
+    for (const s of siblings) {
+      if (s.beamNo?.trim() || named.get(s.productionId)?.size !== 1) continue;
+      const u = unnamed.get(s.productionId) ?? { meters: 0, woven: 0 };
+      u.meters += (s.totalCount ?? 0) + (s.rejCount ?? 0);
+      u.woven += s.totalCount ?? 0;
+      unnamed.set(s.productionId, u);
+    }
+  }
+
+  // One running total per voucher; every row of this beam in a voucher carries it.
+  const byVoucher: (typeof rows)[] = [];
+  for (const r of rows) {
+    const last = byVoucher[byVoucher.length - 1];
+    if (last && last[0].productionId === r.productionId) last.push(r);
+    else byVoucher.push([r]);
+  }
   let run = 0;
   let woven = 0;
-  for (const r of rows) {
-    run = r2(run + (r.totalCount ?? 0) + (r.rejCount ?? 0));
-    woven += r.totalCount ?? 0;
-    const bl = r.bLength ?? 0;
-    const rcvdMtr = run || null;
-    const diff = bl > 0 ? r2(bl - run) : null;
-    const shrinkage = bl > 0 && diff != null ? r2((diff / bl) * 100) : null;
-    if (same(r.rcvdMtr, rcvdMtr) && same(r.diff, diff) && same(r.shrinkage, shrinkage)) continue;
-    await tx
-      .update(schema.intDailyProductionSet)
-      .set({ rcvdMtr, diff, shrinkage })
-      .where(eq(schema.intDailyProductionSet.id, r.id));
+  for (const vr of byVoucher) {
+    const extra = unnamed.get(vr[0].productionId);
+    run = r2(run + vr.reduce((a, r) => a + (r.totalCount ?? 0) + (r.rejCount ?? 0), 0) + (extra?.meters ?? 0));
+    woven += vr.reduce((a, r) => a + (r.totalCount ?? 0), 0) + (extra?.woven ?? 0);
+    for (const r of vr) {
+      const bl = r.bLength ?? 0;
+      const rcvdMtr = run || null;
+      const diff = bl > 0 ? r2(bl - run) : null;
+      const shrinkage = bl > 0 && diff != null ? r2((diff / bl) * 100) : null;
+      if (same(r.rcvdMtr, rcvdMtr) && same(r.diff, diff) && same(r.shrinkage, shrinkage)) continue;
+      await tx
+        .update(schema.intDailyProductionSet)
+        .set({ rcvdMtr, diff, shrinkage })
+        .where(eq(schema.intDailyProductionSet.id, r.id));
+    }
   }
 
   const latest = rows[rows.length - 1];

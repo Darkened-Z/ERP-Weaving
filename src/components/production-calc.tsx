@@ -32,6 +32,30 @@ export function ProductionSetCalc({
     const countRows = () => Array.from(document.querySelectorAll<HTMLTableRowElement>("#idp-count-rows tr"));
     const beamRows = () => Array.from(document.querySelectorAll<HTMLTableRowElement>("#idp-beam-rows tr"));
 
+    const cellNum = (tr: Element | undefined, n: string) => {
+      const x = parseFloat(tr?.querySelector<HTMLInputElement>(`[name="${n}"]`)?.value ?? "");
+      return Number.isFinite(x) ? x : 0;
+    };
+    const beamAt = (j: number) =>
+      (beamRows()[j]?.querySelector<HTMLInputElement>('[name="beamNo"]')?.value ?? "").trim();
+    // This voucher's meters for a beam: its own thans, plus the beam-less thans
+    // (B, C…) when the grid names only this one beam — the same rule the server
+    // stamps Rcvd/Mtr with (lib/beam-cycle).
+    const voucherMeters = (beamNo: string) => {
+      const cRows = countRows();
+      const n = Math.max(cRows.length, beamRows().length);
+      const named = new Set<string>();
+      for (let j = 0; j < n; j++) if (beamAt(j)) named.add(beamAt(j));
+      let m = 0;
+      for (let j = 0; j < n; j++) {
+        const b = beamAt(j);
+        if (b !== beamNo && (b || named.size !== 1)) continue;
+        const tr = cRows[j];
+        m += cellNum(tr, "aCount") + cellNum(tr, "bCount") + cellNum(tr, "cCount") + cellNum(tr, "cpCount") + cellNum(tr, "ppcCount") + cellNum(tr, "rejCount");
+      }
+      return m;
+    };
+
     const eachPair = (ci: number) => {
       const cRow = countRows()[ci];
       const bRow = beamRows()[ci];
@@ -63,12 +87,7 @@ export function ProductionSetCalc({
         bLenEl.value = String(stat.length);
       }
       const bLen = bnum("bLength");
-      // Rejection is a counts-row box ("up to Rejection stays on top").
-      const rej = (() => {
-        const x = parseFloat(cq("rejCount")?.value ?? "");
-        return Number.isFinite(x) ? x : 0;
-      })();
-      const rcvd = beamNo ? round((stat?.rcvd ?? 0) + (cnum("totalCount") || 0) + rej, 2) : 0;
+      const rcvd = beamNo ? round((stat?.rcvd ?? 0) + voucherMeters(beamNo), 2) : 0;
       const diff = bLen > 0 ? round(bLen - rcvd, 2) : 0;
       const shr = bLen > 0 ? round((diff / bLen) * 100, 2) : 0;
       const rcvdEl = bq("rcvdMtr");
@@ -124,12 +143,10 @@ export function ProductionSetCalc({
       const t = e.target as HTMLInputElement | null;
       if (!t?.name) return;
       if (!COUNT_SOURCES.has(t.name) && !BEAM_SOURCES.has(t.name) && t.name !== "totalCount") return;
-      const tr = t.closest("tr");
-      if (!tr) return;
-      const inCounts = tr.closest("#idp-count-rows");
-      const idx = Array.from((inCounts ? countRows() : beamRows())).indexOf(tr);
-      if (idx >= 0) eachPair(idx);
-      grandTotal();
+      if (!t.closest("#idp-count-rows, #idp-beam-rows")) return;
+      // Any than can move any beam's Rcvd/Mtr (beam-less thans count towards
+      // the voucher's beam), so every pair is refreshed, not just this row's.
+      recompute();
     };
     recompute();
     document.addEventListener("input", onEvt, true);

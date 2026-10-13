@@ -13,8 +13,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { SaveForm, type SaveError } from "@/components/save-form";
 import { db, schema } from "@/db";
 import { clearVoucher } from "@/lib/gl-post";
-import { inCurrentBeamCycle, recomputeBeamStatus } from "@/lib/beam-cycle";
-import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { recomputeBeamStatus } from "@/lib/beam-cycle";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, verifySavePassword } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
@@ -123,6 +123,7 @@ export default async function DailyProductionPage({
       partyTrade: schema.beams.partyTrade,
       szgParty: schema.beams.szgParty,
       brVno: schema.beams.brVno,
+      brDate: schema.beams.brDate,
     })
     .from(schema.beams)
     .orderBy(schema.beams.beamNo);
@@ -219,32 +220,40 @@ export default async function DailyProductionPage({
   // before this one in the beam's current cycle — the same running total the
   // server re-stamps on save (lib/beam-cycle), so the screen and the record agree.
   // It used to take the Rcvd/Mtr the newest voucher stamped, so editing an older
-  // voucher stacked its meters on top of the newest total.
-  const accumRowsRaw = await db
+  // voucher stacked its meters on top of the newest total. A voucher that names
+  // one beam also counts its beam-less thans (B, C…) towards it.
+  const priorRows = await db
     .select({
+      productionId: schema.intDailyProductionSet.productionId,
       beamNo: schema.intDailyProductionSet.beamNo,
-      total: sql<number>`COALESCE(SUM(COALESCE(${schema.intDailyProductionSet.totalCount},0) + COALESCE(${schema.intDailyProductionSet.rejCount},0)),0)`,
+      totalCount: schema.intDailyProductionSet.totalCount,
+      rejCount: schema.intDailyProductionSet.rejCount,
+      vDate: schema.intDailyProduction.vDate,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
-    .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
-    .where(
-      and(
-        isNotNull(schema.intDailyProductionSet.beamNo),
-        inCurrentBeamCycle,
-        editing ? lt(schema.intDailyProductionSet.productionId, editing.id) : undefined,
-      )
-    )
-    .groupBy(schema.intDailyProductionSet.beamNo);
+    .where(editing ? lt(schema.intDailyProductionSet.productionId, editing.id) : undefined);
 
   const beamStats: Record<string, { rcvd: number; length: number | null }> = {};
   for (const b of beamCatalog) {
     if (b.beamNo) beamStats[b.beamNo] = { rcvd: 0, length: b.length ?? null };
   }
-  for (const r of accumRowsRaw) {
-    if (!r.beamNo) continue;
-    if (!beamStats[r.beamNo]) beamStats[r.beamNo] = { rcvd: 0, length: null };
-    beamStats[r.beamNo].rcvd = Number(r.total ?? 0);
+  {
+    const brDateOf = new Map(beamCatalog.map((b) => [b.beamNo, b.brDate]));
+    const byVoucher = new Map<number, typeof priorRows>();
+    for (const r of priorRows) (byVoucher.get(r.productionId) ?? byVoucher.set(r.productionId, []).get(r.productionId)!).push(r);
+    for (const vr of byVoucher.values()) {
+      const named = new Set(vr.map((r) => r.beamNo?.trim()).filter((b): b is string => !!b));
+      for (const b of named) {
+        const br = brDateOf.get(b);
+        if (br && vr[0].vDate < br) continue;
+        const meters = vr
+          .filter((r) => r.beamNo?.trim() === b || (!r.beamNo?.trim() && named.size === 1))
+          .reduce((a, r) => a + (r.totalCount ?? 0) + (r.rejCount ?? 0), 0);
+        if (!beamStats[b]) beamStats[b] = { rcvd: 0, length: null };
+        beamStats[b].rcvd = Math.round((beamStats[b].rcvd + meters) * 100) / 100;
+      }
+    }
   }
 
   const beamFillMap: Record<string, Record<string, string | number | null>> = {};
@@ -998,16 +1007,12 @@ export default async function DailyProductionPage({
     try {
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
-          // Snapshot old sets so we can (a) revert beam.statusWrk for beams the
-          // new grid drops, (b) re-apply dlv_status='Y' for than serials this
-          // voucher previously delivered, (c) collide-check mmThanSrNo against
-          // ANY row not in this voucher.
+          // Snapshot old sets so we can (a) re-derive every beam the old grid
+          // named, (b) collide-check mmThanSrNo against ANY row not in this voucher.
           const oldSets = await tx
             .select({
               beamNo: schema.intDailyProductionSet.beamNo,
               beamStatus: schema.intDailyProductionSet.beamStatus,
-              mmThanSrNo: schema.intDailyProductionSet.mmThanSrNo,
-              dlvStatus: schema.intDailyProductionSet.dlvStatus,
             })
             .from(schema.intDailyProductionSet)
             .where(eq(schema.intDailyProductionSet.productionId, id));
@@ -1023,12 +1028,8 @@ export default async function DailyProductionPage({
             .from(schema.intDailyProduction)
             .where(eq(schema.intDailyProduction.id, id));
           const oldBeamStatus = new Map<string, string | null>();
-          // Per-ROW delivery memory (serial + beam) — rows of one voucher share a
-          // serial now, so a serial-only key would cross-mark the A/B/C thans.
-          const oldDelivered = new Map<string, string | null>();
           for (const os of oldSets) {
             if (os.beamNo) oldBeamStatus.set(os.beamNo, os.beamStatus ?? null);
-            if (os.mmThanSrNo) oldDelivered.set(`${os.mmThanSrNo}::${os.beamNo ?? ""}`, os.dlvStatus ?? null);
           }
 
           await tx
@@ -1183,21 +1184,22 @@ export default async function DailyProductionPage({
             }
           }
 
-          // Re-stamp dlvStatus='Y' per ROW where the old voucher already delivered.
-          for (const s of validSets) {
-            if (!s.mmThanSrNo) continue;
-            if (oldDelivered.get(`${s.mmThanSrNo}::${s.beamNo ?? ""}`) !== "Y") continue;
+          // Delivered = a despatch line carries the than. Re-derived from the
+          // despatch lines rather than remembered from the old rows: the memory
+          // was keyed serial + beam and never matched a beam-less than (B, C…),
+          // so an edit after despatch reopened it for a second despatch.
+          const delivered = validSets
+            .map((s) => s.mmThanSrNo)
+            .filter((k): k is string => !!k && (lockedBy.has(k) || openDespatchOf.has(k)));
+          if (delivered.length) {
             await tx
               .update(schema.intDailyProductionSet)
               .set({ dlvStatus: "Y" })
               .where(
                 and(
                   eq(schema.intDailyProductionSet.productionId, id),
-                  eq(schema.intDailyProductionSet.mmThanSrNo, s.mmThanSrNo),
-                  s.beamNo
-                    ? eq(schema.intDailyProductionSet.beamNo, s.beamNo)
-                    : isNotNull(schema.intDailyProductionSet.beamNo)
-                )
+                  inArray(schema.intDailyProductionSet.mmThanSrNo, delivered),
+                ),
               );
           }
 

@@ -546,6 +546,25 @@ export default async function GreyDespatchPage({
         .map((r) => (r.tSrNo as unknown as string | null))
         .filter((s): s is string => !!s);
     }
+    // A than already on ANOTHER despatch is taken whatever its delivered flag
+    // says — the flag is a cache, and a production edit once wiped it (IDP-0431/B
+    // became pickable again while still on IGD-0014).
+    if (inputThanSerials.length) {
+      const elsewhere = await db
+        .select({ t: schema.intGreyDespatchLine.tSrNo })
+        .from(schema.intGreyDespatchLine)
+        .where(
+          and(
+            inArray(schema.intGreyDespatchLine.tSrNo, inputThanSerials as unknown as number[]),
+            isUpdate ? ne(schema.intGreyDespatchLine.despatchId, id) : undefined,
+          ),
+        )
+        .limit(1);
+      if (elsewhere.length) {
+        const q = isUpdate ? `?id=${id}&error=than_used` : `?adding=1&error=than_used`;
+        redirect("/inventory/grey-despatch" + q);
+      }
+    }
     if (prodSerials.length) {
       const existing = await db
         .select({ mm: schema.intDailyProductionSet.mmThanSrNo, dlv: schema.intDailyProductionSet.dlvStatus })
