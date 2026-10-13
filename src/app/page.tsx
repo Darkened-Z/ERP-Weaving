@@ -1,6 +1,6 @@
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,9 @@ export default async function Dashboard() {
 
   // Totals for the fiscal year shown in the header, not every year ever posted.
   const fy = company?.currentFy ?? "";
+  // The year's dates come from its own fiscal_years row; the profile's
+  // fy_start/fy_end are typed once and go stale when the year rolls over.
+  const [fyRow] = await db.select().from(schema.fiscalYears).where(eq(schema.fiscalYears.code, fy));
   const [dRow] = await db
     .select({ total: sql<number>`coalesce(sum(${schema.transDetail.debit}), 0)` })
     .from(schema.transDetail)
@@ -22,8 +25,6 @@ export default async function Dashboard() {
   const totalCredit = cRow?.total ?? 0;
 
   const [vRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.transMain).where(eq(schema.transMain.fyCode, fy));
-  const [loomRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms);
-  const [runningRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.looms).where(inArray(schema.looms.statusWrk, ["RUNNING", "R"]));
   const [contractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts);
   const [activeContractRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.contracts).where(sql`status = 'A'`);
   const oracleContracts = await db.get<{ total: number; running: number }>(sql`
@@ -49,7 +50,6 @@ export default async function Dashboard() {
   `);
   const contractsTotal = (contractRow?.count ?? 0) + (oracleContracts?.total ?? 0);
   const contractsActive = (activeContractRow?.count ?? 0) + (oracleContracts?.running ?? 0);
-  const [greyRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.greyConstruction);
   const [yarnRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.yarnCounts);
   const [partsRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.chartParts);
   const [beamRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.beams);
@@ -66,11 +66,6 @@ export default async function Dashboard() {
     running: sql<number>`count(case when status = 'R' then 1 end)`,
     totalBags: sql<number>`coalesce(sum(case when status = 'R' then qty_bags else 0 end), 0)`,
   }).from(schema.extYarnPurContract);
-  // Production entries go to int_daily_production*; daily_production is the
-  // legacy table nothing writes any more.
-  const [prodRow] = await db
-    .select({ total: sql<number>`coalesce(sum(${schema.intDailyProductionSet.totalCount}), 0)` })
-    .from(schema.intDailyProductionSet);
   const [userRow] = await db.select({ count: sql<number>`count(*)` }).from(schema.users).where(sql`${schema.users.roleName} != 'superadmin'`);
 
   const recentVouchers = await db
@@ -88,17 +83,14 @@ export default async function Dashboard() {
   const formatNum = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
 
   const modules = [
-    // The three the mill opens every morning. Chart of accounts, vouchers and
-    // the ledger are still in the menu; they are not what the dashboard is for.
+    // What the mill opens every morning. Chart of accounts and vouchers are
+    // still in the menu. The Production block (looms / output / grey specs)
+    // was dropped by the owner in favour of the General Ledger.
     { label: "Finance", items: [
       { label: "Folding Stock", value: "View", unit: "daily folding stock", href: "/reports/weaving/folding-stock" },
       { label: "Counts — Sale", value: "View", unit: "weaving counts accounts", href: "/external/reports/weaving-counts-sale" },
       { label: "Counts — Purchase", value: "View", unit: "weaving counts accounts", href: "/external/reports/weaving-counts-purchase" },
-    ]},
-    { label: "Production", items: [
-      { label: "Looms", value: `${runningRow?.count ?? 0}/${loomRow?.count ?? 0}`, unit: "running / total", href: "/weaving/looms" },
-      { label: "Output", value: formatNum(prodRow?.total ?? 0), unit: "meters produced", href: "/weaving/looms" },
-      { label: "Grey Specs", value: greyRow?.count ?? 0, unit: "construction types", href: "/define/grey-construction" },
+      { label: "General Ledger", value: "View", unit: "accounts ledger", href: "/ledger" },
     ]},
     { label: "Supply Chain", items: [
       { label: "Grey Conv Sale Avg", value: `${extGccRow?.running ?? 0}`, unit: `running · ${formatNum(extGccRow?.production ?? 0)} mtr`, href: "/external/reports/grey-conv-sale-avg" },
@@ -115,7 +107,6 @@ export default async function Dashboard() {
 
   const GROUP_COLORS: Record<string, string> = {
     Finance: "var(--h4)",
-    Production: "var(--h2)",
     "Supply Chain": "var(--h3)",
     Operations: "var(--h5)",
   };
@@ -132,7 +123,7 @@ export default async function Dashboard() {
           </div>
           <div className="text-right">
             <div className="label">Fiscal Year</div>
-            <div className="mono text-lg font-bold mt-1">{company?.fyStart} — {company?.fyEnd}</div>
+            <div className="mono text-lg font-bold mt-1">{fyRow?.startDate ?? company?.fyStart} — {fyRow?.endDate ?? company?.fyEnd}</div>
           </div>
         </div>
 

@@ -330,6 +330,10 @@ export default async function WarpedBeamReceivingPage({
     const convs = formData.getAll("conv") as string[];
     const amounts = formData.getAll("amount") as string[];
     const gpNoLines = formData.getAll("gpNoLine") as string[];
+    // Per-beam YES/NO (owner): only a YES line loads its beam. A set arrives on
+    // one bill but its beams are loaded one at a time, so saving must not load
+    // the whole set. Stored on the line as beam_status LOADED / PENDING.
+    const loadLines = formData.getAll("loadLine") as string[];
 
     const validLines: (typeof schema.intWarpedBeamReceivingLine.$inferInsert)[] = [];
     for (let i = 0; i < yarnLotNos.length; i++) {
@@ -371,7 +375,8 @@ export default async function WarpedBeamReceivingPage({
       } else {
         row.amount = null;
       }
-      validLines.push({ ...row, beamStatus: row.beamNo ? "LOADED" : null, receivingId: 0 });
+      const load = (loadLines[i] || "").trim().toUpperCase() === "YES";
+      validLines.push({ ...row, beamStatus: row.beamNo ? (load ? "LOADED" : "PENDING") : null, receivingId: 0 });
     }
 
     const totalLength = validLines.reduce((s, l) => s + (l.beamLength ?? 0), 0);
@@ -451,18 +456,6 @@ export default async function WarpedBeamReceivingPage({
             .where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
           const oldBeams = oldLines.map((r) => r.beamNo).filter((b): b is string => !!b);
 
-          await tx
-            .update(schema.intWarpedBeamReceiving)
-            .set({ ...header, modifiedDate: nowIso })
-            .where(eq(schema.intWarpedBeamReceiving.id, id));
-          await tx
-            .delete(schema.intWarpedBeamReceivingLine)
-            .where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
-          if (validLines.length) {
-            await tx
-              .insert(schema.intWarpedBeamReceivingLine)
-              .values(validLines.map((l) => ({ ...l, receivingId: id })));
-          }
           // Beam-status guard: a beam that has already moved past receiving
           // (KNOTTING / PRODUCTION / RUNNING via the knotting mount) must NOT be
           // forced back to LOADED by re-saving this voucher — that used to break
@@ -481,8 +474,27 @@ export default async function WarpedBeamReceivingPage({
               .where(sql`${schema.beams.beamNo} IN (${sql.join(allBeams.map((b) => sql`${b}`), sql`, `)})`);
             for (const r of rows0) beamNow.set(r.beamNo, { status: (r.statusWrk ?? "").toUpperCase(), brVno: r.brVno });
           }
+          // A beam this bill loaded that has since been knotted or woven out can't
+          // be taken back to NO — it stays YES (the form shows it locked).
           for (const l of validLines) {
-            if (!l.beamNo) continue;
+            const c = l.beamNo ? beamNow.get(l.beamNo) : undefined;
+            if (l.beamStatus === "PENDING" && c?.brVno === vNo && c.status !== "LOADED") l.beamStatus = "LOADED";
+          }
+
+          await tx
+            .update(schema.intWarpedBeamReceiving)
+            .set({ ...header, modifiedDate: nowIso })
+            .where(eq(schema.intWarpedBeamReceiving.id, id));
+          await tx
+            .delete(schema.intWarpedBeamReceivingLine)
+            .where(eq(schema.intWarpedBeamReceivingLine.receivingId, id));
+          if (validLines.length) {
+            await tx
+              .insert(schema.intWarpedBeamReceivingLine)
+              .values(validLines.map((l) => ({ ...l, receivingId: id })));
+          }
+          for (const l of validLines) {
+            if (!l.beamNo || l.beamStatus !== "LOADED") continue;
             const c = beamNow.get(l.beamNo);
             // Received again by a later bill: that bill owns the beam now.
             if (c?.brVno && c.brVno !== vNo && c.status !== "EMPTY") continue;
@@ -505,9 +517,10 @@ export default async function WarpedBeamReceivingPage({
               })
               .where(eq(schema.beams.beamNo, l.beamNo));
           }
-          const newBeams = new Set(lineBeams);
-          for (const ob of oldBeams) {
-            if (newBeams.has(ob)) continue;
+          // Dropped lines and lines switched to NO give their beam back.
+          const loadedBeams = new Set(validLines.filter((l) => l.beamStatus === "LOADED").map((l) => l.beamNo));
+          for (const ob of allBeams) {
+            if (loadedBeams.has(ob)) continue;
             // Only a beam still sitting LOADED from THIS receiving reverts.
             const c = beamNow.get(ob);
             if (!c || c.status !== "LOADED" || c.brVno !== vNo) continue;
@@ -616,7 +629,7 @@ export default async function WarpedBeamReceivingPage({
             for (const r of rows0) curStatus.set(r.beamNo, (r.statusWrk ?? "").toUpperCase());
           }
           for (const l of validLines) {
-            if (!l.beamNo) continue;
+            if (!l.beamNo || l.beamStatus !== "LOADED") continue;
             const advanced = ADVANCED.has(curStatus.get(l.beamNo) ?? "");
             // A mounted beam can't come in again until production empties it;
             // stamping a new receiving on it would restart its cycle mid-weave.
@@ -1100,6 +1113,7 @@ export default async function WarpedBeamReceivingPage({
                         <th style={{ width: 80 }}>Beam Set No</th>
                         <th style={{ width: 70 }}>Beam No</th>
                         <th style={{ width: 80 }}>Beam Status</th>
+                        <th style={{ width: 60 }} title="YES loads this beam on save; NO keeps it out of knotting until it is loaded">Load</th>
                         <th style={{ width: 90 }} className="text-right">Beam Length</th>
                         <th style={{ width: 70 }} className="text-right">Width</th>
                         <th style={{ width: 70 }} className="text-right">Ends</th>
@@ -1113,6 +1127,9 @@ export default async function WarpedBeamReceivingPage({
                     <tbody id="iwb-lines">
                       {Array.from({ length: ROWS }).map((_, i) => {
                         const l = lines[i];
+                        const live = l?.beamNo ? (liveStatusByNo.get(l.beamNo) ?? "").toUpperCase() : "";
+                        // Loaded and already knotted / woven out: NO would undo nothing real.
+                        const loadLocked = l?.beamStatus === "LOADED" && live !== "" && live !== "LOADED";
                         return (
                           <tr key={i}>
                             <td className="mono text-[11px] text-center whitespace-nowrap">
@@ -1136,6 +1153,19 @@ export default async function WarpedBeamReceivingPage({
                             <td><input name="beamSetNo" className={gridCellCls} defaultValue={l?.beamSetNo ?? ""} /></td>
                             <td><input name="beamNo" list="iwb-beam-list" className={gridCellCls} defaultValue={l?.beamNo ?? ""} /></td>
                             <td><input className={gridCellCls + " bg-gray-100"} defaultValue={l?.beamNo ? (liveStatusByNo.get(l.beamNo) || "LOADED") : l?.beamStatus ?? ""} readOnly tabIndex={-1} title="Live beam status — updates after knotting / production" /></td>
+                            <td>
+                              {loadLocked ? (
+                                <>
+                                  <input type="hidden" name="loadLine" value="YES" />
+                                  <input className={gridCellCls + " bg-gray-100"} value="YES" readOnly tabIndex={-1} title={`Already ${live} — cannot be un-loaded`} />
+                                </>
+                              ) : (
+                                <select name="loadLine" className={gridCellCls} defaultValue={l?.beamStatus === "LOADED" ? "YES" : "NO"}>
+                                  <option value="NO">NO</option>
+                                  <option value="YES">YES</option>
+                                </select>
+                              )}
+                            </td>
                             <td><input name="beamLength" type="number" step="any" className={gridCellNumCls} defaultValue={l?.beamLength ?? ""} /></td>
                             <td><input name="width" type="number" step="any" className={gridCellNumCls} defaultValue={l?.width ?? ""} /></td>
                             <td><input name="ends" type="number" step="1" className={gridCellNumCls} defaultValue={l?.ends ?? ""} /></td>
@@ -1159,7 +1189,8 @@ export default async function WarpedBeamReceivingPage({
                 <RowErase tbodyId="iwb-lines" />
                 <div className="text-[10px] text-[var(--muted)] mt-2 px-2">
                   Empty rows are ignored on save. On update, lines are replaced with the current grid.
-                  Beams named on lines are marked LOADED on save.
+                  Only lines with Load = YES mark their beam LOADED on save; switching a line back to NO
+                  returns its beam (until it is knotted).
                 </div>
                 {/* Grid totals — sum of Beam Length and Amount across the rows. */}
                 <div className="grid grid-cols-3 gap-2 mt-2 px-2 pb-2">

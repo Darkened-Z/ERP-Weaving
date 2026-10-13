@@ -50,7 +50,11 @@ export default async function FoldingStockPage({
   )
     .map((a) => (a.description ?? "").trim())
     .filter(Boolean);
+  // The rows follow the same head: a contract held by a COMMERCIAL or creditor
+  // account (external GCC- contracts) is not the mill's folding stock.
+  const wvgParties = new Set(partyOpts);
   const contracts = allContracts
+    .filter((c) => wvgParties.has((c.party ?? "").trim()))
     .filter((c) => (partyQ ? c.party === partyQ : true))
     // No status picked = ALL, exactly as the Oracle form behaves.
     .filter((c) => (statusQ ? (c.status ?? "").toUpperCase() === statusQ : true))
