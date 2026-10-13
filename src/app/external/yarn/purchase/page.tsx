@@ -601,7 +601,6 @@ export default async function YarnPurchaseVoucherPage({
       const q = num(qtys[i]);
       const b = num(bags[i]);
       const co = num(cons[i]);
-      const l = num(lbss[i]);
       const u = (units[i] || "").trim();
       const dp = (dspParties[i] || "").trim();
       const rt = num(rates[i]);
@@ -610,8 +609,10 @@ export default async function YarnPurchaseVoucherPage({
       // A row is empty when nothing was ENTERED on it. The despatch party and
       // the unit are auto-filled on every row of the grid, so counting them as
       // data made every blank line look real: each save wrote them all and gave
-      // each one a batch letter, and the voucher grew by ten rows a time.
-      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && rt == null && rs == null) {
+      // each one a batch letter, and the voucher grew by ten rows a time. Lbs
+      // is not entered either — it is qty × 100 and stored on every line (0
+      // when blank), so counting it let a blank line re-save itself.
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && rt == null && rs == null) {
         continue;
       }
 

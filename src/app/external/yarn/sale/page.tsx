@@ -702,15 +702,16 @@ export default async function YarnSaleVoucherPage({
       const q = num(qtys[i]);
       const b = num(bags[i]);
       const co = num(conss[i]);
-      const l = num(lbss[i]);
       const u = (units[i] || "").trim();
       const dp = (dspParties[i] || "").trim();
       const rt = num(rates[i]);
       const rm = (rmks[i] || "").trim();
 
       // Same as the purchase side: the godown and unit are auto-filled on every
-      // row, so treating them as data would persist every blank line.
-      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && l == null && rt == null && !rm) {
+      // row, so treating them as data would persist every blank line. Lbs too:
+      // it is always qty × 100 and every saved line stores it (0 when blank),
+      // so a blank line came back with "0" in it and saved itself again.
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && rt == null && !rm) {
         continue;
       }
 
