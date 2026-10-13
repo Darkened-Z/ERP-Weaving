@@ -6,6 +6,8 @@ export type SaveError = {
   than?: string;
   dv?: string;
   thru?: string;
+  loom?: string;
+  beam?: string;
 } | null;
 
 const msgs: Record<string, (e: SaveError) => string> = {
@@ -26,6 +28,8 @@ const msgs: Record<string, (e: SaveError) => string> = {
   party_mismatch: () =>
     "Party mismatch — Conv Contract Party and Beam Cost Party must be the same. Check the Parties section before saving.",
   no_grade: () => "Total grade production must be greater than 0.",
+  loom_taken: (e) =>
+    `${e?.loom ?? "That loom"} now carries beam ${e?.beam ?? ""} — this change would put another beam back on it. Empty or move ${e?.beam ?? "it"} first. Nothing was saved.`,
 };
 
 export function SaveForm({

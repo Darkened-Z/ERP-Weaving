@@ -172,7 +172,10 @@ export default async function BeamsPage({
     const [existing] = await db.select().from(schema.beams).where(eq(schema.beams.id, id)).limit(1);
     const sl = (txt("status_loc") ?? "").toUpperCase();
     const sw = (txt("status_wrk") ?? "").toUpperCase();
-    const isDone = sl === "L-ROLL" || sl === "EMPTY" || sw === "EMPTY" || sw === "L-ROLL";
+    // Status Wrk alone decides whether the beam is off its loom. Status Loc is a
+    // description and goes stale (a beam re-knotted after L-ROLL still reads
+    // L-ROLL there), so saving such a beam here used to empty it mid-run.
+    const isDone = sw === "EMPTY" || sw === "L-ROLL";
     const newLoomNo = isDone ? null : int("loom_no");
     const newShed = isDone ? null : txt("shed");
     const finalStatusWrk = isDone ? "EMPTY" : (txt("status_wrk") ?? "RUNNING");

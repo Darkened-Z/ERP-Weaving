@@ -13,8 +13,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { SaveForm, type SaveError } from "@/components/save-form";
 import { db, schema } from "@/db";
 import { clearVoucher } from "@/lib/gl-post";
-import { inCurrentBeamCycle, recomputeBeamStatus, wovenThisCycle } from "@/lib/beam-cycle";
-import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { inCurrentBeamCycle, recomputeBeamStatus } from "@/lib/beam-cycle";
+import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, verifySavePassword } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
@@ -35,7 +35,7 @@ const infoCls = "input-box mono text-[12px] bg-gray-100";
 export default async function DailyProductionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; than?: string; dv?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; than?: string; dv?: string; loom?: string; beam?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -215,9 +215,11 @@ export default async function DailyProductionPage({
     .orderBy(schema.looms.shed);
   const shedList = shedRows.map((s) => s.shed).filter((s): s is string => !!s);
 
-  // Per-beam accumulated Rcvd/Mtr = Σ(totalCount + rejCount) across ALL saved production
-  // (excluding the current voucher so the live client math can add this row's own numbers).
-  // Current cycle only (see lib/beam-cycle): a reused beam starts from zero.
+  // Rcvd/Mtr opening per beam = Σ(totalCount + rejCount) of every voucher ENTERED
+  // before this one in the beam's current cycle — the same running total the
+  // server re-stamps on save (lib/beam-cycle), so the screen and the record agree.
+  // It used to take the Rcvd/Mtr the newest voucher stamped, so editing an older
+  // voucher stacked its meters on top of the newest total.
   const accumRowsRaw = await db
     .select({
       beamNo: schema.intDailyProductionSet.beamNo,
@@ -230,32 +232,10 @@ export default async function DailyProductionPage({
       and(
         isNotNull(schema.intDailyProductionSet.beamNo),
         inCurrentBeamCycle,
-        editing ? ne(schema.intDailyProductionSet.productionId, editing.id) : undefined,
+        editing ? lt(schema.intDailyProductionSet.productionId, editing.id) : undefined,
       )
     )
     .groupBy(schema.intDailyProductionSet.beamNo);
-
-  // Rcvd/Mtr opening balance = the Rcvd/Mtr the LAST saved voucher stamped on that
-  // beam (owner), which the new voucher's own meters then build on. Rows come back
-  // oldest-first so the last write per beam wins. Falls back to the accumulated sum
-  // for beams whose earlier vouchers predate the stored rcvdMtr.
-  const lastRcvdRows = await db
-    .select({
-      beamNo: schema.intDailyProductionSet.beamNo,
-      rcvdMtr: schema.intDailyProductionSet.rcvdMtr,
-    })
-    .from(schema.intDailyProductionSet)
-    .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
-    .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
-    .where(
-      and(
-        isNotNull(schema.intDailyProductionSet.beamNo),
-        isNotNull(schema.intDailyProductionSet.rcvdMtr),
-        inCurrentBeamCycle,
-        editing ? ne(schema.intDailyProductionSet.productionId, editing.id) : undefined,
-      )
-    )
-    .orderBy(schema.intDailyProductionSet.id);
 
   const beamStats: Record<string, { rcvd: number; length: number | null }> = {};
   for (const b of beamCatalog) {
@@ -265,11 +245,6 @@ export default async function DailyProductionPage({
     if (!r.beamNo) continue;
     if (!beamStats[r.beamNo]) beamStats[r.beamNo] = { rcvd: 0, length: null };
     beamStats[r.beamNo].rcvd = Number(r.total ?? 0);
-  }
-  for (const r of lastRcvdRows) {
-    if (!r.beamNo) continue;
-    if (!beamStats[r.beamNo]) beamStats[r.beamNo] = { rcvd: 0, length: null };
-    beamStats[r.beamNo].rcvd = Number(r.rcvdMtr ?? 0);
   }
 
   const beamFillMap: Record<string, Record<string, string | number | null>> = {};
@@ -1227,47 +1202,16 @@ export default async function DailyProductionPage({
           }
 
           // Beam lifecycle: every beam this voucher touches now or touched
-          // before is re-derived from the latest production of its cycle, so
-          // re-saving an older voucher can't wind a beam back past a newer one,
-          // and a dropped beam falls back to its knotting mount only when no
-          // other production remains.
+          // before is re-derived from its cycle's production (lib/beam-cycle:
+          // Rcvd/Mtr re-stamp, last-entered status, last roll at full length),
+          // so re-saving an older voucher can't wind a beam back past a newer
+          // one, and a dropped beam falls back to its knotting mount only when
+          // no other production remains.
           const newBeams = new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b));
           for (const b of new Set([...newBeams, ...oldBeamStatus.keys()])) {
             const d = newBeams.has(b) ? header.vDate : (oldHead?.vDate ?? header.vDate);
             await recomputeBeamStatus(tx, b, d);
           }
-          // Auto "last roll → EMPTY": a beam whose cumulative woven meters reach
-          // its total length is exhausted → force EMPTY + detach from loom.
-          // No-ops when the beam has no length set, so it's safe until capacities
-          // are entered.
-          for (const beamNo of newBeams) {
-            const [b] = await tx
-              .select({ length: schema.beams.length, statusWrk: schema.beams.statusWrk })
-              .from(schema.beams)
-              .where(eq(schema.beams.beamNo, beamNo))
-              .limit(1);
-            if (!b?.length || b.length <= 0 || b.statusWrk === "EMPTY") continue;
-            // Current cycle only: a reused beam number carries earlier cycles'
-            // production, which would empty it on its first entry back.
-            if ((await wovenThisCycle(tx, beamNo)) >= b.length) {
-              // Last roll: the beam is spent, so free the LOOM too — otherwise it
-              // keeps pointing at an exhausted beam and never reads as available
-              // for the next knotting.
-              const [spent] = await tx
-                .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
-                .from(schema.beams)
-                .where(eq(schema.beams.beamNo, beamNo))
-                .limit(1);
-              await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
-              if (spent?.shed && spent.loomNo != null) {
-                await tx
-                  .update(schema.looms)
-                  .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`));
-              }
-            }
-          }
-
           // Folding grey stock is NOT posted to the general ledger. Under a
           // conversion contract the cloth belongs to the party, not the mill, so
           // capitalising it here and crediting the party swung their receivable
@@ -1327,37 +1271,6 @@ export default async function DailyProductionPage({
           for (const b of new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b))) {
             await recomputeBeamStatus(tx, b, header.vDate);
           }
-          // Auto "last roll → EMPTY" (see update path for rationale). No-ops
-          // until beam length is set.
-          const insBeams = new Set(validSets.map((s) => s.beamNo).filter((b): b is string => !!b));
-          for (const beamNo of insBeams) {
-            const [b] = await tx
-              .select({ length: schema.beams.length, statusWrk: schema.beams.statusWrk })
-              .from(schema.beams)
-              .where(eq(schema.beams.beamNo, beamNo))
-              .limit(1);
-            if (!b?.length || b.length <= 0 || b.statusWrk === "EMPTY") continue;
-            // Current cycle only: a reused beam number carries earlier cycles'
-            // production, which would empty it on its first entry back.
-            if ((await wovenThisCycle(tx, beamNo)) >= b.length) {
-              // Last roll: the beam is spent, so free the LOOM too — otherwise it
-              // keeps pointing at an exhausted beam and never reads as available
-              // for the next knotting.
-              const [spent] = await tx
-                .select({ shed: schema.beams.shed, loomNo: schema.beams.loomNo })
-                .from(schema.beams)
-                .where(eq(schema.beams.beamNo, beamNo))
-                .limit(1);
-              await tx.update(schema.beams).set({ statusWrk: "EMPTY", loomNo: null }).where(eq(schema.beams.beamNo, beamNo));
-              if (spent?.shed && spent.loomNo != null) {
-                await tx
-                  .update(schema.looms)
-                  .set({ statusWrk: "S", currentBeam: null, currentContract: null })
-                  .where(and(eq(schema.looms.loomNo, spent.loomNo), eq(schema.looms.shed, spent.shed), sql`LOWER(${schema.looms.currentBeam}) = LOWER(${beamNo})`));
-              }
-            }
-          }
-
           // No folding-stock GL here either — see the note on the update path.
           return insertedId;
         });
@@ -1371,6 +1284,10 @@ export default async function DailyProductionPage({
         return { error: "than_locked", than, dv: vno ?? "" };
       }
       if (msg === "DUP_THAN") return { error: "dup_than" };
+      if (msg.startsWith("LOOM_TAKEN:")) {
+        const [, loom, beam] = msg.split(":");
+        return { error: "loom_taken", loom, beam };
+      }
       if (/UNIQUE|constraint/i.test(msg)) {
         if (/mm_than_sr_no|mmThanSrNo/i.test(msg)) return { error: "dup_than" };
         return { error: "code_exists" };
@@ -1428,25 +1345,36 @@ export default async function DailyProductionPage({
       }
     }
 
-    await db.transaction(async (tx) => {
-      const oldSets = await tx
-        .select({ beamNo: schema.intDailyProductionSet.beamNo })
-        .from(schema.intDailyProductionSet)
-        .where(eq(schema.intDailyProductionSet.productionId, id));
-      const [oldHead] = await tx
-        .select({ vDate: schema.intDailyProduction.vDate })
-        .from(schema.intDailyProduction)
-        .where(eq(schema.intDailyProduction.id, id));
-      await clearVoucher(tx, "DP", id);
-      await tx.delete(schema.intDailyProductionSet).where(eq(schema.intDailyProductionSet.productionId, id));
-      await tx.delete(schema.intDailyProductionDetail).where(eq(schema.intDailyProductionDetail.productionId, id));
-      await tx.delete(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));
-      // With this voucher gone, each of its beams takes the status of the
-      // latest production left in its cycle — or its knotting mount if none.
-      for (const b of new Set(oldSets.map((os) => os.beamNo).filter((b): b is string => !!b))) {
-        await recomputeBeamStatus(tx, b, oldHead?.vDate);
-      }
-    });
+    let loomTaken: string | null = null;
+    try {
+      await db.transaction(async (tx) => {
+        const oldSets = await tx
+          .select({ beamNo: schema.intDailyProductionSet.beamNo })
+          .from(schema.intDailyProductionSet)
+          .where(eq(schema.intDailyProductionSet.productionId, id));
+        const [oldHead] = await tx
+          .select({ vDate: schema.intDailyProduction.vDate })
+          .from(schema.intDailyProduction)
+          .where(eq(schema.intDailyProduction.id, id));
+        await clearVoucher(tx, "DP", id);
+        await tx.delete(schema.intDailyProductionSet).where(eq(schema.intDailyProductionSet.productionId, id));
+        await tx.delete(schema.intDailyProductionDetail).where(eq(schema.intDailyProductionDetail.productionId, id));
+        await tx.delete(schema.intDailyProduction).where(eq(schema.intDailyProduction.id, id));
+        // With this voucher gone, each of its beams takes the status of the
+        // latest production left in its cycle — or its knotting mount if none.
+        for (const b of new Set(oldSets.map((os) => os.beamNo).filter((b): b is string => !!b))) {
+          await recomputeBeamStatus(tx, b, oldHead?.vDate);
+        }
+      });
+    } catch (e) {
+      const msg = (e as { message?: string })?.message ?? "";
+      if (!msg.startsWith("LOOM_TAKEN:")) throw e;
+      loomTaken = msg;
+    }
+    if (loomTaken) {
+      const [, loom, beam] = loomTaken.split(":");
+      redirect(`/inventory/daily-production?id=${id}&error=loom_taken&loom=${encodeURIComponent(loom)}&beam=${encodeURIComponent(beam)}`);
+    }
     revalidatePath("/inventory/daily-production");
     redirect(`/inventory/daily-production`);
   }
@@ -1510,6 +1438,12 @@ export default async function DailyProductionPage({
             {params.dv}. Even one despatched than holds the whole voucher, because deleting it
             would leave that despatch pointing at production that no longer exists. Remove the
             than from despatch {params.dv} first. Nothing was deleted.
+          </div>
+        )}
+        {params.error === "loom_taken" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Cannot delete — it would put a beam back on {params.loom}, which now carries beam {params.beam}. Empty or
+            move {params.beam} first. Nothing was deleted.
           </div>
         )}
         {params.error === "period_locked" && (

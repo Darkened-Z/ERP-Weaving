@@ -952,10 +952,14 @@ export default async function KnottingPage({
       status: schema.beams.statusWrk,
     })
     .from(schema.intKnottingSarningLine)
+    .innerJoin(schema.intKnottingSarning, eq(schema.intKnottingSarning.id, schema.intKnottingSarningLine.knottingId))
     .leftJoin(schema.beams, eq(schema.beams.beamNo, schema.intKnottingSarningLine.beamNo))
+    // Only the line that holds the beam's CURRENT mount: an R-CUT beam re-knotted
+    // onto another loom must not keep its old bill's loom reserved.
     .where(
-      sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL 
-          AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'LOADED', 'R-CUT')`
+      sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL
+          AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'LOADED', 'R-CUT')
+          AND (${schema.beams.knVno} IS NULL OR ${schema.beams.knVno} = ${schema.intKnottingSarning.vNo})`
     );
   const busyLooms = new Map<string, string>();
   for (const b of beamsOnLooms) busyLooms.set(`${b.shed ?? ""}|${b.loomNo}`, b.beamNo);

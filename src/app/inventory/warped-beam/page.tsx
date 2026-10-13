@@ -506,7 +506,9 @@ export default async function WarpedBeamReceivingPage({
             await tx
               .update(schema.beams)
               .set({
-                ...(advanced ? {} : { statusWrk: "LOADED" }),
+                // Back in the godown: the previous cycle's knotting mount no longer
+                // applies (same as a new receiving), else a stale knVno re-mounts it.
+                ...(advanced ? {} : { statusWrk: "LOADED", knVno: null, knDate: null }),
                 receivedDate: header.vDate,
                 brVno: vNo,
                 brDate: header.vDate,
