@@ -529,9 +529,9 @@ export default async function GreyConvContractPage({
   }
 
   const gridCellCls = "input-box mono text-[13px] py-1";
-  const gridCellWideCls = "input-box mono text-[13px] py-1 min-w-[150px]";
-  const gridCellBrandCls = "input-box mono text-[13px] py-1 min-w-[80px]";
-  const gridCellEndsCls = "input-box mono text-[13px] py-1 text-right min-w-[64px]";
+  const gridCellWideCls = "input-box mono text-[13px] py-1";
+  const gridCellBrandCls = "input-box mono text-[13px] py-1";
+  const gridCellEndsCls = "input-box mono text-[13px] py-1 text-right";
   const gridCellNumCls = "input-box mono text-[13px] py-1 text-right";
   const gridCellCalcCls = "input-box mono text-[13px] py-1 text-right bg-gray-100";
   const roCls = "input-box mono text-[13px] bg-gray-100";
@@ -887,7 +887,7 @@ export default async function GreyConvContractPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 gap-4 mt-4">
               <div className="border border-black">
                 <div className="bg-green-100 border-b border-black px-3 py-1 flex items-center justify-between">
                   <div className="text-[12px] uppercase tracking-[0.1em] font-bold">WARP</div>
@@ -898,19 +898,19 @@ export default async function GreyConvContractPage({
                     <input name="pick" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.pick ?? ""} />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[13px]">
+                <div>
+                  <table className="w-full text-[13px] yarn-grid">
                     <thead>
                       <tr className="bg-gray-50">
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
-                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 56 }}>Count</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">WT Per Mtr</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cost Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 60 }}>Cal Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 64 }}>Ends</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>WT Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>Rate Per Lbs</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 80 }}>Cost Per Mtr</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 22 }}></th>
                       </tr>
                     </thead>
@@ -945,19 +945,19 @@ export default async function GreyConvContractPage({
                     <input name="width" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.width ?? ""} />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[13px]">
+                <div>
+                  <table className="w-full text-[13px] yarn-grid">
                     <thead>
                       <tr className="bg-gray-50">
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
-                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 56 }}>Count</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">WT Per Mtr</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cost Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 60 }}>Cal Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 64 }}>Ends</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>WT Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>Rate Per Lbs</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 80 }}>Cost Per Mtr</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 22 }}></th>
                       </tr>
                     </thead>

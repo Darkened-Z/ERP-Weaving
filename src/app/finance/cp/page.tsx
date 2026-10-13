@@ -422,6 +422,7 @@ export default async function CashPaymentPage({
       code: schema.chartOfAccounts.code,
       description: schema.chartOfAccounts.description,
       descShort: schema.chartOfAccounts.descShort,
+      level: schema.chartOfAccounts.level,
     })
     .from(schema.chartOfAccounts)
     .where(gte(schema.chartOfAccounts.level, 4))
@@ -438,13 +439,17 @@ export default async function CashPaymentPage({
   const codeToAcc = new Map(accounts.map((a) => [a.code, a]));
   // Name in the box, code underneath. Typing a code still finds the account —
   // the picker searches the value as well as the label.
-  const accFindRows = accounts.map((a) => ({
+  // Only posting (level 5) accounts are offered on a voucher line — the heads
+  // above them can't carry a balance of their own (owner). Saved lines on an
+  // older level-4 account still resolve through the maps below.
+  const postable = accounts.filter((a) => a.level === 5);
+  const accFindRows = postable.map((a) => ({
     value: a.code,
     code: a.code,
     description: a.description ?? a.code,
   }));
 
-  const accOpts = accounts.map((a) => ({
+  const accOpts = postable.map((a) => ({
     value: a.code,
     label: a.description ?? a.code,
     desc: a.code,

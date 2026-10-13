@@ -423,7 +423,10 @@ export default async function BankReceiptPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.code);
   const descMap = new Map(accounts.map((a) => [a.code, a.description]));
-  const pickerAccounts = accounts.filter((a) => a.level >= 4);
+  // Only posting (level 5) accounts are offered on a voucher line — the heads
+  // above them can't carry a balance of their own (owner). Saved lines on an
+  // older level-4 account still resolve through the maps below.
+  const pickerAccounts = accounts.filter((a) => a.level === 5);
   // Name in the box, code underneath — the code is there to confirm the right
   // account was hit, not to be read. Typing a code still finds it.
   const lineAccOpts = pickerAccounts.map((a) => ({
@@ -437,7 +440,7 @@ export default async function BankReceiptPage({
     desc: a.description,
   }));
   const lineTitleMap = Object.fromEntries(
-    pickerAccounts.map((a) => [a.code, { line_title: a.description }]),
+    accounts.filter((a) => a.level >= 4).map((a) => [a.code, { line_title: a.description }]),
   );
 
   const centers = await db

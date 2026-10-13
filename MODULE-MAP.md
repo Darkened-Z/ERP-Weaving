@@ -48,7 +48,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Contract pick fills** quality + construction + godown stock + meter/than (kachi-style). Conversion contract also **distributes warp/weft counts** into the UPDATE COUNT grid (`ext_grey_conv_warp/_weft`), incl. **Count Desc + Brand column** (persisted: `descr`/`brand` on `ext_packi_parchi_count`); TOT Lbs = wt/mtr × net meter. Consumption totals footer (Warp/Weft/Total Lbs, Total Amount).
 - **Grey Sale Contract** carries the sale **Term** (paymentTerm/days) → fills Term Sal; its LOV shows a Term column.
 - **Sale money as value+amount pairs:** Rate (grey sale rate, from contract) → Rate Amount (rate×mtr) · Commission (%±) → Commission Amount · Checkery → Checkery Amount · Net Amount. (`kaat_percent_sale` hidden, still in net math.)
-- **GL (VTYPE `GPV`):** DR saleParty (greyAmtSal) / CR `GREY_COMMISSION_INCOME` (commission) / CR party (clearDiff) — commission-agent model. Broker pair: DR `SALE_BROKERAGE_EXP` / CR broker acct. Narration `<than> THAN <mtr> MTR @ rate, <quality> (PACKI SALE)` on header + lines. Delete-of-old UNCONDITIONAL then re-post.
+- **GL (VTYPE `GPV`):** DR saleParty (greyAmtSal) / CR `GREY_COMMISSION_INCOME` (commission) / CR party (clearDiff) — commission-agent model. Broker pair: DR `SALE_BROKERAGE_EXP` / CR broker acct. Narration `<than> THAN <mtr> MTR @ rate, <quality> (PACKI SALE)` on header + lines — `<quality>` is the **full construction** (`richConstruction` of the quality-print/quality code, e.g. `102 X 78  36/S PV 90:10 × 36/S PV 90:10`), not `GC-003` (owner 2026-10). Vouchers posted before keep the code until re-saved. Delete-of-old UNCONDITIONAL then re-post.
 - **Do NOT** add naive inventory GL to packi (it's commission-model).
 - **Quality display (owner):** Quality + Quality Print comboboxes show the **full construction** (`richConstruction` = reed×pick + warp/weft) — **no `GC-001` code, no doubling**. `stockQualityOpts` value = `normQuality(code)`, label = `richFull(code) · <mtr> mtr`; `qualityOpts` label = `richConstruction(c)`. The separate readonly **Construction** + **Print Construction** display fields were **removed** (redundant — the combobox shows it). Stored `quality`/`quality_print` stay the CODE.
 
@@ -83,6 +83,12 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - **Total Length + Total Amount** at grid end. Top header "Total Amount" **hidden** (was duplicate).
 - **Net Weight** box = (bags Qty×Kgs + cones Qty×Kgs) − packing; × Net Weight Rate = Total → GST = Amt Tot. **Net Weight Rate (Kg) auto** = live avg rate of yarn-stock godown `1.01.25.01.0001` (Σ amount ÷ Σ lbs of RCPT yarn receipts into it, ×2.20462 → per Kg) — recomputed each load, NOT a stored constant; editable, saved vouchers keep their own rate. **GL (VTYPE `EXT`):** DR `WARPING_SIZING_EXP`(+GST) / CR party. Bill No + Bill Date + **Bill Due Date** + Billing Status.
 - Delete-of-old GL rows UNCONDITIONAL on edit (then re-post if qualifies).
+
+## Finance — CR / CP / JV / BR / BP line account picker
+- **Offers level-5 (posting) accounts only** (owner 2026-10) — the level-1…4 heads are not on the list. Save-side validation still accepts level 4+, and the code→title maps keep level 4+, so a saved line on an older level-4 account (one JV on `7.02.01.0001`) still shows and re-saves.
+
+## Contracts — warp / weft count grids (`external/contracts/grey-conversion`, `grey-sales`, `inventory/contracts/grey-conversion`)
+- `.yarn-grid` (globals.css): fixed column widths (Count 56 · Cal Count 60 · Ends 64 · WT 72 · Rate 72 · Cost 80, Desc/Brand take the rest), **no sideways scroll, no number spinners** (they hid the Ends digits — owner 2026-10). The two conversion forms (10 columns) stack WARP above WEFT; grey sales (7 columns) stays side by side.
 
 ## Finance — Advance Cheque (`finance/advance-cheque`)
 - Advance-cheque lifecycle register. **VTYPE `ADV`**, phase in `trans_main.trnType` = `ISSUE` / `CLEAR` / `BOUNCE`. Each phase = one balanced 2-line voucher; status derived by grouping ADV vouchers on `chqNo` (BOUNCE→bounced, else CLEAR→cleared, else issued).

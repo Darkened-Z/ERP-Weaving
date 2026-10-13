@@ -186,6 +186,15 @@ tr:hover td {
   transition: border-color 0.15s;
 }
 
+/* Warp / weft count grids on the contract forms. Fixed columns so the table fits
+   its panel instead of scrolling sideways, and no spinner arrows on the number
+   boxes — they covered the Ends digits (owner). */
+.yarn-grid { table-layout: fixed; }
+.yarn-grid .input-box { min-width: 0; padding-left: 4px; padding-right: 4px; }
+.yarn-grid input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.yarn-grid input[type="number"]::-webkit-outer-spin-button,
+.yarn-grid input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
 .input-box:focus {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);

@@ -692,7 +692,12 @@ export default async function PackiParchiPage({
     const brokerSaleCoa = resolvePartyCoa(brokerNameSale);
     const brokerageExpCode = canPostGl && brokerSaleCoa && brokerAmtSal > 0 ? await acc("SALE_BROKERAGE_EXP") : "";
     // Ledger description (mill convention): "<than> THAN <mtr> MTR @ <rate>, <quality> (PACKI SALE)".
-    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${qualityPrint || quality || ""} (PACKI SALE)`.trim();
+    // The quality is spelled out (reed × pick, warp × weft) as on the GDN posting —
+    // the bare GC-003 code means nothing to the party reading their ledger.
+    const narrCode = qualityPrint || quality || "";
+    const narrNorm = gqNormQuality(narrCode, new Set(constructions.map((c) => c.code)));
+    const narrConstr = constructions.find((c) => c.code === narrNorm);
+    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${narrConstr ? richConstruction(narrConstr) : narrCode} (PACKI SALE)`.trim();
 
     const parseVno = (v: string | null | undefined): number => {
       if (!v) return 0;

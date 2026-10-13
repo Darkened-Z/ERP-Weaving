@@ -462,9 +462,12 @@ export default async function JournalVoucherPage({
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
   const accByCode = new Map(accounts.map((a) => [a.code, a]));
-  const pickerAccounts = accounts.filter((a) => a.level >= 4);
+  // Only posting (level 5) accounts are offered on a voucher line — the heads
+  // above them can't carry a balance of their own (owner). Saved lines on an
+  // older level-4 account still resolve through the maps below.
+  const pickerAccounts = accounts.filter((a) => a.level === 5);
   const titleMap: Record<string, { title: string }> = {};
-  for (const a of pickerAccounts) {
+  for (const a of accounts.filter((x) => x.level >= 4)) {
     titleMap[a.code] = { title: a.description };
     if (a.descShort && !titleMap[a.descShort]) titleMap[a.descShort] = { title: a.description };
   }

@@ -931,17 +931,17 @@ export default async function GreySalesContractPage({
                       <input name="pick" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.pick ?? ""} />
                     </div>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[13px]">
+                  <div>
+                    <table className="w-full text-[13px] yarn-grid">
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
-                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 56 }}>Count</th>
                           <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
                           <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
-                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
-                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
-                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 60 }}>Cal Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 64 }}>Ends</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>Rate Per Lbs</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -971,17 +971,17 @@ export default async function GreySalesContractPage({
                       <input name="width" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.width ?? ""} />
                     </div>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[13px]">
+                  <div>
+                    <table className="w-full text-[13px] yarn-grid">
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
-                          <th className="px-1 py-1.5 border-b border-black text-[12px]">Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 56 }}>Count</th>
                           <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
                           <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
-                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Cal Count</th>
-                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Ends</th>
-                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]">Rate Per Lbs</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 60 }}>Cal Count</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 64 }}>Ends</th>
+                          <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>Rate Per Lbs</th>
                         </tr>
                       </thead>
                       <tbody>
