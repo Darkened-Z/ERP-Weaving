@@ -75,7 +75,7 @@ export function ShellLayout({
       </aside>
 
       <main className="flex-1 min-w-0 lg:ml-56">
-        <div className="sticky top-0 z-30 bg-white border-b border-[var(--border-light)] px-4 py-3 flex items-center gap-3 lg:hidden">
+        <div className="sticky top-0 z-30 bg-white border-b border-[var(--border-light)] px-4 py-3 flex items-center gap-3 lg:hidden no-print">
           <button
             onClick={() => setOpen(true)}
             className="cursor-pointer p-1"
@@ -90,7 +90,7 @@ export function ShellLayout({
             <CommandPaletteTrigger />
           </div>
         </div>
-        <div className="sticky top-0 z-30 bg-white border-b border-[var(--border-light)] px-6 py-3 hidden lg:flex items-center justify-end gap-3">
+        <div className="sticky top-0 z-30 bg-white border-b border-[var(--border-light)] px-6 py-3 hidden lg:flex items-center justify-end gap-3 no-print">
           <CommandPaletteTrigger />
         </div>
         <div className="p-4 sm:p-6 lg:p-8">

@@ -146,11 +146,12 @@ export default async function LedgerPage({
   const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance : openingBalance;
   const totalDr = entries.reduce((s, e) => s + e.debit, 0);
   const totalCr = entries.reduce((s, e) => s + e.credit, 0);
+  const dmy = (iso: string) => iso.split("-").reverse().join("-");
 
   return (
     <Shell active="ledger">
       <div className="animate-in">
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-baseline justify-between gap-4">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 no-print">
           <div>
             <h1 className="page-title no-print">General Ledger</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2 no-print">
@@ -209,7 +210,16 @@ export default async function LedgerPage({
 
         {selectedAccount && accountInfo && (
           <div>
-            <div className="border border-black p-6 mb-6">
+            {/* Printed for the party: just whose ledger it is and for which
+                period, like the Oracle ACCOUNTS LEDGER. The code / level card
+                below took half the page and stays on screen only. */}
+            <div className="hidden print:flex items-baseline justify-between gap-4 mb-3 border-b-2 border-black pb-1">
+              <div className="text-[15px] font-bold uppercase">{accountInfo.description}</div>
+              <div className="mono text-[11px] whitespace-nowrap">
+                {dmy(dateFrom)} — {dmy(dateTo)}
+              </div>
+            </div>
+            <div className="border border-black p-6 mb-6 no-print">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <div className="label">Account Code</div>

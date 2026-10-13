@@ -277,7 +277,7 @@ export function FormKeyboard() {
   return (
     <>
       {hasForm && (
-        <div className="fixed bottom-0 left-0 right-0 lg:left-56 z-20 border-t border-[var(--border-light)] bg-white/95 backdrop-blur-sm px-4 py-1 flex items-center gap-4 text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] pointer-events-none select-none">
+        <div className="fixed bottom-0 left-0 right-0 lg:left-56 z-20 border-t border-[var(--border-light)] bg-white/95 backdrop-blur-sm px-4 py-1 flex items-center gap-4 text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] pointer-events-none select-none no-print">
           <span className="flex items-center gap-1"><Key>Enter</Key> next</span>
           <span className="flex items-center gap-1"><Key>↑↓</Key> row</span>
           <span className="flex items-center gap-1"><Key>F9</Key> lookup</span>

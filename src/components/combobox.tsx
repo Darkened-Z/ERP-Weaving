@@ -164,6 +164,25 @@ export function Combobox({
     inputRef.current?.focus();
   };
 
+  // The hidden input is controlled by `val`, so a row clear writing to it only
+  // moved the DOM and snapped back on the next render — the cleared contract
+  // came back on save. Follow writes to THIS instance's input into state
+  // (same as FindingPicker).
+  useEffect(() => {
+    const el = hiddenRef.current;
+    if (!el) return;
+    const sync = () => {
+      setVal(el.value ?? "");
+      setTyped(null);
+    };
+    el.addEventListener("input", sync);
+    el.addEventListener("change", sync);
+    return () => {
+      el.removeEventListener("input", sync);
+      el.removeEventListener("change", sync);
+    };
+  }, []);
+
   // Allow another component (e.g. a contract auto-fill) to push a value in.
   useEffect(() => {
     const onSet = (e: Event) => {

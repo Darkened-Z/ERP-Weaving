@@ -641,7 +641,10 @@ export default async function YarnSaleVoucherPage({
     const pendingFinance = txt(formData.get("pending_finance"));
 
     const contNos = formData.getAll("line_cont_no") as string[];
-    const batchNos = formData.getAll("line_batch_no") as string[];
+    // The batch is whatever the row's Stock Batch picker holds. The hidden
+    // line_batch_no only mirrors it on screen and went stale when the picker was
+    // cleared, which re-saved a deleted line with its old batch.
+    const batchNos = formData.getAll("line_stock_key") as string[];
     const counts = formData.getAll("line_count") as string[];
     const dots = formData.getAll("line_count_dot") as string[];
     const partyCounts = formData.getAll("line_party_count") as string[];
@@ -1674,7 +1677,7 @@ export default async function YarnSaleVoucherPage({
                     headerContractField="cont"
                     blendByContract={blendByContract}
                   />
-                  <RowAutoFill watch="line_stock_key" map={countStockFillMap} force />
+                  <RowAutoFill watch="line_stock_key" map={countStockFillMap} force clearRowOnEmpty />
                   <RowCalc target="line_lbs" a="line_qty" factor={100} round={0} />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">

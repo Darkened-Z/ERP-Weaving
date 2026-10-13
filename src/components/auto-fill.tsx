@@ -154,6 +154,7 @@ export function RowAutoFill({
   watch,
   map,
   force = false,
+  clearRowOnEmpty = false,
 }: {
   watch: string;
   map: Record<string, Fill>;
@@ -167,15 +168,30 @@ export function RowAutoFill({
    * rate, which is worse than losing a hand-typed override.
    */
   force?: boolean;
+  /**
+   * Clearing the watched field clears the whole row. For rows whose watched
+   * field IS the line (a sale line is its batch): clearing only the batch left
+   * qty, rate and the hidden batch behind, so the "deleted" line saved again.
+   */
+  clearRowOnEmpty?: boolean;
 }) {
   useEffect(() => {
     const onChange = (e: Event) => {
       const t = e.target as HTMLInputElement;
       if (!t || t.name !== watch) return;
-      const data = map[t.value.trim()];
-      if (!data) return;
       const tr = t.closest("tr");
       if (!tr) return;
+      if (clearRowOnEmpty && !t.value.trim()) {
+        tr.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach((el) => {
+          if (el === t || !el.name || !el.value) return;
+          el.value = "";
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        return;
+      }
+      const data = map[t.value.trim()];
+      if (!data) return;
       for (const [name, v] of Object.entries(data)) {
         const el = tr.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
         if (!el || v == null || v === "") continue;
@@ -189,6 +205,6 @@ export function RowAutoFill({
     };
     document.addEventListener("change", onChange, true);
     return () => document.removeEventListener("change", onChange, true);
-  }, [watch, map, force]);
+  }, [watch, map, force, clearRowOnEmpty]);
   return null;
 }
