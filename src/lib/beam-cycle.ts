@@ -45,50 +45,26 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
   if (!beam) return;
   if (voucherDate && beam.brDate && voucherDate < beam.brDate) return;
 
-  // 1. If ANY production row in this cycle recorded L-ROLL or EMPTY, the beam
-  // has completed its last roll and must be taken off the loom.
-  const [doneRow] = await tx
+  // Find the latest production row (ordered by cumulative rcvdMtr, then date, then id)
+  const [latest] = await tx
     .select({
       beamStatus: schema.intDailyProductionSet.beamStatus,
       loomNo: schema.intDailyProductionSet.loomNo,
       diff: schema.intDailyProductionSet.diff,
-    })
-    .from(schema.intDailyProductionSet)
-    .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
-    .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
-    .where(
-      and(
-        eq(schema.intDailyProductionSet.beamNo, beamNo),
-        inCurrentBeamCycle,
-        sql`upper(trim(${schema.intDailyProductionSet.beamStatus})) IN ('L-ROLL', 'EMPTY')`
-      )
-    )
-    .orderBy(
-      desc(schema.intDailyProductionSet.rcvdMtr),
-      desc(schema.intDailyProductionSet.id)
-    )
-    .limit(1);
-
-  // 2. Otherwise find the latest production row (ordered by cumulative rcvdMtr, then date, then id)
-  const [latestRow] = await tx
-    .select({
-      beamStatus: schema.intDailyProductionSet.beamStatus,
-      loomNo: schema.intDailyProductionSet.loomNo,
-      diff: schema.intDailyProductionSet.diff,
+      rcvdMtr: schema.intDailyProductionSet.rcvdMtr,
+      vDate: schema.intDailyProduction.vDate,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
     .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intDailyProductionSet.beamNo))
     .where(and(eq(schema.intDailyProductionSet.beamNo, beamNo), inCurrentBeamCycle))
     .orderBy(
-      desc(schema.intDailyProductionSet.rcvdMtr),
+      desc(sql`COALESCE(${schema.intDailyProductionSet.rcvdMtr}, 0)`),
       desc(schema.intDailyProduction.vDate),
       desc(schema.intDailyProduction.id),
       desc(schema.intDailyProductionSet.id)
     )
     .limit(1);
-
-  const latest = doneRow ?? latestRow;
 
   const status = latest?.beamStatus?.trim().toUpperCase()
     ? latest.beamStatus.trim().toUpperCase()
@@ -124,14 +100,14 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
     return;
   }
 
-  // Still mounted. If an earlier last-roll had taken it off its loom, put it
-  // back on the loom its production was recorded against.
+  // Still mounted. Ensure beam and loom stay in sync as RUNNING.
   const loomNo = beam.loomNo ?? latest?.loomNo ?? null;
+  const shed = beam.shed ?? null;
   await tx.update(schema.beams).set({ statusWrk: status, loomNo }).where(eq(schema.beams.beamNo, beamNo));
-  if (beam.loomNo == null && loomNo != null && beam.shed) {
+  if (loomNo != null && shed) {
     await tx
       .update(schema.looms)
       .set({ statusWrk: "RUNNING", currentBeam: beamNo })
-      .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, beam.shed)));
+      .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, shed)));
   }
 }
