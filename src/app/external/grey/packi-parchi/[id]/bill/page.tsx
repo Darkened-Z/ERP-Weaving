@@ -332,7 +332,8 @@ export default async function PackiBillPage({
           <Link href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Back</Link>
           <div className="flex gap-2">
             <ExportPdfButton contentId="packi-bill" filename={`Packi-Bill-${pp.vNo ?? pid}.pdf`} />
-            <WaPdfButton contentId="packi-bill" filename={`Packi-Bill-${pp.vNo ?? pid}.pdf`} />
+            {/* WhatsApp gets one JPG of the bill (owner) — opens in the chat, always one page. */}
+            <WaPdfButton contentId="packi-bill" filename={`Packi-Bill-${pp.vNo ?? pid}.jpg`} as="jpg" />
             <PrintButton label="Print Bill" />
           </div>
         </div>

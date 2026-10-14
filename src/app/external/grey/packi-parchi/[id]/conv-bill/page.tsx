@@ -353,7 +353,7 @@ export default async function PackiConvBillPage({
           <Link href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Back</Link>
           <div className="flex gap-2">
             <ExportPdfButton contentId="packi-conv-bill" filename={`Conversion-Bill-${pp.vNo ?? pid}.pdf`} />
-            <WaPdfButton contentId="packi-conv-bill" filename={`Conversion-Bill-${pp.vNo ?? pid}.pdf`} />
+            <WaPdfButton contentId="packi-conv-bill" filename={`Conversion-Bill-${pp.vNo ?? pid}.jpg`} as="jpg" />
             <PrintButton label="Print Conversion Bill" />
           </div>
         </div>

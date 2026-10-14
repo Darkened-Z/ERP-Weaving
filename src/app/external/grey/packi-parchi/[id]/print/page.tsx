@@ -72,7 +72,7 @@ export default async function PackiParchiPrint({
           </Link>
           <div className="flex gap-2">
             <ExportPdfButton contentId="parchi-print" filename={pdfName} />
-            <WaPdfButton contentId="parchi-print" filename={pdfName} autoTrigger={autoWa} />
+            <WaPdfButton contentId="parchi-print" filename={pdfName} autoTrigger={autoWa} as="jpg" />
             <PrintButton label="Print" />
           </div>
         </div>
