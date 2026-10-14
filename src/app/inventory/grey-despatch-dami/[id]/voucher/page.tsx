@@ -292,8 +292,10 @@ export default async function DamiVoucherPage({
         <div className="dv-toolbar no-print">
           <Link href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Back</Link>
           <div className="flex gap-2">
-            <ExportPdfButton contentId="dami-voucher" filename={`Delivery-Voucher-${dami.vNo ?? damiId}.pdf`} />
-            <WaPdfButton contentId="dami-voucher" filename={`Delivery-Voucher-${dami.vNo ?? damiId}.pdf`} />
+            <ExportPdfButton contentId="dami-voucher" filename={`Delivery-Voucher-${dami.vNo ?? damiId}.pdf`} onePage />
+            {/* WhatsApp gets one JPG of the voucher (owner): it opens in the chat
+                without a PDF viewer, and is always a single page. */}
+            <WaPdfButton contentId="dami-voucher" filename={`Delivery-Voucher-${dami.vNo ?? damiId}.jpg`} as="jpg" />
             <PrintButton label="Print Delivery Voucher" />
           </div>
         </div>

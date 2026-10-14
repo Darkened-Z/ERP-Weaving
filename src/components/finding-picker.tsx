@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Column = { key: string; label: string; width?: number; align?: "left" | "right" };
 type Row = {
@@ -68,6 +68,12 @@ export function FindingPicker({
   const [q, setQ] = useState("");
   const [filterVal, setFilterVal] = useState("");
   const [focusIdx, setFocusIdx] = useState(-1);
+  // Every opening starts a fresh search — the last search used to stay in Find,
+  // so after NEW the list came up with the previous party's text in it.
+  const openList = () => {
+    search("");
+    setOpen(true);
+  };
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
   // Instance-scoped refs so multiple pickers with the SAME name (e.g. one per
   // grid row) stay independent — F9 opens only the focused one, and picking
@@ -82,11 +88,16 @@ export function FindingPicker({
       if (e.key !== "F9") return;
       // Only respond if the focus is inside THIS instance (or its modal is open).
       const insideMe = !!active && !!containerRef.current && containerRef.current.contains(active);
-      if (insideMe || open) { e.preventDefault(); setOpen((s) => !s); }
+      if (insideMe || open) {
+        e.preventDefault();
+        if (open) setOpen(false);
+        else openList();
+      }
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [open]);
+    // Re-bound every render so F9 opens with the current value and scope.
+  });
 
   // Track the party (or other) field this picker is scoped to.
   useEffect(() => {
@@ -139,17 +150,26 @@ export function FindingPicker({
     return () => document.removeEventListener("combobox:set", onSet);
   }, [name]);
 
-  const filtered = useMemo(() => {
+  const filterFor = (qv: string) => {
     const scoped = filterByField && filterVal ? rows.filter((r) => !r.filterKey || r.filterKey === filterVal) : rows;
-    const qL = q.trim().toLowerCase();
+    const qL = qv.trim().toLowerCase();
     if (!qL) return scoped;
     return scoped.filter((r) => {
       const cellText = r.cells ? Object.values(r.cells).map((v) => v ?? "").join(" ") : "";
       return `${r.code} ${r.description} ${r.extra ?? ""} ${cellText}`.toLowerCase().includes(qL);
     });
-  }, [rows, q, filterByField, filterVal]);
+  };
+  const filtered = filterFor(q);
 
-  useEffect(() => { setFocusIdx(-1); }, [q, open]);
+  // Oracle LOV: a row is always highlighted so Enter picks it — the current
+  // value's row on a blank search, else the first match. It used to start with
+  // nothing highlighted, so Enter did nothing unless one row was left.
+  function search(qv: string) {
+    setQ(qv);
+    const rowsNow = filterFor(qv);
+    const cur = qv.trim() ? -1 : rowsNow.findIndex((r) => r.value === value);
+    setFocusIdx(cur >= 0 ? cur : rowsNow.length ? 0 : -1);
+  }
 
   useEffect(() => {
     if (focusIdx < 0) return;
@@ -167,6 +187,28 @@ export function FindingPicker({
       hidden.dispatchEvent(new Event("change", { bubbles: true }));
       hidden.dispatchEvent(new CustomEvent("combobox:change", { bubbles: true, detail: { value: v, name } }));
     }
+  };
+
+  // Pick-then-move (Oracle KEY-NEXT-ITEM, same as Combobox): after a pick from
+  // the list the cursor goes to the next field — on CR / CP / JV that is the
+  // line's narration — instead of being dropped when the list closes.
+  const pickFromList = (v: string) => {
+    pickRow(v);
+    // After React has closed the list (setTimeout, not rAF: rAF never fires in a
+    // background tab).
+    setTimeout(() => {
+      const box = containerRef.current;
+      const form = box?.closest("form");
+      if (!box || !form) return;
+      const next = Array.from(form.querySelectorAll<HTMLInputElement>("input, select, textarea")).find((el) => {
+        if (box.contains(el) || !(box.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) return false;
+        if (el.type === "hidden" || el.disabled || el.tabIndex < 0 || el.offsetParent === null) return false;
+        return !el.readOnly || el.hasAttribute("data-lov-picker");
+      });
+      if (!next) return;
+      next.focus();
+      if (typeof next.select === "function" && next.type !== "date" && next.type !== "number") next.select();
+    }, 0);
   };
 
   useEffect(() => {
@@ -189,8 +231,8 @@ export function FindingPicker({
     else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
     else if (e.key === "Enter") {
       e.preventDefault();
-      if (focusIdx >= 0 && focusIdx < filtered.length) pickRow(filtered[focusIdx].value);
-      else if (filtered.length === 1) pickRow(filtered[0].value);
+      if (focusIdx >= 0 && focusIdx < filtered.length) pickFromList(filtered[focusIdx].value);
+      else if (filtered.length === 1) pickFromList(filtered[0].value);
     }
   };
 
@@ -216,8 +258,8 @@ export function FindingPicker({
           // row in the finding list and in its footer.
           value={selected ? selected.description || selected.code : value}
           placeholder={placeholder}
-          onClick={() => setOpen(true)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
+          onClick={openList}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openList(); } }}
         />
               {/* The display is readOnly and a click opens the list, so there was no
             way at all to take a pick back — on a phone there is not even a
@@ -237,7 +279,7 @@ export function FindingPicker({
         <button
           type="button"
           className="btn btn-outline btn-sm"
-          onClick={() => setOpen(true)}
+          onClick={openList}
           title="Open finding list (F9)"
           style={{ padding: "0 8px", fontSize: 11, flex: "0 0 auto" }}
         >
@@ -265,12 +307,12 @@ export function FindingPicker({
                   autoFocus
                   className="input-box mono w-full"
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => search(e.target.value)}
                   onKeyDown={onSearchKey}
                   placeholder="Type code or description…"
                 />
               </div>
-              {q && <button type="button" className="btn btn-outline btn-sm" onClick={() => setQ("")} style={{ padding: "4px 10px" }}>Clear</button>}
+              {q && <button type="button" className="btn btn-outline btn-sm" onClick={() => search("")} style={{ padding: "4px 10px" }}>Clear</button>}
               <div className="mono text-[11px] text-[var(--muted)] pb-2">{filtered.length} of {rows.length}</div>
             </div>
 
@@ -310,7 +352,7 @@ export function FindingPicker({
                     <tr
                       key={r.value}
                       className="border-b border-[var(--border-light)] cursor-pointer hover:bg-yellow-50"
-                      onClick={() => pickRow(r.value)}
+                      onClick={() => pickFromList(r.value)}
                       style={ri === focusIdx ? { background: "#1e40af", color: "white" } : value === r.value ? { background: "#0f172a", color: "white" } : undefined}
                     >
                       {columns ? (
