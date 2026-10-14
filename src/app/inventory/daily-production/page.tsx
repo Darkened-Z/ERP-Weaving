@@ -751,7 +751,10 @@ export default async function DailyProductionPage({
         if (Number.isFinite(parsed)) headerLoomNo = parsed;
       }
     }
-    if (!header.shedNo && headerShedNo) {
+    // The picked Loom# carries its shed and wins over the hidden Shed No, which
+    // on an edit still holds the old shed — re-picking a loom in another shed
+    // left the voucher on the old shed's loom number.
+    if (headerShedNo) {
       header.shedNo = headerShedNo;
     }
 

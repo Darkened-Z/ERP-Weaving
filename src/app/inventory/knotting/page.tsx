@@ -108,12 +108,16 @@ async function saveKnotting(formData: FormData) {
     const kDate = (kDates[i] ?? "").trim();
     let shdHash = (shdHashes[i] ?? "").trim();
     let lmHash = (lmHashes[i] ?? "").trim();
-    // Loom picker may emit composite "shed|loomNo" — split it so lmHash stays a
-    // bare loom number and shdHash defaults from the picker when empty.
+    // The Lm# picker value "shed|loomNo" is the only source of the shed. The
+    // hidden shd_hash used to win, and it kept the FIRST pick's shed when the
+    // operator re-picked a loom in another shed — "Shed 2 · Loom 14" saved as
+    // Shed 3 Loom 14 and the beam was mounted on the wrong loom (IKS-0038).
     if (lmHash.includes("|")) {
       const [pickShed, pickLoom] = lmHash.split("|");
-      if (!shdHash && pickShed) shdHash = pickShed;
+      shdHash = (pickShed ?? "").trim() || shdHash;
       lmHash = (pickLoom ?? "").trim();
+    } else if (!lmHash) {
+      shdHash = "";
     }
     const extShrAge = num(extShrAges[i]);
     const dspType = (dspTypes[i] ?? "").trim();
@@ -1637,7 +1641,7 @@ export default async function KnottingPage({
               </div>
 
               <RowAutoFill watch="beam_no" map={beamFillMap} />
-              <RowAutoFill watch="lm_hash" map={loomFillMap} />
+              <RowAutoFill watch="lm_hash" map={loomFillMap} force />
               <AutoFill watch="party" map={partyFillMap} inputs={["rate_per_ends", "rate_per_beam", "type"]} />
               <KnottingCalc />
 
