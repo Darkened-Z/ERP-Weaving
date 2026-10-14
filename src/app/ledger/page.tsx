@@ -143,6 +143,20 @@ export default async function LedgerPage({
     });
   }
 
+  // A packi sale's ledger line opens its Pakki Parchi bill. GPV numbers are the
+  // parchi's own number (PP-0017 → GPV-17).
+  const packiIdByVno = new Map<number, number>();
+  if (entries.some((e) => e.vtype === "GPV")) {
+    for (const p of await db.select({ id: schema.extPackiParchi.id, vNo: schema.extPackiParchi.vNo }).from(schema.extPackiParchi)) {
+      const m = /(\d+)\s*$/.exec(p.vNo);
+      if (m) packiIdByVno.set(parseInt(m[1], 10), p.id);
+    }
+  }
+  const billHref = (e: { vtype: string; vno: number }) => {
+    const id = e.vtype === "GPV" ? packiIdByVno.get(e.vno) : undefined;
+    return id ? `/external/grey/packi-parchi/${id}/bill` : null;
+  };
+
   const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance : openingBalance;
   const totalDr = entries.reduce((s, e) => s + e.debit, 0);
   const totalCr = entries.reduce((s, e) => s + e.credit, 0);
@@ -277,11 +291,23 @@ export default async function LedgerPage({
                       {/* One column, the way the mill's own ledger prints it:
                           CP-986, JV-650, OPN-0 — type and number together. */}
                       <td className="mono font-bold whitespace-nowrap">
-                        {entry.vtype}-{entry.vno}
+                        {billHref(entry) ? (
+                          <a href={billHref(entry)!} target="_blank" rel="noopener" className="underline underline-offset-2 print:no-underline" title="Open the Pakki Parchi bill">
+                            {entry.vtype}-{entry.vno}
+                          </a>
+                        ) : (
+                          <>{entry.vtype}-{entry.vno}</>
+                        )}
                       </td>
                       <td className="text-[var(--muted)]">{entry.narration}</td>
                       <td className="text-center no-print">
-                        <ImageLinks value={entry.img} />
+                        {!entry.img && billHref(entry) ? (
+                          <a href={billHref(entry)!} target="_blank" rel="noopener" className="mono text-[11px] font-semibold underline underline-offset-2">
+                            BILL
+                          </a>
+                        ) : (
+                          <ImageLinks value={entry.img} />
+                        )}
                       </td>
                       <td className="mono text-right">
                         {entry.debit > 0 ? formatNum(entry.debit) : ""}
