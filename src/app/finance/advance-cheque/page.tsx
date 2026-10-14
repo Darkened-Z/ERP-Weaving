@@ -451,7 +451,7 @@ async function deleteCheque(formData: FormData) {
         )
         .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.fyCode, fyCode), inArray(schema.transDetail.chqNo, ownChqs)))
     : [];
-  const related: { vno: number; vdate: string }[] = [];
+  const related: { vno: number; vdate: string; trnType: string | null }[] = [];
   for (const chq of ownChqs) {
     const rows = chqRows.filter((r) => (r.chqNo ?? "").trim() === chq);
     const nextIssue = Math.min(
@@ -462,6 +462,10 @@ async function deleteCheque(formData: FormData) {
       if (r.trnType !== "ISSUE" && r.vno > issueVno && r.vno < nextIssue) related.push(r);
     }
   }
+  // A cleared cheque has been paid by the bank — deleting the issue would wipe
+  // that payment out of the books (owner). Same rule as Edit: refused once any
+  // cheque on the voucher has cleared.
+  if (related.some((r) => r.trnType === "CLEAR")) redirect(`${BASE}?error=cleared_no_delete&id=${id}`);
   for (const d of [issue.main.vdate, ...related.map((r) => r.vdate)]) {
     const thru = await lockedThrough(d, "FINANCE");
     if (thru) redirect(`${BASE}?id=${id}&error=period_locked&thru=${thru}`);
@@ -665,8 +669,13 @@ export default async function AdvanceChequePage({
     settled_no_edit:
       "A cheque on this voucher has already cleared or bounced. Undo that first — the money has moved, so the issue cannot be rewritten underneath it.",
     forbidden: "Only ADMIN can delete.",
+    cleared_no_delete:
+      "A cheque on this voucher has already cleared — the bank has paid it, so the voucher can't be deleted. Nothing was deleted.",
     period_locked: "Period is locked. Cannot post for this date.",
   };
+  // Vouchers with a cleared cheque: Del is locked on every row of them, since
+  // deleting the voucher would delete the clearing too.
+  const clearedIssues = new Set(cheques.filter((c) => c.status === "CLEARED").map((c) => c.issueId));
   const errorMsg = params.error ? ERR[params.error] ?? "" : "";
 
   const statusPill = (s: Chq["status"]) => (
@@ -959,12 +968,23 @@ export default async function AdvanceChequePage({
                       {c.status === "BOUNCED" && (
                         <a href={`${BASE}?action=reissue&id=${c.issueId}&chq=${encodeURIComponent(c.chqNo)}`} className="btn btn-outline btn-sm mr-1">Re-issue</a>
                       )}
-                      {session?.roleName === "ADMIN" && (
-                        <form action={deleteCheque} className="inline">
-                          <input type="hidden" name="id" value={c.issueId} />
-                          <ConfirmButton message="Delete this advance cheque and its clear/bounce postings?">Del</ConfirmButton>
-                        </form>
-                      )}
+                      {session?.roleName === "ADMIN" &&
+                        (clearedIssues.has(c.issueId) ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="btn btn-outline btn-sm"
+                            style={{ opacity: 0.4, cursor: "not-allowed" }}
+                            title="Cleared — a cheque on this voucher has been paid, so it can't be deleted"
+                          >
+                            Del
+                          </button>
+                        ) : (
+                          <form action={deleteCheque} className="inline">
+                            <input type="hidden" name="id" value={c.issueId} />
+                            <ConfirmButton message="Delete this advance cheque and its clear/bounce postings?">Del</ConfirmButton>
+                          </form>
+                        ))}
                     </td>
                   </tr>
                 ))}
