@@ -697,7 +697,11 @@ export default async function PackiParchiPage({
     const narrCode = qualityPrint || quality || "";
     const narrNorm = gqNormQuality(narrCode, new Set(constructions.map((c) => c.code)));
     const narrConstr = constructions.find((c) => c.code === narrNorm);
-    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${narrConstr ? richConstruction(narrConstr) : narrCode} (PACKI SALE)`.trim();
+    // gqRichConstruction (the import), not the page's local wrapper: anything
+    // this inline action closes over is serialized into the page, and a local
+    // function can't be — it took the whole page down ("Functions cannot be
+    // passed directly to Client Components").
+    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${narrConstr ? gqRichConstruction(narrConstr, countLabelByCode) : narrCode} (PACKI SALE)`.trim();
 
     const parseVno = (v: string | null | undefined): number => {
       if (!v) return 0;
