@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -17,6 +17,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SK Weaving Mills",
   description: "Weaving Mill ERP System",
+  applicationName: "SK Weaving Mills",
+  icons: { apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "SK Mills", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2c3e6b",
 };
 
 export default function RootLayout({
