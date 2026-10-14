@@ -365,6 +365,51 @@ async function clearCheque(formData: FormData) {
   }
 }
 
+// ── Not Clear: undo a clear posted by mistake (owner) ────────────────────────
+// Removes this cheque's CLEAR voucher — the Dr bank-advance / Cr bank (or cash
+// in hand) pair — so the cheque reads ISSUED again and can be cleared properly,
+// edited or deleted. Only the clear of THIS issue is touched: the CLEAR after
+// it and before the next ISSUE of the same cheque number.
+async function unclearCheque(formData: FormData) {
+  "use server";
+  const id = intVal(formData.get("id"));
+  const chq = txt(formData.get("chq"));
+  if (id === null || !chq) redirect(BASE);
+  const session = await getSession();
+  if (session?.roleName !== "ADMIN") redirect(`${BASE}?error=forbidden&id=${id}`);
+  const issue = await loadIssue(id!, chq!);
+  if (!issue) redirect(`${BASE}?error=not_found`);
+  const { fyCode, vno: issueVno } = issue!.main;
+  const rows = await db
+    .select({ vno: schema.transMain.vno, vdate: schema.transMain.vdate, trnType: schema.transMain.trnType })
+    .from(schema.transMain)
+    .innerJoin(
+      schema.transDetail,
+      and(
+        eq(schema.transDetail.fyCode, schema.transMain.fyCode),
+        eq(schema.transDetail.vtype, schema.transMain.vtype),
+        eq(schema.transDetail.vno, schema.transMain.vno),
+      ),
+    )
+    .where(and(eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.fyCode, fyCode), eq(schema.transDetail.chqNo, issue!.chqNo)));
+  const nextIssue = Math.min(
+    ...rows.filter((r) => r.trnType === "ISSUE" && r.vno > issueVno).map((r) => r.vno),
+    Number.POSITIVE_INFINITY,
+  );
+  const clear = rows
+    .filter((r) => r.trnType === "CLEAR" && r.vno > issueVno && r.vno < nextIssue)
+    .sort((a, b) => b.vno - a.vno)[0];
+  if (!clear) redirect(`${BASE}?error=not_cleared&id=${id}`);
+  const thru = await lockedThrough(clear!.vdate, "FINANCE");
+  if (thru) redirect(`${BASE}?id=${id}&error=period_locked&thru=${thru}`);
+  await db.transaction(async (tx) => {
+    await tx.delete(schema.transDetail).where(and(eq(schema.transDetail.fyCode, fyCode), eq(schema.transDetail.vtype, VTYPE), eq(schema.transDetail.vno, clear!.vno)));
+    await tx.delete(schema.transMain).where(and(eq(schema.transMain.fyCode, fyCode), eq(schema.transMain.vtype, VTYPE), eq(schema.transMain.vno, clear!.vno)));
+  });
+  revalidatePath(BASE);
+  redirect(`${BASE}?id=${id}`);
+}
+
 // ── Bounce: Dr Bank-Advance / Cr party CHQ-FAILLED (dishonour) ────────────────
 async function bounceCheque(formData: FormData) {
   "use server";
@@ -670,7 +715,8 @@ export default async function AdvanceChequePage({
       "A cheque on this voucher has already cleared or bounced. Undo that first — the money has moved, so the issue cannot be rewritten underneath it.",
     forbidden: "Only ADMIN can delete.",
     cleared_no_delete:
-      "A cheque on this voucher has already cleared — the bank has paid it, so the voucher can't be deleted. Nothing was deleted.",
+      "A cheque on this voucher has already cleared — the bank has paid it, so the voucher can't be deleted. If it was cleared by mistake, press Not Clear on that cheque first. Nothing was deleted.",
+    not_cleared: "That cheque is not cleared — there is no clearing to undo.",
     period_locked: "Period is locked. Cannot post for this date.",
   };
   // Vouchers with a cleared cheque: Del is locked on every row of them, since
@@ -967,6 +1013,18 @@ export default async function AdvanceChequePage({
                       )}
                       {c.status === "BOUNCED" && (
                         <a href={`${BASE}?action=reissue&id=${c.issueId}&chq=${encodeURIComponent(c.chqNo)}`} className="btn btn-outline btn-sm mr-1">Re-issue</a>
+                      )}
+                      {c.status === "CLEARED" && session?.roleName === "ADMIN" && (
+                        <form action={unclearCheque} className="inline">
+                          <input type="hidden" name="id" value={c.issueId} />
+                          <input type="hidden" name="chq" value={c.chqNo} />
+                          <ConfirmButton
+                            className="btn btn-outline btn-sm mr-1"
+                            message={`Undo the clearing of cheque #${c.chqNo}? Its bank / cash posting is removed and the cheque goes back to pending.`}
+                          >
+                            Not Clear
+                          </ConfirmButton>
+                        </form>
                       )}
                       {session?.roleName === "ADMIN" &&
                         (clearedIssues.has(c.issueId) ? (
