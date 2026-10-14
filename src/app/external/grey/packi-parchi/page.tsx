@@ -579,6 +579,9 @@ export default async function PackiParchiPage({
     const convRate = num(formData.get("conv_rate"));
     const convAmount = convRate != null ? rnd(meterNetC * convRate) : null;
     const salAmtTot = greyAmtSal - kaatSalAmt - checkerySalAmt;
+    // What the Pakki Parchi bill charges the party (bill page: amount + commission
+    // − kaat − checkery). The ledger posts this, so party ledger and bill agree.
+    const billNet = salAmtTot + commissionSaleAmt;
 
     const brokerAmtSal = rnd((greyAmtSal * (brokerPercentSale ?? 0)) / 100);
     const salAmtDiffC = salAmtTot - purBal;
@@ -730,8 +733,9 @@ export default async function PackiParchiPage({
         narration: `${ppNarr}  [PP#${vNoForGl ?? ""}${kpNo ? ` KP#${kpNo}` : ""}]`.trim(),
         // The party owes what the BILL says, not the gross: commission, checkery
         // and kaat are settled on the bill, so posting the gross left the ledger
-        // disagreeing with the document the party was handed.
-        balanceAmount: salAmtTot,
+        // disagreeing with the document the party was handed. (The commission was
+        // still missing here — GPV-17 sat 10,529.40 above bill PP-0017.)
+        balanceAmount: billNet,
       });
 
       const details: (typeof schema.transDetail.$inferInsert)[] = [
@@ -743,7 +747,7 @@ export default async function PackiParchiPage({
           accCode: partyCoa,
           partyCode: partyCoa,
           narration: ppNarr,
-          debit: salAmtTot,
+          debit: billNet,
           credit: 0,
         },
         {
@@ -766,7 +770,7 @@ export default async function PackiParchiPage({
       // the balance with nothing to explain it. A negative credit is not an
       // entry anyone can read: when the difference goes the other way it is a
       // DEBIT, so it is posted as one.
-      const clearDiff = Math.round((salAmtTot - commissionTotalC) * 100) / 100;
+      const clearDiff = Math.round((billNet - commissionTotalC) * 100) / 100;
       if (Math.abs(clearDiff) >= 0.01) {
         details.push({
           fyCode,

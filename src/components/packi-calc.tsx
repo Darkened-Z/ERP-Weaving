@@ -100,7 +100,9 @@ function recompute() {
   // Visible summary boxes the owner asked for.
   setNum("grey_amt_pur_disp", greyAmtPur); // Purchase amount = net meter × purchase (grey) rate
   setNum("broker_amt_sal_disp", brokerAmtSal); // brokerage amount from the sale-side broker %
-  setNum("sale_net_disp", salAmtTot); // sale-side net
+  // Sale net = what the bill charges: rate amount + commission (±) − kaat − checkery.
+  // It used to leave the commission out, so Net Amount read the rate amount.
+  setNum("sale_net_disp", salAmtTot + commissionSaleAmt);
   setNum("sale_amt_disp", greyAmtSal); // rate amount = net meter × sale rate
   setNum("commission_amt_sal_disp", commissionSaleAmt); // commission value (+add / −less on bill)
   setNum("checkery_amt_sal_disp", checkerySalAmt); // checkery value
