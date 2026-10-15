@@ -352,7 +352,10 @@ export default async function FoldingStockPage({
                           ))}
                         </td>
                         <td className="no-print text-center">
-                          <a href={`/reports/weaving/folding-stock/${encodeURIComponent(r.contNo)}?from=${from}&to=${to}`} className="btn btn-outline btn-sm" title="Production detail">P</a>
+                          <span className="inline-flex gap-1">
+                            <a href={`/reports/weaving/folding-stock/${encodeURIComponent(r.contNo)}?from=${from}&to=${to}&view=P`} className="btn btn-outline btn-sm" title="Pending — thans still lying in stock">P</a>
+                            <a href={`/reports/weaving/folding-stock/${encodeURIComponent(r.contNo)}?from=${from}&to=${to}&view=D`} className="btn btn-outline btn-sm" title="Despatched — which production went out on each despatch">D</a>
+                          </span>
                         </td>
                       </tr>
                     )),

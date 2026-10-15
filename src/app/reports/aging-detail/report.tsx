@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { DateBox } from "@/components/date-box";
+import { HeadField } from "./head-field";
 import { db, schema } from "@/db";
 import { and, eq, lte, like } from "drizzle-orm";
 import { today as todayIso } from "@/lib/time";
@@ -53,7 +54,6 @@ export async function AgingDetailReport({
   const p = await searchParams;
   const asOf = p.asof?.trim() || todayIso();
   const partyFilter = p.party?.trim() ?? "";
-  const codeFilter = p.code?.trim() ?? "";
   const shortFilter = p.short?.trim() ?? "";
   // Summary drops the vouchers and leaves one line per account — the same
   // switch the mill's own screen carries.
@@ -74,6 +74,24 @@ export async function AgingDetailReport({
   const partyCodes = accounts
     .filter((a) => (a.level ?? 0) >= 5 && (a.code ?? "").startsWith(prefix))
     .map((a) => a.code);
+  // Code is picked from the side's level-4 heads (owner). Creditors open on
+  // CREDITORS - YARN PURCHASE; "All heads" submits an empty code and shows
+  // everyone. A code passed in the URL (older links, typed prefixes) still works.
+  const heads = accounts.filter((a) => a.level === 4 && (a.code ?? "").startsWith(prefix));
+  // The picker tree: the side's level-4 heads and their ancestors (3 → 3.03 →
+  // 3.03.01 → 3.03.01.01), like the Chart of Accounts parent-head popup.
+  const treeCodes = new Set<string>();
+  for (const h of heads) {
+    const parts = h.code.split(".");
+    for (let i = 1; i <= parts.length; i++) treeCodes.add(parts.slice(0, i).join("."));
+  }
+  const headOptions = accounts
+    .filter((a) => treeCodes.has(a.code))
+    .map((a) => ({ code: a.code, description: a.description ?? a.code, level: a.level ?? a.code.split(".").length }));
+  // Opening head (owner): creditors YARN PURCHASE, debtors GREY SALE.
+  const defaultCode = side === "CR" ? "3.03.01.01" : "1.01.01.10";
+  const defaultHead = heads.some((h) => h.code === defaultCode) ? defaultCode : "";
+  const codeFilter = p.code === undefined ? defaultHead : p.code.trim();
 
   const rows = partyCodes.length
     ? await db
@@ -209,7 +227,7 @@ export async function AgingDetailReport({
         </div>
 
         <form method="GET" className="card p-4 mb-5 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end no-print">
-          <div className="sm:col-span-3">
+          <div className="sm:col-span-2">
             <label className="label block mb-1">Aging Upto Date</label>
             <DateBox name="asof" className="input-box mono" defaultValue={asOf} />
           </div>
@@ -227,9 +245,9 @@ export async function AgingDetailReport({
             <label className="label block mb-1">Short Tittle</label>
             <input name="short" className="input-box mono" defaultValue={shortFilter} placeholder="any" />
           </div>
-          <div className="sm:col-span-2">
-            <label className="label block mb-1">Code</label>
-            <input name="code" className="input-box mono" defaultValue={codeFilter} placeholder={prefix} />
+          <div className="sm:col-span-3">
+            <label className="label block mb-1">Code (Head)</label>
+            <HeadField value={codeFilter} options={headOptions} />
           </div>
           <div className="sm:col-span-1 flex items-center gap-1 pb-1">
             <input
