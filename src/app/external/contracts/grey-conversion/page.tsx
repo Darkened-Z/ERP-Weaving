@@ -900,7 +900,7 @@ export default async function GreyConvContractPage({
                     <input name="pick" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.pick ?? ""} />
                   </div>
                 </div>
-                <div>
+                <div className="yarn-grid-wrap">
                   <table className="w-full text-[13px] yarn-grid">
                     <thead>
                       <tr className="bg-gray-50">
@@ -947,7 +947,7 @@ export default async function GreyConvContractPage({
                     <input name="width" type="number" step="any" className="input-box mono text-right" style={{ width: 70, padding: "4px 6px" }} defaultValue={formItem?.width ?? ""} />
                   </div>
                 </div>
-                <div>
+                <div className="yarn-grid-wrap">
                   <table className="w-full text-[13px] yarn-grid">
                     <thead>
                       <tr className="bg-gray-50">

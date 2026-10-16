@@ -3,7 +3,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { DateBox } from "@/components/date-box";
 import { db, schema } from "@/db";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import { today } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -31,13 +31,25 @@ function prevMonth(d: string) {
 export default async function FabricProductionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; party?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; party?: string; shed?: string | string[]; loom?: string; status?: string }>;
 }) {
   const p = await searchParams;
   const now = today();
   const to = p.to?.trim() || now;
   const from = p.from?.trim() || monthStart(to);
   const partyQ = p.party?.trim() || "";
+  // Oracle's parameter form (owner 2026-10): tick the sheds to include; none
+  // ticked = every shed. Loom numbers repeat per shed, so a loom narrows within
+  // the ticked sheds. Status is the contract's: R running, C completed.
+  const shedQ = (Array.isArray(p.shed) ? p.shed : p.shed ? [p.shed] : []).map((x) => x.trim()).filter(Boolean);
+  const loomQ = parseInt(p.loom ?? "", 10);
+  const statusQ = (p.status?.trim() || "").toUpperCase();
+
+  const loomSheds = await db.selectDistinct({ shed: schema.looms.shed }).from(schema.looms);
+  const sheds = [...new Set(["1", "2", "3", "4", ...loomSheds.map((l) => l.shed.trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const conds: SQL[] = [gte(schema.intDailyProduction.vDate, from), lte(schema.intDailyProduction.vDate, to)];
+  if (shedQ.length) conds.push(inArray(schema.intDailyProduction.shedNo, shedQ));
+  if (Number.isFinite(loomQ)) conds.push(eq(schema.intDailyProductionSet.loomNo, loomQ));
 
   const contractNo = sql<string | null>`coalesce(nullif(${schema.intDailyProductionSet.contNo}, ''), ${schema.beams.contractNo})`;
   const prod = await db
@@ -49,7 +61,7 @@ export default async function FabricProductionPage({
     .from(schema.intDailyProductionSet)
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id))
     .leftJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
-    .where(and(gte(schema.intDailyProduction.vDate, from), lte(schema.intDailyProduction.vDate, to)))
+    .where(and(...conds))
     .groupBy(sql`1`, schema.intDailyProduction.vDate);
 
   // Every status: a contract completed since still bills what it wove in range.
@@ -63,6 +75,7 @@ export default async function FabricProductionPage({
     pick: t.pick,
     ratePerPick: t.ratePerPick,
     convRatePerMtr: t.convRatePerMtr,
+    status: t.status,
   });
   const [intC, extC, intWarp, intWeft, extWarp, extWeft] = await Promise.all([
     db.select(cols(schema.intGreyConversionContract)).from(schema.intGreyConversionContract),
@@ -92,7 +105,8 @@ export default async function FabricProductionPage({
 
   const parties = [...new Set(prod.map((r) => (r.contNo ? contracts.get(r.contNo)?.party?.trim() : "") || "").filter(Boolean))].sort();
   const inParty = (contNo: string | null) => !partyQ || (contNo ? contracts.get(contNo)?.party?.trim() === partyQ : false);
-  const rowsIn = prod.filter((r) => inParty(r.contNo) && Number(r.m) > 0);
+  const inStatus = (contNo: string | null) => !statusQ || (contNo ? (contracts.get(contNo)?.status ?? "").toUpperCase() === statusQ : false);
+  const rowsIn = prod.filter((r) => inParty(r.contNo) && inStatus(r.contNo) && Number(r.m) > 0);
 
   const byContract = new Map<string, number>();
   const byDay = new Map<string, { m: number; a: number }>();
@@ -135,7 +149,20 @@ export default async function FabricProductionPage({
   const avgRate = totProd ? totAmt / totProd : 0;
 
   const prev = prevMonth(now);
-  const q = (f: string, t: string) => `?from=${f}&to=${t}${partyQ ? `&party=${encodeURIComponent(partyQ)}` : ""}`;
+  const q = (f: string, t: string) => {
+    const u = new URLSearchParams({ from: f, to: t });
+    if (partyQ) u.set("party", partyQ);
+    for (const x of shedQ) u.append("shed", x);
+    if (Number.isFinite(loomQ)) u.set("loom", String(loomQ));
+    if (statusQ) u.set("status", statusQ);
+    return "?" + u.toString();
+  };
+  const filterNote = [
+    shedQ.length ? `Shed ${shedQ.join(", ")}` : "All sheds",
+    Number.isFinite(loomQ) ? `Loom ${loomQ}` : "",
+    statusQ === "R" ? "Running" : statusQ === "C" ? "Completed" : "",
+    partyQ,
+  ].filter(Boolean).join(" · ");
 
   return (
     <Shell active="w-fabric-production">
@@ -144,7 +171,7 @@ export default async function FabricProductionPage({
           <div>
             <h1 className="page-title">Fabric Production &amp; Billing</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {rows.length} contracts &middot; {from} to {to}
+              {rows.length} contracts &middot; {from} to {to} &middot; {filterNote}
             </p>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
@@ -181,12 +208,22 @@ export default async function FabricProductionPage({
         <div className="hidden print:block mb-4">
           <h1 className="page-title">FABRIC PRODUCTION &amp; BILLING</h1>
           <div className="mono text-[12px] mt-1">
-            {from} to {to}
-            {partyQ ? ` · ${partyQ}` : ""}
+            {from} to {to} · {filterNote}
           </div>
         </div>
 
         <form method="GET" action="" className="border border-black p-4 mb-3 grid grid-cols-1 sm:grid-cols-4 gap-4 no-print">
+          <div className="sm:col-span-4">
+            <div className="label mb-1">Sheds <span className="normal-case tracking-normal text-[var(--muted)]">(none ticked = all)</span></div>
+            <div className="flex gap-5 flex-wrap">
+              {sheds.map((sh) => (
+                <label key={sh} className="flex items-center gap-2 text-[13px] font-semibold cursor-pointer">
+                  <input type="checkbox" name="shed" value={sh} defaultChecked={shedQ.length === 0 || shedQ.includes(sh)} className="w-5 h-5 accent-black" />
+                  Shed {sh}
+                </label>
+              ))}
+            </div>
+          </div>
           <div>
             <label className="label block mb-1">From</label>
             <DateBox name="from" defaultValue={from} className="input-box mono" />
@@ -202,6 +239,18 @@ export default async function FabricProductionPage({
               {parties.map((x) => (
                 <option key={x} value={x}>{x}</option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="label block mb-1">Loom No</label>
+            <input name="loom" type="number" inputMode="numeric" defaultValue={Number.isFinite(loomQ) ? loomQ : ""} className="input-box mono" placeholder="All" />
+          </div>
+          <div>
+            <label className="label block mb-1">Contract Status</label>
+            <select name="status" defaultValue={statusQ} className="input-box">
+              <option value="">All</option>
+              <option value="R">R - Running</option>
+              <option value="C">C - Completed</option>
             </select>
           </div>
           <div className="flex items-end gap-2">
