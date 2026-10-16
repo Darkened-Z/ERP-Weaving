@@ -152,6 +152,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 ## Reports — Daily Folding Stock (`reports/weaving/folding-stock` + `/[cont]`)
 - **Parties = the WVG head only (`1.01.01.01.*`, owner 2026-10)** — the dropdown AND the rows. Contracts held by COMMERCIAL (`1.01.01.19`) or creditor accounts (external GCC- contracts: Asim Olampia, Essa, Faisal Yasir, Sami sab) are not the mill's folding stock and are left out.
 - Per grey-conversion contract, grouped by party: **Opening** (prod−desp before `from`) + **Production** (Σ `int_daily_production_set.totalCount` where `set.cont_no` = contract) − **Despatch** (Σ `int_grey_despatch_line.lengthMtrs` where `int_grey_despatch.convContNo` = contract) = **Balance**. From/To filter, party subtotals + grand total.
+- **Tot.Lm and Loom# columns removed** from the summary (owner 2026-10-16); the last column is just the P / D buttons.
 - **P / D** links → `/[cont]?view=P|D` drill-down (owner 2026-10, replaced the single mixed than register):
   - **P = PENDING stock as of TO** — only thans still lying in folding stock: production (any date ≤ TO) whose serial is on no despatch line ≤ TO, plus opening-stock lots (`inventory_opening`, GREY) not despatched as `OPN-<id>`. Running balance; total = the stock (ties to opening + production − despatch; IGCC-0021 = 56 than / 10,335.50 m on 2026-10-15). Despatched thans never appear here.
   - **D = DESPATCHED in FROM–TO** — each despatch voucher with the thans it carried (production V.No / date / loom, or OPENING) and a subtotal per despatch.
