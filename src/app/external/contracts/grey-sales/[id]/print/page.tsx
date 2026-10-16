@@ -6,6 +6,7 @@ import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell
 import { PrintButton } from "@/components/print-button";
 import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
+import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,31 @@ export default async function GreySalesContractPrint({
     .from(schema.extGreySalContractDelivery)
     .where(eq(schema.extGreySalContractDelivery.contractId, id))
     .orderBy(schema.extGreySalContractDelivery.id);
+
+  // The construction is printed in full (reed × pick, warp × weft), not the bare
+  // GC code — the buyer reads the cloth off the contract (owner).
+  let construction = contract.greyCode ?? "";
+  if (contract.greyCode) {
+    const [con] = await db
+      .select({
+        code: schema.greyConstruction.code,
+        reed: schema.greyConstruction.reed,
+        pick: schema.greyConstruction.pick,
+        warpCount: schema.greyConstruction.warpCount,
+        warp2: schema.greyConstruction.warp2,
+        weftCount: schema.greyConstruction.weftCount,
+        weft2: schema.greyConstruction.weft2,
+      })
+      .from(schema.greyConstruction)
+      .where(eq(schema.greyConstruction.code, contract.greyCode.trim()))
+      .limit(1);
+    if (con) {
+      const counts = await db
+        .select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
+        .from(schema.yarnCounts);
+      construction = fullConstruction(con, countLabelMap(counts)) || construction;
+    }
+  }
 
   const [profile] = await db.select().from(schema.companyProfile).limit(1);
   const companyName = profile?.name ?? "SK Weaving Mills";
@@ -97,15 +123,9 @@ export default async function GreySalesContractPrint({
         <table className="w-full text-[11px] mb-4">
           <tbody>
             <tr>
-              <td className="border border-black p-2 w-1/4 font-bold">Broker</td>
-              <td className="border border-black p-2">{contract.broker ?? "-"}</td>
-              <td className="border border-black p-2 w-1/4 font-bold">Brokerage / Bag</td>
-              <td className="border border-black p-2 mono">{fmt(contract.brokagPerBag)}</td>
-            </tr>
-            <tr>
-              <td className="border border-black p-2 font-bold">Grey Code</td>
-              <td className="border border-black p-2 mono">{contract.greyCode ?? "-"}</td>
-              <td className="border border-black p-2 font-bold">Weave</td>
+              <td className="border border-black p-2 w-1/4 font-bold">Grey Construction</td>
+              <td className="border border-black p-2 mono">{construction || "-"}</td>
+              <td className="border border-black p-2 w-1/4 font-bold">Weave</td>
               <td className="border border-black p-2">{contract.weave ?? "-"}</td>
             </tr>
             <tr>

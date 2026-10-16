@@ -1108,41 +1108,8 @@ export default async function GreySalesContractPage({
                 <a href="/external/contracts/grey-sales" className="btn btn-outline btn-sm">Clear</a>
               )}
             </form>
-            <div className="overflow-y-auto scrollbar-thin" style={{ maxHeight: "60vh" }}>
-              {contracts.length === 0 && (
-                <div className="text-[12px] text-[var(--muted)] italic py-2">No contracts</div>
-              )}
-              {contracts.slice(0, 100).map((c) => {
-                const isSel = c.id === selected?.id;
-                return (
-                  <a
-                    key={c.id}
-                    href={`/external/contracts/grey-sales?id=${c.id}`}
-                    className="block no-underline border-b border-gray-200 px-2 py-2"
-                    style={{
-                      background: isSel ? "black" : "transparent",
-                      color: isSel ? "white" : "inherit",
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="mono text-[12px] font-bold">{c.contractNo}</div>
-                      <div className="text-[10px]" style={{ color: isSel ? "white" : "var(--muted)" }}>
-                        {c.contractDate}
-                      </div>
-                    </div>
-                    <div className="text-[11px] truncate">
-                      {c.party ?? "-"}
-                      {c.party && partyCodeByDesc.get(c.party) ? ` (${partyCodeByDesc.get(c.party)})` : ""}
-                    </div>
-                    <div className="text-[10px] mono" style={{ color: isSel ? "white" : "var(--muted)" }}>
-                      {c.greyCode ?? "-"}
-                      {c.greyCode && greyDescByCode.get(c.greyCode) ? ` — ${greyDescByCode.get(c.greyCode)}` : ""}
-                      {c.weave ? " / " + c.weave : ""}
-                    </div>
-                  </a>
-                );
-              })}
-            </div>
+            {/* The search filters the contracts table below; the panel's own copy
+                of that list was removed (owner) — it repeated the table. */}
           </div>
         </div>
 
