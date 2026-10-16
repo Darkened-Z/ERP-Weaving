@@ -116,6 +116,7 @@ export default async function GreyDespatchDamiPage({
     })
     .from(schema.extPackiParchi)
     .orderBy(sql`v_date DESC`);
+  const ppNoById = new Map(pakkiParchis.map((p) => [p.id, p.ppNo]));
 
   async function saveDami(formData: FormData) {
     "use server";
@@ -661,7 +662,7 @@ export default async function GreyDespatchDamiPage({
                   const st = { color: isSel ? "white" : "inherit" } as const;
                   return (
                     <tr key={d.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                      <td className="mono font-bold text-[13px]"><a href={href} className="no-underline flex items-center gap-2" style={st}>{d.vNo}{d.pakki_parchi_id == null && <span className="text-[9px] px-1 bg-red-100 text-red-600 rounded border border-red-200 uppercase tracking-widest no-print">Unlinked</span>}</a></td>
+                      <td className="mono font-bold text-[13px]"><a href={href} className="no-underline flex items-center gap-2" style={st}>{d.vNo}{d.pakki_parchi_id == null ? <span className="text-[9px] px-1 bg-red-100 text-red-600 rounded border border-red-200 uppercase tracking-widest no-print">Unlinked</span> : <span className="text-[10px] px-1 bg-green-100 text-green-700 rounded border border-green-200 tracking-wider no-print">{ppNoById.get(d.pakki_parchi_id) ?? "Linked"}</span>}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={st}>{fmtDate(d.vDate)}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.subParty ?? d.party ?? d.saleParty ?? "—"}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.printingLocation ?? "—"}</a></td>
