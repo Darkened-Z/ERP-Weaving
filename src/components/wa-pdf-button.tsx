@@ -60,7 +60,7 @@ function canvasToPdf(canvas: HTMLCanvasElement, onePage: boolean) {
   return pdf;
 }
 
-async function shareBlob(blob: Blob, filename: string, type: string) {
+export async function shareBlob(blob: Blob, filename: string, type: string) {
   const file = new File([blob], filename, { type });
   if (navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file] });

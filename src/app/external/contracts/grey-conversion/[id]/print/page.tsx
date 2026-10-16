@@ -82,7 +82,7 @@ export default async function GreyConversionContractPrint({
           Back
         </a>
         <ExportPdfButton contentId="ext-grey-conv-print" filename={`Grey-Conversion-Contract-${contract.contNo ?? id}.pdf`} />
-        <WaPdfButton contentId="ext-grey-conv-print" filename={`Grey-Conversion-Contract-${contract.contNo ?? id}.pdf`} />
+        <WaPdfButton contentId="ext-grey-conv-print" filename={`Grey-Conversion-Contract-${contract.contNo ?? id}.jpg`} as="jpg" />
         <PrintButton label="Print" />
       </div>
       <div id="ext-grey-conv-print" className="p-6 mx-auto" style={{ maxWidth: 900 }}>

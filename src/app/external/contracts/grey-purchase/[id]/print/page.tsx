@@ -67,7 +67,7 @@ export default async function GreyPurchaseContractPrint({
           Back
         </a>
         <ExportPdfButton contentId="grey-pur-contract-print" filename={`Grey-Purchase-Contract-${contract.contractNo ?? id}.pdf`} />
-        <WaPdfButton contentId="grey-pur-contract-print" filename={`Grey-Purchase-Contract-${contract.contractNo ?? id}.pdf`} />
+        <WaPdfButton contentId="grey-pur-contract-print" filename={`Grey-Purchase-Contract-${contract.contractNo ?? id}.jpg`} as="jpg" />
         <PrintButton label="Print" />
       </div>
       <div id="grey-pur-contract-print" className="p-6 mx-auto" style={{ maxWidth: 900 }}>

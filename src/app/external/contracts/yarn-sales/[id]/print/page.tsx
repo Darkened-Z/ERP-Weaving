@@ -76,7 +76,7 @@ export default async function YarnSalesContractPrint({
           Back
         </a>
         <ExportPdfButton contentId="yarn-sal-contract-print" filename={`Yarn-Sales-Contract-${contract.contNo ?? id}.pdf`} />
-        <WaPdfButton contentId="yarn-sal-contract-print" filename={`Yarn-Sales-Contract-${contract.contNo ?? id}.pdf`} />
+        <WaPdfButton contentId="yarn-sal-contract-print" filename={`Yarn-Sales-Contract-${contract.contNo ?? id}.jpg`} as="jpg" />
         <PrintButton label="Print" />
       </div>
       <div id="yarn-sal-contract-print" className="p-6 mx-auto" style={{ maxWidth: 900 }}>
