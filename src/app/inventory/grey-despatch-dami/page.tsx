@@ -548,7 +548,7 @@ export default async function GreyDespatchDamiPage({
                   return pp ? (
                     <div className="mb-3 p-2 bg-green-50 border border-green-300 rounded text-[12px] flex items-center gap-3">
                       <span className="text-green-700 font-bold text-[11px] uppercase tracking-wide">✅ Linked to Pakki Parchi</span>
-                      <span className="mono font-bold">PP#{pp.ppNo}</span>
+                      <a href={`/external/grey/packi-parchi?id=${pp.id}`} target="_blank" title="Open Pakki Parchi" className="mono font-bold underline">{pp.ppNo}</a>
                       <span>{pp.ppDate}</span>
                       <span className="text-[var(--muted)]">{pp.party}</span>
                       <span className="ml-auto text-[var(--muted)]">Than: <b>{pp.qtyThan}</b> | Mtr: <b>{pp.qtyMtrs}</b></span>
@@ -662,7 +662,7 @@ export default async function GreyDespatchDamiPage({
                   const st = { color: isSel ? "white" : "inherit" } as const;
                   return (
                     <tr key={d.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                      <td className="mono font-bold text-[13px]"><a href={href} className="no-underline flex items-center gap-2" style={st}>{d.vNo}{d.pakki_parchi_id == null ? <span className="text-[9px] px-1 bg-red-100 text-red-600 rounded border border-red-200 uppercase tracking-widest no-print">Unlinked</span> : <span className="text-[10px] px-1 bg-green-100 text-green-700 rounded border border-green-200 tracking-wider no-print">{ppNoById.get(d.pakki_parchi_id) ?? "Linked"}</span>}</a></td>
+                      <td className="mono font-bold text-[13px]"><div className="flex items-center gap-2"><a href={href} className="no-underline flex items-center gap-2" style={st}>{d.vNo}{d.pakki_parchi_id == null && <span className="text-[9px] px-1 bg-red-100 text-red-600 rounded border border-red-200 uppercase tracking-widest no-print">Unlinked</span>}</a>{d.pakki_parchi_id != null && <a href={`/external/grey/packi-parchi?id=${d.pakki_parchi_id}`} target="_blank" title="Open Pakki Parchi" className="text-[10px] px-1 bg-green-100 text-green-700 rounded border border-green-300 tracking-wider underline no-print">{ppNoById.get(d.pakki_parchi_id) ?? "Linked"}</a>}</div></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={st}>{fmtDate(d.vDate)}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.subParty ?? d.party ?? d.saleParty ?? "—"}</a></td>
                       <td className="text-[12px]"><a href={href} className="no-underline block" style={st}>{d.printingLocation ?? "—"}</a></td>
