@@ -13,8 +13,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { SaveForm, type SaveError } from "@/components/save-form";
 import { db, schema } from "@/db";
 import { clearVoucher } from "@/lib/gl-post";
-import { recomputeBeamStatus } from "@/lib/beam-cycle";
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { inCycle, recomputeBeamStatus } from "@/lib/beam-cycle";
+import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, verifySavePassword } from "@/lib/auth";
 import { today, nowTime } from "@/lib/time";
@@ -220,39 +220,36 @@ export default async function DailyProductionPage({
   // before this one in the beam's current cycle — the same running total the
   // server re-stamps on save (lib/beam-cycle), so the screen and the record agree.
   // It used to take the Rcvd/Mtr the newest voucher stamped, so editing an older
-  // voucher stacked its meters on top of the newest total. A voucher that names
-  // one beam also counts its beam-less thans (B, C…) towards it.
+  // voucher stacked its meters on top of the newest total. Only the than on the
+  // beam's own row counts: Shed 1 and 2 weave two widths, so row B's than comes
+  // off the same warp (counting it doubled their meters).
   const priorRows = await db
     .select({
-      productionId: schema.intDailyProductionSet.productionId,
       beamNo: schema.intDailyProductionSet.beamNo,
       totalCount: schema.intDailyProductionSet.totalCount,
       rejCount: schema.intDailyProductionSet.rejCount,
       vDate: schema.intDailyProduction.vDate,
+      postedDate: schema.intDailyProduction.postedDate,
     })
     .from(schema.intDailyProductionSet)
     .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
-    .where(editing ? lt(schema.intDailyProductionSet.productionId, editing.id) : undefined);
+    .where(and(isNotNull(schema.intDailyProductionSet.beamNo), editing ? lt(schema.intDailyProductionSet.productionId, editing.id) : undefined));
+  const receivingPosted = new Map(
+    (await db.select({ vNo: schema.intWarpedBeamReceiving.vNo, posted: schema.intWarpedBeamReceiving.postedDate }).from(schema.intWarpedBeamReceiving)).map((r) => [r.vNo, r.posted]),
+  );
 
   const beamStats: Record<string, { rcvd: number; length: number | null }> = {};
   for (const b of beamCatalog) {
     if (b.beamNo) beamStats[b.beamNo] = { rcvd: 0, length: b.length ?? null };
   }
   {
-    const brDateOf = new Map(beamCatalog.map((b) => [b.beamNo, b.brDate]));
-    const byVoucher = new Map<number, typeof priorRows>();
-    for (const r of priorRows) (byVoucher.get(r.productionId) ?? byVoucher.set(r.productionId, []).get(r.productionId)!).push(r);
-    for (const vr of byVoucher.values()) {
-      const named = new Set(vr.map((r) => r.beamNo?.trim()).filter((b): b is string => !!b));
-      for (const b of named) {
-        const br = brDateOf.get(b);
-        if (br && vr[0].vDate < br) continue;
-        const meters = vr
-          .filter((r) => r.beamNo?.trim() === b || (!r.beamNo?.trim() && named.size === 1))
-          .reduce((a, r) => a + (r.totalCount ?? 0) + (r.rejCount ?? 0), 0);
-        if (!beamStats[b]) beamStats[b] = { rcvd: 0, length: null };
-        beamStats[b].rcvd = Math.round((beamStats[b].rcvd + meters) * 100) / 100;
-      }
+    const beamOf = new Map(beamCatalog.map((b) => [b.beamNo, b]));
+    for (const r of priorRows) {
+      const b = (r.beamNo ?? "").trim();
+      const cat = beamOf.get(b);
+      if (cat && !inCycle(r.vDate, r.postedDate, cat.brDate, cat.brVno ? receivingPosted.get(cat.brVno) ?? null : null)) continue;
+      if (!beamStats[b]) beamStats[b] = { rcvd: 0, length: null };
+      beamStats[b].rcvd = Math.round((beamStats[b].rcvd + (r.totalCount ?? 0) + (r.rejCount ?? 0)) * 100) / 100;
     }
   }
 

@@ -1,14 +1,23 @@
 import { db, schema } from "@/db";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Beam numbers are reused: warped-beam receiving stamps brDate each time a
  * beam comes back loaded. Production rows dated before that belong to an
- * earlier cycle and must not count towards this one's woven meters.
+ * earlier cycle and must not count towards this one's woven meters. A row dated
+ * the SAME day as the receiving belongs to the new cycle only if it was entered
+ * after the receiving — Sk-7's old last roll (L-ROLL, 6 Oct) shared its date
+ * with the re-receipt and kept emptying the freshly knotted beam.
  */
-export const inCurrentBeamCycle = sql`(${schema.beams.brDate} IS NULL OR ${schema.intDailyProduction.vDate} >= ${schema.beams.brDate})`;
+export const inCurrentBeamCycle = sql`(${schema.beams.brDate} IS NULL OR ${schema.intDailyProduction.vDate} > ${schema.beams.brDate} OR (${schema.intDailyProduction.vDate} = ${schema.beams.brDate} AND COALESCE(${schema.intDailyProduction.postedDate}, '') > COALESCE((SELECT r.posted_date FROM int_warped_beam_receiving r WHERE r.v_no = ${schema.beams.brVno}), '')))`;
+
+/** JS twin of {@link inCurrentBeamCycle} for pages that work on loaded rows. */
+export function inCycle(vDate: string, postedDate: string | null, brDate: string | null, brPosted: string | null): boolean {
+  if (!brDate || vDate > brDate) return true;
+  return vDate === brDate && (postedDate ?? "") > (brPosted ?? "");
+}
 
 /** Meters woven on a beam in its current cycle. */
 export async function wovenThisCycle(tx: Tx | typeof db, beamNo: string): Promise<number> {
@@ -38,8 +47,10 @@ export class LoomTakenError extends Error {
  * Re-derive a beam's state from what is on record:
  *
  * 1. Rcvd/Mtr, Diff and Shrinkage are re-stamped on every production row of the
- *    current cycle as a running total in ENTRY order (production id), counting
- *    the voucher's beam-less thans when it names only this beam. The form
+ *    current cycle as a running total in ENTRY order (production id). Only the
+ *    than on the beam's own row counts: Shed 1 and 2 weave two widths, so the
+ *    voucher's second than (row B) comes off the same warp and must not be added
+ *    again — counting it doubled their meters and emptied AJ-16 mid-run. The form
  *    only knows an opening balance; editing an older voucher used to stamp it
  *    with the newest total plus its own meters, so it outranked the L-ROLL
  *    entered after it and put a finished beam back on its loom.
@@ -91,37 +102,6 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
     .where(and(eq(schema.intDailyProductionSet.beamNo, beamNo), inCurrentBeamCycle))
     .orderBy(asc(schema.intDailyProduction.id), asc(schema.intDailyProductionSet.id));
 
-  // A voucher's thans are all woven on its beam, but only the than paired with
-  // the beam row carries beam_no — thans B, C… are stored without one. They
-  // count towards this beam whenever the voucher names no other beam; without
-  // them Rcvd/Mtr read about half the real meters and the beam never reached
-  // its length. (Same rule the despatch thans list uses.)
-  const unnamed = new Map<number, { meters: number; woven: number }>();
-  const pids = [...new Set(rows.map((r) => r.productionId))];
-  if (pids.length) {
-    const siblings = await tx
-      .select({
-        productionId: schema.intDailyProductionSet.productionId,
-        beamNo: schema.intDailyProductionSet.beamNo,
-        totalCount: schema.intDailyProductionSet.totalCount,
-        rejCount: schema.intDailyProductionSet.rejCount,
-      })
-      .from(schema.intDailyProductionSet)
-      .where(inArray(schema.intDailyProductionSet.productionId, pids));
-    const named = new Map<number, Set<string>>();
-    for (const s of siblings) {
-      const b = s.beamNo?.trim();
-      if (b) (named.get(s.productionId) ?? named.set(s.productionId, new Set()).get(s.productionId)!).add(b);
-    }
-    for (const s of siblings) {
-      if (s.beamNo?.trim() || named.get(s.productionId)?.size !== 1) continue;
-      const u = unnamed.get(s.productionId) ?? { meters: 0, woven: 0 };
-      u.meters += (s.totalCount ?? 0) + (s.rejCount ?? 0);
-      u.woven += s.totalCount ?? 0;
-      unnamed.set(s.productionId, u);
-    }
-  }
-
   // One running total per voucher; every row of this beam in a voucher carries it.
   const byVoucher: (typeof rows)[] = [];
   for (const r of rows) {
@@ -132,9 +112,8 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
   let run = 0;
   let woven = 0;
   for (const vr of byVoucher) {
-    const extra = unnamed.get(vr[0].productionId);
-    run = r2(run + vr.reduce((a, r) => a + (r.totalCount ?? 0) + (r.rejCount ?? 0), 0) + (extra?.meters ?? 0));
-    woven += vr.reduce((a, r) => a + (r.totalCount ?? 0), 0) + (extra?.woven ?? 0);
+    run = r2(run + vr.reduce((a, r) => a + (r.totalCount ?? 0) + (r.rejCount ?? 0), 0));
+    woven += vr.reduce((a, r) => a + (r.totalCount ?? 0), 0);
     for (const r of vr) {
       const bl = r.bLength ?? 0;
       const rcvdMtr = run || null;

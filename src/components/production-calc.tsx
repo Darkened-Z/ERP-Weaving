@@ -38,18 +38,15 @@ export function ProductionSetCalc({
     };
     const beamAt = (j: number) =>
       (beamRows()[j]?.querySelector<HTMLInputElement>('[name="beamNo"]')?.value ?? "").trim();
-    // This voucher's meters for a beam: its own thans, plus the beam-less thans
-    // (B, C…) when the grid names only this one beam — the same rule the server
-    // stamps Rcvd/Mtr with (lib/beam-cycle).
+    // This voucher's meters for a beam: the thans on rows that name it — the same
+    // rule the server stamps Rcvd/Mtr with (lib/beam-cycle). A beam-less row B is
+    // NOT added: Shed 1 and 2 weave two widths, so it comes off the same warp.
     const voucherMeters = (beamNo: string) => {
       const cRows = countRows();
       const n = Math.max(cRows.length, beamRows().length);
-      const named = new Set<string>();
-      for (let j = 0; j < n; j++) if (beamAt(j)) named.add(beamAt(j));
       let m = 0;
       for (let j = 0; j < n; j++) {
-        const b = beamAt(j);
-        if (b !== beamNo && (b || named.size !== 1)) continue;
+        if (beamAt(j) !== beamNo) continue;
         const tr = cRows[j];
         m += cellNum(tr, "aCount") + cellNum(tr, "bCount") + cellNum(tr, "cCount") + cellNum(tr, "cpCount") + cellNum(tr, "ppcCount") + cellNum(tr, "rejCount");
       }
