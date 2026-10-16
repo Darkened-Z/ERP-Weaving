@@ -7,7 +7,7 @@ import { jsPDF } from "jspdf";
 // A4 at 96 dpi. The printed vouchers are laid out for this width (210mm).
 const A4_PX = 794;
 
-async function captureCanvas(contentId: string) {
+export async function captureCanvas(contentId: string) {
   const el = document.getElementById(contentId);
   if (!el) return null;
   // On a phone the voucher is squeezed to the screen width: the header wraps
@@ -62,9 +62,18 @@ function canvasToPdf(canvas: HTMLCanvasElement, onePage: boolean) {
 
 export async function shareBlob(blob: Blob, filename: string, type: string) {
   const file = new File([blob], filename, { type });
+  let shared = false;
   if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file] });
-  } else {
+    try {
+      await navigator.share({ files: [file] });
+      shared = true;
+    } catch (e) {
+      if ((e as DOMException).name === "AbortError") return;
+      // NotAllowedError: a slow capture outlived the tap that allows sharing.
+      // Hand over the file as a download rather than doing nothing.
+    }
+  }
+  if (!shared) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

@@ -1,6 +1,7 @@
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { GreyConvContractSheet } from "@/components/grey-conv-contract-sheet";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
@@ -581,6 +582,7 @@ export default async function IntGreyConversionContractPage({
             ]}
             filename="int-grey-conv-contracts"
             sheetName="IntGreyConvContract"
+            waTarget={formItem ? { contentId: "int-gcc-sheet", filename: `Grey-Conversion-Contract-${formItem.contNo}.jpg` } : undefined}
           />
         </div>
 
@@ -1138,6 +1140,12 @@ export default async function IntGreyConversionContractPage({
           </div>
         </div>
       </div>
+
+      {formItem && (
+        <div aria-hidden className="no-print" style={{ position: "fixed", left: -20000, top: 0, pointerEvents: "none" }}>
+          <GreyConvContractSheet id="int-gcc-sheet" title="GREY CONVERSION CONTRACT" contract={formItem} warp={warpRows} weft={weftRows} />
+        </div>
+      )}
     </Shell>
   );
 }

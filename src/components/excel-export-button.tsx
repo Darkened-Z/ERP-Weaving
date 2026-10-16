@@ -4,7 +4,7 @@ import { useState } from "react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { shareBlob } from "@/components/wa-pdf-button";
+import { captureCanvas, shareBlob } from "@/components/wa-pdf-button";
 
 export type Column = {
   key: string;
@@ -127,9 +127,11 @@ type Props = {
   filename: string;
   sheetName?: string;
   title?: string;
+  /** When a record is open, WA shares that element (its sheet) instead of the list. */
+  waTarget?: { contentId: string; filename: string };
 };
 
-export function ExcelExportButton({ rows, columns, filename, sheetName, title }: Props) {
+export function ExcelExportButton({ rows, columns, filename, sheetName, title, waTarget }: Props) {
   const stamp = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -171,9 +173,10 @@ export function ExcelExportButton({ rows, columns, filename, sheetName, title }:
   const shareJpg = async () => {
     setBusy(true);
     try {
-      const canvas = drawTable(title ?? filename, columns, rows);
+      const canvas = waTarget ? await captureCanvas(waTarget.contentId) : drawTable(title ?? filename, columns, rows);
+      if (!canvas) return;
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.92));
-      if (blob) await shareBlob(blob, `${filename}-${stamp()}.jpg`, "image/jpeg");
+      if (blob) await shareBlob(blob, waTarget ? waTarget.filename : `${filename}-${stamp()}.jpg`, "image/jpeg");
     } finally {
       setBusy(false);
     }
