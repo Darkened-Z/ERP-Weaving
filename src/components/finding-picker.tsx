@@ -317,7 +317,7 @@ export function FindingPicker({
             </div>
 
             <div className="overflow-auto" style={{ flex: 1 }}>
-              <table className="w-full text-[12px] mono">
+              <table className="w-full text-[12px] mono lov-table">
                 <thead className="sticky top-0 bg-white border-b-2 border-black">
                   {columns ? (
                     <tr>

@@ -97,7 +97,9 @@ td {
   line-height: 1.3;
 }
 
-tr:hover td {
+/* Child combinator: a picker popup rendered inside a grid row must not inherit
+   the row hover (it painted the LOV cells white over its highlighted row). */
+tr:hover > td {
   background: var(--surface);
 }
 
@@ -189,6 +191,7 @@ tr:hover td {
 /* Warp / weft count grids on the contract forms. Fixed columns so the table fits
    its panel instead of scrolling sideways, and no spinner arrows on the number
    boxes — they covered the Ends digits (owner). */
+.lov-table td { background: transparent !important; }
 .yarn-grid { table-layout: fixed; }
 /* On a phone the fixed Count/Cal/Ends/Rate columns left Desc and Brand a few
    pixels wide: keep a usable width and scroll the grid inside its box. */
