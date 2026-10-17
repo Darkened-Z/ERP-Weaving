@@ -621,6 +621,19 @@ export default async function YarnSaleVoucherPage({
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const loomType = txt(formData.get("loom_type"));
     const party = txt(formData.get("party"));
+    // No voucher without a party (owner 2026-10): a partyless voucher saved fine
+    // and simply never reached the ledger (YPV-0025, YSV-0022). The party must be
+    // a real account, or the posting below silently skips it all the same.
+    const [partyAcc] = party
+      ? await db
+          .select({ code: schema.chartOfAccounts.code })
+          .from(schema.chartOfAccounts)
+          .where(sql`${schema.chartOfAccounts.level} >= 5 AND (${schema.chartOfAccounts.description} = ${party} OR ${schema.chartOfAccounts.code} = ${party})`)
+          .limit(1)
+      : [];
+    if (!partyAcc) {
+      redirect(Number.isFinite(id) && id > 0 ? `/external/yarn/sale?id=${id}&error=no_party` : `/external/yarn/sale?adding=1&error=no_party`);
+    }
     const broker = txt(formData.get("broker"));
     const type = txt(formData.get("type")) ?? "SAL";
     const term = txt(formData.get("term")) ?? "CASH";
@@ -1226,6 +1239,11 @@ export default async function YarnSaleVoucherPage({
             is trying to sell {params.want ?? "?"} lbs. Nothing was saved.
           </div>
         )}
+        {params.error === "no_party" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Party is required — pick it from the list. Nothing was saved.
+          </div>
+        )}
         {params.error === "no_lines" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             At least one line with Bag or Lbs is required. Nothing was saved.
@@ -1485,6 +1503,7 @@ export default async function YarnSaleVoucherPage({
                       options={partyOpts}
                       defaultValue={formVoucher?.party ?? ""}
                       placeholder="Select party…"
+                      required
                     />
                   </div>
                   <div className="lg:col-span-5">
