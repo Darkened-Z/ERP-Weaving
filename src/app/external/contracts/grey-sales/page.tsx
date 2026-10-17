@@ -8,6 +8,7 @@ import { GreyQualityPicker } from "@/components/grey-quality-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ImageAttach } from "@/components/image-attach";
 import { AutoFill, RowAutoFill } from "@/components/auto-fill";
+import { CountPicker } from "@/components/count-picker";
 import { GreySaleCostCalc } from "@/components/grey-sale-cost-calc";
 import { db, schema } from "@/db";
 import { eq, or, sql } from "drizzle-orm";
@@ -193,6 +194,12 @@ export default async function GreySalesContractPage({
     .from(schema.yarnCounts)
     .where(eq(schema.yarnCounts.status, "A"))
     .orderBy(schema.yarnCounts.countCode);
+  // The same COUNT LIST popup as the grey conversion contract (owner 2026-10:
+  // the datalist only showed bare codes on a phone).
+  const allCountOpts = yarnCountList.map((y) => ({
+    code: String(y.countCode),
+    label: `${y.countCode} — ${y.description}${y.type ? ` ${y.type}` : ""}`,
+  }));
   const greyCountLabels: Record<string, string> = Object.fromEntries(
     yarnCountList.map((y) => [
       String(y.countCode).trim().toLowerCase(),
@@ -1061,6 +1068,7 @@ export default async function GreySalesContractPage({
                   </span>
                 );
               })}
+              <CountPicker partyCodeByDesc={{}} partyCountData={{}} allCounts={allCountOpts} />
 
               <div className="flex items-end gap-2 mt-4 flex-wrap">
                 <input type="password" name="save_password" placeholder="Password" required className="input-box mono" style={{ width: 120, height: 28 }} autoComplete="off" />

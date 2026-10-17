@@ -8,7 +8,7 @@ type PartyData = { counts: Array<{ code: string; label: string }>; byCount: Reco
 /**
  * F9 / Enter count picker for the grey-conversion WARP/WEFT grid.
  * When the operator is on any *_count_* input and presses F9 or Enter (or
- * clicks the field), a modal opens listing the SELECTED party's counts
+ * taps the field on a phone), a modal opens listing the SELECTED party's counts
  * (Cal Warp / Cal Weft / Rate). Picking a row fills that count cell and fires
  * events so PartyCountGrid + RowAutoFill populate Cal Count / Rate / Desc.
  *
@@ -45,8 +45,23 @@ export function CountPicker({
         setOpen(true);
       }
     };
+    // A phone has no F9 and its Enter rarely reaches here: a tap on a Count
+    // cell opens the list. The mouse keeps F9 / Enter so clicking into a cell
+    // on a PC does not throw a dialog up.
+    const onTap = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" || open) return;
+      const name = (e.target as HTMLElement | null)?.getAttribute?.("name") ?? "";
+      if (!re.test(name)) return;
+      setTargetName(name);
+      setQ("");
+      setOpen(true);
+    };
     document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
+    document.addEventListener("pointerup", onTap, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("pointerup", onTap, true);
+    };
   }, [open, countFieldPattern]);
 
   const partyDesc = () =>
@@ -74,6 +89,9 @@ export function CountPicker({
   };
 
   const info = (code: string) => data?.byCount[code];
+  // Cal / Rate come from the party's counts; on the full list they would all
+  // be "-" and only squeeze the description on a phone.
+  const showCal = !!(data && data.counts.length);
 
   if (!open) return null;
   return (
@@ -108,22 +126,30 @@ export function CountPicker({
             <thead className="sticky top-0 bg-white border-b-2 border-black">
               <tr>
                 <th className="px-2 py-1 text-left border-b border-black">Count Desc</th>
-                <th className="px-2 py-1 text-right border-b border-black" style={{ width: 90 }}>Cal Warp</th>
-                <th className="px-2 py-1 text-right border-b border-black" style={{ width: 90 }}>Cal Weft</th>
-                <th className="px-2 py-1 text-right border-b border-black" style={{ width: 90 }}>Rate/Lbs</th>
+                {showCal && (
+                  <>
+                    <th className="px-2 py-1 text-right border-b border-black" style={{ width: 90 }}>Cal Warp</th>
+                    <th className="px-2 py-1 text-right border-b border-black" style={{ width: 90 }}>Cal Weft</th>
+                    <th className="px-2 py-1 text-right border-b border-black" style={{ width: 90 }}>Rate/Lbs</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-[var(--muted)] italic">No counts{partyDesc() ? " for this party — add them in Party Counts" : ""}</td></tr>
+                <tr><td colSpan={showCal ? 4 : 1} className="px-4 py-8 text-center text-[var(--muted)] italic">No counts{partyDesc() ? " for this party — add them in Party Counts" : ""}</td></tr>
               ) : filtered.map((r) => {
                 const i = info(r.code);
                 return (
                   <tr key={r.code} className="border-b border-[var(--border-light)] cursor-pointer hover:bg-yellow-50" onClick={() => pick(r.code)}>
                     <td className="px-2 py-1">{r.label}</td>
-                    <td className="px-2 py-1 text-right">{i?.calWarp ?? "-"}</td>
-                    <td className="px-2 py-1 text-right">{i?.calWeft ?? "-"}</td>
-                    <td className="px-2 py-1 text-right">{i?.rate ?? "-"}</td>
+                    {showCal && (
+                      <>
+                        <td className="px-2 py-1 text-right">{i?.calWarp ?? "-"}</td>
+                        <td className="px-2 py-1 text-right">{i?.calWeft ?? "-"}</td>
+                        <td className="px-2 py-1 text-right">{i?.rate ?? "-"}</td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
