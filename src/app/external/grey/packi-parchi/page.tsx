@@ -704,7 +704,15 @@ export default async function PackiParchiPage({
     // this inline action closes over is serialized into the page, and a local
     // function can't be — it took the whole page down ("Functions cannot be
     // passed directly to Client Components").
-    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${narrConstr ? gqRichConstruction(narrConstr, countLabelByCode) : narrCode} (PACKI SALE)`.trim();
+    const narrQuality = narrConstr ? gqRichConstruction(narrConstr, countLabelByCode) : narrCode;
+    const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${narrQuality} (PACKI SALE)`.trim();
+    // The purchase side of the same parchi (owner 2026-10): its cost leaves the
+    // grey-stock godown and is debited to Income Grey, so that ledger reads
+    // sale − purchase = profit. No purchase rate (or godown not in the chart)
+    // = no cost leg, never a guessed one.
+    const purchaseCoa = resolvePartyCoa(purchaseParty);
+    const postCost = greyAmtPur > 0 && !!purchaseCoa;
+    const purNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRate ?? 0}, ${narrQuality} (GREY PURCHASE)`.trim();
 
     const parseVno = (v: string | null | undefined): number => {
       if (!v) return 0;
@@ -750,6 +758,9 @@ export default async function PackiParchiPage({
           debit: billNet,
           credit: 0,
         },
+        // The whole bill is the sale. It used to be split into a "commission"
+        // line and a "bill adjustment" line on the same account, which read as
+        // two incomes and hid that the parchi carried a purchase at all.
         {
           fyCode,
           vtype: "GPV",
@@ -759,30 +770,14 @@ export default async function PackiParchiPage({
           partyCode: null,
           narration: ppNarr,
           debit: 0,
-          credit: commissionTotalC,
+          credit: billNet,
         },
       ];
-      // The party is carried to what the income leg says, and the difference
-      // between the bill net and that figure settles here.
-      //
-      // This line used to be written as a NEGATIVE credit and with no narration
-      // at all, which is why it showed in the ledger as a blank row that moved
-      // the balance with nothing to explain it. A negative credit is not an
-      // entry anyone can read: when the difference goes the other way it is a
-      // DEBIT, so it is posted as one.
-      const clearDiff = Math.round((billNet - commissionTotalC) * 100) / 100;
-      if (Math.abs(clearDiff) >= 0.01) {
-        details.push({
-          fyCode,
-          vtype: "GPV",
-          vno,
-          srno: details.length + 1,
-          accCode: greyCommissionCode,
-          partyCode: null,
-          narration: `${ppNarr} - bill adjustment`,
-          debit: clearDiff < 0 ? -clearDiff : 0,
-          credit: clearDiff > 0 ? clearDiff : 0,
-        });
+      if (postCost) {
+        details.push(
+          { fyCode, vtype: "GPV", vno, srno: details.length + 1, accCode: greyCommissionCode, partyCode: null, narration: purNarr, debit: greyAmtPur, credit: 0 },
+          { fyCode, vtype: "GPV", vno, srno: details.length + 2, accCode: purchaseCoa, partyCode: purchaseCoa, narration: purNarr, debit: 0, credit: greyAmtPur },
+        );
       }
       // Sale-side brokerage: DR brokerage expense, CR the broker (balanced pair,
       // does not disturb the party/commission netting above).

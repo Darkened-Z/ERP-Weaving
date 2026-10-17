@@ -885,6 +885,44 @@ export default async function YarnSaleVoucherPage({
     // first either way, so turning posting off takes the entry back out.
     const doGl = posting === "Y" && !!fyCode && !!partyCoa && glTotal > 0;
     const yarnSaleIncomeCoa = doGl ? await acc("YARN_SALE_INCOME") : "";
+    // Purchase cost of what was sold (owner 2026-10): each line's lbs × its
+    // batch's purchase rate leaves Yarn Stock and is debited to Income Yarn, so
+    // that ledger reads sale − purchase = profit. A line whose batch has no rate
+    // carries no cost leg rather than a guessed one.
+    const yarnStockCoa = doGl ? await acc("YARN_PURCHASE_STOCK") : "";
+    const soldBatches = validLines.map((l) => l.batchNo).filter((b): b is string => !!b);
+    const batchRateRows = doGl && soldBatches.length
+      ? await db
+          .select({ b: schema.extYarnPurVoucherLine.batchNo, r: schema.extYarnPurVoucherLine.rate })
+          .from(schema.extYarnPurVoucherLine)
+          .where(inArray(schema.extYarnPurVoucherLine.batchNo, soldBatches))
+      : [];
+    const batchRate = new Map(batchRateRows.map((x) => [x.b, x.r]));
+    const costLines = validLines
+      .map((l) => ({ l, rate: l.batchNo ? (batchRate.get(l.batchNo) ?? null) : null }))
+      .filter((x) => (x.l.lbs ?? 0) > 0 && x.rate != null && x.rate > 0);
+    const costTotal = round2(costLines.reduce((sum, x) => sum + (x.l.lbs ?? 0) * (x.rate ?? 0), 0));
+    const costNarr =
+      costLines
+        .map(({ l, rate }) => {
+          const lbl = l.count ? countLabelSrv.get(String(l.count)) || l.count : "";
+          return `@ ${rate}, ${l.count ?? ""} ${lbl} Bags ${round2((l.lbs ?? 0) / 100)} Lbs ${l.lbs ?? 0}`;
+        })
+        .join(", ") + " (PURCHASE COST)";
+    const ysvDetails = (vno: number) => {
+      const base = { fyCode, vtype: "YSV", vno, contNo: cont };
+      const rows: (typeof schema.transDetail.$inferInsert)[] = [
+        { ...base, srno: 1, accCode: partyCoa, partyCode: partyCoa, narration: ledgerNarr, debit: glTotal, credit: 0 },
+        { ...base, srno: 2, accCode: yarnSaleIncomeCoa, partyCode: partyCoa, narration: ledgerNarr, debit: 0, credit: glTotal },
+      ];
+      if (costTotal > 0 && yarnStockCoa) {
+        rows.push(
+          { ...base, srno: 3, accCode: yarnSaleIncomeCoa, partyCode: null, narration: costNarr, debit: costTotal, credit: 0 },
+          { ...base, srno: 4, accCode: yarnStockCoa, partyCode: null, narration: costNarr, debit: 0, credit: costTotal },
+        );
+      }
+      return rows;
+    };
 
     try {
       await assertPeriodOpen(vDate, "INVENTORY");
@@ -936,32 +974,7 @@ export default async function YarnSaleVoucherPage({
                 narration: ledgerNarr,
                 balanceAmount: glTotal,
               });
-              const details: (typeof schema.transDetail.$inferInsert)[] = [
-                {
-                  fyCode,
-                  vtype: "YSV",
-                  vno,
-                  srno: 1,
-                  accCode: partyCoa,
-                  partyCode: partyCoa,
-                  contNo: cont,
-                  narration: ledgerNarr,
-                  debit: glTotal,
-                  credit: 0,
-                },
-                {
-                  fyCode,
-                  vtype: "YSV",
-                  vno,
-                  srno: 2,
-                  accCode: yarnSaleIncomeCoa,
-                  partyCode: partyCoa,
-                  contNo: cont,
-                  narration: ledgerNarr,
-                  debit: 0,
-                  credit: glTotal,
-                },
-              ];
+              const details = ysvDetails(vno);
               const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
               const c = details.reduce((s, x) => s + (x.credit ?? 0), 0);
               if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
@@ -1017,32 +1030,7 @@ export default async function YarnSaleVoucherPage({
                 narration: ledgerNarr,
                 balanceAmount: glTotal,
               });
-              const details: (typeof schema.transDetail.$inferInsert)[] = [
-                {
-                  fyCode,
-                  vtype: "YSV",
-                  vno,
-                  srno: 1,
-                  accCode: partyCoa,
-                  partyCode: partyCoa,
-                  contNo: cont,
-                  narration: ledgerNarr,
-                  debit: glTotal,
-                  credit: 0,
-                },
-                {
-                  fyCode,
-                  vtype: "YSV",
-                  vno,
-                  srno: 2,
-                  accCode: yarnSaleIncomeCoa,
-                  partyCode: partyCoa,
-                  contNo: cont,
-                  narration: ledgerNarr,
-                  debit: 0,
-                  credit: glTotal,
-                },
-              ];
+              const details = ysvDetails(vno);
               const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
               const c = details.reduce((s, x) => s + (x.credit ?? 0), 0);
               if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
