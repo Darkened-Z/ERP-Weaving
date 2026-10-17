@@ -41,7 +41,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number) {
 }
 
 /** The same table the PDF export prints, drawn as one image for WhatsApp. */
-function drawTable(heading: string, columns: Column[], rows: Record<string, unknown>[]) {
+function drawTable(heading: string, columns: Column[], rows: Record<string, unknown>[], totals?: Record<string, unknown>) {
   const ctx = document.createElement("canvas").getContext("2d")!;
   const body = rows.map((r) => columns.map((c) => cellText(r[c.key])));
   const numeric = columns.map((c) => rows.length > 0 && rows.every((r) => r[c.key] == null || typeof r[c.key] === "number"));
@@ -49,21 +49,25 @@ function drawTable(heading: string, columns: Column[], rows: Record<string, unkn
   ctx.font = `bold 12px ${FONT}`;
   const widths = columns.map((c) => Math.min(MAX_COL, ctx.measureText(c.label).width));
   ctx.font = `12px ${FONT}`;
-  body.forEach((cells) => cells.forEach((t, i) => (widths[i] = Math.min(MAX_COL, Math.max(widths[i], ctx.measureText(t).width)))));
+  const foot = totals ? columns.map((c) => cellText(totals[c.key])) : null;
+  [...body, ...(foot ? [foot] : [])].forEach((cells) => cells.forEach((t, i) => (widths[i] = Math.min(MAX_COL, Math.max(widths[i], ctx.measureText(t).width)))));
 
   ctx.font = `bold 12px ${FONT}`;
   const head = columns.map((c, i) => wrap(ctx, c.label, widths[i]));
   ctx.font = `12px ${FONT}`;
   const lines = body.map((cells) => cells.map((t, i) => wrap(ctx, t, widths[i])));
+  ctx.font = `bold 12px ${FONT}`;
+  const footLines = foot ? foot.map((t, i) => wrap(ctx, t, widths[i])) : null;
 
   const margin = 16;
   const tableW = widths.reduce((s, w) => s + w + PAD * 2, 0);
   const rowH = (cells: string[][]) => Math.max(1, ...cells.map((l) => l.length)) * LINE + PAD;
   const headH = rowH(head);
   const heights = lines.map(rowH);
+  const footH = footLines ? rowH(footLines) : 0;
   const top = margin + 44;
   const W = tableW + margin * 2;
-  const H = top + headH + heights.reduce((s, h) => s + h, 0) + margin;
+  const H = top + headH + heights.reduce((s, h) => s + h, 0) + footH + margin;
   const scale = Math.min(2, Math.sqrt(MAX_AREA / (W * H)), MAX_SIDE / W, MAX_SIDE / H);
 
   const canvas = document.createElement("canvas");
@@ -82,7 +86,7 @@ function drawTable(heading: string, columns: Column[], rows: Record<string, unkn
   g.fillStyle = "#555555";
   g.fillText(`Generated ${new Date().toLocaleString()} — ${rows.length} rows`, margin, margin + 24);
 
-  const drawRow = (cells: string[][], y: number, h: number, fill: string | null, bold: boolean, color: string) => {
+  const drawRow = (cells: string[][], y: number, h: number, fill: string | null, bold: boolean, color: string, alignNumbers = !bold) => {
     if (fill) {
       g.fillStyle = fill;
       g.fillRect(margin, y, tableW, h);
@@ -93,7 +97,7 @@ function drawTable(heading: string, columns: Column[], rows: Record<string, unkn
     cells.forEach((l, i) => {
       const w = widths[i] + PAD * 2;
       l.forEach((t, j) => {
-        const tx = numeric[i] && !bold ? x + w - PAD - g.measureText(t).width : x + PAD;
+        const tx = numeric[i] && alignNumbers ? x + w - PAD - g.measureText(t).width : x + PAD;
         g.fillText(t, tx, y + PAD / 2 + 1 + j * LINE);
       });
       x += w;
@@ -109,6 +113,16 @@ function drawTable(heading: string, columns: Column[], rows: Record<string, unkn
     drawRow(cells, y, heights[i], i % 2 ? "#f4f6fa" : null, false, "#000000");
     y += heights[i];
   });
+  if (footLines) {
+    drawRow(footLines, y, footH, "#e2e5ea", true, "#000000", true);
+    g.strokeStyle = "#000000";
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(margin, y);
+    g.lineTo(margin + tableW, y);
+    g.stroke();
+    y += footH;
+  }
   let x = margin;
   g.strokeStyle = "#d0d4dc";
   for (const w of widths.slice(0, -1)) {
@@ -129,16 +143,18 @@ type Props = {
   title?: string;
   /** When a record is open, WA shares that element (its sheet) instead of the list. */
   waTarget?: { contentId: string; filename: string };
+  /** A TOTAL row, keyed like a row; printed last in Excel, PDF and the WA image. */
+  totals?: Record<string, unknown>;
 };
 
-export function ExcelExportButton({ rows, columns, filename, sheetName, title, waTarget }: Props) {
+export function ExcelExportButton({ rows, columns, filename, sheetName, title, waTarget, totals }: Props) {
   const stamp = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
   const exportExcel = () => {
-    const data = rows.map((r) =>
+    const data = [...rows, ...(totals ? [totals] : [])].map((r) =>
       Object.fromEntries(columns.map((c) => [c.label, r[c.key]]))
     );
     const ws = XLSX.utils.json_to_sheet(data, { header: columns.map((c) => c.label) });
@@ -161,6 +177,7 @@ export function ExcelExportButton({ rows, columns, filename, sheetName, title, w
       startY: 24,
       head: [columns.map((c) => c.label)],
       body: rows.map((r) => columns.map((c) => cellText(r[c.key]))),
+      ...(totals ? { foot: [columns.map((c) => cellText(totals[c.key]))], footStyles: { fillColor: [226, 229, 234], textColor: 0, fontStyle: "bold" as const }, showFoot: "lastPage" as const } : {}),
       styles: { fontSize: 8, cellPadding: 1.5, overflow: "linebreak" },
       headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold" },
       alternateRowStyles: { fillColor: [244, 246, 250] },
@@ -173,7 +190,7 @@ export function ExcelExportButton({ rows, columns, filename, sheetName, title, w
   const shareJpg = async () => {
     setBusy(true);
     try {
-      const canvas = waTarget ? await captureCanvas(waTarget.contentId) : drawTable(title ?? filename, columns, rows);
+      const canvas = waTarget ? await captureCanvas(waTarget.contentId) : drawTable(title ?? filename, columns, rows, totals);
       if (!canvas) return;
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.92));
       if (blob) await shareBlob(blob, waTarget ? waTarget.filename : `${filename}-${stamp()}.jpg`, "image/jpeg");

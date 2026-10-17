@@ -2,8 +2,7 @@ import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { DateBox } from "@/components/date-box";
-import { db, schema } from "@/db";
-import { and, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { loadFabricBilling, shedList } from "@/lib/fabric-billing";
 import { today } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -45,108 +44,9 @@ export default async function FabricProductionPage({
   const loomQ = parseInt(p.loom ?? "", 10);
   const statusQ = (p.status?.trim() || "").toUpperCase();
 
-  const loomSheds = await db.selectDistinct({ shed: schema.looms.shed }).from(schema.looms);
-  const sheds = [...new Set(["1", "2", "3", "4", ...loomSheds.map((l) => l.shed.trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const conds: SQL[] = [gte(schema.intDailyProduction.vDate, from), lte(schema.intDailyProduction.vDate, to)];
-  if (shedQ.length) conds.push(inArray(schema.intDailyProduction.shedNo, shedQ));
-  if (Number.isFinite(loomQ)) conds.push(eq(schema.intDailyProductionSet.loomNo, loomQ));
-
-  const contractNo = sql<string | null>`coalesce(nullif(${schema.intDailyProductionSet.contNo}, ''), ${schema.beams.contractNo})`;
-  const prod = await db
-    .select({
-      contNo: contractNo,
-      vDate: schema.intDailyProduction.vDate,
-      m: sql<number>`coalesce(sum(${schema.intDailyProductionSet.totalCount}), 0)`,
-    })
-    .from(schema.intDailyProductionSet)
-    .innerJoin(schema.intDailyProduction, eq(schema.intDailyProductionSet.productionId, schema.intDailyProduction.id))
-    .leftJoin(schema.beams, eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo))
-    .where(and(...conds))
-    .groupBy(sql`1`, schema.intDailyProduction.vDate);
-
-  // Every status: a contract completed since still bills what it wove in range.
-  const cols = <T extends typeof schema.intGreyConversionContract | typeof schema.extGreyConvContract>(t: T) => ({
-    id: t.id,
-    contNo: t.contNo,
-    party: t.party,
-    productName: t.productName,
-    productQuality: t.productQuality,
-    designNo: t.designNo,
-    pick: t.pick,
-    ratePerPick: t.ratePerPick,
-    convRatePerMtr: t.convRatePerMtr,
-    status: t.status,
-  });
-  const [intC, extC, intWarp, intWeft, extWarp, extWeft] = await Promise.all([
-    db.select(cols(schema.intGreyConversionContract)).from(schema.intGreyConversionContract),
-    db.select(cols(schema.extGreyConvContract)).from(schema.extGreyConvContract),
-    db.select({ id: schema.intGreyConversionWarp.contractId, d: schema.intGreyConversionWarp.descr }).from(schema.intGreyConversionWarp).orderBy(schema.intGreyConversionWarp.srNo),
-    db.select({ id: schema.intGreyConversionWeft.contractId, d: schema.intGreyConversionWeft.descr }).from(schema.intGreyConversionWeft).orderBy(schema.intGreyConversionWeft.srNo),
-    db.select({ id: schema.extGreyConvWarp.contractId, d: schema.extGreyConvWarp.descr }).from(schema.extGreyConvWarp).orderBy(schema.extGreyConvWarp.srNo),
-    db.select({ id: schema.extGreyConvWeft.contractId, d: schema.extGreyConvWeft.descr }).from(schema.extGreyConvWeft).orderBy(schema.extGreyConvWeft.srNo),
-  ]);
-  const descrs = (rows: { id: number; d: string | null }[]) => {
-    const m = new Map<number, string[]>();
-    for (const r of rows) if (r.d?.trim()) m.set(r.id, [...(m.get(r.id) ?? []), r.d.trim()]);
-    return m;
-  };
-  const construction = (warp: Map<number, string[]>, weft: Map<number, string[]>, id: number) =>
-    [warp.get(id)?.join(" + "), weft.get(id)?.join(" + ")].filter(Boolean).join(" BY ");
-  const [iwp, iwf, ewp, ewf] = [descrs(intWarp), descrs(intWeft), descrs(extWarp), descrs(extWeft)];
-  const contracts = new Map(
-    [
-      ...intC.map((c) => ({ ...c, construction: construction(iwp, iwf, c.id) })),
-      ...extC.map((c) => ({ ...c, construction: construction(ewp, ewf, c.id) })),
-    ].map((c) => [c.contNo, c]),
-  );
-
-  const rateOf = (c: { pick: number | null; ratePerPick: number | null; convRatePerMtr: number | null } | undefined) =>
-    c ? (c.convRatePerMtr ?? (c.pick ?? 0) * (c.ratePerPick ?? 0)) : 0;
-
-  const parties = [...new Set(prod.map((r) => (r.contNo ? contracts.get(r.contNo)?.party?.trim() : "") || "").filter(Boolean))].sort();
-  const inParty = (contNo: string | null) => !partyQ || (contNo ? contracts.get(contNo)?.party?.trim() === partyQ : false);
-  const inStatus = (contNo: string | null) => !statusQ || (contNo ? (contracts.get(contNo)?.status ?? "").toUpperCase() === statusQ : false);
-  const rowsIn = prod.filter((r) => inParty(r.contNo) && inStatus(r.contNo) && Number(r.m) > 0);
-
-  const byContract = new Map<string, number>();
-  const byDay = new Map<string, { m: number; a: number }>();
-  for (const r of rowsIn) {
-    const k = r.contNo ?? "";
-    const m = Number(r.m);
-    byContract.set(k, (byContract.get(k) ?? 0) + m);
-    const d = byDay.get(r.vDate) ?? { m: 0, a: 0 };
-    d.m += m;
-    d.a += m * rateOf(contracts.get(k));
-    byDay.set(r.vDate, d);
-  }
-
-  const rows = [...byContract.entries()]
-    .map(([contNo, production]) => {
-      const c = contracts.get(contNo);
-      const rate = rateOf(c);
-      return {
-        contNo: contNo || "—",
-        quality: c?.productName || c?.productQuality || "—",
-        construction: c?.construction ?? "",
-        party: c?.party ?? "",
-        designNo: c?.designNo ?? "",
-        production,
-        pick: c?.pick ?? 0,
-        ratePerPick: c?.ratePerPick ?? 0,
-        rate,
-        amount: production * rate,
-      };
-    })
-    // Oracle prints the smallest production first.
-    .sort((a, b) => a.production - b.production);
-  const days = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b));
-
-  const totProd = rows.reduce((s, r) => s + r.production, 0);
-  const totAmt = rows.reduce((s, r) => s + r.amount, 0);
-  const wAvg = (f: (r: (typeof rows)[number]) => number) => (totProd ? rows.reduce((s, r) => s + f(r) * r.production, 0) / totProd : 0);
-  const avgPick = wAvg((r) => r.pick);
-  const avgRpp = wAvg((r) => r.ratePerPick);
-  const avgRate = totProd ? totAmt / totProd : 0;
+  const sheds = await shedList();
+  const { rows, days, totals, parties } = await loadFabricBilling({ from, to, sheds: shedQ, loom: loomQ, status: statusQ, party: partyQ });
+  const { production: totProd, amount: totAmt, pick: avgPick, ratePerPick: avgRpp, rate: avgRate } = totals;
 
   const prev = prevMonth(now);
   const q = (f: string, t: string) => {
@@ -199,6 +99,14 @@ export default async function FabricProductionPage({
                 { key: "rate", label: "Rate / Mtr" },
                 { key: "amount", label: "Amount" },
               ]}
+              totals={{
+                quality: "TOTAL",
+                production: Math.round(totProd * 100) / 100,
+                pick: Math.round(avgPick * 100) / 100,
+                ratePerPick: Math.round(avgRpp * 10000) / 10000,
+                rate: Math.round(avgRate * 100) / 100,
+                amount: Math.round(totAmt),
+              }}
               filename="fabric-production-billing"
               title={`Fabric Production & Billing  ${from} to ${to}`}
             />

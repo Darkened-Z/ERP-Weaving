@@ -112,6 +112,7 @@ export const SECTIONS = [
           { href: "/reports/weaving/folding-stock", label: "Daily Folding Stock", key: "w-folding-stock" },
           { href: "/reports/weaving/folding-fabric", label: "Folding by Fabric Quality", key: "w-folding-fabric" },
           { href: "/reports/weaving/fabric-production", label: "Fabric Production & Billing", key: "w-fabric-production" },
+          { href: "/reports/weaving/weaving-income", label: "Weaving Income (P / L)", key: "w-weaving-income" },
           { href: "/reports/weaving/folding-foreman", label: "Folding by Foreman", key: "w-folding-foreman" },
           { href: "/reports/weaving/sizing-warping-consumption", label: "Sizing/Warping Consumption", key: "w-szg-wrp" },
           { href: "/reports/weaving/knotting-bill", label: "Knotting Bill Register", key: "w-knotting-bill" },
