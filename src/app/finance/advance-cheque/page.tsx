@@ -681,7 +681,9 @@ export default async function AdvanceChequePage({
         (c) =>
           c.chqNo.toLowerCase().includes(findFilter.toLowerCase()) ||
           c.party.toLowerCase().includes(findFilter.toLowerCase()) ||
-          (descMap.get(c.party) ?? "").toLowerCase().includes(findFilter.toLowerCase()),
+          (descMap.get(c.party) ?? "").toLowerCase().includes(findFilter.toLowerCase()) ||
+          c.bankAdv.toLowerCase().includes(findFilter.toLowerCase()) ||
+          (descMap.get(c.bankAdv) ?? "").toLowerCase().includes(findFilter.toLowerCase()),
       )
     : cheques;
 
@@ -956,7 +958,7 @@ export default async function AdvanceChequePage({
 
         {/* Find */}
         <form method="GET" action={BASE} className="mb-3 no-print flex gap-2 max-w-md">
-          <input name="find" className="input-box mono flex-1" defaultValue={findFilter} placeholder="Cheque no / party" />
+          <input name="find" className="input-box mono flex-1" defaultValue={findFilter} placeholder="Cheque no / party / bank" />
           <button type="submit" className="btn btn-outline btn-sm">Find</button>
           {findFilter && <a href={BASE} className="btn btn-outline btn-sm">Clear</a>}
         </form>
@@ -993,6 +995,7 @@ export default async function AdvanceChequePage({
                     </td>
                     <td className="text-[12px]">
                       <span className="mono">{c.bankAdv}</span>
+                      <span className="block text-[11px] text-[var(--muted)]">{descMap.get(c.bankAdv) ?? ""}</span>
                     </td>
                     <td className="mono text-right text-[13px]">{formatNum(c.amount)}</td>
                     <td className="mono text-right text-[13px]">{c.cash > 0 ? formatNum(c.cash) : "—"}</td>
