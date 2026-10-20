@@ -195,9 +195,10 @@ export default async function FoldingStockPage({
         thanOpen, thanDesp, thanBal, totalThanBal,
       };
     })
-    // W.O.Z keeps every contract; W.Z (the default, matching the Oracle button
-    // the mill actually uses) drops contracts with nothing on any column.
-    .filter((r) => withZero || r.opening || r.production || r.despatch || r.rejection);
+    // W.O.Z keeps every contract; W.Z (the default) drops every contract whose
+    // STOCK is zero (owner 2026-10-20) — a contract whose production has all been
+    // despatched is not folding stock, however busy its columns were.
+    .filter((r) => withZero || Math.abs(r.balance) >= 0.005);
 
   const byParty = new Map<string, Row[]>();
   for (const r of rows) (byParty.get(r.party) ?? byParty.set(r.party, []).get(r.party)!).push(r);
