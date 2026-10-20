@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyToken } from "@/lib/session-token";
+import { canAccess, firstAllowedHref } from "@/lib/nav";
 
 /**
  * Every page, route handler and server action needs a signed-in user. Pages
@@ -20,8 +21,20 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname === "/login") return withSecurityHeaders(NextResponse.next());
 
-  if (verifyToken(request.cookies.get("session")?.value))
-    return withSecurityHeaders(NextResponse.next());
+  const session = verifyToken(request.cookies.get("session")?.value);
+  if (session) {
+    if (canAccess(session, pathname)) return withSecurityHeaders(NextResponse.next());
+    // A restricted user outside their modules: pages bounce to their first
+    // module; saves and API calls are refused outright.
+    if (pathname.startsWith("/api/")) {
+      return withSecurityHeaders(NextResponse.json({ error: "Forbidden" }, { status: 403 }));
+    }
+    const home = firstAllowedHref(session.allowedModules ?? null);
+    if ((request.method !== "GET" && request.method !== "HEAD") || home === pathname || !canAccess(session, home)) {
+      return withSecurityHeaders(new NextResponse("You do not have access to this page.", { status: 403 }));
+    }
+    return withSecurityHeaders(NextResponse.redirect(new URL(home, request.url)));
+  }
 
   if (pathname.startsWith("/api/")) {
     return withSecurityHeaders(

@@ -14,13 +14,17 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, fmtMoney as formatNum } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
+import { GrowRows } from "@/components/grow-rows";
 
 export const dynamic = "force-dynamic";
 
 const VTYPE = "ADV";
 const BASE = "/finance/advance-cheque";
 const TITLE = "ADVANCE CHEQUE (WVG)";
-const LINE_ROWS = 6;
+// Rows in the form; GrowRows shows 6 on a blank voucher and opens the next one
+// as the last is filled (owner 2026-10: six cheques was a hard ceiling).
+const LINE_ROWS = 40;
+const LINE_ROWS_SHOWN = 6;
 
 // Per-bank advance-cheque accounts (Dr on clear/bounce, Cr on issue).
 const ADV_PREFIX = "1.01.15.03.";
@@ -703,6 +707,8 @@ export default async function AdvanceChequePage({
   // Every cheque on the voucher being edited, so the grid can be refilled.
   const editRows = isEditForm ? cheques.filter((c) => c.issueId === idParam) : [];
   const editCash = editRows.reduce((a, c) => a + c.cash, 0);
+  // An edit must render every cheque it carries, or saving would drop the extras.
+  const lineRows = Math.max(LINE_ROWS, editRows.length + 1);
 
   const ERR: Record<string, string> = {
     invalid: "Pick the party, then give every line a bank-advance account, cheque no. and a positive amount. At least one cheque is required.",
@@ -854,8 +860,8 @@ export default async function AdvanceChequePage({
                       <th style={{ width: 36 }}></th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {Array.from({ length: LINE_ROWS }).map((_, i) => {
+                  <tbody id="adv-line-rows">
+                    {Array.from({ length: lineRows }).map((_, i) => {
                       // Edit refills every cheque on the voucher; re-issue only
                       // seeds the first row from the bounced cheque.
                       const pf = isEditForm ? editRows[i] ?? null : i === 0 && isReissue ? target : null;
@@ -884,6 +890,7 @@ export default async function AdvanceChequePage({
                     })}
                   </tbody>
                 </table>
+                <GrowRows tbodyId="adv-line-rows" initial={LINE_ROWS_SHOWN} />
               </div>
 
               <div className="flex items-center gap-2 mt-4 no-print flex-wrap">

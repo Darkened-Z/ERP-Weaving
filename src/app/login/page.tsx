@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { login, getSession } from "@/lib/auth";
-import { firstAllowedHref } from "@/components/shell";
+import { firstAllowedHref } from "@/lib/nav";
 
 export default async function LoginPage({
   searchParams,

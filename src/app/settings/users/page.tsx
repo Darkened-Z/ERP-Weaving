@@ -1,4 +1,5 @@
-import { Shell, SECTIONS } from "@/components/shell";
+import { Shell } from "@/components/shell";
+import { SECTIONS } from "@/lib/nav";
 import { ModuleSelector } from "./module-selector";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";

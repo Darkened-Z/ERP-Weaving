@@ -1,0 +1,309 @@
+// The menu, as plain data. It also decides access: proxy.ts maps every
+// request path to the menu item it belongs to (longest href prefix) and lets a
+// restricted user through only to the modules ticked on their user. The menu
+// used to only HIDE items — the pages themselves opened for anyone signed in,
+// so a production user reopening the app landed on the full dashboard and
+// could walk into stock and finance (owner 2026-10-20).
+
+export const SECTIONS = [
+  {
+    label: null,
+    items: [
+      { href: "/", label: "Dashboard", key: "dash" },
+    ],
+  },
+  {
+    label: "Task Management",
+    items: [
+      { href: "/tickets", label: "Tickets", key: "tickets" },
+      { href: "/my-tasks", label: "My Tasks", key: "my-tasks" },
+      { href: "/my-queue", label: "My Queue", key: "my-queue" },
+      { href: "/team/workload", label: "Team Workload", key: "team-workload" },
+    ],
+  },
+  {
+    label: "Define",
+    items: [
+      { href: "/accounts", label: "Chart of Accounts", key: "accounts" },
+      { href: "/accounts/print", label: "Chart of Accounts (Print)", key: "accounts-print" },
+      { href: "/define/grey-dsp", label: "Grey Despatch Chart", key: "grey-dsp" },
+      { href: "/define/cities", label: "Area-Cities", key: "cities" },
+      { href: "/define/beam-status", label: "Beam Status", key: "beam-status" },
+      { href: "/define/company-units", label: "Company Unit", key: "company-units" },
+      { href: "/define/staff", label: "Production Staff", key: "staff" },
+      { href: "/weaving/beams", label: "Beams", key: "beams" },
+      { href: "/define/weavers", label: "Weavers", key: "weavers" },
+      { href: "/weaving/looms", label: "Looms", key: "looms" },
+      { href: "/define/party-counts", label: "Party Count", key: "party-counts" },
+      { href: "/define/yarn-blends", label: "Yarn Blend", key: "yarn-blends" },
+      { href: "/define/yarn-counts", label: "Yarn Count", key: "yarn-counts" },
+      { href: "/weaving/yarn", label: "Yarn Counts List", key: "yarn" },
+      { href: "/define/yarn-brands", label: "Yarn Brands", key: "yarn-brands" },
+      { href: "/define/grey-construction", label: "Grey Construction", key: "grey-construction" },
+      { href: "/weaving/grey", label: "Grey Constructions List", key: "grey" },
+      { href: "/define/locations", label: "Grey Despatch Parties Location", key: "locations-grey" },
+      { href: "/define/yarn-locations", label: "Yarn Parties Location", key: "locations-yarn" },
+      { href: "/define/do-parties", label: "DO Party Chart", key: "do-parties" },
+      { href: "/define/products", label: "Products Coding", key: "products" },
+      { href: "/define/yarn-fibers", label: "Yarn Fiber", key: "yarn-fibers" },
+      { href: "/define/branch-opening", label: "New Branch Opening", key: "branch-opening" },
+      { href: "/define/chart-define", label: "Chart Define", key: "chart-define" },
+      { href: "/define/inv-opening", label: "Inventory Opening", key: "inv-opening" },
+    ],
+  },
+  {
+    label: "Inventory",
+    subsections: [
+      {
+        label: "Contracts",
+        itemBg: "#1e3a5f",
+        items: [
+          { href: "/inventory/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "int-c-ypc" },
+          { href: "/inventory/contracts/beam-ext-ws", label: "Beam Contract External Warping/Sizing", key: "int-c-bews" },
+          { href: "/inventory/contracts/grey-conversion", label: "Grey Conversion Contract", key: "int-c-gcc" },
+          { href: "/inventory/contracts/knotting", label: "Knotting/Sarning/Maroori Contract", key: "int-c-knt" },
+        ],
+      },
+      {
+        label: "Main",
+        itemBg: "#1a3d2a",
+        items: [
+          { href: "/inventory/yarn-receipt", label: "Yarn Receipt / Return", key: "yarn-receipt" },
+          { href: "/inventory/yarn-transfer", label: "Yarn Internal Transfer", key: "yarn-transfer" },
+          { href: "/inventory/warped-beam", label: "Warped Beam Receiving", key: "warped-beam" },
+          { href: "/inventory/knotting", label: "Knotting / Sarning / Maroori", key: "knotting" },
+          { href: "/inventory/hours-schedule", label: "Production Hours Schedual", key: "hours-schedule" },
+          { href: "/inventory/daily-production", label: "Daily Production Entries", key: "production" },
+          { href: "/inventory/grey-despatch", label: "Grey Cloth Despatch", key: "grey-despatch" },
+          { href: "/inventory/paki-parchi", label: "Grey Paki Parchi", key: "paki-parchi" },
+        ],
+      },
+      {
+        label: "Grey Reports",
+        itemBg: "#334155",
+        items: [
+          { href: "/reports/grey/stock-ledger", label: "Grey Stock Ledger", key: "rpt-grey-stock-ledger" },
+          { href: "/reports/grey/shrinkage", label: "Grey Shrinkage", key: "rpt-grey-shrinkage" },
+          { href: "/reports/grey/bill-kp-pp", label: "Grey Bill KP-PP", key: "rpt-grey-bill-kp-pp" },
+          { href: "/reports/grey/conv-bill-kp-pp", label: "Grey Conversion Bill (KP/PP)", key: "rpt-grey-conv-bill-kp-pp" },
+          { href: "/reports/grey/packi-parchi-bill", label: "Packi Parchi Bill/Register", key: "rpt-grey-packi-parchi-bill" },
+          { href: "/reports/grey/delivery-order", label: "Grey Delivery Order", key: "rpt-grey-delivery-order" },
+          { href: "/reports/grey/delivery-order-tax", label: "Grey Delivery Order (Tax)", key: "rpt-grey-delivery-order-tax" },
+          { href: "/reports/grey/despatch-detail-srno", label: "Despatch Detail by Sr No", key: "rpt-grey-despatch-srno" },
+        ],
+      },
+      {
+        label: "Yarn Reports",
+        itemBg: "#4a3728",
+        items: [
+          { href: "/reports/yarn/stock", label: "Yarn Stock (Count)", key: "rpt-yarn-stock" },
+          { href: "/reports/yarn/stock-ledger-godown", label: "Yarn Stock Ledger by Godown", key: "rpt-yarn-stock-godown" },
+          { href: "/reports/yarn/count-balance", label: "Yarn Count Balance", key: "rpt-yarn-count-balance" },
+          { href: "/reports/yarn/count-avg-rate", label: "Yarn Count Avg Rate", key: "rpt-yarn-count-avg-rate" },
+          { href: "/reports/yarn/pur-contract-history", label: "Purchase Contract History", key: "rpt-yarn-pur-cont-history" },
+        ],
+      },
+      {
+        label: "Weaving Reports",
+        itemBg: "#352952",
+        items: [
+          { href: "/reports/weaving/counts-accounts", label: "Counts Accounts", key: "w-counts" },
+          { href: "/reports/weaving/counts-accounts-design", label: "Counts Accounts by Design", key: "w-counts-design" },
+          { href: "/reports/weaving/counts-accounts-summary", label: "Counts Accounts Summary", key: "w-counts-sum" },
+          { href: "/reports/weaving/delivery-order-partywise", label: "Grey Delivery Order Party Wise", key: "w-do-partywise" },
+          { href: "/reports/weaving/daily-folding", label: "Daily Folding", key: "w-daily-folding" },
+          { href: "/reports/weaving/folding-stock", label: "Daily Folding Stock", key: "w-folding-stock" },
+          { href: "/reports/weaving/folding-fabric", label: "Folding by Fabric Quality", key: "w-folding-fabric" },
+          { href: "/reports/weaving/fabric-production", label: "Fabric Production & Billing", key: "w-fabric-production" },
+          { href: "/reports/weaving/weaving-income", label: "Weaving Income (P / L)", key: "w-weaving-income" },
+          { href: "/reports/weaving/folding-foreman", label: "Folding by Foreman", key: "w-folding-foreman" },
+          { href: "/reports/weaving/sizing-warping-consumption", label: "Sizing/Warping Consumption", key: "w-szg-wrp" },
+          { href: "/reports/weaving/knotting-bill", label: "Knotting Bill Register", key: "w-knotting-bill" },
+          { href: "/reports/weaving/missing-audit", label: "Missing Audit / Supervisor", key: "w-missing-audit" },
+          { href: "/reports/weaving/empty-beam-stock", label: "Empty Beam Stock", key: "w-empty-beam-stock" },
+          { href: "/reports/weaving/running-sets", label: "Running Sets", key: "rpt-w-running-sets" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Inventory External",
+    subsections: [
+      {
+        label: "Contracts",
+        items: [
+          { href: "/external/contracts/grey-conversion", label: "Grey Conversion Contract (EXT)", key: "ext-gcc", bg: "#3d2e1a" },
+          { href: "/external/contracts/yarn-purchase", label: "Yarn Purchase Contract", key: "ext-ypc" },
+          { href: "/external/contracts/yarn-sales", label: "Yarn Sales Contract", key: "ext-ysc" },
+          { href: "/external/contracts/grey-purchase", label: "Grey Purchase Contract", key: "ext-gpc" },
+          { href: "/external/contracts/grey-sales", label: "Grey Sales Contract", key: "ext-gsc" },
+        ],
+      },
+      {
+        label: "Yarn",
+        items: [
+          { href: "/external/yarn/purchase", label: "Yarn Purchase", key: "ext-yp-vch" },
+          { href: "/external/yarn/sale", label: "Yarn Sale", key: "ext-ys-vch" },
+        ],
+      },
+      {
+        label: "Grey",
+        items: [
+          { href: "/external/grey/godown-stock", label: "Grey Purchase In Stock", key: "ext-godown" },
+          { href: "/inventory/grey-despatch-dami", label: "Grey Cloth Despatch Dami", key: "grey-despatch-dami" },
+          { href: "/external/grey/transfer", label: "Grey Transfer", key: "ext-gt" },
+          { href: "/external/grey/packi-parchi", label: "Packi Parchi", key: "ext-pp" },
+        ],
+      },
+      {
+        label: "Reports",
+        items: [
+          { href: "/external/reports/grey-conv-sale-avg", label: "Grey Conv Sale Avg", key: "ext-r-gcsa" },
+          { href: "/external/reports/grey-sale-avg", label: "Grey Sale Contract", key: "ext-r-gsa" },
+          { href: "/external/reports/yarn-purchase-avg", label: "Yarn Purchase Contract", key: "ext-r-ypa" },
+          { href: "/external/reports/kora-pending", label: "Kora Pending Lots", key: "ext-r-kora" },
+          { href: "/external/reports/cloth-register", label: "Cloth Purchase Sale Register", key: "ext-r-cloth" },
+          { href: "/external/reports/grey-register", label: "Grey Register", key: "ext-r-greyreg" },
+          { href: "/external/reports/grey-register/sale-ledger", label: "Grey Register — Sale Ledger", key: "ext-r-grey-sale-ledger" },
+          { href: "/external/reports/grey-register/conv-ledger", label: "Grey Register — Conversion Ledger", key: "ext-r-grey-conv-ledger" },
+          { href: "/external/reports/grey-stock", label: "Grey Stock", key: "ext-r-greystock" },
+          { href: "/external/reports/yarn-register", label: "Yarn Register", key: "ext-r-yarnreg" },
+          { href: "/reports/yarn/sale-register", label: "Yarn Sale Register", key: "rpt-yarn-sale-register" },
+          { href: "/external/reports/yarn-stock", label: "Yarn Stock", key: "ext-r-yarnstock" },
+          { href: "/external/reports/yarn-batch-profit", label: "Yarn Batch Profit", key: "ext-r-yarnbatch" },
+          { href: "/external/reports/weaving-counts-purchase", label: "Weaving Counts Accounts — Purchase", key: "ext-r-weaving-purchase" },
+          { href: "/external/reports/weaving-counts-sale", label: "Weaving Counts Accounts — Sale", key: "ext-r-weaving-sale" },
+          { href: "/external/reports/weaving-counts-partywise", label: "Weaving Counts Accounts — Party Wise", key: "ext-r-weaving-pp" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { href: "/finance/cr", label: "Cash Receipt Voucher", key: "fin-cr" },
+      { href: "/finance/cp", label: "Cash Payment Voucher", key: "fin-cp" },
+      { href: "/finance/br", label: "Bank Receipt Voucher", key: "fin-br" },
+      { href: "/finance/bp", label: "Bank Payment Voucher", key: "fin-bp" },
+      { href: "/finance/advance-cheque", label: "Advance Cheque", key: "fin-advance-cheque" },
+      { href: "/finance/cheque-books", label: "Cheque Books", key: "fin-cheque-books" },
+      { href: "/finance/jv", label: "Journal Voucher", key: "fin-jv" },
+      { href: "/finance/finding", label: "Find Voucher", key: "finding" },
+      { href: "/finance/eod-images", label: "EOD Images", key: "eod-images" },
+      { href: "/finance/images", label: "Images", key: "images" },
+      { href: "/vouchers", label: "All Vouchers", key: "vouchers" },
+      { href: "/ledger", label: "General Ledger", key: "ledger" },
+      { href: "/reports/trial-balance", label: "Trial Balance", key: "trial-balance" },
+      { href: "/reports/account-closing-balance", label: "Account Closing Balance", key: "fin-acc-closing" },
+      { href: "/reports/daily-activity", label: "Daily Activity", key: "daily-activity" },
+      { href: "/reports/aging", label: "Aging Analysis", key: "aging" },
+      { href: "/reports/aging-cr-detail", label: "Creditors Accounts Aging", key: "fin-aging-cr-detail" },
+      { href: "/reports/aging-db-detail", label: "Debtors Accounts Aging", key: "fin-aging-db-detail" },
+      { href: "/reports/aging-cr", label: "Creditors Aging (Buckets)", key: "fin-aging-cr" },
+      { href: "/reports/aging-db", label: "Debtors Aging (Buckets)", key: "fin-aging-db" },
+      { href: "/reports/aging-db-date-wise", label: "Debtors Aging Date-wise", key: "fin-aging-db-dw" },
+      { href: "/reports/cash-book/day", label: "Cash Book (Day)", key: "fin-cashbook-day" },
+      { href: "/reports/cash-book", label: "Cash & Bank Book", key: "fin-cashbook" },
+      { href: "/reports/cheque-status", label: "Cheque Status", key: "fin-cheque" },
+      { href: "/reports/pl-accounts", label: "Profit & Loss", key: "fin-pl" },
+      { href: "/reports/finance/project-costing", label: "Job / Project Costing", key: "fin-project-costing" },
+      { href: "/reports/voucher-daybook", label: "Voucher Daybook", key: "fin-daybook" },
+      { href: "/reports/gpv", label: "Print Voucher (GPV)", key: "fin-gpv" },
+      { href: "/reports/grey-aging", label: "Grey Stock Aging", key: "grey-aging" },
+    ],
+  },
+  {
+    label: "Store",
+    subsections: [
+      {
+        label: "Main",
+        items: [
+          { href: "/store/parts", label: "Parts Catalog", key: "parts" },
+          { href: "/store/parts-profit", label: "Parts Profit Change", key: "parts-profit" },
+          { href: "/store/stock", label: "Stock Inquiry", key: "stock" },
+          { href: "/store/demand", label: "Demand Notes", key: "demand" },
+          { href: "/store/grn", label: "Goods Received", key: "grn" },
+          { href: "/store/adjustment", label: "Parts Adjustment", key: "adjustment" },
+          { href: "/store/gatepass", label: "Gate Pass", key: "gatepass" },
+        ],
+      },
+      {
+        label: "Reports",
+        items: [
+          { href: "/reports/store/parts-issues-register", label: "Parts Issues Register", key: "s-issues" },
+          { href: "/reports/store/parts-purchase-register", label: "Parts Purchase Register", key: "s-purchase" },
+          { href: "/reports/store/parts-ledger", label: "Parts Ledger", key: "s-ledger" },
+          { href: "/reports/store/cost-center-consumption", label: "Cost Center Consumption", key: "s-cc" },
+          { href: "/reports/store/cost-center-consumption-loom", label: "Loom-wise Consumption", key: "s-cc-loom" },
+          { href: "/reports/store/department-wise", label: "Department-wise", key: "s-dept" },
+          { href: "/reports/store/grn-note", label: "GRN Note (Print)", key: "s-grn-note" },
+          { href: "/reports/store/demand-print", label: "Demand (Print)", key: "s-dmd-print" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { href: "/settings/company-profile", label: "Company Profile", key: "company-profile" },
+      { href: "/settings/posting-accounts", label: "Posting Accounts", key: "posting-accounts" },
+      { href: "/settings/users", label: "Users & Roles", key: "users" },
+      { href: "/settings/cost-centers", label: "Cost Centers", key: "cost-centers" },
+      { href: "/settings/fiscal-years", label: "Fiscal Years", key: "fiscal-years" },
+      { href: "/settings/locking", label: "System Locking", key: "locking" },
+      { href: "/settings/backup", label: "Daily Backup", key: "backup" },
+    ],
+  },
+];
+
+export function firstAllowedHref(allowed: string[] | null): string {
+  if (!allowed || allowed.length === 0) return "/";
+  const flat = SECTIONS.flatMap(s => [
+    ...(s.items ?? []),
+    ...(s.subsections ?? []).flatMap(sub => sub.items),
+  ]);
+  const first = flat.find(item => allowed.includes(item.key));
+  return first?.href ?? "/";
+}
+
+type NavItem = { href: string; key: string };
+const ITEMS: NavItem[] = SECTIONS.flatMap((s) => [
+  ...((s as { items?: NavItem[] }).items ?? []),
+  ...((s as { subsections?: { items: NavItem[] }[] }).subsections ?? []).flatMap((sub) => sub.items),
+]).map((i) => ({ href: i.href.split("?")[0], key: i.key }));
+
+/** The menu module a path belongs to: the item whose href is its longest prefix. */
+export function moduleKeyForPath(pathname: string): string | null {
+  let best: NavItem | null = null;
+  for (const it of ITEMS) {
+    const hit = it.href === "/" ? pathname === "/" : pathname === it.href || pathname.startsWith(it.href + "/");
+    if (hit && (!best || it.href.length > best.href.length)) best = it;
+  }
+  return best?.key ?? null;
+}
+
+const FULL_ACCESS = new Set(["ADMIN", "SUPERADMIN"]);
+
+/** Restricted = has a module list and is not an admin. No list = everything. */
+export function isRestricted(s: { roleName: string; allowedModules?: string[] | null }): boolean {
+  return !FULL_ACCESS.has((s.roleName ?? "").toUpperCase()) && !!s.allowedModules && s.allowedModules.length > 0;
+}
+
+/**
+ * Whether a session may open a path. A restricted user reaches only paths that
+ * belong to a ticked module; a path under no menu item (import, quick tools,
+ * stray ledgers, the search/backup APIs) is closed to them.
+ */
+export function canAccess(s: { roleName: string; allowedModules?: string[] | null }, pathname: string): boolean {
+  if (!isRestricted(s)) return true;
+  const key = moduleKeyForPath(pathname);
+  if (key && s.allowedModules!.includes(key)) return true;
+  return s.allowedModules!.some((k) => (ALSO_OPENS[k] ?? []).some((p) => pathname.startsWith(p)));
+}
+
+/** Pages a module links into that sit under another menu item. */
+const ALSO_OPENS: Record<string, string[]> = {
+  // A task row opens its ticket.
+  "my-tasks": ["/tickets/"],
+  "my-queue": ["/tickets/"],
+};
