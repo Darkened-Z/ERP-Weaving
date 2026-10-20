@@ -358,7 +358,7 @@ export default async function GreyDespatchDamiPage({
                 <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
                 {formItem ? (
                   formItem.pakki_parchi_id ? (
-                    <button type="button" className="btn btn-outline btn-sm opacity-50 cursor-not-allowed" onClick={(e) => { e.preventDefault(); alert("Cannot delete: This voucher is linked to a Packi Parchi."); }}>Delete</button>
+                    <button type="button" disabled className="btn btn-outline btn-sm opacity-50 cursor-not-allowed" title="Cannot delete: this slip is linked to a Pakki Parchi. Unlink it first.">Delete</button>
                   ) : (
                     <form action={deleteDami} className="inline">
                       <input type="hidden" name="id" value={formItem.id} />
@@ -515,7 +515,7 @@ export default async function GreyDespatchDamiPage({
                 <a href="/inventory/grey-despatch-dami" className="btn btn-outline btn-sm">Exit</a>
                 {formItem ? (
                   formItem.pakki_parchi_id ? (
-                    <button type="button" className="btn btn-outline btn-sm opacity-50 cursor-not-allowed" onClick={(e) => { e.preventDefault(); alert("Cannot delete: This voucher is linked to a Packi Parchi."); }}>Delete</button>
+                    <button type="button" disabled className="btn btn-outline btn-sm opacity-50 cursor-not-allowed" title="Cannot delete: this slip is linked to a Pakki Parchi. Unlink it first.">Delete</button>
                   ) : (
                     <form action={deleteDami} className="inline">
                       <input type="hidden" name="id" value={formItem.id} />

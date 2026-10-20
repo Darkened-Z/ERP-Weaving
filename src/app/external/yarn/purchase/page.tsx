@@ -746,7 +746,9 @@ export default async function YarnPurchaseVoucherPage({
     // rows are still DELETED first, so switching a posted voucher to N removes
     // what it put there rather than leaving it stranded.
     const canPostGL = posting === "Y" && !!fyCode && !!partyCoa && total > 0;
-    const yarnPurStockAcc = canPostGL ? await acc("YARN_PURCHASE_STOCK") : "";
+    // Purchases are debited to Income Yarn (owner 2026-10-20): that ledger is
+    // the yarn trading account — purchases IN, sales OUT, the balance is profit.
+    const yarnIncomeAcc = canPostGL ? await acc("YARN_SALE_INCOME") : "";
 
     const assertBalanced = (details: (typeof schema.transDetail.$inferInsert)[]) => {
       const d = details.reduce((s, x) => s + (x.debit ?? 0), 0);
@@ -823,7 +825,7 @@ export default async function YarnPurchaseVoucherPage({
             const details: (typeof schema.transDetail.$inferInsert)[] = [
               {
                 fyCode, vtype: VTYPE, vno: existingLvNo, srno: 1,
-                accCode: yarnPurStockAcc, partyCode: partyCoa, contNo: cont,
+                accCode: yarnIncomeAcc, partyCode: partyCoa, contNo: cont,
                 narration: ledgerNarr,
                 debit: total, credit: 0,
               },
@@ -901,7 +903,7 @@ export default async function YarnPurchaseVoucherPage({
               const details: (typeof schema.transDetail.$inferInsert)[] = [
                 {
                   fyCode, vtype: VTYPE, vno: nextL, srno: 1,
-                  accCode: yarnPurStockAcc, partyCode: partyCoa, contNo: cont,
+                  accCode: yarnIncomeAcc, partyCode: partyCoa, contNo: cont,
                   narration: ledgerNarr,
                   debit: total, credit: 0,
                 },
@@ -1202,8 +1204,8 @@ export default async function YarnPurchaseVoucherPage({
           className="hidden"
         ></form>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-3">
-          <div className="lg:col-span-3">
+        <div className="grid grid-cols-1 gap-6 mb-3">
+          <div>
             <div className="border border-black p-4">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold">
@@ -1872,74 +1874,6 @@ export default async function YarnPurchaseVoucherPage({
             </div>
           </div>
 
-          <div className="lg:col-span-1">
-            <div className="border border-black">
-              <div className="px-3 py-2 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold">
-                Past Vouchers
-              </div>
-              <div className="overflow-x-auto" style={{ maxHeight: "600px", overflowY: "auto" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>V.#</th>
-                      <th>Date</th>
-                      <th className="text-right">Qty</th>
-                      <th className="text-right">Rate</th>
-                      <th className="text-right">Amt</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vouchers.slice(0, 30).map((v) => {
-                      const isSel = v.id === selected?.id;
-                      const href = `/external/yarn/purchase?id=${v.id}`;
-                      const linkStyle = { color: isSel ? "white" : "inherit" } as const;
-                      return (
-                        <tr
-                          key={v.id}
-                          className={
-                            isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"
-                          }
-                        >
-                          <td className="mono text-[11px]">
-                            <a href={href} className="no-underline block" style={linkStyle}>
-                              {v.vNo}
-                            </a>
-                          </td>
-                          <td className="mono text-[11px]">
-                            <a href={href} className="no-underline block" style={linkStyle}>
-                              {v.vDate}
-                            </a>
-                          </td>
-                          <td className="text-right mono text-[11px]">
-                            <a href={href} className="no-underline block" style={linkStyle}>
-                              {formatNum(v.pur)}
-                            </a>
-                          </td>
-                          <td className="text-right mono text-[11px]">
-                            <a href={href} className="no-underline block" style={linkStyle}>
-                              {formatNum(v.purAvgRate)}
-                            </a>
-                          </td>
-                          <td className="text-right mono text-[11px]">
-                            <a href={href} className="no-underline block" style={linkStyle}>
-                              {formatNum((v.pur ?? 0) * (v.purAvgRate ?? 0))}
-                            </a>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {vouchers.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="text-center text-[11px] text-[var(--muted)] py-4">
-                          No vouchers yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="border border-black">

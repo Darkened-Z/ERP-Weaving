@@ -24,10 +24,12 @@ export default async function FoldingStockPage({
   // R/C/F with "none picked" meaning ALL, and W.Z / W.O.Z decides whether rows
   // that are zero right across are printed or dropped.
   const partyQ = p.party?.trim() || "";
-  const statusQ = (p.status?.trim() || "").toUpperCase();
+  // Running unless the form says otherwise (owner 2026-10-20); the "All"
+  // option submits an empty status, which is different from no status at all.
+  const statusQ = p.status == null ? "R" : p.status.trim().toUpperCase();
   const withZero = p.zero === "1";
 
-  const allContracts = await loadConvContracts();
+  const allContracts = await loadConvContracts(true);
   const productRows = await db
     .select({ description: schema.products.description, mainDesc: schema.products.mainDesc })
     .from(schema.products);

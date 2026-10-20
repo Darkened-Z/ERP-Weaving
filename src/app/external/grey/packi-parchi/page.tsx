@@ -706,13 +706,6 @@ export default async function PackiParchiPage({
     // passed directly to Client Components").
     const narrQuality = narrConstr ? gqRichConstruction(narrConstr, countLabelByCode) : narrCode;
     const ppNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRateKp ?? 0}, ${narrQuality} (PACKI SALE)`.trim();
-    // The purchase side of the same parchi (owner 2026-10): its cost leaves the
-    // grey-stock godown and is debited to Income Grey, so that ledger reads
-    // sale − purchase = profit. No purchase rate (or godown not in the chart)
-    // = no cost leg, never a guessed one.
-    const purchaseCoa = resolvePartyCoa(purchaseParty);
-    const postCost = greyAmtPur > 0 && !!purchaseCoa;
-    const purNarr = `${than ?? 0} THAN ${meterNetC} MTR @ ${greyRate ?? 0}, ${narrQuality} (GREY PURCHASE)`.trim();
 
     const parseVno = (v: string | null | undefined): number => {
       if (!v) return 0;
@@ -758,9 +751,9 @@ export default async function PackiParchiPage({
           debit: billNet,
           credit: 0,
         },
-        // The whole bill is the sale. It used to be split into a "commission"
-        // line and a "bill adjustment" line on the same account, which read as
-        // two incomes and hid that the parchi carried a purchase at all.
+        // The whole bill is the sale (one line; it used to be split into a
+        // "commission" and a "bill adjustment" line on the same account). The
+        // purchase reaches Income Grey from the godown purchase (GDN).
         {
           fyCode,
           vtype: "GPV",
@@ -773,12 +766,6 @@ export default async function PackiParchiPage({
           credit: billNet,
         },
       ];
-      if (postCost) {
-        details.push(
-          { fyCode, vtype: "GPV", vno, srno: details.length + 1, accCode: greyCommissionCode, partyCode: null, narration: purNarr, debit: greyAmtPur, credit: 0 },
-          { fyCode, vtype: "GPV", vno, srno: details.length + 2, accCode: purchaseCoa, partyCode: purchaseCoa, narration: purNarr, debit: 0, credit: greyAmtPur },
-        );
-      }
       // Sale-side brokerage: DR brokerage expense, CR the broker (balanced pair,
       // does not disturb the party/commission netting above).
       if (brokerageExpCode && brokerSaleCoa && brokerAmtSal > 0) {

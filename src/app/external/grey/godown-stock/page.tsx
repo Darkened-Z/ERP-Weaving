@@ -11,6 +11,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { GodownCalc } from "@/components/godown-calc";
 import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
+import { acc } from "@/lib/gl-accounts";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -711,8 +712,9 @@ export default async function GodownStockPage({
 
     const nowIso = new Date().toISOString();
 
-    // Grey purchase GL posting (VTYPE GDN): DR grey-stock godown account, CR the
-    // supplier (purchase party). Amount = net meter × purchase rate. Only for a
+    // Grey purchase GL posting (VTYPE GDN): DR Income Grey — the grey trading
+    // account, purchases IN against Pakki Parchi sales OUT (owner 2026-10-20) —
+    // CR the supplier (purchase party). Amount = net meter × purchase rate. Only for a
     // STOCK (purchase-in) voucher. Narration follows the mill's grey convention.
     const glFyCode = await fyCodeForDate(vDate);
     const glAccts = await db
@@ -735,6 +737,7 @@ export default async function GodownStockPage({
     const greyNarr =
       `${than ?? 0} THAN ${netMeter} MTR @ ${rateVal}, ${narrQuality} (GREY PURCHASE)`.trim();
     const canPostGrey = !!(glFyCode && supplierCoa && greyStockCoa && total > 0 && type === "STOCK");
+    const greyIncomeCoa = canPostGrey ? await acc("GREY_COMMISSION_INCOME") : "";
     const postGreyGl = async (
       tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
       vno: number,
@@ -750,7 +753,7 @@ export default async function GodownStockPage({
         narration: greyNarr, balanceAmount: total,
       });
       await tx.insert(schema.transDetail).values([
-        { fyCode: glFyCode, vtype: "GDN", vno, srno: 1, accCode: greyStockCoa, partyCode: supplierCoa, narration: greyNarr, debit: total, credit: 0 },
+        { fyCode: glFyCode, vtype: "GDN", vno, srno: 1, accCode: greyIncomeCoa, partyCode: supplierCoa, narration: greyNarr, debit: total, credit: 0 },
         { fyCode: glFyCode, vtype: "GDN", vno, srno: 2, accCode: supplierCoa, partyCode: supplierCoa, narration: greyNarr, debit: 0, credit: total },
       ]);
     };

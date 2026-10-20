@@ -30,7 +30,8 @@ export type ConvContract = {
  * both, else the picker looks empty. First warp brand is attached per contract.
  * cont_no prefixes differ (IGCC- vs GCC-) so there are no collisions.
  */
-export async function loadConvContracts(): Promise<ConvContract[]> {
+/** `allStatuses`: reports that filter by status need closed contracts too. */
+export async function loadConvContracts(allStatuses = false): Promise<ConvContract[]> {
   const sel = <T extends typeof schema.intGreyConversionContract | typeof schema.extGreyConvContract>(t: T) => ({
     contNo: t.contNo,
     party: t.party,
@@ -52,8 +53,8 @@ export async function loadConvContracts(): Promise<ConvContract[]> {
   });
 
   const [intC, extC, intW, extW] = await Promise.all([
-    db.select(sel(schema.intGreyConversionContract)).from(schema.intGreyConversionContract).where(eq(schema.intGreyConversionContract.status, "R")),
-    db.select(sel(schema.extGreyConvContract)).from(schema.extGreyConvContract).where(eq(schema.extGreyConvContract.status, "R")),
+    db.select(sel(schema.intGreyConversionContract)).from(schema.intGreyConversionContract).where(allStatuses ? undefined : eq(schema.intGreyConversionContract.status, "R")),
+    db.select(sel(schema.extGreyConvContract)).from(schema.extGreyConvContract).where(allStatuses ? undefined : eq(schema.extGreyConvContract.status, "R")),
     db.select({ contractId: schema.intGreyConversionWarp.contractId, brand: schema.intGreyConversionWarp.brand }).from(schema.intGreyConversionWarp),
     db.select({ contractId: schema.extGreyConvWarp.contractId, brand: schema.extGreyConvWarp.brand }).from(schema.extGreyConvWarp),
   ]);
