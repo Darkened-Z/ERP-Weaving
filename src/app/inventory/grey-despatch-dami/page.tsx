@@ -2,7 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, getTableColumns } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError } from "@/lib/period-lock";
 import { getSession, verifySavePassword } from "@/lib/auth";
 import { today } from "@/lib/time";
@@ -15,6 +15,7 @@ import { DamiLineGrid } from "./dami-line-grid";
 import { SelectFill } from "./select-fill";
 import { countLabelMap, richConstruction } from "@/lib/grey-quality";
 import { DateBox } from "@/components/date-box";
+import { ImageAttach } from "@/components/image-attach";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +33,16 @@ export default async function GreyDespatchDamiPage({
   const escFind = findFilter != null ? escLike(findFilter) : undefined;
   const pat = escFind ? `%${escFind}%` : "";
 
+  // The list never carries the receipt photos (megabytes across 30 slips); it
+  // carries how many there are, and the open slip loads its own below.
+  const { img: imgCol, ...listCols } = getTableColumns(schema.intGreyDespatchDami);
+  const damiListCols = {
+    ...listCols,
+    imgCount: sql<number>`CASE WHEN ${imgCol} IS NULL OR ${imgCol} = '' THEN 0 WHEN substr(${imgCol}, 1, 1) = '[' THEN json_array_length(${imgCol}) ELSE 1 END`,
+  };
   const damis = findFilter
     ? await db
-        .select()
+        .select(damiListCols)
         .from(schema.intGreyDespatchDami)
         .where(sql`
           ${schema.intGreyDespatchDami.vNo} LIKE ${pat} ESCAPE '\\' OR
@@ -44,7 +52,7 @@ export default async function GreyDespatchDamiPage({
         `)
         .orderBy(desc(schema.intGreyDespatchDami.id))
     : await db
-        .select()
+        .select(damiListCols)
         .from(schema.intGreyDespatchDami)
         .orderBy(desc(schema.intGreyDespatchDami.id));
 
@@ -57,6 +65,9 @@ export default async function GreyDespatchDamiPage({
       ? damis[0]
       : null;
   const formItem = isAdding ? null : selected;
+  const [formImg] = formItem
+    ? await db.select({ img: schema.intGreyDespatchDami.img }).from(schema.intGreyDespatchDami).where(eq(schema.intGreyDespatchDami.id, formItem.id))
+    : [];
 
   // Load lines if editing
   const existingLines = formItem
@@ -134,6 +145,7 @@ export default async function GreyDespatchDamiPage({
         vDate,
         lvNo: intVal(formData.get("lv_no")),
         pakki_parchi_id: intVal(formData.get("pakki_parchi_id")) ?? null,
+        img: txt(formData.get("img")),
         purchaseParty: txt(formData.get("purchase_party")),
         saleParty: txt(formData.get("sale_party")),
         subParty: txt(formData.get("sub_party")),
@@ -505,6 +517,10 @@ export default async function GreyDespatchDamiPage({
                   <label className="label block mb-1">Remarks</label>
                   <input name="remarks" className="input-box" defaultValue={formItem?.remarks ?? ""} />
                 </div>
+                <div className="col-span-1 sm:col-span-12">
+                  <label className="label block mb-1">Wasooli Image</label>
+                  <ImageAttach name="img" defaultValue={formImg?.img ?? ""} />
+                </div>
               </div>
 
               {/* Save buttons */}
@@ -653,6 +669,7 @@ export default async function GreyDespatchDamiPage({
                   <th className="text-right">Than</th>
                   <th className="text-right">Mtrs</th>
                   <th>Voucher</th>
+                  <th>Wasooli</th>
                 </tr>
               </thead>
               <tbody>
@@ -672,11 +689,20 @@ export default async function GreyDespatchDamiPage({
                       <td>
                         <a href={`/inventory/grey-despatch-dami/${d.id}/voucher`} target="_blank" className="btn btn-outline btn-sm" style={isSel ? { color: "white", borderColor: "white" } : {}}>Voucher</a>
                       </td>
+                      <td className="text-[12px] whitespace-nowrap">
+                        {d.imgCount > 0
+                          ? Array.from({ length: d.imgCount }, (_, k) => (
+                              <a key={k} href={`/inventory/grey-despatch-dami/${d.id}/wasooli?n=${k}`} target="_blank" className="underline mr-2" style={isSel ? { color: "white" } : {}}>
+                                {d.imgCount > 1 ? `Image ${k + 1}` : "Image"}
+                              </a>
+                            ))
+                          : <span className={isSel ? "" : "text-[var(--muted)]"}>—</span>}
+                      </td>
                     </tr>
                   );
                 })}
                 {damis.length === 0 && (
-                  <tr><td colSpan={8} className="text-center text-[13px] text-[var(--muted)] py-6">No slips. Click <b>New</b> to create one.</td></tr>
+                  <tr><td colSpan={9} className="text-center text-[13px] text-[var(--muted)] py-6">No slips. Click <b>New</b> to create one.</td></tr>
                 )}
               </tbody>
             </table>

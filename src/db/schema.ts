@@ -2168,6 +2168,8 @@ export const intGreyDespatchDami = sqliteTable("int_grey_despatch_dami", {
   postedBy: text("posted_by"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
+  // Receipt (wasooli) photo of the goods sent out: a data URL or JSON array.
+  img: text("img"),
 }, (t) => ({
   ixDate: index("ix_int_gdd_date").on(t.vDate),
   ixOriginal: index("ix_int_gdd_original").on(t.originalDespatchId),

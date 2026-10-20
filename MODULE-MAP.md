@@ -224,6 +224,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 
 ## Inventory — Grey Despatch Dami (`inventory/grey-despatch-dami`)
 
+- **Wasooli (receipt) photo (owner 2026-10-21):** `int_grey_despatch_dami.img` (added by `migrate-dami-img.mjs`, run on Turso 2026-10-21), `ImageAttach` under Remarks. The Dami Slips list never selects `img` (it would ship every slip's photos) — it selects every other column plus `imgCount` (json_array_length) and links each photo to `[id]/wasooli?n=<k>`, a route that serves that one image. The open slip loads its own `img` separately.
 - **A linked slip used to crash ("couldn't load", fixed 2026-10-20):** the locked Delete button carried an `onClick` alert — an event handler in a server page throws as soon as it renders, which only happens when `pakki_parchi_id` is set. It is a plain `disabled` button with a title now. Never put `onClick` in this page.
 
 - **Dami Slips list shows the link on its face (owner 2026-10):** an unlinked slip carries the red `UNLINKED` tag; a linked slip carries a green tag with the linked Pakki Parchi's V.No (`ext_packi_parchi.v_no`, e.g. PP-0029), looked up from the same `pakkiParchis` list the link dropdown uses. `pp_no` (manual PP number) is empty in live data, so the V.No is the number shown.
