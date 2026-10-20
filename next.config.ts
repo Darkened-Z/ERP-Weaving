@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The demo deployment (DEMO_DB=1) reads its database from this bundled file;
+  // production builds leave it out.
+  ...(process.env.DEMO_DB === "1" ? { outputFileTracingIncludes: { "/**": ["./demo/demo.db"] } } : {}),
   experimental: {
     staleTimes: { dynamic: 0, static: 30 },
   },

@@ -80,10 +80,12 @@ export default async function LoginPage({
           </div>
         </form>
 
-        {process.env.NODE_ENV !== "production" && (
+        {(process.env.DEMO_DB === "1" || process.env.NODE_ENV !== "production") && (
           <div className="mt-8 pt-6 border-t border-[var(--border-light)]">
             <p className="text-[11px] text-[var(--muted)]">
-              Demo credentials: <span className="mono">admin / admin123</span>
+              Demo credentials:{" "}
+              <span className="mono">{process.env.DEMO_DB === "1" ? "demo / demo123" : "admin / admin123"}</span>
+              {process.env.DEMO_DB === "1" && <> · sample data, resets on its own</>}
             </p>
           </div>
         )}

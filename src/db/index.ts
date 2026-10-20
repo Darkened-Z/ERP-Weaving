@@ -1,20 +1,33 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { createClient } from "@libsql/client";
 import path from "path";
+import fs from "fs";
+import os from "os";
 import * as schema from "./schema";
 
-const isLocal = !process.env.TURSO_DATABASE_URL;
+// The public demo (erp-weaving.vercel.app) runs on demo/demo.db — made-up data
+// built by demo/build-demo-db.ts — never on the mill's database. The bundled
+// file is read-only on Vercel, so it is copied to the temp dir per instance:
+// demo edits work, and a cold start resets the demo to the sample data.
+const isDemo = process.env.DEMO_DB === "1";
+const isLocal = isDemo || !process.env.TURSO_DATABASE_URL;
 const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 
 if (!isLocal && !process.env.TURSO_AUTH_TOKEN) {
   throw new Error("TURSO_AUTH_TOKEN is required when TURSO_DATABASE_URL is set");
 }
 
-if (isLocal && process.env.NODE_ENV === "production" && !isBuildPhase) {
+if (isLocal && !isDemo && process.env.NODE_ENV === "production" && !isBuildPhase) {
   throw new Error("TURSO_DATABASE_URL must be set in production — SQLite file storage is not available on serverless");
 }
 
-const localDbPath = process.env.LOCAL_DB_PATH || path.join(process.cwd(), "data.db");
+function demoDbPath() {
+  const target = path.join(os.tmpdir(), "erp-demo.db");
+  if (!fs.existsSync(target)) fs.copyFileSync(path.join(process.cwd(), "demo", "demo.db"), target);
+  return target;
+}
+
+const localDbPath = isDemo ? demoDbPath() : process.env.LOCAL_DB_PATH || path.join(process.cwd(), "data.db");
 
 // Vercel freezes the function between requests; Turso drops the idle keep-alive
 // connection meanwhile, and the next query writes into the dead socket — "fetch
