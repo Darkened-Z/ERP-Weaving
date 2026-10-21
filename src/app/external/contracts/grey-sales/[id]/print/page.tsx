@@ -78,6 +78,9 @@ export default async function GreySalesContractPrint({
       <div>
         <b>Status:</b> {contract.status}
       </div>
+      <div>
+        <b>Type:</b> {contract.contractType === "EXT" ? "External" : "Internal"}
+      </div>
       {contract.expDate && (
         <div>
           <b>Expires:</b> {contract.expDate}

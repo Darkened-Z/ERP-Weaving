@@ -1005,6 +1005,8 @@ export const extGreySalContract = sqliteTable("ext_grey_sal_contract", {
   img: text("img"),
   loomType: text("loom_type"),
   status: text("status").notNull().default("R"),
+  // INT internal / EXT external (owner 2026-10-22); internal unless chosen.
+  contractType: text("contract_type").notNull().default("INT"),
   postedDate: text("posted_date"),
   modifiedDate: text("modified_date"),
 }, (t) => ({

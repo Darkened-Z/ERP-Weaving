@@ -39,7 +39,7 @@ const DELIVERY_EMPTY_MIN = 4;
 export default async function GreySalesContractPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; fparty?: string; fgrey?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; fparty?: string; fgrey?: string; ftype?: string }>;
 }) {
   const params = await searchParams;
   const isAdding = params.adding === "1";
@@ -48,6 +48,7 @@ export default async function GreySalesContractPage({
   const pat = `%${escFind ?? ""}%`;
   const fParty = (params.fparty ?? "").trim();
   const fGrey = (params.fgrey ?? "").trim();
+  const fType = (params.ftype ?? "").trim().toUpperCase();
 
   const contractsAll = findFilter
     ? await db
@@ -70,6 +71,7 @@ export default async function GreySalesContractPage({
   const contracts = contractsAll.filter((c) => {
     if (fParty && c.party !== fParty) return false;
     if (fGrey && c.greyCode !== fGrey) return false;
+    if (fType && (c.contractType ?? "INT") !== fType) return false;
     return true;
   });
 
@@ -342,6 +344,8 @@ export default async function GreySalesContractPage({
     const remarks = (formData.get("remarks") as string)?.trim() || null;
     const loomType = (formData.get("loom_type") as string)?.trim() || null;
     const status = (formData.get("status") as string)?.trim() || "R";
+    // Internal unless External is chosen (owner 2026-10-22).
+    const contractType = (formData.get("contract_type") as string)?.trim() === "EXT" ? "EXT" : "INT";
     const nowIso = new Date().toISOString();
 
     const dataBase = {
@@ -378,6 +382,7 @@ export default async function GreySalesContractPage({
       img,
       loomType,
       status,
+      contractType,
       modifiedDate: nowIso,
     };
 
@@ -574,6 +579,7 @@ export default async function GreySalesContractPage({
             rows={contracts}
             columns={[
               { key: "contractNo", label: "Contract No" },
+              { key: "contractType", label: "Type" },
               { key: "party", label: "Party" },
               { key: "greyCode", label: "Grey Code" },
               { key: "weave", label: "Weave" },
@@ -681,6 +687,13 @@ export default async function GreySalesContractPage({
                     readOnly
                     tabIndex={-1}
                   />
+                </div>
+                <div>
+                  <label className="label block mb-1">Type</label>
+                  <select name="contract_type" className="input-box" defaultValue={formItem?.contractType ?? "INT"}>
+                    <option value="INT">INT - Internal</option>
+                    <option value="EXT">EXT - External</option>
+                  </select>
                 </div>
               </div>
 
@@ -1112,7 +1125,15 @@ export default async function GreySalesContractPage({
                   ))}
                 </select>
               </div>
-              {(findFilter || fParty || fGrey) && (
+              <div>
+                <label className="label block mb-1">Type wise</label>
+                <select name="ftype" defaultValue={fType} className="input-box mono text-[13px] w-full">
+                  <option value="">— All types —</option>
+                  <option value="INT">INT - Internal</option>
+                  <option value="EXT">EXT - External</option>
+                </select>
+              </div>
+              {(findFilter || fParty || fGrey || fType) && (
                 <a href="/external/contracts/grey-sales" className="btn btn-outline btn-sm">Clear</a>
               )}
             </form>
@@ -1126,6 +1147,7 @@ export default async function GreySalesContractPage({
             <thead>
               <tr>
                 <th>Contract No</th>
+                <th>Type</th>
                 <th>Party</th>
                 <th style={{ minWidth: 280 }}>Prd. Desc</th>
                 <th className="text-right">Read</th>
@@ -1150,6 +1172,9 @@ export default async function GreySalesContractPage({
                   <tr key={c.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
                     <td className="mono font-bold">
                       <a href={href} className="no-underline block" style={linkStyle}>{c.contractNo}</a>
+                    </td>
+                    <td className="mono text-[12px]">
+                      <a href={href} className="no-underline block" style={linkStyle}>{c.contractType === "EXT" ? "EXT" : "INT"}</a>
                     </td>
                     <td className="text-[13px]">
                       <a href={href} className="no-underline block" style={linkStyle}>
@@ -1203,7 +1228,7 @@ export default async function GreySalesContractPage({
               })}
               {contracts.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="text-center text-[var(--muted)]">No contracts found</td>
+                  <td colSpan={13} className="text-center text-[var(--muted)]">No contracts found</td>
                 </tr>
               )}
             </tbody>
