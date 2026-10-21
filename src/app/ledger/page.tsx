@@ -162,6 +162,26 @@ export default async function LedgerPage({
   const totalCr = entries.reduce((s, e) => s + e.credit, 0);
   const dmy = (iso: string) => iso.split("-").reverse().join("-");
 
+  // Recovery on a party ledger (owner 2026-10-22: "what percent has he paid,
+  // and what is his progress"). A debtor's credit or a creditor's debit is a
+  // payment; it is shown as a share of the balance it came off, and the footer
+  // adds billed vs paid. Income / expense accounts have no "still due".
+  const partySide: "debtor" | "creditor" | null = selectedAccount?.startsWith("1.01.01.")
+    ? "debtor"
+    : selectedAccount?.startsWith("3.03.")
+      ? "creditor"
+      : null;
+  const paymentShare = (e: { debit: number; credit: number; balance: number }) => {
+    const before = e.balance - e.debit + e.credit;
+    const paid = partySide === "debtor" ? e.credit : partySide === "creditor" ? e.debit : 0;
+    const owed = partySide === "debtor" ? before : -before;
+    return paid > 0 && owed > 0 ? { pct: (paid / owed) * 100, owed } : null;
+  };
+  const billed = partySide === "debtor" ? Math.max(openingBalance, 0) + totalDr : Math.max(-openingBalance, 0) + totalCr;
+  const paidTotal = partySide === "debtor" ? totalCr : totalDr;
+  const due = partySide === "debtor" ? closingBalance : -closingBalance;
+  const pct = (n: number) => (billed > 0 ? `${((n / billed) * 100).toFixed(1)}%` : "—");
+
   return (
     <Shell active="ledger">
       <div className="animate-in">
@@ -311,9 +331,19 @@ export default async function LedgerPage({
                       </td>
                       <td className="mono text-right">
                         {entry.debit > 0 ? formatNum(entry.debit) : ""}
+                        {partySide === "creditor" && paymentShare(entry) && (
+                          <div className="text-[10px] text-[var(--muted)] whitespace-nowrap">
+                            {paymentShare(entry)!.pct.toFixed(1)}% of {formatNum(paymentShare(entry)!.owed)}
+                          </div>
+                        )}
                       </td>
                       <td className="mono text-right">
                         {entry.credit > 0 ? formatNum(entry.credit) : ""}
+                        {partySide === "debtor" && paymentShare(entry) && (
+                          <div className="text-[10px] text-[var(--muted)] whitespace-nowrap">
+                            {paymentShare(entry)!.pct.toFixed(1)}% of {formatNum(paymentShare(entry)!.owed)}
+                          </div>
+                        )}
                       </td>
                       <td className="mono text-right font-semibold">
                         {formatNum(entry.balance)}{" "}
@@ -350,6 +380,26 @@ export default async function LedgerPage({
                       </span>
                     </td>
                   </tr>
+                  {partySide && billed > 0 && (
+                    <tr>
+                      <td colSpan={8} className="pt-3">
+                        <div className="text-[12px] flex flex-wrap gap-x-5 gap-y-1 mono">
+                          <span>
+                            {partySide === "debtor" ? "Billed" : "Payable"} <b>{formatNum(billed)}</b>
+                          </span>
+                          <span>
+                            {partySide === "debtor" ? "Received" : "Paid"} <b>{formatNum(paidTotal)}</b> ({pct(paidTotal)})
+                          </span>
+                          <span>
+                            Still due <b>{formatNum(Math.max(due, 0))}</b> ({pct(Math.max(due, 0))})
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-2 border border-black" style={{ maxWidth: 420 }}>
+                          <div className="h-full bg-black" style={{ width: `${Math.min(100, (paidTotal / billed) * 100)}%` }} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>
