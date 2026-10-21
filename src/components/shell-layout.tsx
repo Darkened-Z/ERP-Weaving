@@ -5,6 +5,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { FormKeyboard } from "./form-keyboard";
 import { FormPersist } from "./form-persist";
+import { BRAND } from "@/lib/brand";
 
 type NavItem = { href: string; label: string; key: string; bg?: string };
 type SubSection = { label: string; items: NavItem[]; itemBg?: string };
@@ -43,7 +44,7 @@ export function ShellLayout({
       >
         <div className="p-5 border-b border-[var(--sidebar-border)] flex items-center justify-between">
           <div className="-mx-5 -mt-5 mb-2">
-            <img src="/sk-logo.png" alt="SK Textile" style={{ width: '100%', height: '110px', objectFit: 'cover', objectPosition: 'center', mixBlendMode: 'screen', filter: 'brightness(1.5)' }} />
+            <img src={BRAND.logo} alt={BRAND.name} style={{ width: '100%', height: '110px', objectFit: 'cover', objectPosition: 'center', mixBlendMode: 'screen', filter: 'brightness(1.5)' }} />
             <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--sidebar-muted)] mt-1">
               Weaving Management
             </div>
@@ -84,7 +85,7 @@ export function ShellLayout({
               <path d="M3 5h14M3 10h14M3 15h14" />
             </svg>
           </button>
-          <img src="/sk-logo.png" alt="SK Textile" className="h-10 object-contain" />
+          <img src={BRAND.logo} alt={BRAND.name} className="h-10 object-contain" />
           <div className="flex-1" />
           <div className="w-40">
             <CommandPaletteTrigger />

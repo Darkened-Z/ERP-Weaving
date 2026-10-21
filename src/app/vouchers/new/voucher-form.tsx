@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DateBox } from "@/components/date-box";
 import { today } from "@/lib/time";
+import { BRAND } from "@/lib/brand";
 
 type Line = {
   accCode: string;
@@ -121,7 +122,7 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
       >
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <div>
-            <div className="text-lg font-bold tracking-tight">SK MILLS</div>
+            <div className="text-lg font-bold tracking-tight">{BRAND.mark}</div>
             <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 mt-1">
               Weaving Management
             </div>
@@ -157,7 +158,7 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
               <path d="M3 5h14M3 10h14M3 15h14" />
             </svg>
           </button>
-          <span className="text-[13px] font-bold tracking-tight">SK MILLS</span>
+          <span className="text-[13px] font-bold tracking-tight">{BRAND.mark}</span>
         </div>
 
         <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">

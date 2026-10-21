@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,7 @@ export default async function Dashboard() {
       <div className="animate-in">
         <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mb-8 gap-4">
           <div>
-            <h1 className="page-title">{company?.name ?? "SK Weaving Mills"}</h1>
+            <h1 className="page-title">{company?.name ?? BRAND.name}</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
               FY {company?.currentFy} &middot; {company?.city}
             </p>

@@ -7,6 +7,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export default async function GreySalesContractPrint({
   }
 
   const [profile] = await db.select().from(schema.companyProfile).limit(1);
-  const companyName = profile?.name ?? "SK Weaving Mills";
+  const companyName = profile?.name ?? BRAND.name;
   const sellerName = companyName;
   const buyerName = contract.party ?? "-";
 

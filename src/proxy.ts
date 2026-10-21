@@ -9,7 +9,8 @@ import { canAccess, firstAllowedHref } from "@/lib/nav";
  * reachable without a login. Checking here covers all of them at once.
  */
 function withSecurityHeaders(res: NextResponse) {
-  res.headers.set("X-Frame-Options", "DENY");
+  // The public demo is framed by the portfolio (CSP frame-ancestors in next.config).
+  if (process.env.DEMO_DB !== "1") res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set("X-DNS-Prefetch-Control", "off");

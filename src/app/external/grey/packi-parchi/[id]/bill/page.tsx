@@ -9,6 +9,7 @@ import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 import { countLabelMap, fullConstruction, normQuality } from "@/lib/grey-quality";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -364,7 +365,7 @@ export default async function PackiBillPage({
                 <QrImage value="https://wa.me/923232201515" size={48} />
                 <div style={{ marginTop: 1, fontWeight: 700 }}>WhatsApp Us</div>
               </div>
-              <img src="/sk-logo.png" alt={company?.name ?? "Logo"} style={{ height: 52, objectFit: "contain" }} />
+              <img src={BRAND.logo} alt={company?.name ?? "Logo"} style={{ height: 52, objectFit: "contain" }} />
             </div>
           </div>
           <hr className="bv-rule" />

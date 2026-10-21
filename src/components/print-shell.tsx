@@ -1,4 +1,5 @@
 import { db, schema } from "@/db";
+import { BRAND } from "@/lib/brand";
 
 // Shared print header + signature block for chalans, invoices, and bills.
 // Consumes companyProfile so every printout inherits the same company details.
@@ -26,7 +27,7 @@ export async function PrintHeader({
           <img src={p.logoDataUrl} alt="logo" style={{ maxHeight: 60, marginBottom: 4 }} />
         ) : null}
         <div className="text-[22px] font-extrabold tracking-tight leading-tight">
-          {p?.name ?? "SK Weaving Mills"}
+          {p?.name ?? BRAND.name}
         </div>
         {p?.address ? <div className="text-[11px]">{p.address}</div> : null}
         <div className="text-[11px] flex gap-3 mt-0.5">

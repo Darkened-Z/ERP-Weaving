@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
 import { PrintButton } from "@/components/print-button";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ export default async function ChartOfAccountsPrintPage({
   });
 
   const [profile] = await db.select().from(schema.companyProfile).limit(1);
-  const companyName = profile?.name ?? "SK Mills";
+  const companyName = profile?.name ?? BRAND.short;
   const companyAddr = [profile?.address, profile?.city].filter(Boolean).join(", ");
 
   const printDate = new Date().toLocaleDateString("en-GB", {

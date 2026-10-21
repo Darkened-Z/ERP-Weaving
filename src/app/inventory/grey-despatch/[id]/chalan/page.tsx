@@ -8,6 +8,7 @@ import { PrintButton } from "@/components/print-button";
 import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -314,7 +315,7 @@ export default async function GreyDespatchChalanPage({
                 <QrImage value="https://wa.me/923232201515" size={56} />
                 <div style={{ marginTop: '2px', fontWeight: 'bold' }}>WhatsApp Us</div>
               </div>
-              <img src="/sk-logo.png" alt="SK Textile" className="logo-img" />
+              <img src={BRAND.logo} alt={BRAND.name} className="logo-img" />
             </div>
           </div>
 

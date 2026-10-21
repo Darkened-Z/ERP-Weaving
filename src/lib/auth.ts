@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { createToken, verifyToken, SESSION_SHORT_TTL, SESSION_LONG_TTL, type Session } from "@/lib/session-token";
+import { IS_DEMO } from "@/lib/brand";
 
 export type { Session };
 
@@ -71,8 +72,8 @@ export async function login(loginId: string, password: string, remember: boolean
   const cookieStore = await cookies();
   cookieStore.set("session", signed, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: isProd,
+    // The demo is embedded in the portfolio (cross-site iframe), so its cookie must be partitioned.
+    ...(IS_DEMO ? { sameSite: "none" as const, secure: true, partitioned: true } : { sameSite: "lax" as const, secure: isProd }),
     path: "/",
     maxAge: ttl,
   });

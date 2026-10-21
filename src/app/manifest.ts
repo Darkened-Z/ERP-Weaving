@@ -1,12 +1,13 @@
 import type { MetadataRoute } from "next";
+import { BRAND } from "@/lib/brand";
 
 // Lets Chrome / Edge install the ERP as a desktop app (own window, taskbar
 // icon). Served at /manifest.webmanifest, which the auth proxy leaves open like
 // every other root file with an extension — the browser fetches it before login.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "SK Weaving Mills",
-    short_name: "SK Mills",
+    name: BRAND.name,
+    short_name: BRAND.short,
     description: "Weaving Mill ERP System",
     start_url: "/",
     scope: "/",

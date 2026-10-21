@@ -9,6 +9,7 @@ import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
 import { countLabelMap, fullConstruction } from "@/lib/grey-quality";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -331,7 +332,7 @@ export default async function DamiVoucherPage({
               </div>
             </div>
             <div className="dv-head-right">
-              <img src="/sk-logo.png" alt={company?.name ?? "Logo"} style={{ height: 96, objectFit: "contain" }} />
+              <img src={BRAND.logo} alt={company?.name ?? "Logo"} style={{ height: 96, objectFit: "contain" }} />
             </div>
           </div>
           <hr className="dv-rule" />

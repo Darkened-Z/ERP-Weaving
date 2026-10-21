@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
 import { eq, desc } from "drizzle-orm";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export default async function DemandPrintPage({
   const ccMap = new Map(ccList.map((c) => [String(c.code), c.description]));
 
   const [profile] = await db.select().from(schema.companyProfile).limit(1);
-  const companyName = profile?.name ?? "SK Mills";
+  const companyName = profile?.name ?? BRAND.short;
   const companyAddr = [profile?.address, profile?.city].filter(Boolean).join(", ");
 
   const totQty = lines.reduce((s, l) => s + l.qty, 0);

@@ -6,6 +6,7 @@ import { PrintHeader, SignatureRow, PrintStyles } from "@/components/print-shell
 import { PrintButton } from "@/components/print-button";
 import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
 import { numberToWords } from "@/lib/number-to-words";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function YarnPurchaseContractPrint({
     .orderBy(schema.extYarnPurContractDelivery.id);
 
   const [profile] = await db.select().from(schema.companyProfile).limit(1);
-  const companyName = profile?.name ?? "SK Weaving Mills";
+  const companyName = profile?.name ?? BRAND.name;
   const buyerName = companyName;
   const sellerCode = contract.partyCode ?? "";
   let sellerName = sellerCode;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BRAND } from "@/lib/brand";
 
 type Props = {
   party: string;
@@ -32,7 +33,7 @@ export function WhatsAppModal({ party, despatchNo, date, vehicleNo, biltyNo, met
     `- Rolls: ${fmt(rolls)}`,
     ``,
     `Thank you for your business.`,
-    `- SK Mills`,
+    `- ${BRAND.short}`,
   ].join("\n");
 
   const waHref = `https://wa.me/?text=${encodeURIComponent(message)}`;

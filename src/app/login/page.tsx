@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { login, getSession } from "@/lib/auth";
 import { firstAllowedHref } from "@/lib/nav";
+import { BRAND } from "@/lib/brand";
 
 export default async function LoginPage({
   searchParams,
@@ -30,7 +31,7 @@ export default async function LoginPage({
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm">
         <div className="mb-12">
-          <h1 className="text-4xl font-extrabold tracking-tighter">SK MILLS</h1>
+          <h1 className="text-4xl font-extrabold tracking-tighter">{BRAND.mark}</h1>
           <p className="text-[11px] uppercase tracking-[0.15em] text-[var(--muted)] mt-2">
             Weaving Management System
           </p>

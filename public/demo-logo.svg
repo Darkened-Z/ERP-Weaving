@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220">
+  <rect width="400" height="220" fill="#0b1020"/>
+  <g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round">
+    <path d="M150 70 h100 M150 90 h100 M150 110 h100"/>
+    <path d="M165 60 v60 M185 60 v60 M205 60 v60 M225 60 v60" opacity="0.55"/>
+  </g>
+  <text x="200" y="168" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="800" letter-spacing="6" fill="#ffffff">WEAVING ERP</text>
+</svg>

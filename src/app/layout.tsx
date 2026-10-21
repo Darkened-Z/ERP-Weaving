@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
+import { BRAND } from "@/lib/brand";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,11 +16,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SK Weaving Mills",
+  title: BRAND.name,
   description: "Weaving Mill ERP System",
-  applicationName: "SK Weaving Mills",
+  applicationName: BRAND.name,
   icons: { apple: "/apple-touch-icon.png" },
-  appleWebApp: { capable: true, title: "SK Mills", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: BRAND.short, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
