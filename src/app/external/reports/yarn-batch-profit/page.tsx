@@ -23,7 +23,17 @@ const bags = (lbs: number) => lbs / 100;
  * the balance here at once, on this batch and on every sale that drew from it.
  * There is no stale copy of the rate anywhere for the profit to be taken from.
  */
-export default async function YarnBatchProfitPage() {
+export default async function YarnBatchProfitPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; stock?: string }>;
+}) {
+  // Find one batch (owner 2026-10-22: "where does the detail of this stock
+  // come from") — batch no, count, brand, godown or party; In stock only drops
+  // batches that are fully sold.
+  const sp = await searchParams;
+  const q = (sp.q ?? "").trim().toLowerCase();
+  const inStockOnly = sp.stock === "1";
   const purLines = await db
     .select({
       batchNo: schema.extYarnPurVoucherLine.batchNo,
@@ -95,6 +105,12 @@ export default async function YarnBatchProfitPage() {
         profit: saleValue - soldLbs * cost,
       };
     })
+    .filter((b) => !inStockOnly || b.balLbs > 0.005)
+    .filter((b) =>
+      !q ||
+      [b.batchNo, b.count, countLabel.get(String(b.count)), b.brand, b.loc, b.party, b.vNo, ...b.sales.flatMap((x) => [x.party, x.vNo])]
+        .some((v) => (v ?? "").toLowerCase().includes(q)),
+    )
     .sort((a, b) => (a.batchNo ?? "").localeCompare(b.batchNo ?? ""));
 
   const t = {
@@ -119,6 +135,19 @@ export default async function YarnBatchProfitPage() {
         </div>
         <PrintButton label="Print" />
       </div>
+
+      <form method="GET" className="flex flex-wrap items-end gap-2 mb-4 no-print">
+        <div>
+          <label className="label block mb-1">Find</label>
+          <input name="q" defaultValue={sp.q ?? ""} placeholder="Batch (YPV-0027/A), count, brand, party…" className="input-box mono" style={{ minWidth: 280 }} />
+        </div>
+        <label className="flex items-center gap-2 text-[13px] pb-1.5">
+          <input type="checkbox" name="stock" value="1" defaultChecked={inStockOnly} className="w-4 h-4 accent-black" />
+          In stock only
+        </label>
+        <button type="submit" className="btn btn-sm">Find</button>
+        {(q || inStockOnly) && <a href="/external/reports/yarn-batch-profit" className="btn btn-outline btn-sm">Clear</a>}
+      </form>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border border-black mb-5">
         {(

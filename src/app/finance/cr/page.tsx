@@ -1,4 +1,6 @@
 import { acc } from "@/lib/gl-accounts";
+import { PartyBalance } from "@/components/party-balance";
+import { accountBalances } from "@/lib/gl-balance";
 import { Shell } from "@/components/shell";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -497,6 +499,8 @@ export default async function CashReceiptPage({
   const cashDefaultValue = formVoucher ? formVoucher.accCode ?? "" : defaultCash?.code ?? "";
   const cashTitleDefault = codeToAcc.get(cashDefaultValue)?.description ?? "";
 
+  const partyBalances = await accountBalances();
+
   return (
     <Shell active="fin-cr">
       <div className="animate-in">
@@ -848,6 +852,7 @@ export default async function CashReceiptPage({
                 Exit
               </a>
               <div className="ml-auto flex items-end gap-3">
+                <PartyBalance balances={partyBalances} />
                 <div className="w-44">
                   <label className="label block mb-1 text-right">Balance Amount</label>
                   <VoucherBalance

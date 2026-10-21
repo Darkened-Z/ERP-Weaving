@@ -1,4 +1,6 @@
 import { Shell } from "@/components/shell";
+import { PartyBalance } from "@/components/party-balance";
+import { accountBalances } from "@/lib/gl-balance";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { GrowRows } from "@/components/grow-rows";
@@ -556,6 +558,8 @@ export default async function BankReceiptPage({
   };
   const errorMsg = params.error ? ERROR_MESSAGES[params.error] ?? "" : "";
 
+  const partyBalances = await accountBalances();
+
   return (
     <Shell active="fin-br">
       <div className="animate-in">
@@ -908,6 +912,7 @@ export default async function BankReceiptPage({
                   Exit
                 </a>
                 <div className="ml-auto flex items-end gap-4">
+                  <PartyBalance balances={partyBalances} />
                   <div>
                     <label className="label block mb-1">Balance Amount</label>
                     <VoucherBalance initial={headVoucher?.balanceAmount ?? 0} />

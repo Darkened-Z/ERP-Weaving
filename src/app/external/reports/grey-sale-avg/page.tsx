@@ -206,7 +206,7 @@ export default async function GreySaleAvgPage({
               <span className="mono">{fmt(totAmount)}</span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 no-print">
             <ExcelExportButton
               rows={excelRows}
               columns={[
@@ -231,7 +231,7 @@ export default async function GreySaleAvgPage({
           </div>
         </div>
 
-        <form action={reportUrl} method="get" className="flex gap-3 items-end flex-wrap border border-black p-3 bg-gray-50 mb-4">
+        <form action={reportUrl} method="get" className="flex gap-3 items-end flex-wrap border border-black p-3 bg-gray-50 mb-4 no-print">
           <div>
             <label className="label block mb-1">Find</label>
             <input name="find" defaultValue={findFilter} placeholder="Contract, Party…" className="input-box mono text-[13px]" style={{ maxWidth: 220 }} />
@@ -277,7 +277,18 @@ export default async function GreySaleAvgPage({
 
         {dateLabel && <div className="text-center text-[13px] font-bold mb-2 mono">{dateLabel}</div>}
 
-        <div className="border border-black">
+        {/* Print (owner 2026-10-22): A4 landscape, the whole table on the page,
+            and the filters in force written under the title instead of the form. */}
+        <style>{`@media print {
+  @page { size: A4 landscape; margin: 8mm; }
+  .gsa-report .overflow-x-auto { overflow: visible !important; }
+  .gsa-report table { width: 100% !important; font-size: 10px !important; }
+  .gsa-report th, .gsa-report td { padding: 3px 5px !important; }
+}`}</style>
+        <div className="hidden print:block text-[11px] mono mb-2">
+          {[fStatus === "R" ? "Status: Running" : fStatus ? `Status: ${fStatus}` : "All statuses", fParty ? `Party: ${fParty}` : "All parties", fLoom ? `Loom: ${fLoom}` : "", from || to ? `${from || "…"} to ${to || "…"}` : ""].filter(Boolean).join(" · ")}
+        </div>
+        <div className="border border-black gsa-report">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>

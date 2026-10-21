@@ -22,8 +22,11 @@ if (isLocal && !isDemo && process.env.NODE_ENV === "production" && !isBuildPhase
 }
 
 function demoDbPath() {
-  const target = path.join(os.tmpdir(), "erp-demo.db");
-  if (!fs.existsSync(target)) fs.copyFileSync(path.join(process.cwd(), "demo", "demo.db"), target);
+  // Keyed by the bundled file's mtime, so a rebuilt demo.db (new columns) is
+  // never shadowed by a copy an older run left in the temp dir.
+  const source = path.join(process.cwd(), "demo", "demo.db");
+  const target = path.join(os.tmpdir(), `erp-demo-${Math.round(fs.statSync(source).mtimeMs)}.db`);
+  if (!fs.existsSync(target)) fs.copyFileSync(source, target);
   return target;
 }
 

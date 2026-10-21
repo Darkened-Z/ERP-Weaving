@@ -1,4 +1,6 @@
 import { Combobox } from "@/components/combobox";
+import { PartyBalance } from "@/components/party-balance";
+import { accountBalances } from "@/lib/gl-balance";
 import { FindingPicker } from "@/components/finding-picker";
 import { ImageAttach } from "@/components/image-attach";
 import { Shell } from "@/components/shell";
@@ -588,6 +590,8 @@ export default async function JournalVoucherPage({
   const cell = "input-box mono text-[12px]";
   const cellNum = "input-box mono text-[12px] text-right";
 
+  const partyBalances = await accountBalances();
+
   return (
     <Shell active="fin-jv">
       <div className="animate-in">
@@ -1010,6 +1014,7 @@ export default async function JournalVoucherPage({
                   </a>
                 </div>
                 <div className="ml-auto">
+                  <PartyBalance balances={partyBalances} fieldName="title" />
                   <JvBalanceBar initialDr={initialDr} initialCr={initialCr} />
                 </div>
               </div>
