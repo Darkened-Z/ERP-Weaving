@@ -47,7 +47,8 @@ export default async function YarnStockPage({
     .select({
       vDate: schema.extYarnPurVoucher.vDate,
       count: schema.extYarnPurVoucherLine.count,
-      bags: schema.extYarnPurVoucherLine.bag,
+      // Bags are entered as Qty; the bag column is rarely filled.
+      bags: sql<number>`coalesce(nullif(${schema.extYarnPurVoucherLine.bag}, 0), ${schema.extYarnPurVoucherLine.qty}, 0)`,
       lbs: schema.extYarnPurVoucherLine.lbs,
       rate: schema.extYarnPurVoucherLine.rate,
     })
@@ -66,7 +67,8 @@ export default async function YarnStockPage({
     .select({
       vDate: schema.extYarnSalVoucher.vDate,
       count: schema.extYarnSalVoucherLine.count,
-      bags: schema.extYarnSalVoucherLine.bag,
+      // Bags are entered as Qty; the bag column is rarely filled.
+      bags: sql<number>`coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)`,
       lbs: schema.extYarnSalVoucherLine.lbs,
     })
     .from(schema.extYarnSalVoucherLine)

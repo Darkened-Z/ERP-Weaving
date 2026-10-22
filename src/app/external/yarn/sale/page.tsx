@@ -725,7 +725,9 @@ export default async function YarnSaleVoucherPage({
       // row, so treating them as data would persist every blank line. Lbs too:
       // it is always qty × 100 and every saved line stores it (0 when blank),
       // so a blank line came back with "0" in it and saved itself again.
-      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && rt == null && !rm) {
+      // A remark alone is not a line either: browser autofill typed "admin" into
+      // the blank rows' Remarks and saved 27 empty lines (found 2026-10-22).
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && rt == null) {
         continue;
       }
 
@@ -1876,6 +1878,7 @@ export default async function YarnSaleVoucherPage({
                             <td>
                               <input
                                 name="line_remarks"
+                                autoComplete="off"
                                 className="input-box mono text-[12px]"
                                 defaultValue={row?.remarks ?? ""}
                                 style={{ minWidth: 140 }}

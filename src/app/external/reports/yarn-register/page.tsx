@@ -111,7 +111,30 @@ export default async function YarnRegisterPage({
       .from(schema.extYarnSalContract)
       .where(and(gte(schema.extYarnSalContract.contDate, from), lte(schema.extYarnSalContract.contDate, to))),
   ]);
-  const optionRows = [...purAll, ...salAll];
+  // The reports read the vouchers, so their parties / counts / brands must be
+  // pickable too. A voucher stores the party NAME; offer its account code.
+  const codeByPartyDesc = new Map(accountRows.map((r) => [r.description, r.code]));
+  const [purVch, salVch] = await Promise.all([
+    db
+      .select({ party: schema.extYarnPurVoucher.party, countCode: schema.extYarnPurVoucherLine.count, brand: schema.extYarnPurVoucherLine.brand })
+      .from(schema.extYarnPurVoucherLine)
+      .innerJoin(schema.extYarnPurVoucher, eq(schema.extYarnPurVoucher.id, schema.extYarnPurVoucherLine.voucherId))
+      .where(and(gte(schema.extYarnPurVoucher.vDate, from), lte(schema.extYarnPurVoucher.vDate, to))),
+    db
+      .select({ party: schema.extYarnSalVoucher.party, countCode: schema.extYarnSalVoucherLine.count, brand: schema.extYarnSalVoucherLine.brand })
+      .from(schema.extYarnSalVoucherLine)
+      .innerJoin(schema.extYarnSalVoucher, eq(schema.extYarnSalVoucher.id, schema.extYarnSalVoucherLine.voucherId))
+      .where(and(gte(schema.extYarnSalVoucher.vDate, from), lte(schema.extYarnSalVoucher.vDate, to))),
+  ]);
+  const optionRows = [
+    ...purAll,
+    ...salAll,
+    ...[...purVch, ...salVch].map((r) => ({
+      partyCode: r.party ? codeByPartyDesc.get(r.party) ?? r.party : null,
+      countCode: r.countCode,
+      brand: r.brand,
+    })),
+  ];
   const uniq = (xs: Array<string | null>) =>
     Array.from(new Set(xs.map((x) => (x ?? "").trim()).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b, undefined, { numeric: true }),
@@ -154,19 +177,18 @@ export default async function YarnRegisterPage({
       )
     )`);
   }
-  if (count) {
+  // A picked count is a code: match it exactly ("2" must not pull in every
+  // count whose name contains a 2). Typed text still searches the names.
+  if (count && countDescByCode.has(count)) {
+    purConditions.push(eq(schema.extYarnPurContract.countCode, count));
+    salConditions.push(eq(schema.extYarnSalContract.countCode, count));
+  } else if (count) {
     const pat = `%${escLike(count)}%`;
-    purConditions.push(sql`(
-      ${schema.extYarnPurContract.countCode} = ${count}
-      OR ${schema.extYarnPurContract.countCode} IN (
-        SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\'
-      )
+    purConditions.push(sql`${schema.extYarnPurContract.countCode} IN (
+      SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\'
     )`);
-    salConditions.push(sql`(
-      ${schema.extYarnSalContract.countCode} = ${count}
-      OR ${schema.extYarnSalContract.countCode} IN (
-        SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\'
-      )
+    salConditions.push(sql`${schema.extYarnSalContract.countCode} IN (
+      SELECT count_code FROM yarn_counts WHERE description LIKE ${pat} ESCAPE '\\'
     )`);
   }
   if (brand) {
@@ -259,18 +281,6 @@ export default async function YarnRegisterPage({
     status ? `Status ${status}` : null,
   ].filter(Boolean);
 
-  const buildHref = (base: string, extra: Record<string, string> = {}) => {
-    const qs = new URLSearchParams();
-    if (from) qs.set("from", from);
-    if (to) qs.set("to", to);
-    if (count) qs.set("code", count);
-    if (brand) qs.set("brand", brand);
-    if (party) qs.set("party", party);
-    for (const [k, v] of Object.entries(extra)) if (v) qs.set(k, v);
-    const q = qs.toString();
-    return q ? `${base}?${q}` : base;
-  };
-
   return (
     <Shell active="ext-r-yarnreg">
       <div className="animate-in">
@@ -313,7 +323,7 @@ export default async function YarnRegisterPage({
           </div>
         </div>
 
-        <form method="GET" action="" className="border border-black p-4 mb-6 no-print">
+        <form id="yr-filter" method="GET" action="" className="border border-black p-4 mb-6 no-print">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <label className="label block mb-1">Date From</label>
@@ -383,12 +393,14 @@ export default async function YarnRegisterPage({
             </div>
 
             <div className="flex flex-col gap-3">
-              <div className="label">Reports (current filters)</div>
+              {/* These submit the filter form as it stands — a date typed but not yet
+                  applied still reaches the report (owner 2026-10-22). */}
+              <div className="label">Reports (filters above)</div>
               <div className="grid grid-cols-2 gap-2">
-                <a href={buildHref("/external/reports/yarn-register/count-avg")} target="_blank" rel="noopener" className="btn btn-outline btn-sm text-center">Count Avg</a>
-                <a href={buildHref("/external/reports/yarn-register/count-list")} target="_blank" rel="noopener" className="btn btn-outline btn-sm text-center">Count</a>
-                <a href={buildHref("/external/reports/yarn-register/register-party")} target="_blank" rel="noopener" className="btn btn-outline btn-sm text-center">Register/Party</a>
-                <a href={buildHref("/external/reports/yarn-register/do-no")} target="_blank" rel="noopener" className="btn btn-outline btn-sm text-center">DO No</a>
+                <button type="submit" form="yr-filter" formAction="/external/reports/yarn-register/count-avg" formTarget="_blank" className="btn btn-outline btn-sm text-center">Count Avg</button>
+                <button type="submit" form="yr-filter" formAction="/external/reports/yarn-register/count-list" formTarget="_blank" className="btn btn-outline btn-sm text-center">Count</button>
+                <button type="submit" form="yr-filter" formAction="/external/reports/yarn-register/register-party" formTarget="_blank" className="btn btn-outline btn-sm text-center">Register/Party</button>
+                <button type="submit" form="yr-filter" formAction="/external/reports/yarn-register/do-no" formTarget="_blank" className="btn btn-outline btn-sm text-center">DO No</button>
               </div>
               <Link href="/" className="btn btn-sm text-center">Exit</Link>
             </div>
