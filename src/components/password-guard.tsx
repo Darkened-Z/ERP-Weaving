@@ -1,6 +1,15 @@
 "use client";
 import { useEffect } from "react";
 
+// serverActions.bodySizeLimit in next.config, less room for the multipart framing.
+const MAX_BODY_BYTES = 3.9 * 1048576;
+
+function formBytes(form: HTMLFormElement) {
+  let total = 0;
+  for (const [, v] of new FormData(form)) total += typeof v === "string" ? v.length : v.size;
+  return total;
+}
+
 export function PasswordGuard({
   formId,
   passwordFieldName = "save_password",
@@ -59,7 +68,21 @@ export function PasswordGuard({
       e.preventDefault();
       e.stopImmediatePropagation();
 
-      const btn = (submitter || form.querySelector("button[type=submit]")) as HTMLButtonElement | null;
+      const size = formBytes(form);
+      if (size > MAX_BODY_BYTES) {
+        showError(
+          `Too many photos on this voucher: ${(size / 1048576).toFixed(1)} MB, the limit is 4 MB. Remove a few photos and save again. Nothing was sent — what you typed is still here.`,
+        );
+        return;
+      }
+
+      // Enter / Ctrl+S submit with no submitter. The fallback must be a button
+      // this form owns — a Find form's Go button can sit inside its markup.
+      const btn = (submitter ||
+        Array.from(form.elements).find(
+          (el) => el instanceof HTMLButtonElement && el.type === "submit" && !el.hasAttribute("formaction"),
+        ) ||
+        null) as HTMLButtonElement | null;
       const originalText = btn ? btn.textContent : "";
       if (btn) {
         btn.disabled = true;

@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
   ...(isDemo ? { outputFileTracingIncludes: { "/**": ["./demo/demo.db"] } } : {}),
   experimental: {
     staleTimes: { dynamic: 0, static: 30 },
+    // Voucher photos travel inside the save form as data URLs (~70 KB each), so
+    // the 1 MB default failed any JV with ~13 photos. Vercel caps a request at
+    // 4.5 MB; PasswordGuard stops the save with a message before this limit.
+    serverActions: { bodySizeLimit: "4mb" },
   },
   async redirects() {
     return [
