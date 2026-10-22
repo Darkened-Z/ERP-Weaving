@@ -17,6 +17,7 @@ export default async function GreySaleAvgPage({
     fparty?: string;
     fstatus?: string;
     floom?: string;
+    ftype?: string;
     find?: string;
   }>;
 }) {
@@ -24,6 +25,7 @@ export default async function GreySaleAvgPage({
   const fParty = (params.fparty ?? "").trim();
   const fStatus = (params.fstatus ?? "R").trim();
   const fLoom = (params.floom ?? "").trim();
+  const fType = params.ftype === "INT" || params.ftype === "EXT" ? params.ftype : "";
   const from = (params.from ?? "").trim();
   const to = (params.to ?? "").trim();
   const findFilter = (params.find ?? "").trim();
@@ -114,6 +116,7 @@ export default async function GreySaleAvgPage({
     if (fStatus && c.status !== fStatus) return false;
     if (fParty && c.party !== fParty) return false;
     if (fLoom && (c.loomType ?? "") !== fLoom) return false;
+    if (fType && c.contractType !== fType) return false;
     if (from && (c.contractDate ?? "") < from) return false;
     if (to && (c.contractDate ?? "") > to) return false;
     if (findL) {
@@ -159,6 +162,7 @@ export default async function GreySaleAvgPage({
       profitLoss,
       amount,
       loomType: c.loomType ?? "",
+      contractType: c.contractType,
       broker: c.broker ?? "",
       status: c.status,
     };
@@ -178,6 +182,7 @@ export default async function GreySaleAvgPage({
 
   const excelRows = rows.map((r) => ({
     contractNo: r.contractNo,
+    type: r.contractType === "EXT" ? "External" : "Internal",
     party: r.party,
     construction: [r.construction, r.quality ? `(${r.quality})` : "", r.warp !== "-" ? `W: ${r.warp}` : "", r.weft !== "-" ? `Wf: ${r.weft}` : ""].filter(Boolean).join(" "),
     width: r.width,
@@ -211,6 +216,7 @@ export default async function GreySaleAvgPage({
               rows={excelRows}
               columns={[
                 { key: "contractNo", label: "Contract" },
+                { key: "type", label: "Type" },
                 { key: "party", label: "Party" },
                 { key: "construction", label: "Construction" },
                 { key: "width", label: "Width" },
@@ -253,6 +259,14 @@ export default async function GreySaleAvgPage({
             </select>
           </div>
           <div>
+            <label className="label block mb-1">Type</label>
+            <select name="ftype" defaultValue={fType} className="input-box mono text-[13px]" style={{ minWidth: 120 }}>
+              <option value="">All</option>
+              <option value="INT">INT - Internal</option>
+              <option value="EXT">EXT - External</option>
+            </select>
+          </div>
+          <div>
             <label className="label block mb-1">Party</label>
             <select name="fparty" defaultValue={fParty} className="input-box mono text-[13px]" style={{ minWidth: 200 }}>
               <option value="">— All parties —</option>
@@ -270,7 +284,7 @@ export default async function GreySaleAvgPage({
             </select>
           </div>
           <button type="submit" className="btn btn-outline btn-sm">Search</button>
-          {(findFilter || from || to || fParty || fLoom || fStatus !== "R") && (
+          {(findFilter || from || to || fParty || fLoom || fType || fStatus !== "R") && (
             <a href={reportUrl} className="btn btn-outline btn-sm">Clear</a>
           )}
         </form>
@@ -286,7 +300,7 @@ export default async function GreySaleAvgPage({
   .gsa-report th, .gsa-report td { padding: 3px 5px !important; }
 }`}</style>
         <div className="hidden print:block text-[11px] mono mb-2">
-          {[fStatus === "R" ? "Status: Running" : fStatus ? `Status: ${fStatus}` : "All statuses", fParty ? `Party: ${fParty}` : "All parties", fLoom ? `Loom: ${fLoom}` : "", from || to ? `${from || "…"} to ${to || "…"}` : ""].filter(Boolean).join(" · ")}
+          {[fStatus === "R" ? "Status: Running" : fStatus ? `Status: ${fStatus}` : "All statuses", fParty ? `Party: ${fParty}` : "All parties", fLoom ? `Loom: ${fLoom}` : "", fType === "INT" ? "Type: Internal" : fType === "EXT" ? "Type: External" : "", from || to ? `${from || "…"} to ${to || "…"}` : ""].filter(Boolean).join(" · ")}
         </div>
         <div className="border border-black gsa-report">
           <div className="overflow-x-auto">
@@ -314,6 +328,7 @@ export default async function GreySaleAvgPage({
                       <Link href={`/external/contracts/grey-sales?id=${r.id}`} className="no-underline" style={{ color: "inherit" }}>
                         {r.contractNo}
                       </Link>
+                      <div className="text-[10px] font-normal text-[var(--muted)]">{r.contractType === "EXT" ? "EXT" : "INT"}</div>
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)]">
                       <div className="text-[13px]">{r.party}</div>
