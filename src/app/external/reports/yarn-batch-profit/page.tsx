@@ -26,7 +26,7 @@ const bags = (lbs: number) => lbs / 100;
 export default async function YarnBatchProfitPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stock?: string }>;
+  searchParams: Promise<{ q?: string; stock?: string; count?: string }>;
 }) {
   // Find one batch (owner 2026-10-22: "where does the detail of this stock
   // come from") — batch no, count, brand, godown or party; In stock only drops
@@ -34,6 +34,8 @@ export default async function YarnBatchProfitPage({
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().toLowerCase();
   const inStockOnly = sp.stock === "1";
+  // Exact count code, from Yarn Stock (Count-wise): every batch of that count.
+  const countQ = (sp.count ?? "").trim();
   const purLines = await db
     .select({
       batchNo: schema.extYarnPurVoucherLine.batchNo,
@@ -106,6 +108,7 @@ export default async function YarnBatchProfitPage({
       };
     })
     .filter((b) => !inStockOnly || b.balLbs > 0.005)
+    .filter((b) => !countQ || String(b.count) === countQ)
     .filter((b) =>
       !q ||
       [b.batchNo, b.count, countLabel.get(String(b.count)), b.brand, b.loc, b.party, b.vNo, ...b.sales.flatMap((x) => [x.party, x.vNo])]
@@ -146,7 +149,9 @@ export default async function YarnBatchProfitPage({
           In stock only
         </label>
         <button type="submit" className="btn btn-sm">Find</button>
-        {(q || inStockOnly) && <a href="/external/reports/yarn-batch-profit" className="btn btn-outline btn-sm">Clear</a>}
+        {countQ && <input type="hidden" name="count" value={countQ} />}
+        {countQ && <span className="text-[12px] mono pb-1.5">Count: {countLabel.get(countQ) || countQ}</span>}
+        {(q || inStockOnly || countQ) && <a href="/external/reports/yarn-batch-profit" className="btn btn-outline btn-sm">Clear</a>}
       </form>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border border-black mb-5">

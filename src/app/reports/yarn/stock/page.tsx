@@ -248,6 +248,7 @@ export default async function YarnStockPage({
                       {countDescMap.get(r.count) ? (
                         <div className="text-[11px] text-[var(--muted)]">{countDescMap.get(r.count)}</div>
                       ) : null}
+                      <a href={`/external/reports/yarn-batch-profit?count=${encodeURIComponent(r.count)}&stock=1`} className="text-[10px] underline font-normal no-print" title="Every batch of this count still in stock">Batches</a>
                     </td>
                     <td className="mono text-right">{fmt(r.opBags)}</td>
                     <td className="mono text-right">{fmt(r.opLbs)}</td>

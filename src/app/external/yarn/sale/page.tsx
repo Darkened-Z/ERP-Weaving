@@ -11,6 +11,7 @@ import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { BatchHeaderFill } from "./batch-header-fill";
+import { BatchDetailLink } from "./batch-detail-link";
 import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
@@ -1722,6 +1723,7 @@ export default async function YarnSaleVoucherPage({
                                 placeholder="pick a batch…"
                                 className="input-box mono text-[11px] cursor-pointer"
                               />
+                              <BatchDetailLink />
                               <input
                                 type="hidden"
                                 name="line_batch_no"
