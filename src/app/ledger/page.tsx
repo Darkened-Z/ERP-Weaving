@@ -332,7 +332,7 @@ export default async function LedgerPage({
                       <td className="mono text-right">
                         {entry.debit > 0 ? formatNum(entry.debit) : ""}
                         {partySide === "creditor" && paymentShare(entry) && (
-                          <div className="text-[10px] text-[var(--muted)] whitespace-nowrap">
+                          <div className="text-[10px] text-[var(--muted)] whitespace-nowrap no-print">
                             {paymentShare(entry)!.pct.toFixed(1)}% of {formatNum(paymentShare(entry)!.owed)}
                           </div>
                         )}
@@ -340,7 +340,7 @@ export default async function LedgerPage({
                       <td className="mono text-right">
                         {entry.credit > 0 ? formatNum(entry.credit) : ""}
                         {partySide === "debtor" && paymentShare(entry) && (
-                          <div className="text-[10px] text-[var(--muted)] whitespace-nowrap">
+                          <div className="text-[10px] text-[var(--muted)] whitespace-nowrap no-print">
                             {paymentShare(entry)!.pct.toFixed(1)}% of {formatNum(paymentShare(entry)!.owed)}
                           </div>
                         )}

@@ -75,16 +75,22 @@ export function Signatures() {
   );
 }
 
-/** Purchase / sale subtotal rows, plus the balance when both are shown. */
-function SubRows({ lines, label, foot }: { lines: RegisterLine[]; label: string; foot?: boolean }) {
+/** Purchase and sale totals of a set of lines (only the types present). */
+function typeTotals(lines: RegisterLine[]): { name: string; t: Totals }[] {
   const pur = lines.filter((l) => l.type === "PUR");
   const sal = lines.filter((l) => l.type === "SAL");
-  const rows: { name: string; t: Totals; bal?: boolean }[] = [];
-  if (pur.length) rows.push({ name: "Purchase", t: totalsOf(pur) });
-  if (sal.length) rows.push({ name: "Sale", t: totalsOf(sal) });
-  if (pur.length && sal.length) {
-    const p = totalsOf(pur);
-    const s = totalsOf(sal);
+  return [
+    ...(pur.length ? [{ name: "Purchase", t: totalsOf(pur) }] : []),
+    ...(sal.length ? [{ name: "Sale", t: totalsOf(sal) }] : []),
+  ];
+}
+
+/** Purchase / sale subtotal rows, plus the balance when both are shown. */
+function SubRows({ lines, label, foot, balanceOnly }: { lines: RegisterLine[]; label: string; foot?: boolean; balanceOnly?: boolean }) {
+  const tt = typeTotals(lines);
+  const rows: { name: string; t: Totals; bal?: boolean }[] = balanceOnly ? [] : [...tt];
+  if (tt.length === 2) {
+    const [p, s] = [tt[0].t, tt[1].t];
     rows.push({ name: "Balance", t: { bags: p.bags - s.bags, lbs: p.lbs - s.lbs, amount: 0, avgRate: 0 }, bal: true });
   }
   return (
@@ -108,6 +114,8 @@ function SubRows({ lines, label, foot }: { lines: RegisterLine[]; label: string;
  * The Oracle Yarn Sale Register layout: one block per count (or per party),
  * every voucher line in it by date, then the block's bags / lbs / average rate /
  * amount. Purchases and sales are totalled apart — adding them would mean nothing.
+ * `avgHeader` = the Oracle Yarn Purchase Register (Count Avg): the block's Avg
+ * Rate and totals sit on the count's own header row, the vouchers under it.
  */
 export async function RegisterReport({
   title,
@@ -115,12 +123,14 @@ export async function RegisterReport({
   groupBy,
   filter,
   filename,
+  avgHeader = false,
 }: {
   title: string;
   lines: RegisterLine[];
   groupBy: "count" | "party";
   filter: string;
   filename: string;
+  avgHeader?: boolean;
 }) {
   const keyOf = (l: RegisterLine) => (groupBy === "count" ? l.countLabel : l.party || "—");
   const groups = new Map<string, RegisterLine[]>();
@@ -138,7 +148,7 @@ export async function RegisterReport({
       vDate: l.vDate,
       desc: groupBy === "count" ? l.party : l.countLabel,
       brand: l.brand,
-      contNo: l.contNo,
+      doNo: l.doNo,
       bags: l.bags,
       lbs: l.lbs,
       rate: l.rate,
@@ -161,7 +171,7 @@ export async function RegisterReport({
                 { key: "vDate", label: "V. Date" },
                 { key: "desc", label: descHead },
                 { key: "brand", label: "Brand" },
-                { key: "contNo", label: "Cont #" },
+                { key: "doNo", label: "DO #" },
                 { key: "bags", label: "Bags" },
                 { key: "lbs", label: "Lbs" },
                 { key: "rate", label: "Rate" },
@@ -188,7 +198,7 @@ export async function RegisterReport({
                   <th>V. Date</th>
                   <th>{descHead}</th>
                   <th>Brand</th>
-                  <th>Cont #</th>
+                  <th>DO #</th>
                   <th className="num">Bags</th>
                   <th className="num">Lbs</th>
                   <th className="num">Rate</th>
@@ -202,7 +212,7 @@ export async function RegisterReport({
                   </tr>
                 )}
                 {ordered.map(([k, ls]) => (
-                  <GroupBlock key={k} label={k} lines={ls} groupBy={groupBy} />
+                  <GroupBlock key={k} label={k} lines={ls} groupBy={groupBy} avgHeader={avgHeader} />
                 ))}
               </tbody>
               {lines.length > 0 && (
@@ -220,26 +230,42 @@ export async function RegisterReport({
   );
 }
 
-function GroupBlock({ label, lines, groupBy }: { label: string; lines: RegisterLine[]; groupBy: "count" | "party" }) {
+function GroupBlock({ label, lines, groupBy, avgHeader }: { label: string; lines: RegisterLine[]; groupBy: "count" | "party"; avgHeader: boolean }) {
+  const tt = typeTotals(lines);
   return (
     <>
-      <tr className="rp-grp">
-        <td colSpan={9}>{label}</td>
-      </tr>
+      {avgHeader ? (
+        tt.map((r, i) => (
+          <tr key={r.name} className="rp-grp">
+            <td colSpan={3}>{i === 0 ? label : ""}</td>
+            <td colSpan={2} className="num">
+              {tt.length > 1 ? `${r.name} ` : ""}Avg Rate {fmt(r.t.avgRate, 2)}
+            </td>
+            <td className="num">{fmt(r.t.bags, 2)}</td>
+            <td className="num">{fmt(r.t.lbs)}</td>
+            <td></td>
+            <td className="num">{fmt(r.t.amount)}</td>
+          </tr>
+        ))
+      ) : (
+        <tr className="rp-grp">
+          <td colSpan={9}>{label}</td>
+        </tr>
+      )}
       {lines.map((l, i) => (
         <tr key={`${l.vNo}-${i}`}>
           <td className="mono">{l.vNo}</td>
           <td className="mono">{l.vDate}</td>
           <td>{groupBy === "count" ? l.party : l.countLabel}</td>
           <td>{l.brand}</td>
-          <td className="mono">{l.contNo}</td>
+          <td className="mono">{l.doNo}</td>
           <td className="num">{fmt(l.bags, 2)}</td>
           <td className="num">{fmt(l.lbs)}</td>
           <td className="num">{fmt(l.rate, 2)}</td>
           <td className="num">{fmt(l.amount)}</td>
         </tr>
       ))}
-      <SubRows lines={lines} label="" />
+      <SubRows lines={lines} label="" balanceOnly={avgHeader} />
     </>
   );
 }

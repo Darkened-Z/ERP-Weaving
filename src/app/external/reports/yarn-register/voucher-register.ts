@@ -29,7 +29,7 @@ export type RegisterLine = {
   countCode: string;
   countLabel: string;
   brand: string;
-  contNo: string;
+  doNo: string;
   bags: number;
   lbs: number;
   rate: number;
@@ -95,20 +95,20 @@ export async function loadRegister(f: RegisterFilters) {
     f.type === "SAL"
       ? []
       : db
-          .select({ vNo: P.vNo, vDate: P.vDate, party: P.party, count: PL.count, brand: PL.brand, contNo: PL.contNo, qty: PL.qty, bag: PL.bag, lbs: PL.lbs, rate: PL.rate })
+          .select({ vNo: P.vNo, vDate: P.vDate, party: P.party, count: PL.count, brand: PL.brand, doNo: PL.doNo, qty: PL.qty, bag: PL.bag, lbs: PL.lbs, rate: PL.rate })
           .from(PL)
           .innerJoin(P, eq(P.id, PL.voucherId))
           .where(conds(P, PL)),
     f.type === "PUR"
       ? []
       : db
-          .select({ vNo: S.vNo, vDate: S.vDate, party: S.party, count: SL.count, brand: SL.brand, contNo: SL.contNo, qty: SL.qty, bag: SL.bag, lbs: SL.lbs, rate: SL.rate, amt: SL.amt })
+          .select({ vNo: S.vNo, vDate: S.vDate, party: S.party, count: SL.count, brand: SL.brand, doNo: SL.doNo, qty: SL.qty, bag: SL.bag, lbs: SL.lbs, rate: SL.rate, amt: SL.amt })
           .from(SL)
           .innerJoin(S, eq(S.id, SL.voucherId))
           .where(conds(S, SL)),
   ]);
 
-  const line = (type: "PUR" | "SAL", r: { vNo: string; vDate: string; party: string | null; count: string | null; brand: string | null; contNo: string | null; qty: number | null; bag: number | null; lbs: number | null; rate: number | null }, amt: number | null): RegisterLine => {
+  const line = (type: "PUR" | "SAL", r: { vNo: string; vDate: string; party: string | null; count: string | null; brand: string | null; doNo: string | null; qty: number | null; bag: number | null; lbs: number | null; rate: number | null }, amt: number | null): RegisterLine => {
     const lbs = r.lbs ?? 0;
     const rate = r.rate ?? 0;
     const countCode = (r.count ?? "").trim();
@@ -120,7 +120,7 @@ export async function loadRegister(f: RegisterFilters) {
       countCode,
       countLabel: labels.get(countCode) || countCode || "—",
       brand: r.brand ?? "",
-      contNo: r.contNo ?? "",
+      doNo: r.doNo ?? "",
       // Bags are entered as Qty (lbs = qty × 100); the bag column is rarely filled.
       bags: r.bag || r.qty || 0,
       lbs,
