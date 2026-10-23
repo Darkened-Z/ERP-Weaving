@@ -94,7 +94,7 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - DO No / Pur & Sal Cont. History stay contract-based (they are about contracts and deliveries).
 
 ## Reports — Yarn Stock (`external/reports/yarn-stock`)
-- One row per purchase voucher + count with Sold / Bal Lbs and **Bal Bags**; **under each row, every sale that took its batches** ("↳ YSV-… Sold to <party>", bags, lbs, rate, amount, up to Date To), so the balance can be traced (owner 2026-10-23: "106 bags bought, 14 left — where did the rest go"). Excel export carries the sale rows too ("sold: YSV-…", negative bags / lbs).
+- One row per purchase voucher + count with Sold / Bal Lbs and **Bal Bags**; **under each row, every sale that took its batches** ("↳ YSV-… Sold to <party>", bags, lbs, rate, amount, up to Date To), so the balance can be traced (owner 2026-10-23: "106 bags bought, 14 left — where did the rest go"). **Zeros** select like Folding Stock (`zero`: W.Z without zero = default, hides fully sold purchases; W.O.Z with zero); the bags / lbs tiles carry the balance. Excel export carries the sale rows too ("sold: YSV-…", negative bags / lbs).
 
 ## Yarn — Internal Transfer (`inventory/yarn-transfer`)
 - **Transfer From / Transfer To party** = DEBTORS-CONVERSION **WVG head `1.01.01.01.*` ONLY** (`WVG_CONVERSION_PREFIX`). **Location From** default = yarn-stock godown `1.01.25.01.0001` (resolved by CODE). **Location From + Location To** = **GODOWN accounts only** (`1.01.25.01.*` via `godownLocationOpts`; sizing / CHQ-FAILED excluded) + loom sheds in To. (Prior free-text location history dropped — godowns cover it.)

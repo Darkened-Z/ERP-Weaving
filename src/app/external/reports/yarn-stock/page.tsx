@@ -45,7 +45,7 @@ type SaleOut = { vNo: string; vDate: string; party: string; bags: number; lbs: n
 export default async function YarnStockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; code?: string; description?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; code?: string; description?: string; zero?: string }>;
 }) {
   await requireSession();
   const params = await searchParams;
@@ -55,6 +55,9 @@ export default async function YarnStockPage({
   const to = params.to?.trim() || today;
   const code = params.code?.trim() ?? "";
   const description = params.description?.trim() ?? "";
+  // Without zero by default, like Folding Stock (owner 2026-10-23): a fully
+  // sold purchase has nothing left to show.
+  const withZero = params.zero === "1";
 
   const conditions = [
     gte(schema.extYarnPurVoucher.vDate, from),
@@ -208,7 +211,7 @@ export default async function YarnStockPage({
     for (const r of soldRows) if (r.batchNo) soldByBatch.set(r.batchNo, Number(r.lbs ?? 0));
   }
 
-  const rows: StockRow[] = Array.from(byKey.values())
+  const allRows: StockRow[] = Array.from(byKey.values())
     .filter((a) => a.lbs > 0 || a.bags > 0)
     .sort((a, b) => (a.vDate < b.vDate ? 1 : a.vDate > b.vDate ? -1 : b.id - a.id))
     .map((agg) => {
@@ -236,7 +239,8 @@ export default async function YarnStockPage({
       };
     });
 
-  for (const r of rows) r.balBags = r.bags - r.sales.reduce((s, x) => s + x.bags, 0);
+  for (const r of allRows) r.balBags = r.bags - r.sales.reduce((s, x) => s + x.bags, 0);
+  const rows = allRows.filter((r) => withZero || Math.abs(r.balLbs) >= 0.005);
 
   const uniqueVouchers = new Set(rows.map((r) => r.id)).size;
   const totalBags = rows.reduce((s, r) => s + r.bags, 0);
@@ -273,6 +277,7 @@ export default async function YarnStockPage({
             <h1 className="page-title">Yarn Stock</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
               {uniqueVouchers} voucher{uniqueVouchers === 1 ? "" : "s"} &middot; {from} to {to}
+              {withZero ? " · with zero" : " · without zero"}
             </p>
           </div>
           <div className="flex gap-2">
@@ -304,7 +309,7 @@ export default async function YarnStockPage({
         <div className="hidden print:block mb-6">
           <h1 className="page-title">Yarn Stock</h1>
           <div className="mono text-[12px] mt-2">
-            Period: {from} to {to}
+            Period: {from} to {to}{withZero ? " · with zero" : " · without zero"}
           </div>
         </div>
 
@@ -329,6 +334,13 @@ export default async function YarnStockPage({
             <label className="label block mb-1">Description</label>
             <input type="text" name="description" defaultValue={description} className="input-box" placeholder="Brand / Party" />
           </div>
+          <div>
+            <label className="label block mb-1">Zeros</label>
+            <select name="zero" defaultValue={withZero ? "1" : "0"} className="input-box mono">
+              <option value="0">W.Z — without zero</option>
+              <option value="1">W.O.Z — with zero</option>
+            </select>
+          </div>
           <div className="sm:col-span-4 flex gap-2">
             <button type="submit" className="btn btn-sm">Apply</button>
             <a href="/external/reports/yarn-stock" className="btn btn-outline btn-sm">Clear</a>
@@ -342,11 +354,11 @@ export default async function YarnStockPage({
           </div>
           <div className="bg-white p-4">
             <div className="mono text-xl font-bold">{fmt2(totalBags)}</div>
-            <div className="stat-label">Total Bags</div>
+            <div className="stat-label">Total Bags · balance {fmt2(rows.reduce((s, r) => s + r.balBags, 0))}</div>
           </div>
           <div className="bg-white p-4">
             <div className="mono text-xl font-bold">{fmt(totalLbs)}</div>
-            <div className="stat-label">Total Lbs</div>
+            <div className="stat-label">Total Lbs · balance {fmt(rows.reduce((s, r) => s + r.balLbs, 0))}</div>
           </div>
           <div className="bg-white p-4">
             <div className="mono text-xl font-bold">Rs {fmt(totalAmount)}</div>
