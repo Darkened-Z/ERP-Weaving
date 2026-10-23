@@ -81,7 +81,8 @@ export async function loadRegister(f: RegisterFilters) {
           : sql`${l.count} IN (SELECT count_code FROM yarn_counts WHERE description LIKE ${`%${escLike(f.count)}%`} ESCAPE '\\')`,
       );
     }
-    if (f.brand) c.push(sql`${l.brand} LIKE ${`%${escLike(f.brand)}%`} ESCAPE '\\'`);
+    // Brand is picked from the list: "AJ" means AJ, not every brand containing "aj".
+    if (f.brand) c.push(sql`UPPER(TRIM(${l.brand})) = ${f.brand.toUpperCase()}`);
     if (f.rate !== null) c.push(sql`ABS(COALESCE(${l.rate}, 0) - ${f.rate}) < 0.0001`);
     return and(...c);
   };

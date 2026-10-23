@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Shell } from "@/components/shell";
 import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -34,7 +35,12 @@ type StockRow = {
   amount: number | null;
   soldLbs: number;
   balLbs: number;
+  balBags: number;
+  sales: SaleOut[];
 };
+
+/** One sale that took yarn out of a purchase batch. */
+type SaleOut = { vNo: string; vDate: string; party: string; bags: number; lbs: number; rate: number; amount: number };
 
 export default async function YarnStockPage({
   searchParams,
@@ -154,7 +160,42 @@ export default async function YarnStockPage({
   // purchase line is its lbs less every sale of its batches up to `to`.
   const allBatches = Array.from(new Set(Array.from(byKey.values()).flatMap((a) => Array.from(a.batches))));
   const soldByBatch = new Map<string, number>();
+  // Which sales took each batch, so the balance can be traced (owner 2026-10-23:
+  // "106 bags bought, 14 left — where did the rest go?").
+  const salesByBatch = new Map<string, SaleOut[]>();
   if (allBatches.length) {
+    const saleRows = await db
+      .select({
+        batchNo: schema.extYarnSalVoucherLine.batchNo,
+        vNo: schema.extYarnSalVoucher.vNo,
+        vDate: schema.extYarnSalVoucher.vDate,
+        party: schema.extYarnSalVoucher.party,
+        bag: schema.extYarnSalVoucherLine.bag,
+        qty: schema.extYarnSalVoucherLine.qty,
+        lbs: schema.extYarnSalVoucherLine.lbs,
+        rate: schema.extYarnSalVoucherLine.rate,
+        amt: schema.extYarnSalVoucherLine.amt,
+      })
+      .from(schema.extYarnSalVoucherLine)
+      .innerJoin(schema.extYarnSalVoucher, eq(schema.extYarnSalVoucher.id, schema.extYarnSalVoucherLine.voucherId))
+      .where(and(inArray(schema.extYarnSalVoucherLine.batchNo, allBatches), lte(schema.extYarnSalVoucher.vDate, to)))
+      .orderBy(schema.extYarnSalVoucher.vDate, schema.extYarnSalVoucher.vNo);
+    for (const r of saleRows) {
+      if (!r.batchNo) continue;
+      const lbs = r.lbs ?? 0;
+      const list = salesByBatch.get(r.batchNo) ?? [];
+      list.push({
+        vNo: r.vNo,
+        vDate: r.vDate,
+        party: r.party ?? "",
+        bags: r.bag || r.qty || lbs / 100,
+        lbs,
+        rate: r.rate ?? 0,
+        amount: r.amt ?? lbs * (r.rate ?? 0),
+      });
+      salesByBatch.set(r.batchNo, list);
+    }
+
     const soldRows = await db
       .select({
         batchNo: schema.extYarnSalVoucherLine.batchNo,
@@ -188,21 +229,41 @@ export default async function YarnStockPage({
         amount: agg.hasRate ? agg.amount : null,
         soldLbs: Array.from(agg.batches).reduce((s, b) => s + (soldByBatch.get(b) ?? 0), 0),
         balLbs: agg.lbs - Array.from(agg.batches).reduce((s, b) => s + (soldByBatch.get(b) ?? 0), 0),
+        balBags: 0,
+        sales: Array.from(agg.batches)
+          .flatMap((b) => salesByBatch.get(b) ?? [])
+          .sort((x, y) => x.vDate.localeCompare(y.vDate) || x.vNo.localeCompare(y.vNo)),
       };
     });
+
+  for (const r of rows) r.balBags = r.bags - r.sales.reduce((s, x) => s + x.bags, 0);
 
   const uniqueVouchers = new Set(rows.map((r) => r.id)).size;
   const totalBags = rows.reduce((s, r) => s + r.bags, 0);
   const totalLbs = rows.reduce((s, r) => s + r.lbs, 0);
   const totalAmount = rows.reduce((s, r) => s + (r.amount ?? 0), 0);
 
-  const excelRows = rows.map((r) => ({
-    ...r,
-    party: r.party ?? "",
-    count: r.count ?? "",
-    blend: r.count ? (countBlendMap.get(r.count) ?? "") : "",
-    brand: r.brand ?? "",
-  }));
+  const excelRows = rows.flatMap((r) => [
+    {
+      ...r,
+      party: r.party ?? "",
+      count: r.count ?? "",
+      blend: r.count ? (countBlendMap.get(r.count) ?? "") : "",
+      brand: r.brand ?? "",
+    },
+    ...r.sales.map((x) => ({
+      vNo: `  sold: ${x.vNo}`,
+      vDate: x.vDate,
+      party: x.party,
+      count: "",
+      blend: "",
+      brand: "",
+      bags: -x.bags,
+      lbs: -x.lbs,
+      rate: x.rate,
+      amount: x.amount,
+    })),
+  ]);
 
   return (
     <Shell active="ext-r-yarnstock">
@@ -230,6 +291,7 @@ export default async function YarnStockPage({
                 { key: "lbs", label: "Lbs" },
                 { key: "soldLbs", label: "Sold Lbs" },
                 { key: "balLbs", label: "Bal Lbs" },
+                { key: "balBags", label: "Bal Bags" },
                 { key: "rate", label: "Rate" },
                 { key: "amount", label: "Amount" },
               ]}
@@ -306,6 +368,7 @@ export default async function YarnStockPage({
                 <th className="text-right">Lbs</th>
                 <th className="text-right">Sold Lbs</th>
                 <th className="text-right">Bal Lbs</th>
+                <th className="text-right">Bal Bags</th>
                 <th className="text-right">Rate</th>
                 <th className="text-right">Amount</th>
               </tr>
@@ -313,13 +376,14 @@ export default async function YarnStockPage({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="text-center text-[var(--muted)] py-8">
+                  <td colSpan={13} className="text-center text-[var(--muted)] py-8">
                     No records found
                   </td>
                 </tr>
               ) : (
                 rows.map((r, i) => (
-                  <tr key={`${r.id}-${r.count}-${i}`}>
+                  <Fragment key={`${r.id}-${r.count}-${i}`}>
+                  <tr>
                     <td className="mono text-[13px] font-bold">{r.vNo}</td>
                     <td className="mono text-[13px]">{r.vDate}</td>
                     <td className="text-[13px]">{r.party ?? "-"}</td>
@@ -338,9 +402,28 @@ export default async function YarnStockPage({
                     <td className="mono text-right">{fmt2(r.lbs)}</td>
                     <td className="mono text-right">{fmt2(r.soldLbs)}</td>
                     <td className="mono text-right font-bold">{fmt2(r.balLbs)}</td>
+                    <td className="mono text-right font-bold">{fmt2(r.balBags)}</td>
                     <td className="mono text-right">{r.rate != null ? fmt(r.rate) : "-"}</td>
                     <td className="mono text-right font-bold">{r.amount != null ? fmt(r.amount) : "-"}</td>
                   </tr>
+                  {r.sales.map((x, j) => (
+                    <tr key={j} className="text-[var(--muted)]">
+                      <td className="mono text-[12px] whitespace-nowrap pl-4">↳ {x.vNo}</td>
+                      <td className="mono text-[12px]">{x.vDate}</td>
+                      <td className="text-[12px]">Sold to {x.party || "-"}</td>
+                      <td></td>
+                      <td></td>
+                      <td className="mono text-right text-[12px]">−{fmt2(x.bags)}</td>
+                      <td></td>
+                      <td className="mono text-right text-[12px]">−{fmt2(x.lbs)}</td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                      <td className="mono text-right text-[12px]">{fmt(x.rate)}</td>
+                      <td className="mono text-right text-[12px]">{fmt(x.amount)}</td>
+                    </tr>
+                  ))}
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -357,6 +440,7 @@ export default async function YarnStockPage({
                   <td className="mono text-right">{fmt(totalLbs)}</td>
                   <td className="mono text-right">{fmt(rows.reduce((s, r) => s + r.soldLbs, 0))}</td>
                   <td className="mono text-right">{fmt(rows.reduce((s, r) => s + r.balLbs, 0))}</td>
+                  <td className="mono text-right">{fmt2(rows.reduce((s, r) => s + r.balBags, 0))}</td>
                   <td className="mono text-right">{totalLbs > 0 && totalAmount > 0 ? fmt(totalAmount / totalLbs) : "-"}</td>
                   <td className="mono text-right font-bold">Rs {fmt(totalAmount)}</td>
                 </tr>
