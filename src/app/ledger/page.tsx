@@ -3,7 +3,7 @@ import { ImageLinks } from "@/components/image-links";
 import { Combobox } from "@/components/combobox";
 import { PrintButton } from "@/components/print-button";
 import { db, schema } from "@/db";
-import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, sql, inArray } from "drizzle-orm";
 import { today } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
 
@@ -135,10 +135,32 @@ export default async function LedgerPage({
       .where(and(...rangeConds))
       .orderBy(schema.transMain.vdate, schema.transMain.id);
 
+    // A JV pair — exactly two lines with the same narration — is one
+    // transaction: a photo on either line shows on both ledgers (owner
+    // 2026-10-23, the bank slip was on the party line, the bank ledger showed —).
+    const pairKey = (fy: string, vno: number, narr: string | null) => `${fy}|${vno}|${(narr ?? "").trim().toUpperCase()}`;
+    const pairImg = new Map<string, string>();
+    const jvNos = [...new Set(raw.filter((r) => r.vtype === "JV" && !r.lineImg && (r.narration ?? "").trim()).map((r) => r.vno))];
+    if (jvNos.length) {
+      const jvLines = await db
+        .select({ fyCode: schema.transDetail.fyCode, vno: schema.transDetail.vno, narration: schema.transDetail.narration, img: schema.transDetail.img })
+        .from(schema.transDetail)
+        .where(and(eq(schema.transDetail.vtype, "JV"), inArray(schema.transDetail.vno, jvNos)));
+      const groups = new Map<string, (string | null)[]>();
+      for (const l of jvLines) {
+        const k = pairKey(l.fyCode, l.vno, l.narration);
+        groups.set(k, [...(groups.get(k) ?? []), l.img]);
+      }
+      for (const [k, imgs] of groups) {
+        const withImg = imgs.filter(Boolean);
+        if (imgs.length === 2 && withImg.length) pairImg.set(k, withImg[0]!);
+      }
+    }
+
     let running = openingBalance;
     entries = raw.map((r) => {
       running += r.debit - r.credit;
-      const img = r.lineImg || (r.vtype !== "JV" && !r.lineImg ? r.mainImg : null);
+      const img = r.lineImg || (r.vtype === "JV" ? pairImg.get(pairKey(r.fyCode, r.vno, r.narration)) ?? null : r.mainImg);
       return { ...r, img, balance: running };
     });
   }

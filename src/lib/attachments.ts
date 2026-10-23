@@ -17,6 +17,13 @@ export function parseImages(v: string | null | undefined): string[] {
   return [raw];
 }
 
+/** Several image fields as one value: null, the lone image, or a JSON array. */
+export function mergeImages(values: (string | null | undefined)[]): string | null {
+  const all = values.flatMap(parseImages);
+  if (!all.length) return null;
+  return all.length === 1 ? all[0] : JSON.stringify(all);
+}
+
 /** First image, for thumbnails and list rows that only have room for one. */
 export function firstImage(v: string | null | undefined): string {
   return parseImages(v)[0] ?? "";

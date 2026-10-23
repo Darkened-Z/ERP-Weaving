@@ -184,6 +184,8 @@ async function saveVoucher(formData: FormData) {
         vno,
         srno: 100 + i,
         accCode: cashCode!,
+        // The cash line is what the cash ledger shows: it carries the line's photo.
+        img: r.img,
         partyCode: cashCode,
         narration: ((r.narr ?? "") + chq).trim() || null,
         debit: 0,

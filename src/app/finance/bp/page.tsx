@@ -2,6 +2,7 @@ import { Shell } from "@/components/shell";
 import { PartyBalance } from "@/components/party-balance";
 import { accountBalances } from "@/lib/gl-balance";
 import { ImageAttach } from "@/components/image-attach";
+import { mergeImages } from "@/lib/attachments";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { GrowRows } from "@/components/grow-rows";
 import { RowClearButton } from "@/components/row-clear-button";
@@ -177,6 +178,8 @@ async function saveVoucher(formData: FormData) {
         vno,
         srno: CONTRA_BASE + 1,
         accCode: bankAcc as string,
+        // The bank line is what the bank ledger shows: it carries the lines' photos.
+        img: mergeImages(postable.map((l) => l.img)),
         partyCode: bankAcc,
         debit: IS_RECEIPT ? total : 0,
         credit: IS_RECEIPT ? 0 : total,
@@ -193,6 +196,7 @@ async function saveVoucher(formData: FormData) {
           vno,
           srno: CONTRA_BASE + i + 1,
           accCode: bankAcc as string,
+          img: l.img,
           partyCode: bankAcc,
           debit: IS_RECEIPT ? l.amount : 0,
           credit: IS_RECEIPT ? 0 : l.amount,
