@@ -864,3 +864,34 @@ export function CountGridFiller({
   }, [contractRows, rows]);
   return null;
 }
+
+/**
+ * Keeps the Beam Cost Party "Warp" box on the warp of the beams now in the beam
+ * grid. A loom pick (LoomBeamsFill) and a manual beam pick both fire change on
+ * the beamNo inputs, so one listener covers both; erasing a row clears it too.
+ */
+export function BeamWarpFill({ map }: { map: Record<string, string> }) {
+  useEffect(() => {
+    const recompute = () => {
+      const out = document.querySelector<HTMLInputElement>('input[name="beamWarpInfo"]');
+      if (!out) return;
+      const nos = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="beamNo"]'))
+        .map((i) => i.value.trim())
+        .filter(Boolean);
+      out.value = Array.from(new Set(nos.map((n) => map[n]).filter(Boolean))).join("  +  ");
+    };
+    const onEvent = (e: Event) => {
+      const target = e.target as HTMLInputElement | null;
+      const detail = (e as CustomEvent).detail as { name?: string } | undefined;
+      if (target?.name === "beamNo" || detail?.name === "beamNo") setTimeout(recompute, 0);
+    };
+    recompute();
+    document.addEventListener("change", onEvent);
+    document.addEventListener("combobox:change", onEvent);
+    return () => {
+      document.removeEventListener("change", onEvent);
+      document.removeEventListener("combobox:change", onEvent);
+    };
+  }, [map]);
+  return null;
+}

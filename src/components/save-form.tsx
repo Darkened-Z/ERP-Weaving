@@ -8,11 +8,14 @@ export type SaveError = {
   thru?: string;
   loom?: string;
   beam?: string;
+  cont?: string;
+  bw?: string;
+  cw?: string;
 } | null;
 
 const msgs: Record<string, (e: SaveError) => string> = {
   no_password: () => "Password is required to save.",
-  wrong_password: () => "Incorrect password. Nothing was sent � what you typed is still here.",
+  wrong_password: () => "Incorrect password. Nothing was sent — what you typed is still here.",
   code_exists: () => "Voucher number already exists. Try again.",
   period_locked: (e) =>
     `Period is locked. Cannot save vouchers for this date${e?.thru ? ` — locked through ${e.thru}` : ""}.`,
@@ -27,6 +30,8 @@ const msgs: Record<string, (e: SaveError) => string> = {
     "Party cross — every beam’s contract must belong to the same conversion party. Fix the loom/contract selection.",
   party_mismatch: () =>
     "Party mismatch — Conv Contract Party and Beam Cost Party must be the same. Check the Parties section before saving.",
+  warp_mismatch: (e) =>
+    `Warp mismatch — beam ${e?.beam ?? ""} carries warp count ${e?.bw ?? ""}, but contract ${e?.cont ?? ""} has warp count ${e?.cw ?? ""}. Beam Cost Party warp and Yarn Cost Party warp must be the same. Nothing was saved.`,
   no_grade: () => "Total grade production must be greater than 0.",
   loom_taken: (e) =>
     `${e?.loom ?? "That loom"} now carries beam ${e?.beam ?? ""} — this change would put another beam back on it. Empty or move ${e?.beam ?? "it"} first. Nothing was saved.`,

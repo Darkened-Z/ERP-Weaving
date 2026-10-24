@@ -4,7 +4,9 @@ import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
 import { RowAutoFill, AutoFill } from "@/components/auto-fill";
 import { FindingPicker } from "@/components/finding-picker";
-import { ProductionSetCalc, LoomBeamsFill, BeamPartyFill, RowErase, HideEmptyRows } from "@/components/production-calc";
+import { ProductionSetCalc, LoomBeamsFill, BeamPartyFill, BeamWarpFill, RowErase, HideEmptyRows } from "@/components/production-calc";
+import { beamWarps, contractWarpCounts, warpMismatch } from "@/lib/beam-warp";
+import { countLabelMap } from "@/lib/grey-quality";
 import { ThanSerialLive } from "@/components/than-serial-live";
 import { loadConvContracts } from "@/lib/conv-contracts";
 import { thanLetter } from "@/lib/than-serial";
@@ -281,6 +283,21 @@ export default async function DailyProductionPage({
     if (b.beamNo) beamPartyMap[b.beamNo] = { ...partiesOfBeam(b), contNo: b.contractNo ?? null };
   }
 
+  // Beam Cost Party shows the WARP the beam carries (owner 2026-10-24) — count
+  // off the sizing contract of its receiving bill, brand off the bill's line,
+  // ends off the beam. The save refuses a beam whose warp count is not the
+  // contract's warp count.
+  const [warpOfBeam, countRows] = await Promise.all([
+    beamWarps(),
+    db.select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type }).from(schema.yarnCounts),
+  ]);
+  const countLabels = countLabelMap(countRows);
+  const beamWarpText: Record<string, string> = {};
+  for (const [beamNo, w] of warpOfBeam) {
+    const counts = w.counts.map((c) => `${c}. ${countLabels.get(c) ?? ""}`.trim()).join(" + ") || "Count not recorded (no sizing contract)";
+    beamWarpText[beamNo] = `${counts}${w.brand ? ` ${w.brand}` : ""}${w.ends != null ? ` — ${w.ends} E` : ""}`;
+  }
+
   // Mounted beams — KNOTTING after the knotting bill, PRODUCTION once already in
   // production, RUNNING kept for pre-lifecycle records. The SET NO LIST + loom→beam source.
   // A beam is ON a loom from the moment knotting mounts it until production
@@ -492,7 +509,7 @@ export default async function DailyProductionPage({
   // Yarn spec per contract — READ × PICK off the contract head, warp/weft yarn
   // descriptions off its count grids. Shown under the PARTIES boxes (owner) so the
   // operator can see what the beam on the loom is actually weaving.
-  const yarnSpecByCont: Record<string, { yarnReadPick: string; yarnWarpInfo: string; yarnWeftInfo: string; beamWeftInfo: string }> = {};
+  const yarnSpecByCont: Record<string, { yarnReadPick: string; yarnWarpInfo: string; yarnWeftInfo: string }> = {};
   {
     type YarnRow = { contractId: number; count: string | null; descr: string | null; brand: string | null; ends: number | null };
     const yarnCols = <T extends typeof schema.intGreyConversionWarp | typeof schema.intGreyConversionWeft | typeof schema.extGreyConvWarp | typeof schema.extGreyConvWeft>(t: T) => ({
@@ -530,7 +547,6 @@ export default async function DailyProductionPage({
         yarnReadPick: c.read != null && c.pick != null ? `${c.read} × ${c.pick}` : "",
         yarnWarpInfo: (warpByCont.get(c.contNo) ?? []).join("  +  "),
         yarnWeftInfo: weft,
-        beamWeftInfo: weft,
       };
     }
   }
@@ -552,7 +568,7 @@ export default async function DailyProductionPage({
       if (spec) partySpecMap[party] = { ...spec };
     }
   }
-  const SPEC_INPUTS = ["beamWeftInfo", "yarnWarpInfo", "yarnWeftInfo", "yarnReadPick"];
+  const SPEC_INPUTS = ["yarnWarpInfo", "yarnWeftInfo", "yarnReadPick"];
 
   // Edit mode: the voucher stores its contract per beam row, so the spec boxes can
   // be rendered server-side from the first row that carries one.
@@ -574,7 +590,8 @@ export default async function DailyProductionPage({
     }
     return "";
   })();
-  const editingSpec = yarnSpecByCont[editingContNo] ?? { yarnReadPick: "", yarnWarpInfo: "", yarnWeftInfo: "", beamWeftInfo: "" };
+  const editingSpec = yarnSpecByCont[editingContNo] ?? { yarnReadPick: "", yarnWarpInfo: "", yarnWeftInfo: "" };
+  const editingBeamWarp = [...new Set(setRows.map((s) => (s.beamNo ?? "").trim()).filter(Boolean).map((b) => beamWarpText[b]).filter(Boolean))].join("  +  ");
   const contractPickerRows = convContracts.map((c) => {
     const q = c.productQuality ?? c.productName ?? c.grayQltyCode ?? "";
     return {
@@ -953,6 +970,17 @@ export default async function DailyProductionPage({
     }
     if (beamPartyHeader && effectiveConvParty && beamPartyHeader !== effectiveConvParty) {
       return { error: "party_mismatch" };
+    }
+    // Same warp, like same party: the beam's warp count must be the contract's
+    // warp count. A beam whose count was never recorded is let through.
+    const [warpByBeam, warpByCont] = await Promise.all([beamWarps(), contractWarpCounts()]);
+    for (const s of validSets) {
+      const beam = (s.beamNo ?? "").trim();
+      const cont = (s.contNo ?? "").trim();
+      if (!beam || !cont) continue;
+      if (warpMismatch(warpByBeam.get(beam), warpByCont.get(cont)).length) {
+        return { error: "warp_mismatch", beam, cont, bw: warpByBeam.get(beam)!.counts.join(" + "), cw: warpByCont.get(cont)!.join(" + ") };
+      }
     }
     const foldingAmount =
       Math.round(
@@ -1510,6 +1538,7 @@ export default async function DailyProductionPage({
               <RowAutoFill watch="beamNo" map={beamFillMap} />
               {/* Beam pick (manual or via loom) → fills header Beam Cost Party */}
               <BeamPartyFill map={beamPartyMap} />
+              <BeamWarpFill map={beamWarpText} />
               {/* Header Loom# pick → ALL of that loom's knotted beams open in the beam grid */}
               <LoomBeamsFill map={loomBeamsMap} maxRows={SET_ROWS} />
               {/* ✕ buttons erase the whole logical row across both containers */}
@@ -1874,8 +1903,8 @@ export default async function DailyProductionPage({
                           <Combobox name="beamContParty" options={convPartyOpts} defaultValue={editing?.beamContParty ?? ""} placeholder="Select party" />
                         </div>
                         <div>
-                          <label className="label block mb-1">Weft</label>
-                          <input name="beamWeftInfo" className={infoCls} defaultValue={editingSpec.beamWeftInfo} readOnly tabIndex={-1} />
+                          <label className="label block mb-1">Warp <span className="text-[9px] text-[var(--muted)]">(beam)</span></label>
+                          <input name="beamWarpInfo" className={infoCls} defaultValue={editingBeamWarp} readOnly tabIndex={-1} />
                         </div>
                       </div>
                       <div className="border border-black p-3 space-y-2 min-w-0">
