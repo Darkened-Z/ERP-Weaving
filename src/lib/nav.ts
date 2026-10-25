@@ -5,6 +5,8 @@
 // so a production user reopening the app landed on the full dashboard and
 // could walk into stock and finance (owner 2026-10-20).
 
+import { IS_DEMO } from "@/lib/brand";
+
 export const SECTIONS = [
   {
     label: null,
@@ -74,6 +76,8 @@ export const SECTIONS = [
           { href: "/inventory/knotting", label: "Knotting / Sarning / Maroori", key: "knotting" },
           { href: "/inventory/hours-schedule", label: "Production Hours Schedual", key: "hours-schedule" },
           { href: "/inventory/daily-production", label: "Daily Production Entries", key: "production" },
+          // Demo only for now: the mill has no loom monitoring system connected.
+          ...(IS_DEMO ? [{ href: "/inventory/live-board", label: "Live Production Board", key: "live-board" }] : []),
           { href: "/inventory/grey-despatch", label: "Grey Cloth Despatch", key: "grey-despatch" },
           { href: "/inventory/paki-parchi", label: "Grey Paki Parchi", key: "paki-parchi" },
         ],
