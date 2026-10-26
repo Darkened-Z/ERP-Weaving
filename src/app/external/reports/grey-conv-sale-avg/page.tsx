@@ -225,7 +225,7 @@ export default async function GreyConvSaleAvgPage({
               <span className="mono">{fmt(totalValue)}</span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 no-print">
             <ExcelExportButton
               rows={excelRows}
               columns={[
@@ -258,7 +258,7 @@ export default async function GreyConvSaleAvgPage({
         <form
           action={reportUrl}
           method="get"
-          className="flex gap-3 items-end flex-wrap border border-black p-3 bg-gray-50 mb-4"
+          className="flex gap-3 items-end flex-wrap border border-black p-3 bg-gray-50 mb-4 no-print"
         >
           <div>
             <label className="label block mb-1">Find</label>
@@ -322,7 +322,32 @@ export default async function GreyConvSaleAvgPage({
           <div className="text-center text-[13px] font-bold mb-2 mono">{dateLabel}</div>
         )}
 
-        <div className="border border-black">
+        {/* Print (owner 2026-10-26): A4 landscape, bold black text, the filters
+            in force written under the title instead of the form. */}
+        <style>{`@media print {
+  @page { size: A4 landscape; margin: 8mm; }
+  .gcsa-report .overflow-x-auto { overflow: visible !important; }
+  .gcsa-report table { width: 100% !important; font-size: 9.5px !important; }
+  .gcsa-report th, .gcsa-report td { padding: 3px 4px !important; font-weight: 700 !important; color: #000 !important; border-color: #000 !important; }
+  .gcsa-report td * { color: #000 !important; font-weight: 700 !important; }
+  .gcsa-report thead tr, .gcsa-report tfoot tr, .gcsa-report tbody tr { background: #fff !important; color: #000 !important; }
+  .gcsa-report thead th { border-bottom: 1.5pt solid #000 !important; }
+  .gcsa-report { border: none !important; }
+  .gcsa-report tfoot { display: table-row-group; }
+  .gcsa-report tfoot td { border-top: 2pt solid #000 !important; border-bottom: 2pt solid #000 !important; font-size: 12px !important; padding: 5px 4px !important; }
+  .gcsa-report span.bg-black { background: #fff !important; color: #000 !important; border: 1px solid #000 !important; }
+}`}</style>
+        <div className="hidden print:block text-[11px] mono font-bold mb-2">
+          {[
+            fStatus === "R" ? "Status: Running" : fStatus === "C" ? "Status: Closed" : fStatus ? `Status: ${fStatus}` : "All statuses",
+            fType ? `Type: ${fType}` : "",
+            fParty ? `Party: ${fParty}` : "All parties",
+            fLoom ? `Loom: ${fLoom}` : "",
+            findFilter ? `Find: ${findFilter}` : "",
+            from || to ? `${from || "…"} to ${to || "…"}` : "",
+          ].filter(Boolean).join(" · ")}
+        </div>
+        <div className="border border-black gcsa-report">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>

@@ -296,8 +296,15 @@ export default async function GreySaleAvgPage({
         <style>{`@media print {
   @page { size: A4 landscape; margin: 8mm; }
   .gsa-report .overflow-x-auto { overflow: visible !important; }
-  .gsa-report table { width: 100% !important; font-size: 10px !important; }
-  .gsa-report th, .gsa-report td { padding: 3px 5px !important; }
+  .gsa-report table { width: 100% !important; font-size: 9.5px !important; }
+  .gsa-report th, .gsa-report td { padding: 3px 4px !important; font-weight: 700 !important; color: #000 !important; border-color: #000 !important; }
+  .gsa-report td * { color: #000 !important; font-weight: 700 !important; }
+  .gsa-report thead tr, .gsa-report tfoot tr, .gsa-report tbody tr { background: #fff !important; color: #000 !important; }
+  .gsa-report thead th { border-bottom: 1.5pt solid #000 !important; }
+  .gsa-report { border: none !important; }
+  .gsa-report tfoot { display: table-row-group; }
+  .gsa-report tfoot td { border-top: 2pt solid #000 !important; border-bottom: 2pt solid #000 !important; font-size: 12px !important; padding: 5px 4px !important; }
+  .gsa-report span.bg-black { background: #fff !important; color: #000 !important; border: 1px solid #000 !important; }
 }`}</style>
         <div className="hidden print:block text-[11px] mono mb-2">
           {[fStatus === "R" ? "Status: Running" : fStatus ? `Status: ${fStatus}` : "All statuses", fParty ? `Party: ${fParty}` : "All parties", fLoom ? `Loom: ${fLoom}` : "", fType === "INT" ? "Type: Internal" : fType === "EXT" ? "Type: External" : "", from || to ? `${from || "…"} to ${to || "…"}` : ""].filter(Boolean).join(" · ")}
