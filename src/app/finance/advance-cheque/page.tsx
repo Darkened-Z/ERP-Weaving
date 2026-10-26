@@ -551,7 +551,7 @@ type Chq = {
 export default async function AdvanceChequePage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string; pending?: string }>;
 }) {
   const params = await searchParams;
   const session = await getSession();
@@ -567,6 +567,10 @@ export default async function AdvanceChequePage({
   const isEditForm = action === "edit" && hasId;
   const chqParam = params.chq?.trim() ?? "";
   const findFilter = params.find?.trim() ?? "";
+  // Pending Cheques (owner 2026-10-26): still ISSUED and the cheque date has
+  // already passed — it should have been presented and has not cleared.
+  const pendingOnly = params.pending === "1";
+  const todayIso = today();
 
   const accounts = await db
     .select({
@@ -680,7 +684,14 @@ export default async function AdvanceChequePage({
     })
     .sort((a, b) => b.vno - a.vno || a.chqNo.localeCompare(b.chqNo));
 
-  const filtered = findFilter
+  const overdueDays = (c: { status: string; chqDate: string; vdate: string }) => {
+    const d = c.chqDate || c.vdate;
+    return c.status === "ISSUED" && d && d < todayIso ? Math.round((Date.parse(todayIso) - Date.parse(d)) / 86400000) : 0;
+  };
+  const overdue = cheques.filter((c) => overdueDays(c) > 0);
+  const overdueTotal = overdue.reduce((s, c) => s + c.amount, 0);
+
+  const found = findFilter
     ? cheques.filter(
         (c) =>
           c.chqNo.toLowerCase().includes(findFilter.toLowerCase()) ||
@@ -690,6 +701,9 @@ export default async function AdvanceChequePage({
           (descMap.get(c.bankAdv) ?? "").toLowerCase().includes(findFilter.toLowerCase()),
       )
     : cheques;
+  const filtered = pendingOnly
+    ? found.filter((c) => overdueDays(c) > 0).sort((a, b) => overdueDays(b) - overdueDays(a))
+    : found;
 
   const stats = {
     issued: cheques.filter((c) => c.status === "ISSUED"),
@@ -761,6 +775,9 @@ export default async function AdvanceChequePage({
           <div className="no-print flex gap-2">
             <a href={`${BASE}?adding=1`} className="btn btn-sm">New Advance Cheque</a>
             <a href="/reports/cheque-status" className="btn btn-outline btn-sm">Cheque Status</a>
+            <a href={pendingOnly ? BASE : `${BASE}?pending=1`} className={`btn btn-sm ${pendingOnly ? "" : "btn-outline"}`} title="Issued cheques whose date has passed and that have not cleared">
+              Pending Cheques ({overdue.length})
+            </a>
           </div>
         </div>
 
@@ -965,14 +982,34 @@ export default async function AdvanceChequePage({
 
         {/* Find */}
         <form method="GET" action={BASE} className="mb-3 no-print flex gap-2 max-w-md">
+          {pendingOnly && <input type="hidden" name="pending" value="1" />}
           <input name="find" className="input-box mono flex-1" defaultValue={findFilter} placeholder="Cheque no / party / bank" />
           <button type="submit" className="btn btn-outline btn-sm">Find</button>
-          {findFilter && <a href={BASE} className="btn btn-outline btn-sm">Clear</a>}
+          {findFilter && <a href={pendingOnly ? `${BASE}?pending=1` : BASE} className="btn btn-outline btn-sm">Clear</a>}
         </form>
 
         {/* Register */}
         <div className="border border-black">
-          <div className="px-4 py-3 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold">Advance Cheque Register</div>
+          <div className="px-4 py-3 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold flex flex-wrap items-baseline justify-between gap-2">
+            {pendingOnly ? (
+              <>
+                <span>
+                  Pending Cheques — date passed, not cleared · {filtered.length} cheque{filtered.length === 1 ? "" : "s"} ·{" "}
+                  <span className="mono">{formatNum(filtered.reduce((s, c) => s + c.amount, 0))}</span>
+                </span>
+                <a href={BASE} className="underline normal-case tracking-normal font-normal no-print">Show all cheques</a>
+              </>
+            ) : (
+              <>
+                <span>Advance Cheque Register</span>
+                {overdue.length > 0 && (
+                  <a href={`${BASE}?pending=1`} className="normal-case tracking-normal font-semibold text-[var(--danger)] no-print">
+                    {overdue.length} past their date, not cleared · {formatNum(overdueTotal)}
+                  </a>
+                )}
+              </>
+            )}
+          </div>
           <div className="overflow-x-auto">
             <table style={{ minWidth: 1100 }}>
               <thead>
@@ -1011,7 +1048,14 @@ export default async function AdvanceChequePage({
                     <td className="text-[11px] text-[var(--muted)]">
                       {c.status === "CLEARED" && <>via {descMap.get(c.clearBank ?? "") ?? c.clearBank} · {c.clearDate}</>}
                       {c.status === "BOUNCED" && <>to {descMap.get(c.dishonour ?? "") ?? c.dishonour} · {c.bounceDate}</>}
-                      {c.status === "ISSUED" && "pending"}
+                      {c.status === "ISSUED" &&
+                        (overdueDays(c) > 0 ? (
+                          <span className="text-[var(--danger)] font-semibold">
+                            date passed · {overdueDays(c)} day{overdueDays(c) === 1 ? "" : "s"}
+                          </span>
+                        ) : (
+                          "pending"
+                        ))}
                     </td>
                     <td className="no-print text-right whitespace-nowrap">
                       {c.status === "ISSUED" && (
@@ -1059,7 +1103,7 @@ export default async function AdvanceChequePage({
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={11} className="text-center text-[13px] text-[var(--muted)] py-6">
-                      No advance cheques. Click <b>New Advance Cheque</b> above.
+                      {pendingOnly ? "No pending cheques — every issued cheque past its date has cleared or bounced." : <>No advance cheques. Click <b>New Advance Cheque</b> above.</>}
                     </td>
                   </tr>
                 )}
