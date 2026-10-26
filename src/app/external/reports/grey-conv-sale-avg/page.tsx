@@ -102,7 +102,7 @@ export default async function GreyConvSaleAvgPage({
       const key = d.contNo ?? "";
       const party = d.party ?? "-";
       if (!despatchDetailByContNo.has(key)) despatchDetailByContNo.set(key, []);
-      let arr = despatchDetailByContNo.get(key)!;
+      const arr = despatchDetailByContNo.get(key)!;
       let partyObj = arr.find((x) => x.party === party);
       if (!partyObj) {
         partyObj = { party, totalMeter: 0, lots: 0, lotsList: [] };
@@ -388,23 +388,18 @@ export default async function GreyConvSaleAvgPage({
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{r.width || "-"}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">{fmt2(r.production)}</td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right">
+                      {/* Total only; the parchi-by-parchi breakdown opens as its own report
+                          (owner 2026-10-26: it crowded the table and the print). */}
                       {r.despatch ? (
-                        <div>
-                          <div className="font-bold">{fmt2(r.despatch)}</div>
-{r.despatchDetail.map((d: any, di: number) => (
-                              <div key={di} className="text-[10px] text-[var(--muted)] text-left mt-1" style={{ lineHeight: 1.4 }}>
-                                <div className="font-semibold text-gray-800">{d.party}</div>
-                                {d.lotsList.map((l: any, li: number) => (
-                                  <div key={li} className="pl-1 text-gray-600">
-                                    <span className="font-semibold text-gray-700">{l.vNo}</span>: {fmt2(l.meter)}
-                                  </div>
-                                ))}
-                                <div className="border-t border-gray-200 mt-0.5 pt-0.5 font-semibold text-gray-700">
-                                  Total: {fmt2(d.totalMeter)} ({d.lots})
-                                </div>
-                              </div>
-                            ))}
-                        </div>
+                        <a
+                          href={`/external/reports/grey-conv-sale-avg/despatch?cont=${encodeURIComponent(r.contNo)}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="font-bold underline underline-offset-2 print:no-underline"
+                          title="Open the Pakki Parchi detail of this despatch"
+                        >
+                          {fmt2(r.despatch)}
+                        </a>
                       ) : ""}
                     </td>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono text-right font-bold">{fmt2(r.balance)}</td>

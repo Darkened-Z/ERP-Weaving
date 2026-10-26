@@ -907,12 +907,12 @@ export default async function GreyConvContractPage({
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 56 }}>Count</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
-                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 60 }}>Cal Count</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 64 }}>Ends</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>WT Per Mtr</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>Rate Per Lbs</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 80 }}>Cost Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: "14%" }}>Brand</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "9%" }}>Cal Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "9%" }}>Ends</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "11%" }}>WT Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "11%" }}>Rate Per Lbs</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "12%" }}>Cost Per Mtr</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 22 }}></th>
                       </tr>
                     </thead>
@@ -954,12 +954,12 @@ export default async function GreyConvContractPage({
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 28 }}>Sr#</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 56 }}>Count</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]">Desc</th>
-                        <th className="px-1 py-1.5 border-b border-black text-[12px]">Brand</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 60 }}>Cal Count</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 64 }}>Ends</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>WT Per Mtr</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 72 }}>Rate Per Lbs</th>
-                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: 80 }}>Cost Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: "14%" }}>Brand</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "9%" }}>Cal Count</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "9%" }}>Ends</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "11%" }}>WT Per Mtr</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "11%" }}>Rate Per Lbs</th>
+                        <th className="px-1 py-1.5 border-b border-black text-right text-[12px]" style={{ width: "12%" }}>Cost Per Mtr</th>
                         <th className="px-1 py-1.5 border-b border-black text-[12px]" style={{ width: 22 }}></th>
                       </tr>
                     </thead>
