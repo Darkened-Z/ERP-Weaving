@@ -10,6 +10,7 @@ import { RowReconcileFromPartyCount } from "@/components/row-reconcile";
 import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
+import { YarnPurchaseCountRate } from "./count-rate";
 import { FindingPicker } from "@/components/finding-picker";
 import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
@@ -250,18 +251,18 @@ export default async function YarnPurchaseVoucherPage({
     };
   }
 
-  // Party Count column data: keyed by the yarn count code (the option value).
-  // partyCountInfo carries the negotiated rate from party_counts; partyCountFillMap
-  // drives the per-row auto-fill (count + desc + rate) when a Party Count is picked.
-  const partyCountInfo: Record<string, { code: string; desc: string; rate: string }> = {};
+  // Rates must follow BOTH the live header party and the selected count. A
+  // count-only map leaks another party's rate; the saved party is also stale
+  // as soon as the operator changes the header (and is absent on new vouchers).
+  const ratesByParty: Record<string, Record<string, number>> = {};
   for (const pc of partyCountsRows) {
     const yc =
       countList.find((c) => c.id === pc.countCode) ??
       countList.find((c) => String(c.code) === String(pc.countCode));
     if (!yc) continue;
-    const code = String(yc.code);
-    const desc = [yc.description, yc.type].filter(Boolean).join(" ").trim();
-    partyCountInfo[code] = { code, desc, rate: pc.ratePerLbs != null ? String(pc.ratePerLbs) : "" };
+    const party = descByCode[pc.partyCode];
+    if (!party || pc.ratePerLbs == null) continue;
+    (ratesByParty[party] ??= {})[String(yc.code)] = pc.ratePerLbs;
   }
   const partyCountOptions: { code: string; description: string }[] = [];
   const seenPartyCount = new Set<string>();
@@ -270,29 +271,11 @@ export default async function YarnPurchaseVoucherPage({
     seenPartyCount.add(sc.code);
     partyCountOptions.push({ code: sc.code, description: sc.description });
   }
-  const savedPartyCode = formVoucher?.party
-    ? partyAccounts.find((p) => p.description === formVoucher.party)?.code
-    : undefined;
-  const partyRate = new Map<string, number>();
-  if (savedPartyCode) {
-    for (const pc of partyCountsRows) {
-      if (String(pc.partyCode) !== String(savedPartyCode)) continue;
-      if (pc.ratePerLbs == null) continue;
-      const yc =
-        countList.find((c) => c.id === pc.countCode) ??
-        countList.find((c) => String(c.code) === String(pc.countCode));
-      if (!yc) continue;
-      partyRate.set(String(yc.code), pc.ratePerLbs);
-    }
-  }
   const partyCountFillMap: Record<string, Record<string, string | number>> = {};
   for (const opt of partyCountOptions) {
-    const pRate = partyRate.get(opt.code);
-    const rate = pRate != null ? String(pRate) : partyCountInfo[opt.code]?.rate;
     partyCountFillMap[opt.code] = {
       line_count: opt.code,
       line_count_desc: opt.description,
-      ...(rate ? { line_rate: rate } : {}),
     };
   }
   // Party-scoped Party-Count select options: only the selected party's counts show.
@@ -493,26 +476,6 @@ export default async function YarnPurchaseVoucherPage({
       line_despatch_party: godownParty,
       line_brand: fallbackBrand,
     };
-  }
-  // Party-specific rates — when the voucher's party has partyCounts entries,
-  // picking a count code auto-fills the negotiated rate for that party+count.
-  if (savedPartyCode) {
-    const pcRows = await db
-      .select()
-      .from(schema.partyCounts)
-      .where(eq(schema.partyCounts.partyCode, savedPartyCode));
-    // party_counts.count_code holds yarn_counts.id; the grid keys by the
-    // count's code text, so translate before filling.
-    const codeById = new Map(countList.map((c) => [c.id, String(c.code)]));
-    for (const r of pcRows) {
-      if (r.ratePerLbs == null) continue;
-      const k = codeById.get(r.countCode);
-      if (!k) continue;
-      countDefaultMap[k] = {
-        ...(countDefaultMap[k] ?? { line_pack: 24, line_unit: "GDN", line_despatch_party: godownParty }),
-        line_rate: r.ratePerLbs,
-      };
-    }
   }
 
   async function saveVoucher(formData: FormData) {
@@ -1550,8 +1513,8 @@ export default async function YarnPurchaseVoucherPage({
                       party is set up with), so on load the row is reconciled to it. */}
                   <RowReconcileFromPartyCount selectName="line_party_count" map={partyCountFillMap} />
                   <RowAutoFill watch="line_count" map={countDefaultMap} />
-                  <RowAutoFill watch="line_party_count" map={partyCountFillMap} />
                   <PartyCountSelectFilter partyField="party" selectName="line_party_count" countsByParty={countsByParty} allCounts={allPartyCountOpts} />
+                  <YarnPurchaseCountRate ratesByParty={ratesByParty} countFields={partyCountFillMap} />
                   <CountBlendEnricher
                     watchLineCount="line_count"
                     descField="line_count_desc"

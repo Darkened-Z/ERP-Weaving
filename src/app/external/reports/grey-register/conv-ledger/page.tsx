@@ -294,8 +294,9 @@ export default async function GreyRegisterConvLedgerPage({
           </div>
         </form>
 
+        <p className="sm:hidden no-print text-[11px] text-[var(--muted)] mb-2">Swipe sideways to see all ledger columns.</p>
         <div className="card overflow-x-auto">
-          <table className="sm:min-w-[1150px]">
+          <table className="min-w-[850px] sm:min-w-[1150px]">
             <thead>
               <tr>
                 <th style={{ width: 80 }}>Date</th>
@@ -304,8 +305,8 @@ export default async function GreyRegisterConvLedgerPage({
                 <th className="hidden sm:table-cell" style={{ width: 80 }}>Sale Cont #</th>
                 <th>Narration</th>
                 <th className="hidden sm:table-cell text-right" style={{ width: 60 }}>Than</th>
-                <th className="text-right" style={{ width: 70 }}>Mtr</th>
-                <th className="hidden sm:table-cell text-right" style={{ width: 70 }}>Conv. Rate</th>
+                <th className="text-right whitespace-nowrap" style={{ width: 100 }}>Mtr</th>
+                <th className="text-right whitespace-nowrap" style={{ width: 90 }}>Conv. Rate</th>
                 <th className="text-right" style={{ width: 90 }}>Dr</th>
                 <th className="text-right" style={{ width: 90 }}>Cr</th>
                 <th className="text-right" style={{ width: 100 }}>Balance</th>
@@ -327,8 +328,8 @@ export default async function GreyRegisterConvLedgerPage({
                     <td className="hidden sm:table-cell mono text-[12px]">{r.saleCont}</td>
                     <td className="text-[11px] sm:text-[12px] max-w-[120px] sm:max-w-none truncate">{r.narration}</td>
                     <td className="hidden sm:table-cell mono text-right">{r.than ? fmt(r.than) : ""}</td>
-                    <td className="mono text-right text-[11px] sm:text-[13px]">{r.mtr ? fmt(r.mtr) : ""}</td>
-                    <td className="hidden sm:table-cell mono text-right">{r.rate ? fmt2(r.rate) : ""}</td>
+                    <td className="mono text-right whitespace-nowrap text-[11px] sm:text-[13px]">{r.kind === "PP" ? fmt2(r.mtr) : ""}</td>
+                    <td className="mono text-right whitespace-nowrap text-[11px] sm:text-[13px]">{r.rate ? fmt2(r.rate) : ""}</td>
                     <td className="mono text-right text-[11px] sm:text-[13px]">{r.dr ? fmt(r.dr) : ""}</td>
                     <td className="mono text-right text-[11px] sm:text-[13px]">{r.cr ? fmt(r.cr) : ""}</td>
                     <td className="mono text-right font-semibold text-[11px] sm:text-[13px]">
@@ -349,8 +350,8 @@ export default async function GreyRegisterConvLedgerPage({
                   <td className="hidden sm:table-cell" />
                   <td />
                   <td className="hidden sm:table-cell mono text-right font-bold">{fmt(total.than)}</td>
-                  <td className="mono text-right font-bold">{fmt(total.mtr)}</td>
-                  <td className="hidden sm:table-cell" />
+                  <td className="mono text-right whitespace-nowrap font-bold">{fmt2(total.mtr)}</td>
+                  <td />
                   <td className="mono text-right font-bold">{fmt(total.dr)}</td>
                   <td className="mono text-right font-bold">{fmt(total.cr)}</td>
                   <td className="mono text-right font-bold">
