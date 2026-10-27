@@ -1,50 +1,24 @@
 import { NextResponse } from "next/server";
 import { today as todayPk } from "@/lib/time";
-import { db, schema } from "@/db";
+import { db } from "@/db";
 import { getSession } from "@/lib/auth";
-import { isTable } from "drizzle-orm";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { createDatabaseBackup } from "@/lib/database-backup";
+import { gzipSync } from "node:zlib";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.roleName !== "ADMIN") {
-    return NextResponse.json({ error: "ADMIN only" }, { status: 403 });
-  }
-
-  const dump: Record<string, unknown> = {
-    _meta: {
-      generatedAt: new Date().toISOString(),
-      generatedBy: session.login,
-      version: 1,
-    },
-  };
-  const tables: Record<string, unknown[]> = {};
-
-  for (const [name, value] of Object.entries(schema)) {
-    if (!isTable(value)) continue;
-    try {
-      const rows = await db.select().from(value as SQLiteTable);
-      tables[name] = rows;
-    } catch {
-      tables[name] = [];
-    }
-  }
-  dump.tables = tables;
-
-  const body = JSON.stringify(dump, null, 2);
-  const date = todayPk();
-  const filename = `sk-mills-backup-${date}.json`;
-
-  return new NextResponse(body, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+  if (!["ADMIN", "SUPERADMIN"].includes(session.roleName.toUpperCase())) return NextResponse.json({ error: "ADMIN only" }, { status: 403 });
+  try {
+    const dump = await createDatabaseBackup(db.$client, session.login);
+    return new NextResponse(new Uint8Array(gzipSync(JSON.stringify(dump))), { headers: {
+      "Content-Type": "application/gzip",
+      "Content-Disposition": `attachment; filename="sk-mills-backup-${todayPk()}.json.gz"`,
       "Cache-Control": "no-store",
-    },
-  });
+    } });
+  } catch {
+    return NextResponse.json({ error: "Backup failed. No complete snapshot was produced. Please retry." }, { status: 500 });
+  }
 }

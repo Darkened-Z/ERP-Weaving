@@ -7,6 +7,7 @@ import { join } from "node:path";
 // Import the real lifecycle code only after directing it to an isolated DB.
 const directory = mkdtempSync(join(tmpdir(), "weaving-beam-test-"));
 const databasePath = join(directory, "test.db");
+Object.assign(process.env, { NODE_ENV: "test" });
 process.env.TURSO_DATABASE_URL = "";
 process.env.TURSO_AUTH_TOKEN = "";
 process.env.DEMO_DB = "";

@@ -8,6 +8,7 @@ import { KnottingCalc } from "@/components/knotting-calc";
 import { RowErase } from "@/components/production-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
+import { captureVoucher, recordVoucherChange } from "@/lib/change-history";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { assertLoomAvailable, LoomTakenError, canKnotBeam, inCurrentBeamCycle } from "@/lib/beam-cycle";
 import { eq, sql, desc, and } from "drizzle-orm";
@@ -43,7 +44,7 @@ async function saveKnotting(formData: FormData) {
   const backUrl = Number.isFinite(id) && id > 0
     ? `/inventory/knotting?id=${id}`
     : `/inventory/knotting?adding=1`;
-  await verifySavePassword(formData.get("save_password") as string, backUrl);
+  const actor = await verifySavePassword(formData.get("save_password") as string, backUrl);
   await assertPeriodOpen(txt(formData.get("v_date")) ?? today(), "INVENTORY");
   // An edit can't move a voucher out of a locked period either.
   if (Number.isFinite(id) && id > 0) {
@@ -321,6 +322,7 @@ async function saveKnotting(formData: FormData) {
 
   if (Number.isFinite(id) && id > 0) {
     await db.transaction(async (tx) => {
+      const before = await captureVoucher(tx, "knotting", id);
       // Snapshot the old mounted lines so we can reverse the side-effects of
       // mountBeam (looms + beams) for every line that had a loom assigned.
       const oldLines = await tx
@@ -411,6 +413,7 @@ async function saveKnotting(formData: FormData) {
         }
       }
 
+      await recordVoucherChange(tx, actor, "knotting", id, before, await captureVoucher(tx, "knotting", id));
       const [current] = await tx
         .select({ lvNo: schema.intKnottingSarning.lvNo })
         .from(schema.intKnottingSarning)
@@ -565,6 +568,7 @@ async function saveKnotting(formData: FormData) {
           await tx.insert(schema.transDetail).values(details);
         }
 
+        await recordVoucherChange(tx, actor, "knotting", insertedId, null, await captureVoucher(tx, "knotting", insertedId));
         return insertedId;
       });
     } catch (e: unknown) {
@@ -635,6 +639,8 @@ async function deleteKnotting(formData: FormData) {
   }
 
   await db.transaction(async (tx) => {
+    const before = await captureVoucher(tx, "knotting", id);
+    await recordVoucherChange(tx, session, "knotting", id, before, null);
     if (vno > 0) {
       await clearVoucher(tx, "KB", vno);
     }
@@ -738,6 +744,7 @@ async function mountBeam(formData: FormData) {
       if (!cur || !(canKnotBeam(st, cur.loomNo) || (st === "KNOTTING" && cur.knVno === row.vNo))) {
         redirect(`/inventory/knotting?id=${row.knottingId}&error=beam_not_loaded`);
       }
+      const before = await captureVoucher(tx, "knotting", row.knottingId);
       await assertLoomAvailable(tx, line.beamNo!, line.shdHash!, loomNo);
       await tx
         .update(schema.looms)
@@ -759,6 +766,7 @@ async function mountBeam(formData: FormData) {
           ...(line.beamSetNo ? { beamSetNo: line.beamSetNo } : {}),
         })
         .where(eq(schema.beams.beamNo, line.beamNo!));
+      await recordVoucherChange(tx, session, "knotting", row.knottingId, before, await captureVoucher(tx, "knotting", row.knottingId), st === "KNOTTING" && cur.loomNo === loomNo ? [] : [{ field: `Beam ${line.beamNo}: status`, before: st, after: "KNOTTING" }, { field: `Beam ${line.beamNo}: loom`, before: cur.loomNo, after: loomNo }]);
       return row.knottingId;
     });
   } catch (error) {

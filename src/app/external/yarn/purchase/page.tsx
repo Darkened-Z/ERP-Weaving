@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { GridNavigator } from "@/components/grid-navigator";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
@@ -17,6 +18,8 @@ import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
 import { TermSelect } from "@/components/term-select";
 import { db, schema } from "@/db";
+import { captureVoucher, recordVoucherChange } from "@/lib/change-history";
+import { assertYarnPurchaseStock, PurchaseStockError } from "@/lib/yarn-purchase-stock";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -483,7 +486,7 @@ export default async function YarnPurchaseVoucherPage({
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
-    await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/external/yarn/purchase?id=${id}` : "/external/yarn/purchase?adding=1");
+    const actor = await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/external/yarn/purchase?id=${id}` : "/external/yarn/purchase?adding=1");
 
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const loomType = txt(formData.get("loom_type"));
@@ -622,56 +625,6 @@ export default async function YarnPurchaseVoucherPage({
       );
     }
 
-    // Stock integrity: a batch that has already been sold cannot be taken off
-    // this voucher, nor cut below what went out on it. Without this, correcting
-    // a purchase would leave sale rows pointing at yarn that no longer exists
-    // and the count would show negative stock at month end — the exact thing
-    // that must not happen during a purchase/sale correction.
-    //
-    // Quantity is editable even when the sale is FINAL. This guard always
-    // applies: to cut a purchase below what's sold, correct the sale first.
-    if (Number.isFinite(id) && id > 0) {
-      const priorBatches = (
-        await db
-          .select({ batchNo: schema.extYarnPurVoucherLine.batchNo })
-          .from(schema.extYarnPurVoucherLine)
-          .where(eq(schema.extYarnPurVoucherLine.voucherId, id))
-      )
-        .map((r) => r.batchNo)
-        .filter(Boolean) as string[];
-      if (priorBatches.length) {
-        const sold = await db
-          .select({
-            batchNo: schema.extYarnSalVoucherLine.batchNo,
-            bag: sql<number>`coalesce(sum(coalesce(nullif(${schema.extYarnSalVoucherLine.bag}, 0), ${schema.extYarnSalVoucherLine.qty}, 0)), 0)`,
-            lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
-          })
-          .from(schema.extYarnSalVoucherLine)
-          .where(inArray(schema.extYarnSalVoucherLine.batchNo, priorBatches))
-          .groupBy(schema.extYarnSalVoucherLine.batchNo);
-        const incoming = new Map<string, { bag: number; lbs: number }>();
-        for (const l of validLines) {
-          if (!l.batchNo) continue;
-          const cur = incoming.get(l.batchNo) ?? { bag: 0, lbs: 0 };
-          cur.bag += l.bag ?? 0;
-          cur.lbs += l.lbs ?? 0;
-          incoming.set(l.batchNo, cur);
-        }
-        for (const srow of sold) {
-          const b = srow.batchNo;
-          if (!b) continue;
-          if (srow.bag <= 0 && srow.lbs <= 0) continue;
-          const inc = incoming.get(b);
-          const q = (reason: string) =>
-            redirect(
-              `/external/yarn/purchase?id=${id}&error=batch_sold&batch=${encodeURIComponent(b)}&why=${reason}&sold=${srow.lbs}`
-            );
-          if (!inc) q("removed");
-          else if (inc.lbs + 0.01 < srow.lbs) q("short");
-        }
-      }
-    }
-
     const nowIso = new Date().toISOString();
 
     const VTYPE = "YPV";
@@ -737,6 +690,8 @@ export default async function YarnPurchaseVoucherPage({
         const formVNo = existing?.vNo ?? "";
 
         await db.transaction(async (tx) => {
+          await assertYarnPurchaseStock(tx, id, validLines);
+          const before = await captureVoucher(tx, "yarn_purchase", id);
           await tx
             .update(schema.extYarnPurVoucher)
             .set({
@@ -770,6 +725,8 @@ export default async function YarnPurchaseVoucherPage({
               .insert(schema.extYarnPurVoucherLine)
               .values(validLines.map((l) => ({ ...l, voucherId: id })));
           }
+
+          await recordVoucherChange(tx, actor, "yarn_purchase", id, before, await captureVoucher(tx, "yarn_purchase", id));
 
           if (existingLvNo > 0) {
             await clearVoucher(tx, VTYPE, existingLvNo);
@@ -880,6 +837,7 @@ export default async function YarnPurchaseVoucherPage({
               assertBalanced(details);
               await tx.insert(schema.transDetail).values(details);
             }
+            await recordVoucherChange(tx, actor, "yarn_purchase", insertedId, null, await captureVoucher(tx, "yarn_purchase", insertedId));
             return insertedId;
           });
         } catch (e: unknown) {
@@ -899,6 +857,7 @@ export default async function YarnPurchaseVoucherPage({
         redirect(`/external/yarn/purchase?id=${newId}`);
       }
     } catch (e: unknown) {
+      if (e instanceof PurchaseStockError) redirect(`/external/yarn/purchase?id=${id}&error=batch_sold&batch=${encodeURIComponent(e.stock)}&why=${e.reason}&sold=${e.sold}`);
       const digest = (e as { digest?: string })?.digest ?? "";
       if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
       const msg = (e as { message?: string })?.message ?? "";
@@ -919,56 +878,20 @@ export default async function YarnPurchaseVoucherPage({
     const [dated] = await db.select({ d: schema.extYarnPurVoucher.vDate }).from(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
     await refuseIfLocked(dated?.d, "INVENTORY", `/external/yarn/purchase?id=${id}`);
 
-    // Deleting the whole voucher is the same wound as cutting one line below
-    // what was sold, only bigger: the sale rows survive, keep subtracting, and
-    // the count goes negative — the -1000 lbs the client hit. Refused outright;
-    // the sale has to be removed or re-pointed first.
-    {
-      const batches = (
-        await db
-          .select({ batchNo: schema.extYarnPurVoucherLine.batchNo })
-          .from(schema.extYarnPurVoucherLine)
-          .where(eq(schema.extYarnPurVoucherLine.voucherId, id))
-      )
-        .map((r) => r.batchNo)
-        .filter(Boolean) as string[];
-      if (batches.length) {
-        const sold = await db
-          .select({
-            batchNo: schema.extYarnSalVoucherLine.batchNo,
-            vNo: schema.extYarnSalVoucher.vNo,
-            lbs: schema.extYarnSalVoucherLine.lbs,
-          })
-          .from(schema.extYarnSalVoucherLine)
-          .innerJoin(
-            schema.extYarnSalVoucher,
-            eq(schema.extYarnSalVoucherLine.voucherId, schema.extYarnSalVoucher.id)
-          )
-          .where(inArray(schema.extYarnSalVoucherLine.batchNo, batches));
-        const live = sold.filter((r) => (r.lbs ?? 0) > 0);
-        if (live.length) {
-          const on = Array.from(new Set(live.map((r) => r.vNo ?? ""))).filter(Boolean).join(", ");
-          redirect(
-            `/external/yarn/purchase?id=${id}&error=batch_sold&batch=${encodeURIComponent(
-              live[0].batchNo ?? ""
-            )}&why=voucher_delete&sold=${encodeURIComponent(on)}`
-          );
-        }
-      }
+    try {
+      await db.transaction(async (tx) => {
+        await assertYarnPurchaseStock(tx, id, []);
+        const before = await captureVoucher(tx, "yarn_purchase", id);
+        await recordVoucherChange(tx, s, "yarn_purchase", id, before, null);
+        const [existing] = await tx.select({ lvNo: schema.extYarnPurVoucher.lvNo }).from(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
+        if (existing?.lvNo) await clearVoucher(tx, "YPV", existing.lvNo);
+        await tx.delete(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.voucherId, id));
+        await tx.delete(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
+      });
+    } catch (e) {
+      if (e instanceof PurchaseStockError) redirect(`/external/yarn/purchase?id=${id}&error=batch_sold&batch=${encodeURIComponent(e.stock)}&why=${e.reason}&sold=${e.sold}`);
+      throw e;
     }
-
-    const [existing] = await db
-      .select({ lvNo: schema.extYarnPurVoucher.lvNo })
-      .from(schema.extYarnPurVoucher)
-      .where(eq(schema.extYarnPurVoucher.id, id));
-    const lvNo = existing?.lvNo ?? 0;
-    await db.transaction(async (tx) => {
-      if (lvNo > 0) {
-        await clearVoucher(tx, "YPV", lvNo);
-      }
-      await tx.delete(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.voucherId, id));
-      await tx.delete(schema.extYarnPurVoucher).where(eq(schema.extYarnPurVoucher.id, id));
-    });
     revalidatePath("/external/yarn/purchase");
     redirect("/external/yarn/purchase");
   }
@@ -1535,7 +1458,8 @@ export default async function YarnPurchaseVoucherPage({
                     watch="line_count"
                     initialCode={lines[0]?.count ? String(lines[0].count) : ""}
                   />
-                  <div className="overflow-x-auto border border-black">
+                  <GridNavigator tbodyId="ypv-line-rows" fields={[{ name: "line_qty", label: "Quantity" }, { name: "line_rate", label: "Rate" }, { name: "line_amt", label: "Amount" }]} />
+                  <div className="overflow-x-auto border border-black voucher-entry">
                     <table style={{ minWidth: "1700px" }}>
                       <thead>
                         <tr>
@@ -1760,10 +1684,11 @@ export default async function YarnPurchaseVoucherPage({
                               <input
                                 name="line_rate"
                                 type="number"
+                                inputMode="decimal"
                                 step="any"
                                 className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.rate ?? ""}
-                                style={{ width: 80 }}
+                                style={{ width: 110 }}
                                 title={
                                   locked
                                     ? "Rate can be corrected even though this batch is sold — it changes this purchase's cost, not the sale"
@@ -1784,7 +1709,7 @@ export default async function YarnPurchaseVoucherPage({
                                 }
                                 readOnly
                                 tabIndex={-1}
-                                style={{ width: 100 }}
+                                style={{ width: 130 }}
                               />
                             </td>
                           </tr>

@@ -1,4 +1,6 @@
 import { Shell } from "@/components/shell";
+import { PurchaseQuantityInput } from "../purchase/quantity-input";
+import { GridNavigator } from "@/components/grid-navigator";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
@@ -13,6 +15,7 @@ import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { BatchHeaderFill } from "./batch-header-fill";
 import { BatchDetailLink } from "./batch-detail-link";
 import { db, schema } from "@/db";
+import { captureVoucher, recordVoucherChange } from "@/lib/change-history";
 import { assertYarnSaleStock, YarnStockError } from "@/lib/yarn-sale-stock";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
@@ -618,7 +621,7 @@ export default async function YarnSaleVoucherPage({
     "use server";
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
-    await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/external/yarn/sale?id=${id}` : "/external/yarn/sale?adding=1");
+    const actor = await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/external/yarn/sale?id=${id}` : "/external/yarn/sale?adding=1");
 
     const vDate = ((formData.get("v_date") as string) || "").trim() || today();
     const loomType = txt(formData.get("loom_type"));
@@ -825,6 +828,7 @@ export default async function YarnSaleVoucherPage({
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
           await assertYarnSaleStock(tx, validLines, id);
+          const before = await captureVoucher(tx, "yarn_sale", id);
           await tx
             .update(schema.extYarnSalVoucher)
             .set({
@@ -843,6 +847,8 @@ export default async function YarnSaleVoucherPage({
               .insert(schema.extYarnSalVoucherLine)
               .values(validLines.map((l) => ({ ...l, voucherId: id })));
           }
+
+          await recordVoucherChange(tx, actor, "yarn_sale", id, before, await captureVoucher(tx, "yarn_sale", id));
 
           {
             const lvRow = await tx
@@ -928,6 +934,7 @@ export default async function YarnSaleVoucherPage({
               if (Math.abs(d - c) >= 0.01) throw new Error("Unbalanced voucher");
               await tx.insert(schema.transDetail).values(details);
             }
+            await recordVoucherChange(tx, actor, "yarn_sale", insertedId, null, await captureVoucher(tx, "yarn_sale", insertedId));
             return insertedId;
           });
         } catch (e: unknown) {
@@ -1000,6 +1007,8 @@ export default async function YarnSaleVoucherPage({
       .limit(1);
     const lvNo = lvRow[0]?.lvNo ?? 0;
     await db.transaction(async (tx) => {
+      const before = await captureVoucher(tx, "yarn_sale", id);
+      await recordVoucherChange(tx, s, "yarn_sale", id, before, null);
       if (lvNo > 0) {
         await clearVoucher(tx, "YSV", lvNo);
       }
@@ -1583,7 +1592,8 @@ export default async function YarnSaleVoucherPage({
                     unitLabel="batch"
                     initialCode={gridRows[0]?.batchNo ?? ""}
                   />
-                  <div className="overflow-x-auto border border-black">
+                  <GridNavigator tbodyId="ysv-line-rows" fields={[{ name: "line_qty", label: "Quantity" }, { name: "line_rate", label: "Rate" }, { name: "line_amt", label: "Amount" }]} />
+                  <div className="overflow-x-auto border border-black voucher-entry">
                     <table style={{ minWidth: "1700px" }}>
                       <thead>
                         <tr>
@@ -1607,7 +1617,7 @@ export default async function YarnSaleVoucherPage({
                           <th>Remarks</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody id="ysv-line-rows">
                         {gridRows.map((row, i) => (
                           <tr key={row?.id ?? `e-${i}`}>
                             <td className="mono text-[11px] text-center text-[var(--muted)]">
@@ -1726,14 +1736,7 @@ export default async function YarnSaleVoucherPage({
                               />
                             </td>
                             <td>
-                              <input
-                                name="line_qty"
-                                type="number"
-                                step="any"
-                                className="input-box mono text-[12px] text-right"
-                                defaultValue={row?.qty ?? ""}
-                                style={{ width: 70 }}
-                              />
+                              <PurchaseQuantityInput value={row?.qty} />
                             </td>
                             <td>
                               <input
@@ -1744,7 +1747,7 @@ export default async function YarnSaleVoucherPage({
                                 defaultValue={row?.lbs ?? ""}
                                 readOnly
                                 tabIndex={-1}
-                                style={{ width: 75 }}
+                                style={{ width: 110 }}
                               />
                             </td>
                             {/* Unit dropped at the client's request. Still
@@ -1770,10 +1773,11 @@ export default async function YarnSaleVoucherPage({
                               <input
                                 name="line_rate"
                                 type="number"
+                                inputMode="decimal"
                                 step="any"
                                 className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.rate ?? ""}
-                                style={{ width: 80 }}
+                                style={{ width: 110 }}
                               />
                             </td>
                             <td>
@@ -1783,7 +1787,7 @@ export default async function YarnSaleVoucherPage({
                                 step="any"
                                 className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.amt ?? ""}
-                                style={{ width: 100 }}
+                                style={{ width: 130 }}
                               />
                             </td>
                             <td>

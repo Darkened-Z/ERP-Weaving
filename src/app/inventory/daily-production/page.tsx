@@ -1,4 +1,5 @@
 import { Shell } from "@/components/shell";
+import { GridNavigator } from "@/components/grid-navigator";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
 import { Combobox } from "@/components/combobox";
@@ -14,6 +15,7 @@ import { WVG_CONVERSION_PREFIX } from "@/lib/coa-heads";
 import { ConfirmButton } from "@/components/confirm-button";
 import { SaveForm, type SaveError } from "@/components/save-form";
 import { db, schema } from "@/db";
+import { captureVoucher, recordVoucherChange } from "@/lib/change-history";
 import { clearVoucher } from "@/lib/gl-post";
 import { inCycle, recomputeBeamStatus } from "@/lib/beam-cycle";
 import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
@@ -684,7 +686,7 @@ export default async function DailyProductionPage({
     try {
     const idRaw = formData.get("id") as string | null;
     const id = idRaw ? parseInt(idRaw, 10) : NaN;
-    await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/inventory/daily-production?id=${id}` : "/inventory/daily-production?adding=1");
+    const actor = await verifySavePassword(formData.get("save_password") as string, Number.isFinite(id) && id > 0 ? `/inventory/daily-production?id=${id}` : "/inventory/daily-production?adding=1");
 
     const header = {
       vDate: txt(formData.get("vDate")) ?? today(),
@@ -1035,6 +1037,7 @@ export default async function DailyProductionPage({
         await db.transaction(async (tx) => {
           // Snapshot old sets so we can (a) re-derive every beam the old grid
           // named, (b) collide-check mmThanSrNo against ANY row not in this voucher.
+          const before = await captureVoucher(tx, "production", id);
           const oldSets = await tx
             .select({
               beamNo: schema.intDailyProductionSet.beamNo,
@@ -1254,6 +1257,7 @@ export default async function DailyProductionPage({
           // behaviour are cleaned up the next time they are saved. Daily Folding
           // Stock reads the production and despatch tables directly, not the GL,
           // so nothing is lost by leaving it off the books.
+          await recordVoucherChange(tx, actor, "production", id, before, await captureVoucher(tx, "production", id));
           await clearVoucher(tx, "DP", id);
                   });
         revalidatePath("/inventory/daily-production");
@@ -1305,6 +1309,7 @@ export default async function DailyProductionPage({
             await recomputeBeamStatus(tx, b, header.vDate);
           }
           // No folding-stock GL here either — see the note on the update path.
+          await recordVoucherChange(tx, actor, "production", insertedId, null, await captureVoucher(tx, "production", insertedId));
           return insertedId;
         });
         revalidatePath("/inventory/daily-production");
@@ -1385,6 +1390,8 @@ export default async function DailyProductionPage({
     let loomTaken: string | null = null;
     try {
       await db.transaction(async (tx) => {
+        const before = await captureVoucher(tx, "production", id);
+        await recordVoucherChange(tx, session, "production", id, before, null);
         const oldSets = await tx
           .select({ beamNo: schema.intDailyProductionSet.beamNo })
           .from(schema.intDailyProductionSet)
@@ -1688,7 +1695,8 @@ export default async function DailyProductionPage({
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
                   BEAM DETAILS — Beam Set# → Shrinkage (auto-fills from header Loom#)
                 </div>
-                <div className="overflow-x-auto">
+                <GridNavigator tbodyId="idp-beam-rows" fields={[{ name: "beamStatus", label: "Beam status" }, { name: "rcvdMtr", label: "Metres" }]} />
+                <div className="overflow-x-auto voucher-entry">
                   <table style={{ minWidth: "1560px" }}>
                     <thead>
                       <tr>
@@ -1781,7 +1789,7 @@ export default async function DailyProductionPage({
                 <div className="text-[11px] uppercase tracking-[0.1em] font-semibold p-3 border-b-2 border-black bg-gray-50">
                   COUNTS GRID — mm/Than Sr No, A / B / C / CP / PPC, Total, Rej
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto voucher-entry">
                   <table style={{ minWidth: "760px" }}>
                     <thead>
                       <tr>

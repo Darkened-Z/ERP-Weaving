@@ -12,13 +12,17 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 const directory = mkdtempSync(join(tmpdir(), "weaving-integrity-"));
 const database = join(directory, "test.db");
 copyFileSync("demo/demo.db", database);
+Object.assign(process.env, { NODE_ENV: "test" });
 process.env.TURSO_DATABASE_URL = "";
 process.env.TURSO_AUTH_TOKEN = "";
 process.env.DEMO_DB = "";
 process.env.LOCAL_DB_PATH = database;
 const { db, schema } = await import("../src/db/index");
+const { assertYarnPurchaseStock, PurchaseStockError } = await import("../src/lib/yarn-purchase-stock");
 const { assertYarnSaleStock, YarnStockError } = await import("../src/lib/yarn-sale-stock");
 const { assertLoomAvailable, LoomTakenError, recomputeBeamStatus, canKnotBeam } = await import("../src/lib/beam-cycle");
+const { captureVoucher, recordVoucherChange } = await import("../src/lib/change-history");
+const actor = { userId: 1, login: "regression", fullName: "Regression", roleName: "ADMIN" };
 const { clearVoucher } = await import("../src/lib/gl-post");
 const { activeSession } = await import("../src/lib/active-session");
 const { createToken, SESSION_LONG_TTL } = await import("../src/lib/session-token");
@@ -53,7 +57,7 @@ function compile<T>(expression: string, deps: Record<string, unknown>): T {
 }
 class Redirect extends Error { constructor(readonly url: string) { super(url); } }
 const redirect = (url: string): never => { throw new Redirect(url); };
-const shared = { db, schema, eq, and, inArray, sql, assertYarnSaleStock, clearVoucher, recomputeBeamStatus };
+const shared = { assertYarnPurchaseStock, PurchaseStockError, actor, captureVoucher, recordVoucherChange, db, schema, eq, and, inArray, sql, assertYarnSaleStock, clearVoucher, recomputeBeamStatus };
 const saleCreate = transaction("src/app/external/yarn/sale/page.tsx", "const existingRows");
 const saleEdit = transaction("src/app/external/yarn/sale/page.tsx", "assertYarnSaleStock(tx, validLines, id)");
 let serial = 0;
@@ -118,7 +122,7 @@ await test("U mount action respects both occupancy records", async t => {
   const [kn] = await db.insert(schema.intKnottingSarning).values({ vNo: "REG-KN", vDate: "2026-10-28" }).returning();
   const [kl] = await db.insert(schema.intKnottingSarningLine).values({ knottingId: kn.id, srNo: 1, beamNo: "REG-MOUNT", lmHash: "9001", shdHash: "REG" }).returning();
   const mount = compile<(fd: FormData) => Promise<void>>(extract("src/app/inventory/knotting/page.tsx", n => ts.isFunctionDeclaration(n) && n.name?.text === "mountBeam"), {
-    ...shared, assertLoomAvailable, LoomTakenError, canKnotBeam, getSession: async () => ({ userId: 1 }), intVal: Number, redirect, revalidatePath: () => {},
+    ...shared, assertLoomAvailable, LoomTakenError, canKnotBeam, getSession: async () => actor, intVal: Number, redirect, revalidatePath: () => {},
   });
   const form = new FormData(); form.set("mount_line_id", String(kl.id));
   const busy = (e: unknown) => e instanceof Redirect && e.url.includes("error=loom_busy");
@@ -211,5 +215,63 @@ await test("existing sessions follow current user state", async t => {
   await t.test("deleting the user revokes their session", async () => {
     await db.delete(schema.users).where(eq(schema.users.id, user.id));
     assert.equal(await activeSession(token), null);
+  });
+});
+
+const purchaseEdit = transaction("src/app/external/yarn/purchase/page.tsx", "assertYarnPurchaseStock(tx, id, validLines)");
+async function editPurchase(batch: string, count: string, lbs: number, connection = db) {
+  const [row] = await db.select().from(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.batchNo, batch));
+  const fields = Object.fromEntries(["loomType", "bmParty", "party", "broker", "dueDate", "img", "cont", "pur", "bal", "salAvgRate", "purAvgRate", "percent", "perBag", "rkd", "lotNo", "pendingFinance"].map(k => [k, null]));
+  const action = compile<(tx: Tx) => Promise<void>>(purchaseEdit, {
+    ...shared, ...fields, id: row.voucherId, validLines: [line(batch, count, lbs)], vDate: "2026-10-28", type: "PUR", term: "CASH", posting: "N", nowIso: "2026-10-28T03:00:00Z", existingLvNo: 0, canPostGL: false,
+  });
+  await connection.transaction(action);
+}
+await test("purchase corrections and history", async t => {
+  const batch = await purchase("REG-PUR-GUARD", 100);
+  const [p] = await db.select().from(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.batchNo, batch));
+  const remove = compile<(fd: FormData) => Promise<void>>(extract("src/app/external/yarn/purchase/page.tsx", n => ts.isFunctionDeclaration(n) && n.name?.text === "deleteVoucher"), {
+    ...shared, getSession: async () => actor, redirect, refuseIfLocked: async () => {}, revalidatePath: () => {},
+  });
+  const fd = new FormData(); fd.set("id", String(p.voucherId));
+  await saveSale([line(batch, "REG-PUR-GUARD", 80)]);
+  await t.test("sold batches cannot shrink below sales, switch counts, or be deleted", async () => {
+    await assert.rejects(editPurchase(batch, "REG-PUR-GUARD", 70), PurchaseStockError);
+    await assert.rejects(editPurchase(batch, "REG-OTHER-COUNT", 100), PurchaseStockError);
+    await assert.rejects(remove(fd), (e: unknown) => e instanceof Redirect && e.url.includes("batch_sold"));
+    assert.equal((await db.select().from(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.batchNo, batch)))[0].lbs, 100);
+  });
+  await t.test("valid correction is logged with actor and before/after values", async () => {
+    await editPurchase(batch, "REG-PUR-GUARD", 90);
+    const history = await db.all<{ actor_login: string; changes: string }>(sql`SELECT actor_login,changes FROM record_history WHERE kind='yarn_purchase' AND record_id=${p.voucherId}`);
+    assert.equal(history.length, 1);
+    assert.equal(history[0].actor_login, "regression");
+    assert.ok(JSON.parse(history[0].changes).some((c: { field: string; before: number; after: number }) => c.field === "Line 1: lbs" && c.before === 100 && c.after === 90));
+    assert.ok(!history[0].changes.includes("password"));
+    await editPurchase(batch, "REG-PUR-GUARD", 90);
+    assert.equal((await db.all(sql`SELECT id FROM record_history WHERE kind='yarn_purchase' AND record_id=${p.voucherId}`)).length, 1);
+  });
+  await t.test("count-only sales also block purchase shrinkage", async () => {
+    const legacy = await purchase("REG-PUR-LEGACY", 100);
+    await saveSale([line(null, "REG-PUR-LEGACY", 80)]);
+    await assert.rejects(editPurchase(legacy, "REG-PUR-LEGACY", 70), PurchaseStockError);
+  });
+  await t.test("purchase shrink racing a sale cannot leave negative stock", async () => {
+    const racing = await purchase("REG-PUR-RACE", 100);
+    const other = drizzle(createClient({ url: `file:${database}` }), { schema });
+    const attempts = await Promise.allSettled([editPurchase(racing, "REG-PUR-RACE", 50), saveSale([line(racing, "REG-PUR-RACE", 80)], undefined, other)]);
+    assert.equal(attempts.filter(a => a.status === "fulfilled").length, 1);
+    const [supply] = await db.select().from(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.batchNo, racing));
+    const [sold] = await db.select({ lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}),0)` }).from(schema.extYarnSalVoucherLine).where(eq(schema.extYarnSalVoucherLine.batchNo, racing));
+    assert.ok((supply.lbs ?? 0) >= sold.lbs);
+  });
+  await t.test("uncommitted history rolls back with the failed save", async () => {
+    const count = (await db.all(sql`SELECT id FROM record_history`)).length;
+    await assert.rejects(db.transaction(async tx => {
+      const before = await captureVoucher(tx, "yarn_purchase", p.voucherId);
+      await recordVoucherChange(tx, actor, "yarn_purchase", p.voucherId, before, null);
+      throw new Error("rollback-test");
+    }), /rollback-test/);
+    assert.equal((await db.all(sql`SELECT id FROM record_history`)).length, count);
   });
 });

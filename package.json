@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm test && next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/*.test.mts"
+    "test": "tsx --test tests/*.test.mts",
+    "restore-backup": "tsx scripts/restore-backup.mts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

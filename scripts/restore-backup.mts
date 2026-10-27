@@ -1,0 +1,11 @@
+import { readFileSync, openSync, closeSync } from "node:fs";
+import { resolve } from "node:path";
+import { createClient } from "@libsql/client";
+import { restoreDatabaseBackup, parseDatabaseBackup } from "../src/lib/database-backup";
+const [source, destination] = process.argv.slice(2);
+if (!source || !destination) throw new Error("Usage: npm run restore-backup -- backup.json[.gz] NEW-local-database.db");
+const target = resolve(destination);
+const backup = parseDatabaseBackup(readFileSync(resolve(source)));
+closeSync(openSync(target, "wx"));
+const client = createClient({ url: `file:${target}` });
+console.log(JSON.stringify({ target, ...await restoreDatabaseBackup(client, backup) }, null, 2));
