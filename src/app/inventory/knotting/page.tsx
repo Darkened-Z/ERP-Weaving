@@ -9,7 +9,7 @@ import { RowErase } from "@/components/production-calc";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
-import { inCurrentBeamCycle } from "@/lib/beam-cycle";
+import { assertLoomAvailable, LoomTakenError, canKnotBeam, inCurrentBeamCycle } from "@/lib/beam-cycle";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
@@ -239,11 +239,12 @@ async function saveKnotting(formData: FormData) {
       .map((l) => l.beamNo as string);
     if (newBeams.length) {
       const found = await db
-        .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk })
+        .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo })
         .from(schema.beams)
         .where(sql`upper(${schema.beams.beamNo}) IN (${sql.join(newBeams.map((b) => sql`${b.toUpperCase()}`), sql`, `)})`);
       const statusOf = new Map(found.map((b) => [b.beamNo.toUpperCase(), (b.statusWrk ?? "").toUpperCase()]));
-      const bad = newBeams.find((b) => !["LOADED", "R-CUT"].includes(statusOf.get(b.toUpperCase()) ?? ""));
+      const available = new Set(found.filter((b) => canKnotBeam(b.statusWrk, b.loomNo)).map((b) => b.beamNo.toUpperCase()));
+      const bad = newBeams.find((b) => !available.has(b.toUpperCase()));
       if (bad) {
         const st = statusOf.get(bad.toUpperCase()) || "NOT FOUND";
         bail(`beam_not_loaded&beam=${encodeURIComponent(bad)}&st=${encodeURIComponent(st)}`);
@@ -255,7 +256,7 @@ async function saveKnotting(formData: FormData) {
     const onLooms = await db
       .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
       .from(schema.beams)
-      .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED', 'R-CUT')`);
+      .where(sql`${schema.beams.loomNo} IS NOT NULL AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'L-ROLL', 'LOADED')`);
     for (const b of onLooms) {
       const k = `${b.shed ?? ""}|${b.loomNo}`;
       if (wantedLooms.has(k) && !ownBeams.has(b.beamNo)) bail("loom_busy");
@@ -274,7 +275,7 @@ async function saveKnotting(formData: FormData) {
     for (const lm of mounted) {
       const k = `${lm.shed ?? ""}|${lm.loomNo}`;
       const bSt = (lm.beamStatus ?? "").toUpperCase();
-      if (['EMPTY', 'LOADED', 'R-CUT'].includes(bSt)) continue;
+      if (['EMPTY', 'L-ROLL', 'LOADED'].includes(bSt)) continue;
       if (wantedLooms.has(k) && !ownBeams.has(lm.currentBeam ?? "")) bail("loom_busy");
     }
   }
@@ -385,11 +386,12 @@ async function saveKnotting(formData: FormData) {
         const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
         if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
           const [cur] = await tx
-            .select({ statusWrk: schema.beams.statusWrk })
+            .select({ statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo })
             .from(schema.beams)
             .where(eq(schema.beams.beamNo, l.beamNo))
             .limit(1);
-          if (!["LOADED", "R-CUT"].includes((cur?.statusWrk ?? "").toUpperCase())) continue;
+          if (!canKnotBeam(cur?.statusWrk, cur?.loomNo)) continue;
+          await assertLoomAvailable(tx, l.beamNo, l.shdHash, loomNo);
           await tx
             .update(schema.looms)
             .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -497,11 +499,12 @@ async function saveKnotting(formData: FormData) {
           const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
           if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
             const [cur] = await tx
-              .select({ statusWrk: schema.beams.statusWrk })
+              .select({ statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo })
               .from(schema.beams)
               .where(eq(schema.beams.beamNo, l.beamNo))
               .limit(1);
-            if (!["LOADED", "R-CUT"].includes((cur?.statusWrk ?? "").toUpperCase())) continue;
+            if (!canKnotBeam(cur?.statusWrk, cur?.loomNo)) continue;
+            await assertLoomAvailable(tx, l.beamNo, l.shdHash, loomNo);
             await tx
               .update(schema.looms)
               .set({ statusWrk: "RUNNING", currentBeam: l.beamNo, ...(l.knContNo ? { currentContract: l.knContNo } : {}) })
@@ -580,6 +583,7 @@ async function saveKnotting(formData: FormData) {
     redirect(`/inventory/knotting?id=${newId}`);
   }
   } catch (e) {
+    if (e instanceof LoomTakenError) redirect("/inventory/knotting?error=loom_busy");
     const err = e as { message?: string; digest?: string };
     if (err.digest && err.digest.startsWith("NEXT_REDIRECT")) throw e;
     const thru = parseLockedThroughFromError(err.message ?? "");
@@ -700,61 +704,69 @@ async function mountBeam(formData: FormData) {
   if (!session) redirect("/login");
   const lineId = intVal(formData.get("mount_line_id"));
   if (lineId === null) return;
-  const rows = await db
-    .select({
-      line: schema.intKnottingSarningLine,
-      vNo: schema.intKnottingSarning.vNo,
-      vDate: schema.intKnottingSarning.vDate,
-      knottingId: schema.intKnottingSarning.id,
-    })
-    .from(schema.intKnottingSarningLine)
-    .innerJoin(
-      schema.intKnottingSarning,
-      eq(schema.intKnottingSarningLine.knottingId, schema.intKnottingSarning.id),
-    )
-    .where(eq(schema.intKnottingSarningLine.id, lineId));
-  const row = rows[0];
-  if (!row) redirect("/inventory/knotting");
-  const { line } = row;
-  const loomNo = line.lmHash ? parseInt(line.lmHash, 10) : NaN;
-  if (!line.beamNo || !Number.isFinite(loomNo) || !line.shdHash) {
-    redirect(`/inventory/knotting?id=${row.knottingId}&error=loom_required`);
+  let knottingId: number | undefined;
+  try {
+    knottingId = await db.transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          line: schema.intKnottingSarningLine,
+          vNo: schema.intKnottingSarning.vNo,
+          vDate: schema.intKnottingSarning.vDate,
+          knottingId: schema.intKnottingSarning.id,
+        })
+        .from(schema.intKnottingSarningLine)
+        .innerJoin(
+          schema.intKnottingSarning,
+          eq(schema.intKnottingSarningLine.knottingId, schema.intKnottingSarning.id),
+        )
+        .where(eq(schema.intKnottingSarningLine.id, lineId));
+      const row = rows[0];
+      if (!row) redirect("/inventory/knotting");
+      const { line } = row;
+      const loomNo = line.lmHash ? parseInt(line.lmHash, 10) : NaN;
+      if (!line.beamNo || !Number.isFinite(loomNo) || !line.shdHash) {
+        redirect(`/inventory/knotting?id=${row.knottingId}&error=loom_required`);
+      }
+      // Mount only a beam that is waiting to be knotted, or re-mount one this same
+      // bill already holds — never pull a beam off production or another bill.
+      const [cur] = await tx
+        .select({ statusWrk: schema.beams.statusWrk, knVno: schema.beams.knVno, loomNo: schema.beams.loomNo })
+        .from(schema.beams)
+        .where(eq(schema.beams.beamNo, line.beamNo!))
+        .limit(1);
+      const st = (cur?.statusWrk ?? "").toUpperCase();
+      if (!cur || !(canKnotBeam(st, cur.loomNo) || (st === "KNOTTING" && cur.knVno === row.vNo))) {
+        redirect(`/inventory/knotting?id=${row.knottingId}&error=beam_not_loaded`);
+      }
+      await assertLoomAvailable(tx, line.beamNo!, line.shdHash!, loomNo);
+      await tx
+        .update(schema.looms)
+        .set({
+          statusWrk: "RUNNING",
+          currentBeam: line.beamNo,
+          ...(line.knContNo ? { currentContract: line.knContNo } : {}),
+        })
+        .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, line.shdHash!)));
+      await tx
+        .update(schema.beams)
+        .set({
+          statusWrk: "KNOTTING",
+          loomNo,
+          shed: line.shdHash!,
+          knVno: row.vNo,
+          knDate: line.kDate ?? row.vDate,
+          ...(line.setNo ? { setNo: line.setNo } : {}),
+          ...(line.beamSetNo ? { beamSetNo: line.beamSetNo } : {}),
+        })
+        .where(eq(schema.beams.beamNo, line.beamNo!));
+      return row.knottingId;
+    });
+  } catch (error) {
+    if (error instanceof LoomTakenError) redirect("/inventory/knotting?error=loom_busy");
+    throw error;
   }
-  // Mount only a beam that is waiting to be knotted, or re-mount one this same
-  // bill already holds — never pull a beam off production or another bill.
-  const [cur] = await db
-    .select({ statusWrk: schema.beams.statusWrk, knVno: schema.beams.knVno })
-    .from(schema.beams)
-    .where(eq(schema.beams.beamNo, line.beamNo!))
-    .limit(1);
-  const st = (cur?.statusWrk ?? "").toUpperCase();
-  if (!cur || !(st === "LOADED" || st === "R-CUT" || (st === "KNOTTING" && cur.knVno === row.vNo))) {
-    redirect(`/inventory/knotting?id=${row.knottingId}&error=beam_not_loaded`);
-  }
-  await db.transaction(async (tx) => {
-    await tx
-      .update(schema.looms)
-      .set({
-        statusWrk: "RUNNING",
-        currentBeam: line.beamNo,
-        ...(line.knContNo ? { currentContract: line.knContNo } : {}),
-      })
-      .where(and(eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, line.shdHash!)));
-    await tx
-      .update(schema.beams)
-      .set({
-        statusWrk: "KNOTTING",
-        loomNo,
-        shed: line.shdHash!,
-        knVno: row.vNo,
-        knDate: line.kDate ?? row.vDate,
-        ...(line.setNo ? { setNo: line.setNo } : {}),
-        ...(line.beamSetNo ? { beamSetNo: line.beamSetNo } : {}),
-      })
-      .where(eq(schema.beams.beamNo, line.beamNo!));
-  });
   revalidatePath("/inventory/knotting");
-  redirect(`/inventory/knotting?id=${row.knottingId}`);
+  redirect(`/inventory/knotting?id=${knottingId}`);
 }
 
 export default async function KnottingPage({
@@ -871,7 +883,7 @@ export default async function KnottingPage({
       shed: schema.beams.shed,
     })
     .from(schema.beams)
-    .where(sql`upper(${schema.beams.statusWrk}) IN ('LOADED', 'R-CUT')`)
+    .where(sql`upper(${schema.beams.statusWrk}) = 'LOADED' OR (upper(${schema.beams.statusWrk}) = 'R-CUT' AND ${schema.beams.loomNo} IS NULL)`)
     .orderBy(schema.beams.beamNo);
   const beamFillMap = Object.fromEntries(
     loadedBeams.map((b) => [
@@ -946,7 +958,7 @@ export default async function KnottingPage({
     .from(schema.beams)
     .where(
       sql`${schema.beams.loomNo} IS NOT NULL 
-          AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'LOADED', 'R-CUT')`
+          AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'L-ROLL', 'LOADED')`
     );
   const knottedLooms = await db
     .select({
@@ -962,7 +974,7 @@ export default async function KnottingPage({
     // onto another loom must not keep its old bill's loom reserved.
     .where(
       sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL
-          AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'LOADED', 'R-CUT')
+          AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'L-ROLL', 'LOADED')
           AND (${schema.beams.knVno} IS NULL OR ${schema.beams.knVno} = ${schema.intKnottingSarning.vNo})`
     );
   const busyLooms = new Map<string, string>();
@@ -970,7 +982,7 @@ export default async function KnottingPage({
   for (const lm of loomRows) {
     if (lm.currentBeam) {
       const bStatus = (beamStatusByNo.get(lm.currentBeam) ?? "").toUpperCase();
-      if (!['EMPTY', 'LOADED', 'R-CUT'].includes(bStatus)) {
+      if (!['EMPTY', 'L-ROLL', 'LOADED'].includes(bStatus)) {
         busyLooms.set(`${lm.shed ?? ""}|${lm.loomNo}`, lm.currentBeam);
       }
     }

@@ -11,6 +11,7 @@ import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { YarnPurchaseCountRate } from "./count-rate";
+import { PurchaseQuantityInput } from "./quantity-input";
 import { FindingPicker } from "@/components/finding-picker";
 import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
@@ -627,9 +628,8 @@ export default async function YarnPurchaseVoucherPage({
     // and the count would show negative stock at month end — the exact thing
     // that must not happen during a purchase/sale correction.
     //
-    // This runs whatever the sale's EDIT/FINAL state is. EDIT unlocks the
-    // fields so a line can be fixed; it does not license overselling. To cut a
-    // purchase below what's sold, cut the sale first.
+    // Quantity is editable even when the sale is FINAL. This guard always
+    // applies: to cut a purchase below what's sold, correct the sale first.
     if (Number.isFinite(id) && id > 0) {
       const priorBatches = (
         await db
@@ -1574,7 +1574,7 @@ export default async function YarnPurchaseVoucherPage({
                             style={locked ? { background: "#fff7ed" } : undefined}
                             title={
                               locked
-                                ? `Sold on ${soldOn} — put that sale in EDIT to change this line`
+                                ? `Sold on ${soldOn} — Qty and Rate can be corrected; put the sale in EDIT to change batch details`
                                 : undefined
                             }
                           >
@@ -1718,15 +1718,7 @@ export default async function YarnPurchaseVoucherPage({
                               />
                             </td>
                             <td>
-                              <input
-                                name="line_qty"
-                                type="number"
-                                step="any"
-                                className={`input-box mono text-[12px] text-right${lockCls}`}
-                                defaultValue={row?.qty ?? ""}
-                                style={{ width: 70 }}
-                              {...ro}
-                              />
+                              <PurchaseQuantityInput value={row?.qty} soldLbs={bl?.soldLbs} />
                             </td>
                             <td>
                               <input
@@ -1737,7 +1729,7 @@ export default async function YarnPurchaseVoucherPage({
                                 defaultValue={row?.lbs ?? ""}
                                 readOnly
                                 tabIndex={-1}
-                                style={{ width: 75 }}
+                                style={{ width: 110 }}
                               />
                             </td>
                             {/* Unit dropped at the client's request. Still
@@ -1760,8 +1752,8 @@ export default async function YarnPurchaseVoucherPage({
                             </td>
                             {/* Rate stays open even on a locked line. A wrong rate
                                 (300 typed for 305) is the commonest correction and it
-                                moves no yarn — the guard that matters protects
-                                QUANTITY. Freezing it forced a pointless round trip
+                                moves no yarn — the quantity guard still prevents
+                                reducing a purchase below its sales. Freezing it forced a pointless round trip
                                 through the sale. The sale keeps the rate it was made
                                 at; only this purchase's own cost re-posts. */}
                             <td>
@@ -1803,7 +1795,8 @@ export default async function YarnPurchaseVoucherPage({
                   </div>
                   <div className="text-[10px] text-[var(--muted)] mt-2">
                     Empty rows are ignored on save. On update, all lines are replaced with the current grid.
-                    A line with a padlock has been sold out of its batch — open that yarn sale with EDIT to change it.
+                    Qty and Rate can be corrected even on a sold batch. Qty must cover the pounds already sold.
+                    A padlock protects the batch details — open the linked yarn sale with EDIT to change those.
                   </div>
                 </div>
 

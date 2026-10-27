@@ -13,6 +13,7 @@ import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { BatchHeaderFill } from "./batch-header-fill";
 import { BatchDetailLink } from "./batch-detail-link";
 import { db, schema } from "@/db";
+import { assertYarnSaleStock, YarnStockError } from "@/lib/yarn-sale-stock";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
 import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { acc } from "@/lib/gl-accounts";
@@ -767,104 +768,6 @@ export default async function YarnSaleVoucherPage({
       );
     }
 
-    // A sale can never take more out of a batch than is lying in it. Without
-    // this the count goes negative the moment someone fat-fingers a quantity,
-    // and monthly clearance is chasing yarn that was never there.
-    {
-      const wanted = new Map<string, number>();
-      for (const l of validLines) {
-        if (!l.batchNo) continue;
-        wanted.set(l.batchNo, (wanted.get(l.batchNo) ?? 0) + (l.lbs ?? 0));
-      }
-      if (wanted.size) {
-        const keys = Array.from(wanted.keys());
-        const purRows = await db
-          .select({
-            batchNo: schema.extYarnPurVoucherLine.batchNo,
-            lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
-          })
-          .from(schema.extYarnPurVoucherLine)
-          .where(inArray(schema.extYarnPurVoucherLine.batchNo, keys))
-          .groupBy(schema.extYarnPurVoucherLine.batchNo);
-        const otherSales = await db
-          .select({
-            batchNo: schema.extYarnSalVoucherLine.batchNo,
-            lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
-          })
-          .from(schema.extYarnSalVoucherLine)
-          .where(
-            Number.isFinite(id) && id > 0
-              ? and(
-                  inArray(schema.extYarnSalVoucherLine.batchNo, keys),
-                  ne(schema.extYarnSalVoucherLine.voucherId, id),
-                )
-              : inArray(schema.extYarnSalVoucherLine.batchNo, keys),
-          )
-          .groupBy(schema.extYarnSalVoucherLine.batchNo);
-        const purBy = new Map(purRows.map((r) => [r.batchNo ?? "", r.lbs]));
-        const soldBy = new Map(otherSales.map((r) => [r.batchNo ?? "", r.lbs]));
-        for (const [batch, want] of wanted) {
-          const avail = round2((purBy.get(batch) ?? 0) - (soldBy.get(batch) ?? 0));
-          if (want > avail + 0.01) {
-            redirect(
-              `/external/yarn/sale?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}` +
-                `error=over_stock&batch=${encodeURIComponent(batch)}` +
-                `&avail=${avail}&want=${round2(want)}`,
-            );
-          }
-        }
-      }
-    }
-
-    // Lines without a batch draw on the count as a whole: purchases of that
-    // count less every other sale of it (batched or not).
-    {
-      const wanted = new Map<string, number>();
-      for (const l of validLines) {
-        if (l.batchNo || !l.count) continue;
-        wanted.set(l.count, (wanted.get(l.count) ?? 0) + (l.lbs ?? 0));
-      }
-      if (wanted.size) {
-        const keys = Array.from(wanted.keys());
-        const purRows = await db
-          .select({
-            count: schema.extYarnPurVoucherLine.count,
-            lbs: sql<number>`coalesce(sum(${schema.extYarnPurVoucherLine.lbs}), 0)`,
-          })
-          .from(schema.extYarnPurVoucherLine)
-          .where(inArray(schema.extYarnPurVoucherLine.count, keys))
-          .groupBy(schema.extYarnPurVoucherLine.count);
-        const saleRows = await db
-          .select({
-            count: schema.extYarnSalVoucherLine.count,
-            lbs: sql<number>`coalesce(sum(${schema.extYarnSalVoucherLine.lbs}), 0)`,
-          })
-          .from(schema.extYarnSalVoucherLine)
-          .where(
-            Number.isFinite(id) && id > 0
-              ? and(inArray(schema.extYarnSalVoucherLine.count, keys), ne(schema.extYarnSalVoucherLine.voucherId, id))
-              : inArray(schema.extYarnSalVoucherLine.count, keys),
-          )
-          .groupBy(schema.extYarnSalVoucherLine.count);
-        const purBy = new Map(purRows.map((r) => [r.count ?? "", r.lbs]));
-        const soldBy = new Map(saleRows.map((r) => [r.count ?? "", r.lbs]));
-        // Batched lines on THIS voucher also come out of the count.
-        for (const l of validLines) {
-          if (l.batchNo && l.count) soldBy.set(l.count, (soldBy.get(l.count) ?? 0) + (l.lbs ?? 0));
-        }
-        for (const [count, want] of wanted) {
-          const avail = round2((purBy.get(count) ?? 0) - (soldBy.get(count) ?? 0));
-          if (want > avail + 0.01) {
-            redirect(
-              `/external/yarn/sale?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}` +
-                `error=over_stock&batch=${encodeURIComponent(`count ${count}`)}` +
-                `&avail=${avail}&want=${round2(want)}`,
-            );
-          }
-        }
-      }
-    }
-
     const nowIso = new Date().toISOString();
 
     const fyCode = await fyCodeForDate(vDate);
@@ -921,6 +824,7 @@ export default async function YarnSaleVoucherPage({
 
       if (Number.isFinite(id) && id > 0) {
         await db.transaction(async (tx) => {
+          await assertYarnSaleStock(tx, validLines, id);
           await tx
             .update(schema.extYarnSalVoucher)
             .set({
@@ -981,6 +885,7 @@ export default async function YarnSaleVoucherPage({
         let codeExists = false;
         try {
           newId = await db.transaction(async (tx) => {
+            await assertYarnSaleStock(tx, validLines);
             const existingRows = await tx.select({ vNo: schema.extYarnSalVoucher.vNo }).from(schema.extYarnSalVoucher);
             const vNo = providedVNo || nextVNo(existingRows, "YSV");
             const lvRow = await tx
@@ -1044,6 +949,12 @@ export default async function YarnSaleVoucherPage({
         redirect(`/external/yarn/sale?id=${newId}`);
       }
     } catch (e: unknown) {
+      if (e instanceof YarnStockError) {
+        redirect(
+          `/external/yarn/sale?${Number.isFinite(id) && id > 0 ? `id=${id}&` : ""}` +
+          `error=over_stock&batch=${encodeURIComponent(e.stock)}&avail=${e.available}&want=${e.wanted}`,
+        );
+      }
       const digest = (e as { digest?: string })?.digest ?? "";
       if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw e;
       const msg = (e as { message?: string })?.message ?? "";

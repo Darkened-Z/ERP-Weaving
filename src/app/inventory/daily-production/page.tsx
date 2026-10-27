@@ -107,8 +107,8 @@ export default async function DailyProductionPage({
   const nextNum = (maxRow[0]?.maxNum ?? 0) + 1;
   const upcomingVNo = `IDP-${String(nextNum).padStart(4, "0")}`;
 
-  // Beam Status choices (owner: only these five, Oracle list)
-  const BEAM_STATUS_CHOICES = ["F-ROLL", "L-ROLL", "R-CUT", "RE-KNOT", "RUNNING"];
+  // Finishing statuses L-ROLL and EMPTY both release the beam and loom.
+  const BEAM_STATUS_CHOICES = ["F-ROLL", "L-ROLL", "EMPTY", "R-CUT", "RE-KNOT", "RUNNING"];
   const beamCatalog = await db
     .select({
       beamNo: schema.beams.beamNo,
@@ -301,11 +301,9 @@ export default async function DailyProductionPage({
   // Mounted beams — KNOTTING after the knotting bill, PRODUCTION once already in
   // production, RUNNING kept for pre-lifecycle records. The SET NO LIST + loom→beam source.
   // A beam is ON a loom from the moment knotting mounts it until production
-  // empties it. That includes every status daily production itself assigns
-  // (BEAM_STATUS_CHOICES) — a beam at L-ROLL is still on the loom being woven, so
-  // leaving those out made it vanish from the picker mid-run. Only EMPTY (freed)
-  // and LOADED (received, never knotted) are not mounted.
-  const MOUNTED = new Set(["KNOTTING", "PRODUCTION", ...BEAM_STATUS_CHOICES.filter((s) => s !== "R-CUT")]);
+  // empties it after L-ROLL/EMPTY. Mid-run statuses, including R-CUT, keep the
+  // mount; recorded beam length alone must never release it.
+  const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "F-ROLL", "R-CUT", "RE-KNOT", "RUNNING"]);
   const voucherBeamNos = new Set(
     setRows.map((s) => (s.beamNo ?? "").trim()).filter(Boolean)
   );
@@ -1091,10 +1089,12 @@ export default async function DailyProductionPage({
             .from(schema.intGreyDespatchLine)
             .innerJoin(schema.intGreyDespatch, eq(schema.intGreyDespatch.id, schema.intGreyDespatchLine.despatchId));
           const lockedBy = new Map<string, string>();
+          const despatchBy = new Map<string, string>();
           const openDespatchOf = new Map<string, number>();
           for (const l of lockedRows) {
             const k = (l.than as unknown as string | null) ?? "";
             if (!k) continue;
+            despatchBy.set(k, l.vNo);
             if ((l.lockState ?? "FINAL").toUpperCase() === "EDIT") openDespatchOf.set(k, l.despatchId);
             else lockedBy.set(k, l.vNo);
           }
@@ -1102,9 +1102,12 @@ export default async function DailyProductionPage({
           for (const v of validSets) if (v.mmThanSrNo) incomingByThan.set(v.mmThanSrNo, v);
           for (const os of oldSets2) {
             const k = os.mmThanSrNo ?? "";
-            if (!k || !lockedBy.has(k)) continue;
+            if (!k || !despatchBy.has(k)) continue;
             const now = incomingByThan.get(k);
-            if (!now) throw new Error(`THAN_LOCKED:${k}:${lockedBy.get(k)}`);
+            // EDIT permits metre corrections, not leaving a despatch without
+            // its source cloth. Remove the than from that despatch first.
+            if (!now) throw new Error(`THAN_DESPATCHED:${k}:${despatchBy.get(k)}`);
+            if (!lockedBy.has(k)) continue;
             if (Math.round(Number(now.totalCount ?? 0) * 100) !== Math.round(Number(os.totalCount ?? 0) * 100)) {
               throw new Error(`THAN_LOCKED:${k}:${lockedBy.get(k)}`);
             }
@@ -1233,7 +1236,7 @@ export default async function DailyProductionPage({
 
           // Beam lifecycle: every beam this voucher touches now or touched
           // before is re-derived from its cycle's production (lib/beam-cycle:
-          // Rcvd/Mtr re-stamp, last-entered status, last roll at full length),
+          // Rcvd/Mtr re-stamp and the last-entered beam status),
           // so re-saving an older voucher can't wind a beam back past a newer
           // one, and a dropped beam falls back to its knotting mount only when
           // no other production remains.
@@ -1309,6 +1312,10 @@ export default async function DailyProductionPage({
       }
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message ?? "unknown";
+      if (msg.startsWith("THAN_DESPATCHED:")) {
+        const [, than, vno] = msg.split(":");
+        return { error: "than_despatched", than, dv: vno ?? "" };
+      }
       if (msg.startsWith("THAN_LOCKED:")) {
         const [, than, vno] = msg.split(":");
         return { error: "than_locked", than, dv: vno ?? "" };

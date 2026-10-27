@@ -21,6 +21,8 @@ const msgs: Record<string, (e: SaveError) => string> = {
     `Period is locked. Cannot save vouchers for this date${e?.thru ? ` — locked through ${e.thru}` : ""}.`,
   than_locked: (e) =>
     `Than ${e?.than ?? ""} has already gone out on despatch ${e?.dv ?? ""} — it cannot be changed or removed here. Edit despatch ${e?.dv ?? ""} first if the cloth really did not leave.`,
+  than_despatched: (e) =>
+    `Than ${e?.than ?? ""} is on despatch ${e?.dv ?? ""}. Remove it from that despatch before removing or renaming it in production. Nothing was saved.`,
   dup_than: () => "Duplicate mm/Than Sr No — already used by another production entry.",
   no_contract: () =>
     "Conv Contract is required — pick a grey conversion contract before saving.",

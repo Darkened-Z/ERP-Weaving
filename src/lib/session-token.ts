@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-// Kept free of next/headers and the DB so proxy.ts can verify a session
-// without pulling in the app's server modules.
+// Signature/expiry verification stays separate from active-session.ts, which
+// checks the current account status and permissions in the database.
 
 const SECRET =
   process.env.SESSION_SECRET ||

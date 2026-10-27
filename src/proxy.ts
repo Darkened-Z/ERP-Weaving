@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { verifyToken } from "@/lib/session-token";
+import { activeSession } from "@/lib/active-session";
 import { canAccess, firstAllowedHref } from "@/lib/nav";
 
 /**
@@ -18,11 +18,11 @@ function withSecurityHeaders(res: NextResponse) {
   return res;
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname === "/login") return withSecurityHeaders(NextResponse.next());
 
-  const session = verifyToken(request.cookies.get("session")?.value);
+  const session = await activeSession(request.cookies.get("session")?.value);
   if (session) {
     if (canAccess(session, pathname)) return withSecurityHeaders(NextResponse.next());
     // A restricted user outside their modules: pages bounce to their first

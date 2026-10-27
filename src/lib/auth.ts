@@ -3,14 +3,15 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { createToken, verifyToken, SESSION_SHORT_TTL, SESSION_LONG_TTL, type Session } from "@/lib/session-token";
+import { createToken, SESSION_SHORT_TTL, SESSION_LONG_TTL, type Session } from "@/lib/session-token";
+import { activeSession } from "@/lib/active-session";
 import { IS_DEMO } from "@/lib/brand";
 
 export type { Session };
 
 export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
-  return verifyToken(cookieStore.get("session")?.value);
+  return activeSession(cookieStore.get("session")?.value);
 }
 
 export async function requireSession(): Promise<Session> {

@@ -31,7 +31,13 @@ export async function wovenThisCycle(tx: Tx | typeof db, beamNo: string): Promis
 }
 
 const DONE = new Set(["EMPTY", "L-ROLL"]);
-const OFF_LOOM = new Set([...DONE, "LOADED", "R-CUT"]);
+const OFF_LOOM = new Set([...DONE, "LOADED"]);
+
+/** Legacy R-CUT beams already off a loom can still be re-knotted. */
+export function canKnotBeam(status: string | null | undefined, loomNo: number | null | undefined): boolean {
+  const value = (status ?? "").trim().toUpperCase();
+  return value === "LOADED" || (value === "R-CUT" && loomNo == null);
+}
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const same = (a: number | null | undefined, b: number | null) =>
   a == null || b == null ? a == null && b == null : Math.abs(a - b) < 0.005;
@@ -41,6 +47,24 @@ export class LoomTakenError extends Error {
   constructor(readonly loom: string, readonly holder: string) {
     super(`LOOM_TAKEN:${loom}:${holder}`);
   }
+}
+
+/** Check both mount records inside the write transaction before taking a loom. */
+export async function assertLoomAvailable(tx: Tx, beamNo: string, shed: string, loomNo: number): Promise<void> {
+  const [mounted] = await tx.select({ beamNo: schema.beams.beamNo }).from(schema.beams).where(and(
+    eq(schema.beams.loomNo, loomNo), eq(schema.beams.shed, shed),
+    sql`lower(${schema.beams.beamNo}) <> lower(${beamNo})`,
+    sql`upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('EMPTY', 'L-ROLL', 'LOADED')`,
+  )).limit(1);
+  if (mounted) throw new LoomTakenError(`Shed ${shed} · Loom ${loomNo}`, mounted.beamNo);
+  const [holder] = await tx.select({ beamNo: schema.looms.currentBeam }).from(schema.looms)
+    .leftJoin(schema.beams, sql`lower(${schema.beams.beamNo}) = lower(${schema.looms.currentBeam})`)
+    .where(and(
+      eq(schema.looms.loomNo, loomNo), eq(schema.looms.shed, shed),
+      sql`lower(${schema.looms.currentBeam}) <> lower(${beamNo})`,
+      sql`upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('EMPTY', 'L-ROLL', 'LOADED')`,
+    )).limit(1);
+  if (holder?.beamNo) throw new LoomTakenError(`Shed ${shed} · Loom ${loomNo}`, holder.beamNo);
 }
 
 /**
@@ -55,8 +79,8 @@ export class LoomTakenError extends Error {
  *    with the newest total plus its own meters, so it outranked the L-ROLL
  *    entered after it and put a finished beam back on its loom.
  * 2. Status = the last-entered row's status, so a wrong date can't reorder it.
- *    Woven ≥ beam length also empties the beam — here, not only on save, so a
- *    later edit can't bring an exhausted beam back.
+ *    Reaching the recorded beam length does NOT finish the beam: actual output
+ *    can exceed that estimate. Only an entered finishing status releases it.
  * 3. With no production yet, the beam is KNOTTING only if its knotting bill
  *    still carries it and that knotting belongs to this cycle; else LOADED/EMPTY.
  * 4. A beam going back on a loom never takes it from another beam mounted there.
@@ -73,7 +97,6 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
       knDate: schema.beams.knDate,
       shed: schema.beams.shed,
       loomNo: schema.beams.loomNo,
-      length: schema.beams.length,
       statusLoc: schema.beams.statusLoc,
     })
     .from(schema.beams)
@@ -110,10 +133,8 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
     else byVoucher.push([r]);
   }
   let run = 0;
-  let woven = 0;
   for (const vr of byVoucher) {
     run = r2(run + vr.reduce((a, r) => a + (r.totalCount ?? 0) + (r.rejCount ?? 0), 0));
-    woven += vr.reduce((a, r) => a + (r.totalCount ?? 0), 0);
     for (const r of vr) {
       const bl = r.bLength ?? 0;
       const rcvdMtr = run || null;
@@ -155,14 +176,12 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
       status = beam.brVno ? "LOADED" : "EMPTY";
     }
   }
-  if (!DONE.has(status) && (beam.length ?? 0) > 0 && woven >= beam.length!) status = "EMPTY";
-
   if (OFF_LOOM.has(status) || mountLoom == null || !mountShed) {
     await tx
       .update(schema.beams)
       .set({
         statusWrk: DONE.has(status) ? "EMPTY" : OFF_LOOM.has(status) ? status : "LOADED",
-        ...(DONE.has(status) ? { statusLoc: "L-ROLL" } : status === "R-CUT" ? { statusLoc: "R-CUT" } : {}),
+        ...(DONE.has(status) ? { statusLoc: "L-ROLL" } : {}),
         loomNo: null,
       })
       .where(eq(schema.beams.beamNo, beamNo));
@@ -173,22 +192,7 @@ export async function recomputeBeamStatus(tx: Tx, beamNo: string, voucherDate?: 
     return;
   }
 
-  const [holder] = await tx
-    .select({ beamNo: schema.beams.beamNo })
-    .from(schema.looms)
-    .innerJoin(schema.beams, sql`LOWER(${schema.beams.beamNo}) = LOWER(${schema.looms.currentBeam})`)
-    .where(
-      and(
-        eq(schema.looms.loomNo, mountLoom),
-        eq(schema.looms.shed, mountShed),
-        sql`LOWER(${schema.looms.currentBeam}) <> LOWER(${beamNo})`,
-        eq(schema.beams.loomNo, mountLoom),
-        eq(schema.beams.shed, mountShed),
-        sql`upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'L-ROLL', 'LOADED', 'R-CUT')`,
-      ),
-    )
-    .limit(1);
-  if (holder) throw new LoomTakenError(`Shed ${mountShed} · Loom ${mountLoom}`, holder.beamNo);
+  await assertLoomAvailable(tx, beamNo, mountShed, mountLoom);
 
   // A finished beam that went back on its loom must not keep reading L-ROLL /
   // R-CUT in Status Loc — the Beams page treats that as "done".
