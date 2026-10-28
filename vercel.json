@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "regions": ["bom1"],
-  "buildCommand": "next build",
+  "buildCommand": "npm run build",
   "outputDirectory": ".next"
 }
