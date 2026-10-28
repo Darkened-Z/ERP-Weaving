@@ -7,6 +7,7 @@ import ts from "typescript";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { num } from "../src/lib/form";
 
 // Every mutation is against a disposable copy of the fabricated demo database.
 const directory = mkdtempSync(join(tmpdir(), "weaving-integrity-"));
@@ -219,14 +220,43 @@ await test("existing sessions follow current user state", async t => {
 });
 
 const purchaseEdit = transaction("src/app/external/yarn/purchase/page.tsx", "assertYarnPurchaseStock(tx, id, validLines)");
-async function editPurchase(batch: string, count: string, lbs: number, connection = db) {
+async function editPurchase(batch: string, count: string, lbs: number, connection = db, qty = lbs / 100) {
   const [row] = await db.select().from(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.batchNo, batch));
   const fields = Object.fromEntries(["loomType", "bmParty", "party", "broker", "dueDate", "img", "cont", "pur", "bal", "salAvgRate", "purAvgRate", "percent", "perBag", "rkd", "lotNo", "pendingFinance"].map(k => [k, null]));
   const action = compile<(tx: Tx) => Promise<void>>(purchaseEdit, {
-    ...shared, ...fields, id: row.voucherId, validLines: [line(batch, count, lbs)], vDate: "2026-10-28", type: "PUR", term: "CASH", posting: "N", nowIso: "2026-10-28T03:00:00Z", existingLvNo: 0, canPostGL: false,
+    ...shared, ...fields, id: row.voucherId, validLines: [{ ...line(batch, count, lbs), qty }], vDate: "2026-10-28", type: "PUR", term: "CASH", posting: "N", nowIso: "2026-10-28T03:00:00Z", existingLvNo: 0, canPostGL: false,
   });
   await connection.transaction(action);
 }
+const purchaseLineLoop = extract("src/app/external/yarn/purchase/page.tsx", n => ts.isForStatement(n) && n.getText().includes("validLines.push"));
+function parsePurchaseRows(qtys: string[], lbss: string[], counts: string[] = []) {
+  const empty = Object.fromEntries(["contNos", "dots", "partyCounts", "blds", "packs", "brands", "doNos", "bags", "cons", "units", "dspParties", "rates", "rateSvs", "batchNos"].map(k => [k, []]));
+  return compile<() => { qty: number | null; lbs: number }[]>(`() => { const validLines = []; ${purchaseLineLoop}; return validLines; }`, {
+    ...empty, qtys, lbss, counts, rowCount: Math.max(qtys.length, lbss.length), num, id: 1, redirect, round2: (n: number) => Math.round(n * 100) / 100,
+  })();
+}
+await test("purchase form preserves manually entered weight through save and reload", async () => {
+  const [parsed] = parsePurchaseRows(["35.00"], ["3487.25"], ["REG-MANUAL-LBS"]);
+  assert.equal(parsed.qty, 35);
+  assert.equal(parsed.lbs, 3487.25);
+  const batch = await purchase("REG-MANUAL-LBS", 3500);
+  await editPurchase(batch, "REG-MANUAL-LBS", parsed.lbs, db, parsed.qty!);
+  const [saved] = await db.select().from(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.batchNo, batch));
+  assert.equal(saved.qty, 35);
+  assert.equal(saved.lbs, 3487.25);
+  assert.equal(parsePurchaseRows([String(saved.qty)], [String(saved.lbs)], [saved.count!])[0].lbs, 3487.25);
+});
+await test("purchase weight defaults only when blank and ignores spare rows", () => {
+  assert.equal(parsePurchaseRows(["35"], [""])[0].lbs, 3500);
+  assert.equal(parsePurchaseRows(["35"], ["0"])[0].lbs, 0);
+  assert.equal(parsePurchaseRows([""], ["12.25"])[0].lbs, 12.25);
+  assert.equal(parsePurchaseRows(["", ""], ["", "0"]).length, 0);
+});
+await test("invalid or negative manual purchase weights are rejected", () => {
+  for (const weight of ["-0.25", "Infinity", "oops", "12bad"]) {
+    assert.throws(() => parsePurchaseRows(["35"], [weight]), (e: unknown) => e instanceof Redirect && e.url.includes("invalid_lbs"));
+  }
+});
 await test("purchase corrections and history", async t => {
   const batch = await purchase("REG-PUR-GUARD", 100);
   const [p] = await db.select().from(schema.extYarnPurVoucherLine).where(eq(schema.extYarnPurVoucherLine.batchNo, batch));

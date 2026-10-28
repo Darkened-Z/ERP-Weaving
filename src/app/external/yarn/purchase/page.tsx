@@ -13,6 +13,7 @@ import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { YarnPurchaseCountRate } from "./count-rate";
 import { PurchaseQuantityInput } from "./quantity-input";
+import { PurchaseWeightCalc } from "./weight-calc";
 import { FindingPicker } from "@/components/finding-picker";
 import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
@@ -579,6 +580,11 @@ export default async function YarnPurchaseVoucherPage({
       const br = (brands[i] || "").trim();
       const dn = (doNos[i] || "").trim();
       const q = num(qtys[i]);
+      const rawLbs = (lbss[i] ?? "").trim();
+      const enteredLbs = rawLbs === "" ? null : Number(rawLbs);
+      if (enteredLbs != null && (!Number.isFinite(enteredLbs) || enteredLbs < 0)) {
+        redirect(Number.isFinite(id) && id > 0 ? `/external/yarn/purchase?id=${id}&error=invalid_lbs` : "/external/yarn/purchase?adding=1&error=invalid_lbs");
+      }
       const b = num(bags[i]);
       const co = num(cons[i]);
       const u = (units[i] || "").trim();
@@ -589,10 +595,9 @@ export default async function YarnPurchaseVoucherPage({
       // A row is empty when nothing was ENTERED on it. The despatch party and
       // the unit are auto-filled on every row of the grid, so counting them as
       // data made every blank line look real: each save wrote them all and gave
-      // each one a batch letter, and the voucher grew by ten rows a time. Lbs
-      // is not entered either — it is qty × 100 and stored on every line (0
-      // when blank), so counting it let a blank line re-save itself.
-      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && rt == null && rs == null) {
+      // each one a batch letter, and the voucher grew by ten rows a time.
+      // A positive manual weight is meaningful; a legacy blank-row zero is not.
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && !(enteredLbs && enteredLbs > 0) && rt == null && rs == null) {
         continue;
       }
 
@@ -609,7 +614,7 @@ export default async function YarnPurchaseVoucherPage({
         qty: q,
         bag: b,
         con: co,
-        lbs: Math.round((q ?? 0) * 100),
+        lbs: enteredLbs ?? round2((q ?? 0) * 100),
         unit: u || null,
         despatchParty: dp || null,
         rate: rt,
@@ -1022,6 +1027,11 @@ export default async function YarnPurchaseVoucherPage({
         {params.error === "no_party" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Party is required — pick it from the list. Nothing was saved.
+          </div>
+        )}
+        {params.error === "invalid_lbs" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Lbs must be a valid number of zero or more. Nothing was saved.
           </div>
         )}
         {params.error === "no_lines" && (
@@ -1445,7 +1455,7 @@ export default async function YarnPurchaseVoucherPage({
                     headerContractField="cont"
                     blendByContract={blendByContract}
                   />
-                  <RowCalc target="line_lbs" a="line_qty" factor={100} round={0} />
+                  <PurchaseWeightCalc />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
@@ -1458,7 +1468,7 @@ export default async function YarnPurchaseVoucherPage({
                     watch="line_count"
                     initialCode={lines[0]?.count ? String(lines[0].count) : ""}
                   />
-                  <GridNavigator tbodyId="ypv-line-rows" fields={[{ name: "line_qty", label: "Quantity" }, { name: "line_rate", label: "Rate" }, { name: "line_amt", label: "Amount" }]} />
+                  <GridNavigator tbodyId="ypv-line-rows" fields={[{ name: "line_qty", label: "Quantity" }, { name: "line_lbs", label: "Lbs" }, { name: "line_rate", label: "Rate" }, { name: "line_amt", label: "Amount" }]} />
                   <div className="overflow-x-auto border border-black voucher-entry">
                     <table style={{ minWidth: "1700px" }}>
                       <thead>
@@ -1498,7 +1508,7 @@ export default async function YarnPurchaseVoucherPage({
                             style={locked ? { background: "#fff7ed" } : undefined}
                             title={
                               locked
-                                ? `Sold on ${soldOn} — Qty and Rate can be corrected; put the sale in EDIT to change batch details`
+                                ? `Sold on ${soldOn} — Qty, Lbs and Rate can be corrected; put the sale in EDIT to change batch details`
                                 : undefined
                             }
                           >
@@ -1648,11 +1658,12 @@ export default async function YarnPurchaseVoucherPage({
                               <input
                                 name="line_lbs"
                                 type="number"
+                                inputMode="decimal"
+                                min="0"
                                 step="any"
-                                className="input-box mono text-[12px] text-right bg-gray-100"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.lbs ?? ""}
-                                readOnly
-                                tabIndex={-1}
+                                title="Actual weight in pounds. Defaults to Qty × 100 when quantity changes; can be corrected separately."
                                 style={{ width: 110 }}
                               />
                             </td>
@@ -1720,7 +1731,7 @@ export default async function YarnPurchaseVoucherPage({
                   </div>
                   <div className="text-[10px] text-[var(--muted)] mt-2">
                     Empty rows are ignored on save. On update, all lines are replaced with the current grid.
-                    Qty and Rate can be corrected even on a sold batch. Qty must cover the pounds already sold.
+                    Qty, Lbs and Rate can be corrected even on a sold batch. Changing Qty defaults Lbs to Qty × 100; enter the actual weight in Lbs if different. Lbs must cover the pounds already sold.
                     A padlock protects the batch details — open the linked yarn sale with EDIT to change those.
                   </div>
                 </div>
