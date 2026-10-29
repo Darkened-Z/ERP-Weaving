@@ -4,12 +4,15 @@ import { db, schema } from "@/db";
 import { and, gte, lte, sql, eq, inArray } from "drizzle-orm";
 import { fmt, fmt2, escLike, sixMonthsAgo, todayIso } from "../../../_shared";
 import { countLabelMap, normQuality, richConstruction } from "@/lib/grey-quality";
+import { ContractImageGallery } from "@/components/contract-image-gallery";
 
 export const dynamic = "force-dynamic";
 
 // Lbs/M figures are small fractions (e.g. 0.2085) — show 4 decimals.
 const fmt4 = (n: number | null | undefined) =>
   n == null ? "—" : new Intl.NumberFormat("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(n);
+const fmtMeters = (n: number | null | undefined) =>
+  n == null ? "—" : new Intl.NumberFormat("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 // Detail ledger for one party + count: the seed (yarn sold to the party) vs every
 // packi-parchi conversion that consumed that count (warp/weft lbs, than, meters,
@@ -182,6 +185,7 @@ export default async function WeavingCountLedgerPage({
         .select({
           id: schema.extGreyConvContract.id,
           contNo: schema.extGreyConvContract.contNo,
+          img: schema.extGreyConvContract.img,
           grayQltyCode: schema.extGreyConvContract.grayQltyCode,
           grayCode: schema.extGreyConvContract.grayCode,
           warpWtPerMtr: schema.extGreyConvContract.warpWtPerMtr,
@@ -201,6 +205,7 @@ export default async function WeavingCountLedgerPage({
         .select({
           id: schema.extGreySalContract.id,
           contractNo: schema.extGreySalContract.contractNo,
+          img: schema.extGreySalContract.img,
           greyCode: schema.extGreySalContract.greyCode,
           ratePerMtr: schema.extGreySalContract.ratePerMtr,
           quantityMtr: schema.extGreySalContract.quantityMtr,
@@ -223,7 +228,7 @@ export default async function WeavingCountLedgerPage({
   // Width belongs on the CONV.C# header: the construction says reed x pick and
   // the counts, but the cloth is not identified until its width is beside them,
   // and the conversion contract is where that is agreed.
-  type ContInfo = { construction: string; width: number | null; wrpM: number | null; wftM: number | null; totM: number | null; convRate: number | null; qtyMtr: number | null; href?: string };
+  type ContInfo = { construction: string; width: number | null; wrpM: number | null; wftM: number | null; totM: number | null; convRate: number | null; qtyMtr: number | null; href?: string; img?: string | null };
   const contInfo = new Map<string, ContInfo>();
   for (const c of convContracts) {
     contInfo.set(c.contNo, {
@@ -233,6 +238,7 @@ export default async function WeavingCountLedgerPage({
       convRate: c.convRatePerMtr ?? c.grayRatePerMtr ?? c.rateMtr,
       qtyMtr: c.qtyMtr,
       href: `/external/contracts/grey-conversion?id=${c.id}`,
+      img: c.img,
     });
   }
   for (const c of salContracts) {
@@ -243,6 +249,7 @@ export default async function WeavingCountLedgerPage({
       wrpM: null, wftM: null, totM: null,
       convRate: c.ratePerMtr, qtyMtr: c.quantityMtr,
       href: `/external/contracts/grey-sales?id=${c.id}`,
+      img: c.img,
     });
   }
 
@@ -322,11 +329,11 @@ export default async function WeavingCountLedgerPage({
                 <th>Product</th>
                 <th className="text-right">C.Cnt Wrp</th>
                 <th className="text-right">C.Cnt Wft</th>
-                <th className="text-right">Than</th>
-                <th className="text-right">Meters</th>
-                <th className="text-right">Warp Lbs</th>
-                <th className="text-right">Weft Lbs</th>
-                <th className="text-right">Tot Lbs</th>
+                <th className="text-right text-blue-700">Than</th>
+                <th className="text-right text-blue-700">Meters</th>
+                <th className="text-right text-red-700">Warp Lbs</th>
+                <th className="text-right text-red-700">Weft Lbs</th>
+                <th className="text-right text-red-700">Tot Lbs</th>
                 <th className="text-right">Resulted Cnt</th>
                 <th className="text-right">Rate</th>
                 <th className="text-right">Amount</th>
@@ -339,16 +346,19 @@ export default async function WeavingCountLedgerPage({
                 contGroups.flatMap((g) => [
                   <tr key={`h-${g.cont}`} className="contract-ledger-header bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                     <td colSpan={14} className="mono font-bold text-[12px] px-2 py-1">
-                      <a href={g.info.href} className={g.info.href ? "block text-inherit hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" : "block text-inherit"} title={g.info.href ? `Open contract ${g.cont}` : undefined}>
-                        <span>CONV.C# {g.cont}</span>
-                        {g.info.construction && <span className="ml-3 font-normal">{g.info.construction}</span>}
-                        {g.info.width != null && (
-                          <span className="ml-3 font-normal">
-                            Width <span className="font-bold">{fmt2(g.info.width)}&quot;</span>
-                          </span>
-                        )}
-                        {g.info.convRate != null && <span className="float-right sm:float-none sm:ml-4 font-normal">Conv Rate {fmt2(g.info.convRate)}</span>}
-                      </a>
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <a href={g.info.href} className={g.info.href ? "min-w-0 flex-1 text-inherit hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" : "min-w-0 flex-1 text-inherit"} title={g.info.href ? `Open contract ${g.cont}` : undefined}>
+                          <span>CONV.C# {g.cont}</span>
+                          {g.info.construction && <span className="ml-3 font-normal">{g.info.construction}</span>}
+                          {g.info.width != null && (
+                            <span className="ml-3 font-normal">
+                              Width <span className="font-bold">{fmt2(g.info.width)}&quot;</span>
+                            </span>
+                          )}
+                          {g.info.convRate != null && <span className="float-right sm:float-none sm:ml-4 font-normal">Conv Rate {fmt2(g.info.convRate)}</span>}
+                        </a>
+                        <ContractImageGallery value={g.info.img} contractNo={g.cont} />
+                      </div>
                     </td>
                   </tr>,
                   <tr key={`h2-${g.cont}`} style={{ background: "#e2e8f0" }}>
@@ -393,7 +403,7 @@ export default async function WeavingCountLedgerPage({
                         <span className="ml-4">Rate/Lbs <span className="font-bold">{fmt2(g.info.rateLbs)}</span></span>
                       )}
                       {g.info.qtyMtr != null && (
-                        <span className="float-right">Cont Qty {fmt(g.info.qtyMtr)} mtr</span>
+                        <span className="float-right">Cont Qty {fmtMeters(g.info.qtyMtr)} mtr</span>
                       )}
                     </td>
                   </tr>,
@@ -408,11 +418,11 @@ export default async function WeavingCountLedgerPage({
                       <td className="text-[12px]">{(l.product && (richFull(l.product) || l.product)) || l.descr || "—"}</td>
                       <td className="mono text-right">{l.warpCal ? fmt2(l.warpCal) : "—"}</td>
                       <td className="mono text-right">{l.weftCal ? fmt2(l.weftCal) : "—"}</td>
-                      <td className="mono text-right">{fmt(l.than)}</td>
-                      <td className="mono text-right">{fmt(l.meters)}</td>
-                      <td className="mono text-right">{fmt2(l.warpLbs)}</td>
-                      <td className="mono text-right">{fmt2(l.weftLbs)}</td>
-                      <td className="mono text-right font-bold">{fmt2(l.totLbs)}</td>
+                      <td className="mono text-right text-blue-700">{fmt(l.than)}</td>
+                      <td className="mono text-right text-blue-700">{fmtMeters(l.meters)}</td>
+                      <td className="mono text-right text-red-700">{fmt2(l.warpLbs)}</td>
+                      <td className="mono text-right text-red-700">{fmt2(l.weftLbs)}</td>
+                      <td className="mono text-right font-bold text-red-700">{fmt2(l.totLbs)}</td>
                       <td className="mono text-right">{fmt4(l.resulted)}</td>
                       <td className="mono text-right">{fmt2(l.rate)}</td>
                       <td className="mono text-right">{fmt(l.totLbs * l.rate)}</td>
@@ -420,11 +430,11 @@ export default async function WeavingCountLedgerPage({
                   )),
                   <tr key={`s-${g.cont}`} style={{ background: "#fce7f3", fontWeight: 700 }}>
                     <td colSpan={6} className="text-right pr-2">CONV.C# TOTAL</td>
-                    <td className="mono text-right">{fmt(g.sub.than)}</td>
-                    <td className="mono text-right">{fmt(g.sub.meters)}</td>
-                    <td className="mono text-right">{fmt2(g.sub.warpLbs)}</td>
-                    <td className="mono text-right">{fmt2(g.sub.weftLbs)}</td>
-                    <td className="mono text-right">{fmt2(g.sub.totLbs)}</td>
+                    <td className="mono text-right text-blue-700">{fmt(g.sub.than)}</td>
+                    <td className="mono text-right text-blue-700">{fmtMeters(g.sub.meters)}</td>
+                    <td className="mono text-right text-red-700">{fmt2(g.sub.warpLbs)}</td>
+                    <td className="mono text-right text-red-700">{fmt2(g.sub.weftLbs)}</td>
+                    <td className="mono text-right text-red-700">{fmt2(g.sub.totLbs)}</td>
                     <td className="mono text-right">{fmt4(g.sub.resulted)}</td>
                     <td></td>
                     <td className="mono text-right">{fmt(g.sub.amount)}</td>
@@ -436,11 +446,11 @@ export default async function WeavingCountLedgerPage({
               <tfoot>
                 <tr style={{ borderTop: "2px solid black", fontWeight: 700, background: "#ccfbf1" }}>
                   <td colSpan={6} className="text-right pr-2">GRAND TOTAL</td>
-                  <td className="mono text-right">{fmt(grand.than)}</td>
-                  <td className="mono text-right">{fmt(grand.meters)}</td>
-                  <td className="mono text-right">{fmt2(grand.warpLbs)}</td>
-                  <td className="mono text-right">{fmt2(grand.weftLbs)}</td>
-                  <td className="mono text-right">{fmt2(grand.totLbs)}</td>
+                  <td className="mono text-right text-blue-700">{fmt(grand.than)}</td>
+                  <td className="mono text-right text-blue-700">{fmtMeters(grand.meters)}</td>
+                  <td className="mono text-right text-red-700">{fmt2(grand.warpLbs)}</td>
+                  <td className="mono text-right text-red-700">{fmt2(grand.weftLbs)}</td>
+                  <td className="mono text-right text-red-700">{fmt2(grand.totLbs)}</td>
                   <td className="mono text-right">{fmt4(grand.resulted)}</td>
                   <td></td>
                   <td className="mono text-right">{fmt(consumedAmt)}</td>
