@@ -1,5 +1,6 @@
 import { Shell } from "@/components/shell";
 import { PurchaseQuantityInput } from "../purchase/quantity-input";
+import { YarnWeightCalc } from "../purchase/weight-calc";
 import { GridNavigator } from "@/components/grid-navigator";
 import { ImageAttach } from "@/components/image-attach";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -718,6 +719,11 @@ export default async function YarnSaleVoucherPage({
       const br = (brands[i] || "").trim();
       const dn = (doNos[i] || "").trim();
       const q = num(qtys[i]);
+      const rawLbs = (lbss[i] ?? "").trim();
+      const enteredLbs = rawLbs === "" ? null : Number(rawLbs);
+      if (enteredLbs != null && (!Number.isFinite(enteredLbs) || enteredLbs < 0)) {
+        redirect(Number.isFinite(id) && id > 0 ? `/external/yarn/sale?id=${id}&error=invalid_lbs` : "/external/yarn/sale?adding=1&error=invalid_lbs");
+      }
       const b = num(bags[i]);
       const co = num(conss[i]);
       const u = (units[i] || "").trim();
@@ -725,19 +731,16 @@ export default async function YarnSaleVoucherPage({
       const rt = num(rates[i]);
       const rm = (rmks[i] || "").trim();
 
-      // Same as the purchase side: the godown and unit are auto-filled on every
-      // row, so treating them as data would persist every blank line. Lbs too:
-      // it is always qty × 100 and every saved line stores it (0 when blank),
-      // so a blank line came back with "0" in it and saved itself again.
+      // The godown and unit are auto-filled on every row, so they cannot make
+      // a blank row into a saved line. A positive manual weight can.
       // A remark alone is not a line either: browser autofill typed "admin" into
       // the blank rows' Remarks and saved 27 empty lines (found 2026-10-22).
-      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && rt == null) {
+      if (!c && !ct && !pc && !bl && !pk && !br && !dn && q == null && b == null && co == null && !(enteredLbs && enteredLbs > 0) && rt == null) {
         continue;
       }
 
-      // Lbs is derived from Qty × 100 (the visible Lbs box is read-only).
-      const computedLbs = Math.round((q ?? 0) * 100);
-      const recomputedAmt = rt != null ? Math.round(computedLbs * rt * 100) / 100 : null;
+      const actualLbs = enteredLbs ?? round2((q ?? 0) * 100);
+      const recomputedAmt = rt != null ? round2(actualLbs * rt) : null;
 
       validLines.push({
         contNo: c || null,
@@ -752,7 +755,7 @@ export default async function YarnSaleVoucherPage({
         qty: q,
         bag: b,
         cons: co,
-        lbs: computedLbs,
+        lbs: actualLbs,
         unit: u || null,
         despatchParty: dp || null,
         rate: rt,
@@ -1141,6 +1144,11 @@ export default async function YarnSaleVoucherPage({
         {params.error === "no_lines" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             At least one line with Bag or Lbs is required. Nothing was saved.
+          </div>
+        )}
+        {params.error === "invalid_lbs" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Lbs must be a valid non-negative number. Nothing was saved.
           </div>
         )}
         {params.error === "period_locked" && (
@@ -1580,7 +1588,7 @@ export default async function YarnSaleVoucherPage({
                     blendByContract={blendByContract}
                   />
                   <RowAutoFill watch="line_stock_key" map={countStockFillMap} force clearRowOnEmpty />
-                  <RowCalc target="line_lbs" a="line_qty" factor={100} round={0} />
+                  <YarnWeightCalc tbodyId="ysv-line-rows" />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)
@@ -1592,7 +1600,7 @@ export default async function YarnSaleVoucherPage({
                     unitLabel="batch"
                     initialCode={gridRows[0]?.batchNo ?? ""}
                   />
-                  <GridNavigator tbodyId="ysv-line-rows" fields={[{ name: "line_qty", label: "Quantity" }, { name: "line_rate", label: "Rate" }, { name: "line_amt", label: "Amount" }]} />
+                  <GridNavigator tbodyId="ysv-line-rows" fields={[{ name: "line_qty", label: "Quantity" }, { name: "line_lbs", label: "Lbs" }, { name: "line_rate", label: "Rate" }, { name: "line_amt", label: "Amount" }]} />
                   <div className="overflow-x-auto border border-black voucher-entry">
                     <table style={{ minWidth: "1700px" }}>
                       <thead>
@@ -1742,11 +1750,12 @@ export default async function YarnSaleVoucherPage({
                               <input
                                 name="line_lbs"
                                 type="number"
+                                inputMode="decimal"
+                                min="0"
                                 step="any"
-                                className="input-box mono text-[12px] text-right bg-gray-100"
+                                className="input-box mono text-[12px] text-right"
                                 defaultValue={row?.lbs ?? ""}
-                                readOnly
-                                tabIndex={-1}
+                                title="Actual weight in pounds. Defaults to Qty × 100 when quantity changes; can be corrected separately."
                                 style={{ width: 110 }}
                               />
                             </td>
@@ -1805,7 +1814,7 @@ export default async function YarnSaleVoucherPage({
                     </table>
                   </div>
                   <div className="text-[10px] text-[var(--muted)] mt-2">
-                    Empty rows are ignored on save. On update, all lines are replaced with the current grid.
+                    Empty rows are ignored on save. On update, all lines are replaced with the current grid. Changing Qty defaults Lbs to Qty × 100; enter the actual weight in Lbs if different.
                   </div>
                 </div>
 

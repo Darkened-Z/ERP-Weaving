@@ -3,12 +3,12 @@
 import { useEffect } from "react";
 
 /** Default weight when bags change; preserve saved/manual weight on unchanged blur. */
-export function PurchaseWeightCalc() {
+export function YarnWeightCalc({ tbodyId }: { tbodyId: string }) {
   useEffect(() => {
     const previous = new WeakMap<HTMLInputElement, string>();
     const onInput = (event: Event) => {
       const qty = event.target;
-      if (!(qty instanceof HTMLInputElement) || qty.name !== "line_qty" || !qty.closest("#ypv-line-rows")) return;
+      if (!(qty instanceof HTMLInputElement) || qty.name !== "line_qty" || !qty.closest(`#${tbodyId}`)) return;
       const old = previous.get(qty) ?? qty.defaultValue;
       previous.set(qty, qty.value);
       if (old === qty.value || (old !== "" && qty.value !== "" && Number(old) === qty.valueAsNumber)) return;
@@ -19,6 +19,6 @@ export function PurchaseWeightCalc() {
     };
     document.addEventListener("input", onInput, true);
     return () => document.removeEventListener("input", onInput, true);
-  }, []);
+  }, [tbodyId]);
   return null;
 }

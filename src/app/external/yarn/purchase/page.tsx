@@ -13,7 +13,7 @@ import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { YarnPurchaseCountRate } from "./count-rate";
 import { PurchaseQuantityInput } from "./quantity-input";
-import { PurchaseWeightCalc } from "./weight-calc";
+import { YarnWeightCalc } from "./weight-calc";
 import { PurchaseLineTotals } from "./line-totals";
 import { FindingPicker } from "@/components/finding-picker";
 import { YarnContractApply } from "@/components/yarn-contract-apply";
@@ -1456,7 +1456,7 @@ export default async function YarnPurchaseVoucherPage({
                     headerContractField="cont"
                     blendByContract={blendByContract}
                   />
-                  <PurchaseWeightCalc />
+                  <YarnWeightCalc tbodyId="ypv-line-rows" />
                   <RowCalc target="line_amt" a="line_lbs" b="line_rate" />
                   <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2">
                     Line Items ({LINE_ROWS} rows)

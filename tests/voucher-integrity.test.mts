@@ -79,6 +79,40 @@ function saveSale(validLines: SaleLine[], id?: number, connection = db) {
 }
 const line = (batchNo: string | null, count: string, lbs: number): SaleLine => ({ batchNo, count, lbs, qty: lbs / 100 });
 
+const saleLineLoop = extract("src/app/external/yarn/sale/page.tsx", n => ts.isForStatement(n) && n.getText().includes("validLines.push"));
+function parseSaleRows(qtys: string[], lbss: string[], rates: string[] = [], batches: string[] = [], counts: string[] = []) {
+  const empty = Object.fromEntries(["contNos", "dots", "partyCounts", "blds", "packs", "brands", "doNos", "bags", "conss", "units", "dspParties", "rmks"].map(k => [k, []]));
+  return compile<() => { qty: number | null; lbs: number; rate: number | null; amt: number | null; batchNo: string | null; count: string | null }[]>(`() => { const validLines = []; ${saleLineLoop}; return validLines; }`, {
+    ...empty, qtys, lbss, rates, batchNos: batches, counts, rowCount: Math.max(qtys.length, lbss.length, rates.length, batches.length, counts.length), num, id: 1, redirect, round2: (n: number) => Math.round(n * 100) / 100,
+  })();
+}
+
+await test("sale form saves fractional actual pounds and prices the actual weight", async () => {
+  const batch = await purchase("REG-SALE-MANUAL-LBS", 100.75);
+  const [parsed] = parseSaleRows(["1.00"], ["100.75"], ["375"], [batch], ["REG-SALE-MANUAL-LBS"]);
+  assert.equal(parsed.qty, 1);
+  assert.equal(parsed.lbs, 100.75);
+  assert.equal(parsed.amt, 37781.25);
+  const id = await saveSale([parsed as SaleLine]);
+  const [saved] = await db.select().from(schema.extYarnSalVoucherLine).where(eq(schema.extYarnSalVoucherLine.voucherId, id as number));
+  assert.equal(saved.qty, 1);
+  assert.equal(saved.lbs, 100.75);
+  assert.equal(saved.amt, 37781.25);
+  assert.equal(parseSaleRows([String(saved.qty)], [String(saved.lbs)], [String(saved.rate)], [saved.batchNo!], [saved.count!])[0].lbs, 100.75);
+  await assert.rejects(saveSale([line(batch, "REG-SALE-MANUAL-LBS", 1)]), YarnStockError);
+});
+await test("sale weight defaults only when blank and spare rows stay empty", () => {
+  assert.equal(parseSaleRows(["1.25"], [""])[0].lbs, 125);
+  assert.equal(parseSaleRows(["1"], ["0"])[0].lbs, 0);
+  assert.equal(parseSaleRows([""], ["0.25"])[0].lbs, 0.25);
+  assert.equal(parseSaleRows(["", ""], ["", "0"]).length, 0);
+});
+await test("sale rejects invalid or negative actual weight", () => {
+  for (const weight of ["-0.25", "Infinity", "oops", "12bad"]) {
+    assert.throws(() => parseSaleRows(["1"], [weight]), (e: unknown) => e instanceof Redirect && e.url.includes("invalid_lbs"));
+  }
+});
+
 await test("yarn sale transactions", async t => {
   await t.test("two simultaneous saves cannot both consume the same stock", async () => {
     const batch = await purchase("REG-RACE", 100);
