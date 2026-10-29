@@ -1520,6 +1520,7 @@ export default async function PackiParchiPage({
                 <label className="label block mb-1">Grey Sale Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
                 <FindingPicker
                   tabIndex={5} name="conv_cont_no_sale"
+                  showCodeBeside
                   defaultValue={formItem?.convContNoSale ?? ""}
                   rows={salContractFindRows}
                   columns={saleContractColumns}
@@ -1545,6 +1546,7 @@ export default async function PackiParchiPage({
                 <label className="label block mb-1">Conversion Contract <span className="text-[9px] text-[var(--muted)]">(sale party)</span></label>
                 <FindingPicker
                   tabIndex={6} name="conv_cont_sale2"
+                  showCodeBeside
                   defaultValue={formItem?.convContSale2 ?? ""}
                   rows={convContractFindRows}
                   columns={convContractColumns}

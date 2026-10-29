@@ -180,6 +180,7 @@ export default async function WeavingCountLedgerPage({
   const convContracts = contNos.length
     ? await db
         .select({
+          id: schema.extGreyConvContract.id,
           contNo: schema.extGreyConvContract.contNo,
           grayQltyCode: schema.extGreyConvContract.grayQltyCode,
           grayCode: schema.extGreyConvContract.grayCode,
@@ -198,6 +199,7 @@ export default async function WeavingCountLedgerPage({
   const salContracts = contNos.length
     ? await db
         .select({
+          id: schema.extGreySalContract.id,
           contractNo: schema.extGreySalContract.contractNo,
           greyCode: schema.extGreySalContract.greyCode,
           ratePerMtr: schema.extGreySalContract.ratePerMtr,
@@ -221,7 +223,7 @@ export default async function WeavingCountLedgerPage({
   // Width belongs on the CONV.C# header: the construction says reed x pick and
   // the counts, but the cloth is not identified until its width is beside them,
   // and the conversion contract is where that is agreed.
-  type ContInfo = { construction: string; width: number | null; wrpM: number | null; wftM: number | null; totM: number | null; convRate: number | null; qtyMtr: number | null };
+  type ContInfo = { construction: string; width: number | null; wrpM: number | null; wftM: number | null; totM: number | null; convRate: number | null; qtyMtr: number | null; href?: string };
   const contInfo = new Map<string, ContInfo>();
   for (const c of convContracts) {
     contInfo.set(c.contNo, {
@@ -230,6 +232,7 @@ export default async function WeavingCountLedgerPage({
       wrpM: c.warpWtPerMtr, wftM: c.weftWtPerMtr, totM: c.wtPerMtr,
       convRate: c.convRatePerMtr ?? c.grayRatePerMtr ?? c.rateMtr,
       qtyMtr: c.qtyMtr,
+      href: `/external/contracts/grey-conversion?id=${c.id}`,
     });
   }
   for (const c of salContracts) {
@@ -239,11 +242,12 @@ export default async function WeavingCountLedgerPage({
       width: null,
       wrpM: null, wftM: null, totM: null,
       convRate: c.ratePerMtr, qtyMtr: c.quantityMtr,
+      href: `/external/contracts/grey-sales?id=${c.id}`,
     });
   }
 
   const contGroups = Array.from(byCont.entries()).map(([cont, rows]) => {
-    const base = contInfo.get(cont) ?? { construction: richFull(rows[0]?.quality), width: null, wrpM: null, wftM: null, totM: null, convRate: null, qtyMtr: null };
+    const base: ContInfo = contInfo.get(cont) ?? { construction: richFull(rows[0]?.quality), width: null, wrpM: null, wftM: null, totM: null, convRate: null, qtyMtr: null };
     // Ends / Lbs/M actuals come from the packi count rows (first row that has them);
     // the contract's wt-per-mtr is the fallback when the parchi rows carry none.
     const first = rows.find((r) => r.warpEnds || r.weftEnds) ?? rows[0];
@@ -333,16 +337,18 @@ export default async function WeavingCountLedgerPage({
                 <tr><td colSpan={14} className="text-center text-[var(--muted)] py-8">No consumption for this party + count in period</td></tr>
               ) : (
                 contGroups.flatMap((g) => [
-                  <tr key={`h-${g.cont}`} className="bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
+                  <tr key={`h-${g.cont}`} className="contract-ledger-header bg-slate-900 text-white print:bg-transparent print:!text-black print:border-y-2 print:border-black font-bold">
                     <td colSpan={14} className="mono font-bold text-[12px] px-2 py-1">
-                      <span>CONV.C# {g.cont}</span>
-                      {g.info.construction && <span className="ml-3 font-normal">{g.info.construction}</span>}
-                      {g.info.width != null && (
-                        <span className="ml-3 font-normal">
-                          Width <span className="font-bold">{fmt2(g.info.width)}&quot;</span>
-                        </span>
-                      )}
-                      {g.info.convRate != null && <span className="float-right sm:float-none sm:ml-4 font-normal">Conv Rate {fmt2(g.info.convRate)}</span>}
+                      <a href={g.info.href} className={g.info.href ? "block text-inherit hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" : "block text-inherit"} title={g.info.href ? `Open contract ${g.cont}` : undefined}>
+                        <span>CONV.C# {g.cont}</span>
+                        {g.info.construction && <span className="ml-3 font-normal">{g.info.construction}</span>}
+                        {g.info.width != null && (
+                          <span className="ml-3 font-normal">
+                            Width <span className="font-bold">{fmt2(g.info.width)}&quot;</span>
+                          </span>
+                        )}
+                        {g.info.convRate != null && <span className="float-right sm:float-none sm:ml-4 font-normal">Conv Rate {fmt2(g.info.convRate)}</span>}
+                      </a>
                     </td>
                   </tr>,
                   <tr key={`h2-${g.cont}`} style={{ background: "#e2e8f0" }}>

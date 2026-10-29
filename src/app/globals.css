@@ -103,6 +103,16 @@ tr:hover > td {
   background: var(--surface);
 }
 
+/* Keep linked contract headers readable under the global table hover rule. */
+.contract-ledger-header:hover > td {
+  background: #0f172a;
+}
+@media print {
+  .contract-ledger-header:hover > td {
+    background: transparent !important;
+  }
+}
+
 .label {
   font-size: 10px;
   font-weight: 600;

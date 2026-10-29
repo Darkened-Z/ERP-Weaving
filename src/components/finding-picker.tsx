@@ -29,6 +29,7 @@ type Row = {
 export function FindingPicker({
   name,
   showCodeBelow,
+  showCodeBeside,
   tabIndex,
   defaultValue,
   rows,
@@ -52,6 +53,8 @@ export function FindingPicker({
   tabIndex?: number;
   required?: boolean;
   showCodeBelow?: boolean;
+  /** Keep a selected code visible beside a long description. */
+  showCodeBeside?: boolean;
   /** Optional Oracle-style columns; when set, the table renders these instead of Code/Description/[Extra]. */
   columns?: Column[];
 }) {
@@ -261,6 +264,14 @@ export function FindingPicker({
           onClick={openList}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openList(); } }}
         />
+        {showCodeBeside && (
+          <output
+            aria-label="Selected code"
+            title={value ? `Selected contract: ${value}` : "No contract selected"}
+            className="input-box mono text-[11px] text-center whitespace-nowrap"
+            style={{ flex: "0 0 88px", overflow: "hidden", textOverflow: "ellipsis" }}
+          >{value || "\u00a0"}</output>
+        )}
               {/* The display is readOnly and a click opens the list, so there was no
             way at all to take a pick back — on a phone there is not even a
             Delete key to reach for. Only shown once something is picked. */}
