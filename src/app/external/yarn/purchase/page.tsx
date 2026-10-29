@@ -14,6 +14,7 @@ import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { YarnPurchaseCountRate } from "./count-rate";
 import { PurchaseQuantityInput } from "./quantity-input";
 import { PurchaseWeightCalc } from "./weight-calc";
+import { PurchaseLineTotals } from "./line-totals";
 import { FindingPicker } from "@/components/finding-picker";
 import { YarnContractApply } from "@/components/yarn-contract-apply";
 import { DatalistPartyFilter } from "@/components/datalist-party-filter";
@@ -1727,6 +1728,7 @@ export default async function YarnPurchaseVoucherPage({
                           );
                         })}
                       </tbody>
+                      <PurchaseLineTotals initialQty={lines.reduce((sum, line) => sum + (line.qty ?? 0), 0)} initialLbs={lines.reduce((sum, line) => sum + (line.lbs ?? 0), 0)} />
                     </table>
                   </div>
                   <div className="text-[10px] text-[var(--muted)] mt-2">
