@@ -13,7 +13,7 @@ process.env.TURSO_AUTH_TOKEN = "";
 process.env.DEMO_DB = "";
 process.env.LOCAL_DB_PATH = databasePath;
 const { db } = await import("../src/db/index");
-const { recomputeBeamStatus, LoomTakenError, canKnotBeam } = await import("../src/lib/beam-cycle");
+const { recomputeBeamStatus, LoomTakenError, canKnotBeam, currentKnottingMounts } = await import("../src/lib/beam-cycle");
 const client = db.$client;
 
 await client.executeMultiple(`
@@ -143,4 +143,20 @@ test("beam lifecycle follows entered statuses, not estimated length", async (t) 
     assert.equal((await state("AJ-13")).loom.current_beam, "OTHER");
     assert.equal((await state("AJ-13")).b.status_wrk, "EMPTY");
   });
+});
+
+test("a moved beam's old knotting bill does not reserve its former loom", async () => {
+  await seed("AJ-27", 22);
+  await production(1, "AJ-27", 22, "L-ROLL", 130, 3889);
+  await db.transaction(tx => recomputeBeamStatus(tx, "AJ-27"));
+  await client.execute("INSERT INTO looms VALUES (2, 21, '3', 'RUNNING', 'AJ-33', NULL)");
+  await client.execute("INSERT INTO looms VALUES (3, 23, '3', 'RUNNING', 'AJ-34', NULL)");
+  await client.execute("INSERT INTO int_knotting_sarning VALUES (2, 'IKS-60')");
+  await client.execute("INSERT INTO int_knotting_sarning VALUES (3, 'IKS-61')");
+  await client.execute("INSERT INTO beams (beam_no, shed, loom_no, kn_vno, status_wrk) VALUES ('AJ-33', '3', 21, 'IKS-60', 'RUNNING')");
+  await client.execute("INSERT INTO beams (beam_no, shed, loom_no, kn_vno, status_wrk) VALUES ('AJ-34', '3', 23, 'IKS-61', 'R-CUT')");
+  await client.execute("INSERT INTO int_knotting_sarning_line VALUES (2, 'AJ-33', '3', '22')");
+  await client.execute("INSERT INTO int_knotting_sarning_line VALUES (3, 'AJ-34', '3', '23')");
+  const mounts = await currentKnottingMounts(db);
+  assert.deepEqual(mounts.map(m => `${m.shed}|${m.loomNo}|${m.beamNo}`), ["3|23|AJ-34"]);
 });

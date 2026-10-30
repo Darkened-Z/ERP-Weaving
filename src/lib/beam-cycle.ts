@@ -67,6 +67,24 @@ export async function assertLoomAvailable(tx: Tx, beamNo: string, shed: string, 
   if (holder?.beamNo) throw new LoomTakenError(`Shed ${shed} · Loom ${loomNo}`, holder.beamNo);
 }
 
+/** Knotting bills reserve only the loom on which their beam is mounted now. */
+export async function currentKnottingMounts(tx: Tx | typeof db) {
+  return tx
+    .select({
+      beamNo: schema.intKnottingSarningLine.beamNo,
+      shed: schema.intKnottingSarningLine.shdHash,
+      loomNo: schema.intKnottingSarningLine.lmHash,
+    })
+    .from(schema.intKnottingSarningLine)
+    .innerJoin(schema.intKnottingSarning, eq(schema.intKnottingSarning.id, schema.intKnottingSarningLine.knottingId))
+    .innerJoin(schema.beams, eq(schema.beams.beamNo, schema.intKnottingSarningLine.beamNo))
+    .where(sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL
+      AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'L-ROLL', 'LOADED')
+      AND ${schema.beams.shed} = ${schema.intKnottingSarningLine.shdHash}
+      AND CAST(${schema.beams.loomNo} AS TEXT) = trim(${schema.intKnottingSarningLine.lmHash})
+      AND (${schema.beams.knVno} IS NULL OR ${schema.beams.knVno} = ${schema.intKnottingSarning.vNo})`);
+}
+
 /**
  * Re-derive a beam's state from what is on record:
  *

@@ -10,7 +10,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
 import { captureVoucher, recordVoucherChange } from "@/lib/change-history";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
-import { assertLoomAvailable, LoomTakenError, canKnotBeam, inCurrentBeamCycle } from "@/lib/beam-cycle";
+import { assertLoomAvailable, LoomTakenError, canKnotBeam, currentKnottingMounts, inCurrentBeamCycle } from "@/lib/beam-cycle";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { assertPeriodOpen, parseLockedThroughFromError, refuseIfLocked } from "@/lib/period-lock";
 import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
@@ -959,8 +959,8 @@ export default async function KnottingPage({
   // (L-ROLL) is posted and both loom and beam are freed. So the loom must be
   // off the pick list until then. Occupancy is read from three sources because
   // older rows may miss one: the beam's loom_no, the loom's current_beam, and
-  // any saved knotting line whose beam is actually mounted. A LOADED beam sits
-  // in the godown, so an old bill line naming it reserves nothing.
+  // any saved knotting line whose beam is actually mounted on that same loom.
+  // A historical bill line for a beam moved elsewhere reserves nothing.
   const beamsOnLooms = await db
     .select({ beamNo: schema.beams.beamNo, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
     .from(schema.beams)
@@ -968,23 +968,7 @@ export default async function KnottingPage({
       sql`${schema.beams.loomNo} IS NOT NULL 
           AND upper(${schema.beams.statusWrk}) NOT IN ('EMPTY', 'L-ROLL', 'LOADED')`
     );
-  const knottedLooms = await db
-    .select({
-      beamNo: schema.intKnottingSarningLine.beamNo,
-      shed: schema.intKnottingSarningLine.shdHash,
-      loomNo: schema.intKnottingSarningLine.lmHash,
-      status: schema.beams.statusWrk,
-    })
-    .from(schema.intKnottingSarningLine)
-    .innerJoin(schema.intKnottingSarning, eq(schema.intKnottingSarning.id, schema.intKnottingSarningLine.knottingId))
-    .leftJoin(schema.beams, eq(schema.beams.beamNo, schema.intKnottingSarningLine.beamNo))
-    // Only the line that holds the beam's CURRENT mount: an R-CUT beam re-knotted
-    // onto another loom must not keep its old bill's loom reserved.
-    .where(
-      sql`${schema.intKnottingSarningLine.lmHash} IS NOT NULL
-          AND upper(coalesce(${schema.beams.statusWrk}, '')) NOT IN ('', 'EMPTY', 'L-ROLL', 'LOADED')
-          AND (${schema.beams.knVno} IS NULL OR ${schema.beams.knVno} = ${schema.intKnottingSarning.vNo})`
-    );
+  const knottedLooms = await currentKnottingMounts(db);
   const busyLooms = new Map<string, string>();
   for (const b of beamsOnLooms) busyLooms.set(`${b.shed ?? ""}|${b.loomNo}`, b.beamNo);
   for (const lm of loomRows) {
