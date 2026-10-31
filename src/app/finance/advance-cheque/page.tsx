@@ -3,13 +3,13 @@ import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { RowClearButton } from "@/components/row-clear-button";
-import { RowAutoFill } from "@/components/auto-fill";
 import { db, schema } from "@/db";
 import { and, eq, sql, desc, gte, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/lib/period-lock";
 import { fyCodeForDate } from "@/lib/gl-post";
-import { today, nowTime } from "@/lib/time";
+import { today, nowTime, addDays } from "@/lib/time";
+import { isUpcomingCheque, upcomingDays } from "@/lib/cheque-window";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, fmtMoney as formatNum } from "@/lib/form";
@@ -551,7 +551,7 @@ type Chq = {
 export default async function AdvanceChequePage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string; pending?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string; pending?: string; upcoming?: string }>;
 }) {
   const params = await searchParams;
   const session = await getSession();
@@ -569,7 +569,9 @@ export default async function AdvanceChequePage({
   const findFilter = params.find?.trim() ?? "";
   // Pending Cheques (owner 2026-10-26): still ISSUED and the cheque date has
   // already passed — it should have been presented and has not cleared.
-  const pendingOnly = params.pending === "1";
+  const daysAhead = upcomingDays(params.upcoming);
+  const upcomingOnly = daysAhead !== null;
+  const pendingOnly = !upcomingOnly && params.pending === "1";
   const todayIso = today();
 
   const accounts = await db
@@ -690,6 +692,8 @@ export default async function AdvanceChequePage({
   };
   const overdue = cheques.filter((c) => overdueDays(c) > 0);
   const overdueTotal = overdue.reduce((s, c) => s + c.amount, 0);
+  const upcomingThree = cheques.filter((c) => isUpcomingCheque(c, todayIso, 3));
+  const upcomingThreeTotal = upcomingThree.reduce((s, c) => s + c.amount, 0);
 
   const found = findFilter
     ? cheques.filter(
@@ -703,6 +707,8 @@ export default async function AdvanceChequePage({
     : cheques;
   const filtered = pendingOnly
     ? found.filter((c) => overdueDays(c) > 0).sort((a, b) => overdueDays(b) - overdueDays(a))
+    : upcomingOnly
+    ? found.filter((c) => isUpcomingCheque(c, todayIso, daysAhead)).sort((a, b) => a.chqDate.localeCompare(b.chqDate))
     : found;
 
   const stats = {
@@ -772,13 +778,26 @@ export default async function AdvanceChequePage({
               {cheques.length} cheque{cheques.length === 1 ? "" : "s"} · FY {fyCode || "—"} · Dr party → Cr bank-advance, clear/bounce reverses it
             </p>
           </div>
-          <div className="no-print flex gap-2">
+          <div className="no-print flex flex-wrap gap-2">
             <a href={`${BASE}?adding=1`} className="btn btn-sm">New Advance Cheque</a>
             <a href="/reports/cheque-status" className="btn btn-outline btn-sm">Cheque Status</a>
             <a href={pendingOnly ? BASE : `${BASE}?pending=1`} className={`btn btn-sm ${pendingOnly ? "" : "btn-outline"}`} title="Issued cheques whose date has passed and that have not cleared">
               Pending Cheques ({overdue.length})
             </a>
+            <a href={upcomingOnly ? BASE : `${BASE}?upcoming=3`} className={`btn btn-sm ${upcomingOnly ? "" : "btn-outline"}`} title="Issued cheques dated today through the next three days">
+              Upcoming 3 Days ({upcomingThree.length})
+            </a>
           </div>
+        </div>
+
+        <div className="border border-black bg-white px-4 py-3 mb-4 flex flex-wrap items-end justify-between gap-3 no-print">
+          <div className="text-[12px]">Upcoming 3 days: <b>{upcomingThree.length} cheque{upcomingThree.length === 1 ? "" : "s"} · {formatNum(upcomingThreeTotal)}</b></div>
+          <form method="GET" action={BASE} className="flex items-end gap-2">
+            <label className="text-[11px] font-semibold uppercase">Look ahead (days)
+              <input name="upcoming" type="number" min="1" max="365" step="1" required className="input-box block w-24 mt-1" defaultValue={daysAhead ?? 3} />
+            </label>
+            <button type="submit" className="btn btn-sm">Show Upcoming</button>
+          </form>
         </div>
 
         {errorMsg && (
@@ -983,9 +1002,10 @@ export default async function AdvanceChequePage({
         {/* Find */}
         <form method="GET" action={BASE} className="mb-3 no-print flex gap-2 max-w-md">
           {pendingOnly && <input type="hidden" name="pending" value="1" />}
+          {upcomingOnly && <input type="hidden" name="upcoming" value={daysAhead} />}
           <input name="find" className="input-box mono flex-1" defaultValue={findFilter} placeholder="Cheque no / party / bank" />
           <button type="submit" className="btn btn-outline btn-sm">Find</button>
-          {findFilter && <a href={pendingOnly ? `${BASE}?pending=1` : BASE} className="btn btn-outline btn-sm">Clear</a>}
+          {findFilter && <a href={pendingOnly ? `${BASE}?pending=1` : upcomingOnly ? `${BASE}?upcoming=${daysAhead}` : BASE} className="btn btn-outline btn-sm">Clear</a>}
         </form>
 
         {/* Register */}
@@ -997,6 +1017,11 @@ export default async function AdvanceChequePage({
                   Pending Cheques — date passed, not cleared · {filtered.length} cheque{filtered.length === 1 ? "" : "s"} ·{" "}
                   <span className="mono">{formatNum(filtered.reduce((s, c) => s + c.amount, 0))}</span>
                 </span>
+                <a href={BASE} className="underline normal-case tracking-normal font-normal no-print">Show all cheques</a>
+              </>
+            ) : upcomingOnly ? (
+              <>
+                <span>Upcoming Cheques — {todayIso} to {addDays(todayIso, daysAhead)} · {filtered.length} cheque{filtered.length === 1 ? "" : "s"} · <span className="mono">{formatNum(filtered.reduce((s, c) => s + c.amount, 0))}</span></span>
                 <a href={BASE} className="underline normal-case tracking-normal font-normal no-print">Show all cheques</a>
               </>
             ) : (
@@ -1103,7 +1128,7 @@ export default async function AdvanceChequePage({
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={11} className="text-center text-[13px] text-[var(--muted)] py-6">
-                      {pendingOnly ? "No pending cheques — every issued cheque past its date has cleared or bounced." : <>No advance cheques. Click <b>New Advance Cheque</b> above.</>}
+                      {pendingOnly ? "No pending cheques — every issued cheque past its date has cleared or bounced." : upcomingOnly ? "No issued cheques due in this date window." : <>No advance cheques. Click <b>New Advance Cheque</b> above.</>}
                     </td>
                   </tr>
                 )}

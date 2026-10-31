@@ -33,6 +33,21 @@ export const postingAccounts = sqliteTable("posting_accounts", {
   updatedAt: text("updated_at"),
 });
 
+// Finance's next expected settlement per party. Actual outstanding always comes
+// from the posted ledger; these fields only schedule and track follow-up.
+export const cashFlowPlans = sqliteTable("cash_flow_plans", {
+  side: text("side").notNull(),
+  accCode: text("acc_code").notNull(),
+  expectedDate: text("expected_date"),
+  expectedAmount: real("expected_amount"),
+  stage: text("stage").notNull().default("OPEN"),
+  notes: text("notes"),
+  updatedAt: text("updated_at").notNull(),
+  updatedBy: text("updated_by").notNull(),
+}, (t) => ({
+  uxParty: uniqueIndex("ux_cash_flow_plan_party").on(t.side, t.accCode),
+}));
+
 export const fiscalYears = sqliteTable("fiscal_years", {
   code: text("code").primaryKey(),
   description: text("description").notNull(),

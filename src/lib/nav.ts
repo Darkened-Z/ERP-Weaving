@@ -185,6 +185,7 @@ export const SECTIONS = [
   {
     label: "Finance",
     items: [
+      { href: "/finance/cash-flow", label: "Cash Flow & Payments", key: "fin-cash-flow" },
       { href: "/finance/cr", label: "Cash Receipt Voucher", key: "fin-cr" },
       { href: "/finance/cp", label: "Cash Payment Voucher", key: "fin-cp" },
       { href: "/finance/br", label: "Bank Receipt Voucher", key: "fin-br" },
