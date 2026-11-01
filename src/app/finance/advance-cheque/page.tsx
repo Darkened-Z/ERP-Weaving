@@ -10,6 +10,7 @@ import { assertPeriodOpen, lockedThrough, parseLockedThroughFromError } from "@/
 import { fyCodeForDate } from "@/lib/gl-post";
 import { today, nowTime, addDays } from "@/lib/time";
 import { isUpcomingCheque, upcomingDays } from "@/lib/cheque-window";
+import { bounceToUndo } from "@/lib/advance-cheque-undo";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { num, intVal, txt, fmtMoney as formatNum } from "@/lib/form";
@@ -414,6 +415,62 @@ async function unclearCheque(formData: FormData) {
   redirect(`${BASE}?id=${id}`);
 }
 
+// Remove a mistaken bounce posting so this cheque returns to ISSUED.
+// A later re-issue must be removed first, or the same number would be active twice.
+async function unbounceCheque(formData: FormData) {
+  "use server";
+  const id = intVal(formData.get("id"));
+  const chq = txt(formData.get("chq"));
+  if (id === null || !chq) redirect(BASE);
+  const session = await getSession();
+  if (session?.roleName !== "ADMIN") redirect(`${BASE}?error=forbidden&id=${id}`);
+  const issue = await loadIssue(id, chq);
+  if (!issue) redirect(`${BASE}?error=not_found`);
+
+  const rows = await db
+    .select({
+      id: schema.transMain.id,
+      fyCode: schema.transMain.fyCode,
+      vno: schema.transMain.vno,
+      vdate: schema.transMain.vdate,
+      trnType: schema.transMain.trnType,
+      accCode: schema.transDetail.accCode,
+      debit: schema.transDetail.debit,
+    })
+    .from(schema.transMain)
+    .innerJoin(
+      schema.transDetail,
+      and(
+        eq(schema.transDetail.fyCode, schema.transMain.fyCode),
+        eq(schema.transDetail.vtype, schema.transMain.vtype),
+        eq(schema.transDetail.vno, schema.transMain.vno),
+      ),
+    )
+    .where(and(
+      eq(schema.transMain.vtype, VTYPE),
+      inArray(schema.transMain.trnType, ["ISSUE", "BOUNCE"]),
+      eq(schema.transDetail.chqNo, issue.chqNo),
+    ));
+  const selected = bounceToUndo(rows, {
+    id: issue.main.id,
+    fyCode: issue.main.fyCode,
+    bankAdv: issue.bankAdv,
+  });
+  if (selected.status !== "ready") redirect(`${BASE}?error=${selected.status}&id=${id}`);
+  const thru = await lockedThrough(selected.bounce.vdate, "FINANCE");
+  if (thru) redirect(`${BASE}?id=${id}&error=period_locked&thru=${thru}`);
+  await db.transaction(async (tx) => {
+    await tx.delete(schema.transDetail).where(and(
+      eq(schema.transDetail.fyCode, selected.bounce.fyCode),
+      eq(schema.transDetail.vtype, VTYPE),
+      eq(schema.transDetail.vno, selected.bounce.vno),
+    ));
+    await tx.delete(schema.transMain).where(eq(schema.transMain.id, selected.bounce.id));
+  });
+  revalidatePath(BASE);
+  redirect(`${BASE}?id=${id}`);
+}
+
 // ── Bounce: Dr Bank-Advance / Cr party CHQ-FAILLED (dishonour) ────────────────
 async function bounceCheque(formData: FormData) {
   "use server";
@@ -717,6 +774,11 @@ export default async function AdvanceChequePage({
     bounced: cheques.filter((c) => c.status === "BOUNCED"),
   };
   const outstanding = stats.issued.reduce((s, c) => s + c.amount, 0);
+  const reissuedRows = new Set(
+    cheques
+      .filter((c) => cheques.some((other) => other.chqNo === c.chqNo && other.vno > c.vno))
+      .map((c) => `${c.issueId}:${c.chqNo}`),
+  );
 
   // Prefill target for clear/bounce/reissue forms.
   const target = hasId
@@ -741,10 +803,12 @@ export default async function AdvanceChequePage({
     already_bounced: "This cheque is already bounced.",
     settled_no_edit:
       "A cheque on this voucher has already cleared or bounced. Undo that first — the money has moved, so the issue cannot be rewritten underneath it.",
-    forbidden: "Only ADMIN can delete.",
+    forbidden: "Only ADMIN can undo a clearing or bounce, or delete a cheque.",
     cleared_no_delete:
       "A cheque on this voucher has already cleared — the bank has paid it, so the voucher can't be deleted. If it was cleared by mistake, press Not Clear on that cheque first. Nothing was deleted.",
     not_cleared: "That cheque is not cleared — there is no clearing to undo.",
+    not_bounced: "That cheque is not bounced — there is no bounce to undo.",
+    reissued: "This cheque number was re-issued after the bounce. Remove the later issue before undoing this bounce.",
     period_locked: "Period is locked. Cannot post for this date.",
   };
   // Vouchers with a cleared cheque: Del is locked on every row of them, since
@@ -1091,7 +1155,27 @@ export default async function AdvanceChequePage({
                         </>
                       )}
                       {c.status === "BOUNCED" && (
-                        <a href={`${BASE}?action=reissue&id=${c.issueId}&chq=${encodeURIComponent(c.chqNo)}`} className="btn btn-outline btn-sm mr-1">Re-issue</a>
+                        <>
+                          {!reissuedRows.has(`${c.issueId}:${c.chqNo}`) && (
+                            <a href={`${BASE}?action=reissue&id=${c.issueId}&chq=${encodeURIComponent(c.chqNo)}`} className="btn btn-outline btn-sm mr-1">Re-issue</a>
+                          )}
+                          {session?.roleName === "ADMIN" && (
+                            reissuedRows.has(`${c.issueId}:${c.chqNo}`) ? (
+                              <button type="button" disabled className="btn btn-outline btn-sm mr-1" title="Remove the later re-issue before undoing this bounce">Not Bounce</button>
+                            ) : (
+                              <form action={unbounceCheque} className="inline">
+                                <input type="hidden" name="id" value={c.issueId} />
+                                <input type="hidden" name="chq" value={c.chqNo} />
+                                <ConfirmButton
+                                  className="btn btn-outline btn-sm mr-1"
+                                  message={`Undo the bounce of cheque #${c.chqNo}? Its dishonour posting is removed and the cheque goes back to pending.`}
+                                >
+                                  Not Bounce
+                                </ConfirmButton>
+                              </form>
+                            )
+                          )}
+                        </>
                       )}
                       {c.status === "CLEARED" && session?.roleName === "ADMIN" && (
                         <form action={unclearCheque} className="inline">
