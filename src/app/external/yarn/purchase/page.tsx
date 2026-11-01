@@ -12,6 +12,7 @@ import { YarnStockStrip } from "@/components/yarn-stock-strip";
 import { CountBlendEnricher } from "@/components/count-blend-enricher";
 import { PartyCountSelectFilter } from "@/components/party-count-select-filter";
 import { YarnPurchaseCountRate } from "./count-rate";
+import { unpricedPurchaseLine } from "@/lib/yarn-purchase-posting";
 import { PurchaseQuantityInput } from "./quantity-input";
 import { YarnWeightCalc } from "./weight-calc";
 import { PurchaseLineTotals } from "./line-totals";
@@ -23,7 +24,7 @@ import { db, schema } from "@/db";
 import { captureVoucher, recordVoucherChange } from "@/lib/change-history";
 import { assertYarnPurchaseStock, PurchaseStockError } from "@/lib/yarn-purchase-stock";
 import { fyCodeForDate, clearVoucher } from "@/lib/gl-post";
-import { and, eq, ne, sql, desc, inArray } from "drizzle-orm";
+import { eq, ne, sql, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { today as pkToday } from "@/lib/time";
@@ -81,6 +82,7 @@ export default async function YarnPurchaseVoucherPage({
     batch?: string;
     why?: string;
     sold?: string;
+    line?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -631,23 +633,19 @@ export default async function YarnPurchaseVoucherPage({
       );
     }
 
+    const unpricedLine = unpricedPurchaseLine(posting, validLines);
+    if (unpricedLine !== null) {
+      redirect(Number.isFinite(id) && id > 0
+        ? `/external/yarn/purchase?id=${id}&error=missing_rate&line=${unpricedLine}`
+        : `/external/yarn/purchase?adding=1&error=missing_rate&line=${unpricedLine}`);
+    }
+
     const nowIso = new Date().toISOString();
 
     const VTYPE = "YPV";
     const fyCode = await fyCodeForDate(vDate);
 
-    const partyRows = await db
-      .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
-      .from(schema.chartOfAccounts)
-      .where(sql`${schema.chartOfAccounts.level} >= 5`);
-    const codeByDescSrv = new Map(partyRows.map((p) => [p.description, p.code]));
-    const resolvePartyCoa = (p: string | null | undefined): string => {
-      if (!p) return "";
-      const s = p.trim();
-      if (/^\d+(\.\d+)+$/.test(s)) return s;
-      return codeByDescSrv.get(s) ?? "";
-    };
-    const partyCoa = resolvePartyCoa(party);
+    const partyCoa = partyAcc.code;
     const countRowsSrv = await db
       .select({ code: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type })
       .from(schema.yarnCounts);
@@ -664,6 +662,11 @@ export default async function YarnPurchaseVoucherPage({
         })
         .join(", ") || `Cont#${cont ?? ""} ${party ?? ""}`.trim();
     const total = round2(validLines.reduce((s, l) => s + (l.lbs ?? 0) * (l.rate ?? 0), 0));
+    if (posting === "Y" && (!fyCode || total <= 0)) {
+      redirect(Number.isFinite(id) && id > 0
+        ? `/external/yarn/purchase?id=${id}&error=invalid_posting`
+        : "/external/yarn/purchase?adding=1&error=invalid_posting");
+    }
     // POSTING = N means the voucher is kept but stays off the ledger. The GL
     // rows are still DELETED first, so switching a posted voucher to N removes
     // what it put there rather than leaving it stranded.
@@ -1038,6 +1041,21 @@ export default async function YarnPurchaseVoucherPage({
         {params.error === "no_lines" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             At least one line with Bag or Lbs is required. Nothing was saved.
+          </div>
+        )}
+        {params.error === "missing_rate" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Line {params.line ?? "?"} has weight but no positive rate. Enter its Rate before saving a posted purchase. Nothing was saved or removed from the ledger.
+          </div>
+        )}
+        {params.error === "invalid_posting" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            A posted purchase needs a valid fiscal date and a positive value from its Lbs and Rate. Nothing was saved or removed from the ledger.
+          </div>
+        )}
+        {params.error !== "missing_rate" && formVoucher?.posting === "Y" && lines.some((line) => (line.lbs ?? 0) > 0 && (line.rate == null || line.rate <= 0)) && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            This voucher is marked Posted but has an unpriced line, so it has no complete ledger posting. Enter the correct Rate and save to post it to the selected party.
           </div>
         )}
         {params.error === "period_locked" && (

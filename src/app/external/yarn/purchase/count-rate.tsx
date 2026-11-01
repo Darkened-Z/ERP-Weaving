@@ -22,10 +22,12 @@ export function YarnPurchaseCountRate({ ratesByParty, countFields }: {
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
     };
-    const fillRate = (row: Element, count: string) => {
+    const fillRate = (row: Element, count: string, preserveIfMissing = false) => {
       const rate = row.querySelector<HTMLInputElement>('[name="line_rate"]');
       if (!rate || rate.readOnly || rate.disabled) return;
       const value = ratesByParty[party]?.[count];
+      // Keep the entered price when the new party has no negotiated rate.
+      if (value == null && preserveIfMissing) return;
       write(row, "line_rate", value == null ? "" : String(value));
       // RowCalc recalculates a numeric rate, but deliberately ignores blanks.
       if (value == null) write(row, "line_amt", "");
@@ -36,7 +38,7 @@ export function YarnPurchaseCountRate({ ratesByParty, countFields }: {
       party = next;
       for (const row of grid.querySelectorAll("tr")) {
         const count = field(row, "line_count")?.value.trim() ?? "";
-        if (count) fillRate(row, count);
+        if (count) fillRate(row, count, true);
       }
     };
     const onChange = (event: Event) => {
