@@ -1,4 +1,3 @@
-import { Combobox } from "@/components/combobox";
 import { PartyBalance } from "@/components/party-balance";
 import { accountBalances } from "@/lib/gl-balance";
 import { FindingPicker } from "@/components/finding-picker";
@@ -432,6 +431,7 @@ export default async function JournalVoucherPage({
 }: {
   searchParams: Promise<{
     id?: string;
+    fy?: string;
     adding?: string;
     error?: string;
     find?: string;
@@ -454,6 +454,22 @@ export default async function JournalVoucherPage({
     .limit(1);
   const currentFy = profile[0]?.currentFy ?? null;
 
+  const formMainRows = isEditing
+    ? await db.select().from(schema.transMain).where(eq(schema.transMain.id, idParam)).limit(1)
+    : [];
+  const selectedMain = formMainRows[0]?.vtype === VTYPE ? formMainRows[0] : null;
+  const formMain = isAdding ? null : selectedMain;
+  const viewFy = formMain?.fyCode || params.fy?.trim() || currentFy;
+  const fyRows = await db.selectDistinct({ fyCode: schema.transMain.fyCode })
+    .from(schema.transMain).where(eq(schema.transMain.vtype, VTYPE)).orderBy(desc(schema.transMain.fyCode));
+  const fyOptions = [...new Set([currentFy, ...fyRows.map((r) => r.fyCode)].filter((fy): fy is string => !!fy))];
+  const voucherFyRange = formMain
+    ? (await db.select({ startDate: schema.fiscalYears.startDate, endDate: schema.fiscalYears.endDate })
+        .from(schema.fiscalYears).where(eq(schema.fiscalYears.code, formMain.fyCode)).limit(1))[0]
+    : null;
+  const dateOutsideFy = !!(formMain && voucherFyRange &&
+    (formMain.vdate < voucherFyRange.startDate || formMain.vdate > voucherFyRange.endDate));
+
   const accounts = await db
     .select({
       code: schema.chartOfAccounts.code,
@@ -463,7 +479,6 @@ export default async function JournalVoucherPage({
     })
     .from(schema.chartOfAccounts)
     .orderBy(schema.chartOfAccounts.description);
-  const accByCode = new Map(accounts.map((a) => [a.code, a]));
   // Only posting (level 5) accounts are offered on a voucher line — the heads
   // above them can't carry a balance of their own (owner). Saved lines on an
   // older level-4 account still resolve through the maps below.
@@ -484,10 +499,20 @@ export default async function JournalVoucherPage({
   const ccByCode = new Map(ccList.map((c) => [c.code, c.description]));
 
   const listConds = [eq(schema.transMain.vtype, VTYPE)];
-  if (currentFy) listConds.push(eq(schema.transMain.fyCode, currentFy));
+  if (viewFy) listConds.push(eq(schema.transMain.fyCode, viewFy));
   if (findFilter) {
     listConds.push(
-      sql`(CAST(${schema.transMain.vno} AS TEXT) LIKE ${pat} ESCAPE '\\' OR ${schema.transMain.narration} LIKE ${pat} ESCAPE '\\')`,
+      sql`(CAST(${schema.transMain.vno} AS TEXT) LIKE ${pat} ESCAPE '\\'
+        OR ${schema.transMain.narration} LIKE ${pat} ESCAPE '\\'
+        OR EXISTS (
+          SELECT 1 FROM trans_detail AS search_line
+          LEFT JOIN chart_of_accounts AS search_account ON search_account.code = search_line.acc_code
+          WHERE search_line.fy_code = ${schema.transMain.fyCode}
+            AND search_line.vtype = ${schema.transMain.vtype}
+            AND search_line.vno = ${schema.transMain.vno}
+            AND (search_line.narration LIKE ${pat} ESCAPE '\\'
+              OR search_account.description LIKE ${pat} ESCAPE '\\')
+        ))`,
     );
   }
 
@@ -516,16 +541,6 @@ export default async function JournalVoucherPage({
     .orderBy(desc(schema.transMain.id))
     .limit(200);
 
-  const formMainRows = isEditing
-    ? await db
-        .select()
-        .from(schema.transMain)
-        .where(eq(schema.transMain.id, idParam))
-        .limit(1)
-    : [];
-  const selectedMain = formMainRows[0] ?? null;
-  const formMain = isAdding ? null : selectedMain;
-
   const detailLines = formMain
     ? await db
         .select()
@@ -543,13 +558,14 @@ export default async function JournalVoucherPage({
   const initialDr = detailLines.reduce((s, l) => s + (l.debit ?? 0), 0);
   const initialCr = detailLines.reduce((s, l) => s + (l.credit ?? 0), 0);
 
-  const maxVnoRows = currentFy
+  const numberFy = isAdding ? currentFy : viewFy;
+  const maxVnoRows = numberFy
     ? await db
         .select({ m: sql<number>`coalesce(max(${schema.transMain.vno}), 0)` })
         .from(schema.transMain)
         .where(
           and(
-            eq(schema.transMain.fyCode, currentFy),
+            eq(schema.transMain.fyCode, numberFy),
             eq(schema.transMain.vtype, VTYPE),
           ),
         )
@@ -557,7 +573,7 @@ export default async function JournalVoucherPage({
   const upcomingVno = (maxVnoRows[0]?.m ?? 0) + 1;
 
   const countConds = [eq(schema.transMain.vtype, VTYPE)];
-  if (currentFy) countConds.push(eq(schema.transMain.fyCode, currentFy));
+  if (viewFy) countConds.push(eq(schema.transMain.fyCode, viewFy));
   const jvCountRows = await db
     .select({ c: sql<number>`count(*)` })
     .from(schema.transMain)
@@ -568,20 +584,11 @@ export default async function JournalVoucherPage({
   const rowsToShow = Math.max(LINE_ROWS, detailLines.length + 2);
   const lvDisplay = maxVnoRows[0]?.m ?? 0;
 
-  const fmt = (n?: number | null) =>
-    n == null
-      ? ""
-      : new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
   const fmtInt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
 
   const roCls = "input-box mono bg-gray-100";
   // Name in the box, code underneath — the same shape as the cash and bank
   // forms, so every voucher screen is entered the same way.
-  const jvAccOpts = pickerAccounts.map((a) => ({
-    value: a.code,
-    label: a.description ?? a.code,
-    desc: a.code,
-  }));
   const accFindRows = pickerAccounts.map((a) => ({
     value: a.code,
     code: a.code,
@@ -600,7 +607,7 @@ export default async function JournalVoucherPage({
             <h1 className="page-title">JOURNAL VOUCHERS (WVG)</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
               {jvCount} voucher{jvCount === 1 ? "" : "s"}
-              {currentFy ? ` · FY ${currentFy}` : ""}
+              {viewFy ? ` · FY ${viewFy}` : ""}
               {findFilter ? ` · matching "${findFilter}"` : ""}
             </p>
           </div>
@@ -640,6 +647,19 @@ export default async function JournalVoucherPage({
             No current fiscal year is configured in Company Profile. Set one before creating vouchers.
           </div>
         )}
+        {dateOutsideFy && <div className="border border-amber-600 bg-amber-50 px-4 py-2 mb-4 text-[12px]">
+          This voucher is saved under FY {formMain!.fyCode}, but its date is {formMain!.vdate}. It remains in its original fiscal year; account balances include it by transaction date.
+        </div>}
+
+        <form method="GET" action="/finance/jv" className="flex items-end gap-2 mb-4 no-print">
+          <div>
+            <label className="label block mb-1" htmlFor="jv-fy">Fiscal Year</label>
+            <select id="jv-fy" name="fy" className="input-box mono" defaultValue={viewFy ?? ""}>
+              {fyOptions.map((fy) => <option key={fy} value={fy}>FY {fy}</option>)}
+            </select>
+          </div>
+          <button type="submit" className="btn btn-sm">View</button>
+        </form>
 
         <datalist id="jv-acc-short">
           {pickerAccounts
@@ -670,7 +690,7 @@ export default async function JournalVoucherPage({
           method="GET"
           action="/finance/jv"
           className="hidden"
-        ></form>
+        ><input type="hidden" name="fy" value={viewFy ?? ""} /></form>
 
         <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -678,7 +698,7 @@ export default async function JournalVoucherPage({
               {isAdding
                 ? "New — Journal Voucher"
                 : formMain
-                ? `Edit — JV #${formMain.vno}`
+                ? `Edit — FY ${formMain.fyCode} JV #${formMain.vno}`
                 : "Journal Voucher"}
             </div>
             <div className="flex gap-2 no-print flex-wrap">
@@ -708,7 +728,7 @@ export default async function JournalVoucherPage({
                   </ConfirmButton>
                 </form>
               )}
-              <a href="/finance/jv" className="btn btn-outline btn-sm">
+              <a href={`/finance/jv${viewFy ? `?fy=${encodeURIComponent(viewFy)}` : ""}`} className="btn btn-outline btn-sm">
                 Exit
               </a>
             </div>
@@ -789,7 +809,7 @@ export default async function JournalVoucherPage({
                       name="find"
                       className="input-box mono flex-1"
                       defaultValue={params.find ?? ""}
-                      placeholder="V.No / Narration"
+                      placeholder="V.No / Narration / Account"
                     />
                     <button
                       form="jv-find-form"
@@ -1009,7 +1029,7 @@ export default async function JournalVoucherPage({
                       Print
                     </a>
                   ) : null}
-                  <a href="/finance/jv" className="btn btn-outline btn-sm">
+                  <a href={`/finance/jv${viewFy ? `?fy=${encodeURIComponent(viewFy)}` : ""}`} className="btn btn-outline btn-sm">
                     Exit
                   </a>
                 </div>
@@ -1031,7 +1051,7 @@ export default async function JournalVoucherPage({
           <div className="px-4 py-3 border-b-2 border-black text-[11px] uppercase tracking-[0.1em] font-semibold flex items-center justify-between">
             <span>Journal Vouchers</span>
             {findFilter && (
-              <a href="/finance/jv" className="btn btn-outline btn-sm">
+              <a href={`/finance/jv${viewFy ? `?fy=${encodeURIComponent(viewFy)}` : ""}`} className="btn btn-outline btn-sm">
                 Clear Search
               </a>
             )}
@@ -1053,7 +1073,7 @@ export default async function JournalVoucherPage({
               <tbody>
                 {voucherList.map((v) => {
                   const isSel = v.id === selectedMain?.id;
-                  const href = `/finance/jv?id=${v.id}`;
+                  const href = `/finance/jv?id=${v.id}&fy=${encodeURIComponent(v.fyCode)}`;
                   const linkStyle = {
                     color: isSel ? "white" : "inherit",
                   } as const;

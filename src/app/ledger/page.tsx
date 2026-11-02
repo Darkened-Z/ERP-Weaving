@@ -61,6 +61,7 @@ export default async function LedgerPage({
     .map((a) => ({ value: a.code, label: `${a.code} — ${a.description}` }));
 
   let entries: {
+    mainId: number;
     vdate: string;
     fyCode: string | null;
     vtype: string;
@@ -113,6 +114,7 @@ export default async function LedgerPage({
 
     const raw = await db
       .select({
+        mainId: schema.transMain.id,
         vdate: schema.transMain.vdate,
         fyCode: schema.transDetail.fyCode,
         vtype: schema.transDetail.vtype,
@@ -333,7 +335,11 @@ export default async function LedgerPage({
                       {/* One column, the way the mill's own ledger prints it:
                           CP-986, JV-650, OPN-0 — type and number together. */}
                       <td className="mono font-bold whitespace-nowrap">
-                        {billHref(entry) ? (
+                        {entry.vtype === "JV" ? (
+                          <a href={`/finance/jv?id=${entry.mainId}&fy=${encodeURIComponent(entry.fyCode ?? "")}`} className="underline underline-offset-2 print:no-underline" title={`Open FY ${entry.fyCode} Journal Voucher #${entry.vno}`}>
+                            JV-{entry.vno}<span className="block text-[10px] font-normal">FY {entry.fyCode}</span>
+                          </a>
+                        ) : billHref(entry) ? (
                           <a href={billHref(entry)!} target="_blank" rel="noopener" className="underline underline-offset-2 print:no-underline" title="Open the Pakki Parchi bill">
                             {entry.vtype}-{entry.vno}
                           </a>
