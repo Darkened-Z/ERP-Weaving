@@ -33,10 +33,17 @@ export async function wovenThisCycle(tx: Tx | typeof db, beamNo: string): Promis
 const DONE = new Set(["EMPTY", "L-ROLL"]);
 const OFF_LOOM = new Set([...DONE, "LOADED"]);
 
-/** Legacy R-CUT beams already off a loom can still be re-knotted. */
-export function canKnotBeam(status: string | null | undefined, loomNo: number | null | undefined): boolean {
+/** R-CUT can be re-knotted on its current loom, but never moved to another one. */
+export function canKnotBeam(
+  status: string | null | undefined,
+  loomNo: number | null | undefined,
+  targetLoomNo?: number,
+  shed?: string | null,
+  targetShed?: string | null,
+): boolean {
   const value = (status ?? "").trim().toUpperCase();
-  return value === "LOADED" || (value === "R-CUT" && loomNo == null);
+  return value === "LOADED" ||
+    (value === "R-CUT" && (loomNo == null || (loomNo === targetLoomNo && !!shed && shed === targetShed)));
 }
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const same = (a: number | null | undefined, b: number | null) =>

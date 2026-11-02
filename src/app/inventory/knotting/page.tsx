@@ -224,9 +224,8 @@ async function saveKnotting(formData: FormData) {
     wantedLooms.add(k);
   }
   if (wantedLooms.size) {
-    // A beam is knotted straight out of the godown. A new line whose beam isn't
-    // LOADED used to save anyway with the mount silently skipped: the bill kept
-    // the line, the beam never reached its loom, and the loom stayed reserved.
+    // A new beam must be LOADED or R-CUT on the same loom. Otherwise the bill
+    // used to save while silently skipping its mount.
     const priorBeams = new Set<string>();
     if (Number.isFinite(id) && id > 0) {
       const prior = await db
@@ -235,20 +234,22 @@ async function saveKnotting(formData: FormData) {
         .where(eq(schema.intKnottingSarningLine.knottingId, id));
       for (const p of prior) if (p.beamNo) priorBeams.add(p.beamNo.toUpperCase());
     }
-    const newBeams = lines
+    const newMounts = lines
       .filter((l) => loomKeyOf(l) && l.beamNo && !priorBeams.has(l.beamNo.toUpperCase()))
-      .map((l) => l.beamNo as string);
-    if (newBeams.length) {
+    if (newMounts.length) {
       const found = await db
-        .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo })
+        .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo, shed: schema.beams.shed })
         .from(schema.beams)
-        .where(sql`upper(${schema.beams.beamNo}) IN (${sql.join(newBeams.map((b) => sql`${b.toUpperCase()}`), sql`, `)})`);
+        .where(sql`upper(${schema.beams.beamNo}) IN (${sql.join(newMounts.map((l) => sql`${l.beamNo!.toUpperCase()}`), sql`, `)})`);
       const statusOf = new Map(found.map((b) => [b.beamNo.toUpperCase(), (b.statusWrk ?? "").toUpperCase()]));
-      const available = new Set(found.filter((b) => canKnotBeam(b.statusWrk, b.loomNo)).map((b) => b.beamNo.toUpperCase()));
-      const bad = newBeams.find((b) => !available.has(b.toUpperCase()));
+      const beamOf = new Map(found.map((b) => [b.beamNo.toUpperCase(), b]));
+      const bad = newMounts.find((l) => {
+        const b = beamOf.get(l.beamNo!.toUpperCase());
+        return !b || !canKnotBeam(b.statusWrk, b.loomNo, Number(l.lmHash), b.shed, l.shdHash);
+      });
       if (bad) {
-        const st = statusOf.get(bad.toUpperCase()) || "NOT FOUND";
-        bail(`beam_not_loaded&beam=${encodeURIComponent(bad)}&st=${encodeURIComponent(st)}`);
+        const st = statusOf.get(bad.beamNo!.toUpperCase()) || "NOT FOUND";
+        bail(`beam_not_loaded&beam=${encodeURIComponent(bad.beamNo!)}&st=${encodeURIComponent(st)}`);
       }
     }
 
@@ -381,18 +382,17 @@ async function saveKnotting(formData: FormData) {
           .values(lines.map((l) => ({ ...l, knottingId: id })));
       }
 
-      // Mount each picked beam on its loom (LOADED → KNOTTING). Beams this bill
-      // still owned were reversed above; anything not LOADED now is already
-      // past knotting (or belongs to another bill) and is left alone.
+      // Mount LOADED beams and re-knot R-CUT beams on their own looms.
+      // Beams this bill still owned were reversed above.
       for (const l of lines) {
         const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
         if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
           const [cur] = await tx
-            .select({ statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo })
+            .select({ statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo, shed: schema.beams.shed })
             .from(schema.beams)
             .where(eq(schema.beams.beamNo, l.beamNo))
             .limit(1);
-          if (!canKnotBeam(cur?.statusWrk, cur?.loomNo)) continue;
+          if (!canKnotBeam(cur?.statusWrk, cur?.loomNo, loomNo, cur?.shed, l.shdHash)) continue;
           await assertLoomAvailable(tx, l.beamNo, l.shdHash, loomNo);
           await tx
             .update(schema.looms)
@@ -495,18 +495,16 @@ async function saveKnotting(formData: FormData) {
             .values(lines.map((l) => ({ ...l, knottingId: insertedId })));
         }
 
-        // Mount each picked beam on its loom (LOADED → KNOTTING). A beam that
-        // isn't LOADED is already on a loom or empty; mounting it again would
-        // pull it out from under its current bill.
+        // Mount LOADED beams or re-knot R-CUT beams on their own looms.
         for (const l of lines) {
           const loomNo = l.lmHash ? parseInt(l.lmHash, 10) : NaN;
           if (l.beamNo && Number.isFinite(loomNo) && l.shdHash) {
             const [cur] = await tx
-              .select({ statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo })
+              .select({ statusWrk: schema.beams.statusWrk, loomNo: schema.beams.loomNo, shed: schema.beams.shed })
               .from(schema.beams)
               .where(eq(schema.beams.beamNo, l.beamNo))
               .limit(1);
-            if (!canKnotBeam(cur?.statusWrk, cur?.loomNo)) continue;
+            if (!canKnotBeam(cur?.statusWrk, cur?.loomNo, loomNo, cur?.shed, l.shdHash)) continue;
             await assertLoomAvailable(tx, l.beamNo, l.shdHash, loomNo);
             await tx
               .update(schema.looms)
@@ -733,15 +731,15 @@ async function mountBeam(formData: FormData) {
       if (!line.beamNo || !Number.isFinite(loomNo) || !line.shdHash) {
         redirect(`/inventory/knotting?id=${row.knottingId}&error=loom_required`);
       }
-      // Mount only a beam that is waiting to be knotted, or re-mount one this same
-      // bill already holds — never pull a beam off production or another bill.
+      // Mount a LOADED beam, re-knot an R-CUT beam on this same loom, or repeat
+      // the mount this bill already owns. Never move a running beam.
       const [cur] = await tx
-        .select({ statusWrk: schema.beams.statusWrk, knVno: schema.beams.knVno, loomNo: schema.beams.loomNo })
+        .select({ statusWrk: schema.beams.statusWrk, knVno: schema.beams.knVno, loomNo: schema.beams.loomNo, shed: schema.beams.shed })
         .from(schema.beams)
         .where(eq(schema.beams.beamNo, line.beamNo!))
         .limit(1);
       const st = (cur?.statusWrk ?? "").toUpperCase();
-      if (!cur || !(canKnotBeam(st, cur.loomNo) || (st === "KNOTTING" && cur.knVno === row.vNo))) {
+      if (!cur || !(canKnotBeam(st, cur.loomNo, loomNo, cur.shed, line.shdHash) || (st === "KNOTTING" && cur.knVno === row.vNo))) {
         redirect(`/inventory/knotting?id=${row.knottingId}&error=beam_not_loaded`);
       }
       const before = await captureVoucher(tx, "knotting", row.knottingId);
@@ -889,9 +887,10 @@ export default async function KnottingPage({
       ends: schema.beams.ends,
       brVno: schema.beams.brVno,
       shed: schema.beams.shed,
+      loomNo: schema.beams.loomNo,
     })
     .from(schema.beams)
-    .where(sql`upper(${schema.beams.statusWrk}) = 'LOADED' OR (upper(${schema.beams.statusWrk}) = 'R-CUT' AND ${schema.beams.loomNo} IS NULL)`)
+    .where(sql`upper(${schema.beams.statusWrk}) IN ('LOADED', 'R-CUT')`)
     .orderBy(schema.beams.beamNo);
   const beamFillMap = Object.fromEntries(
     loadedBeams.map((b) => [
@@ -902,6 +901,9 @@ export default async function KnottingPage({
         beam_length: b.beamLength,
         ends: b.ends,
         beam_status: b.statusWrk,
+        ...(b.statusWrk?.toUpperCase() === "R-CUT" && b.loomNo != null && b.shed
+          ? { lm_hash: `${b.shed}|${b.loomNo}`, shd_hash: b.shed }
+          : {}),
       },
     ]),
   );
@@ -918,6 +920,7 @@ export default async function KnottingPage({
       beamLength: b.beamLength ?? "",
       ends: b.ends ?? "",
       gp: b.brVno ?? "",
+      loom: b.loomNo != null ? `Shed ${b.shed} · Loom ${b.loomNo}` : "",
     },
   }));
   const beamCols = [
@@ -928,17 +931,16 @@ export default async function KnottingPage({
     { key: "beamLength", label: "Length", width: 70, align: "right" as const },
     { key: "ends", label: "Ends", width: 70, align: "right" as const },
     { key: "gp", label: "GP/Vno", width: 90 },
+    { key: "loom", label: "Current Loom", width: 150 },
   ];
   // Status of every beam, so an already-picked beam shows its status on edit.
   const allBeamRows = await db
     .select({
       beamNo: schema.beams.beamNo,
       statusWrk: schema.beams.statusWrk,
-      statusLoc: schema.beams.statusLoc,
     })
     .from(schema.beams);
   const beamStatusByNo = new Map(allBeamRows.map((b) => [b.beamNo, b.statusWrk]));
-  const beamStatusLocByNo = new Map(allBeamRows.map((b) => [b.beamNo, b.statusLoc]));
 
   const loomRows = await db
     .select({
@@ -995,14 +997,18 @@ export default async function KnottingPage({
     },
   });
   const allLoomPickerRows = loomRows.map(loomRowOf);
-  const freeLoomPickerRows = allLoomPickerRows.filter((r) => !busyLooms.has(r.value));
+  // Include an R-CUT beam's occupied loom so that beam can be re-knotted there.
+  // Server validation still rejects another beam or a different loom.
+  const selectableLoomPickerRows = allLoomPickerRows.filter((r) => {
+    const holder = busyLooms.get(r.value);
+    return !holder || (beamStatusByNo.get(holder) ?? "").toUpperCase() === "R-CUT";
+  });
   // The exemption is per LINE, not per bill: an already-saved line keeps its own
-  // loom in its own list so it still reads "Shed 1 — Loom 7", while every other
-  // row of the same bill sees only free looms. Bill-wide it was possible to add
-  // a second row on a loom row 1 already held.
+  // loom in its list. Other rows see free looms plus R-CUT looms; the save guard
+  // permits an R-CUT loom only for the beam already mounted there.
   const loomPickerRowsFor = (l?: { shdHash?: string | null; lmHash?: string | null }) => {
     const own = l?.shdHash && l?.lmHash ? `${l.shdHash}|${l.lmHash}` : "";
-    if (!own || freeLoomPickerRows.some((r) => r.value === own)) return freeLoomPickerRows;
+    if (!own || selectableLoomPickerRows.some((r) => r.value === own)) return selectableLoomPickerRows;
     const ownRow =
       allLoomPickerRows.find((r) => r.value === own) ??
       {
@@ -1012,7 +1018,7 @@ export default async function KnottingPage({
         filterKey: l?.shdHash ?? "",
         cells: { shed: l?.shdHash, loomNo: l?.lmHash, rpm: "", status: "" },
       };
-    return [ownRow, ...freeLoomPickerRows];
+    return [ownRow, ...selectableLoomPickerRows];
   };
   const loomPickerRows = allLoomPickerRows;
   const loomCols = [
@@ -1105,10 +1111,10 @@ export default async function KnottingPage({
                 Beam <span className="mono">{params.beam}</span> is {params.st || "not LOADED"}.{" "}
                 {params.st === "EMPTY" || params.st === "NOT FOUND"
                   ? "Save it on Warped Beam Receiving first — that marks it LOADED, then it can be knotted."
-                  : "It is already mounted on a loom. A beam can only be knotted from LOADED."}
+                  : "A mounted R-CUT beam can only be re-knotted on its current loom; other mounted beams cannot be selected."}
               </>
             ) : (
-              "Cannot mount — the beam is not LOADED (it is empty, in production, or on another bill)."
+              "Cannot mount — choose a LOADED beam or an R-CUT beam on its current loom."
             )}
           </div>
         )}
@@ -1467,7 +1473,7 @@ export default async function KnottingPage({
                                 defaultValue={l?.beamNo ?? ""}
                                 rows={beamPickerRows}
                                 columns={beamCols}
-                                title="SET NO LIST — LOADED BEAMS"
+                                title="SET NO LIST — LOADED / R-CUT BEAMS"
                                 placeholder="F9 beam"
                                 className="input-box mono text-[13px] cursor-pointer"
                               />

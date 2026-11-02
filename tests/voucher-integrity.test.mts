@@ -187,6 +187,30 @@ await test("U mount action respects both occupancy records", async t => {
   });
 });
 
+await test("R-CUT beam is re-knotted only on its current loom", async () => {
+  await db.insert(schema.looms).values([
+    { loomNo: 9002, shed: "REG-RCUT", type: "AIRJET", statusWrk: "RUNNING", currentBeam: "REG-CUT-BEAM" },
+    { loomNo: 9003, shed: "REG-RCUT", type: "AIRJET", statusWrk: "S" },
+  ]);
+  await db.insert(schema.beams).values({ beamNo: "REG-CUT-BEAM", type: "OWN", statusWrk: "R-CUT", loomNo: 9002, shed: "REG-RCUT", knVno: "REG-OLD-KN" });
+  const [bill] = await db.insert(schema.intKnottingSarning).values({ vNo: "REG-NEW-KN", vDate: "2026-10-29" }).returning();
+  const [line] = await db.insert(schema.intKnottingSarningLine).values({ knottingId: bill.id, srNo: 1, beamNo: "REG-CUT-BEAM", lmHash: "9003", shdHash: "REG-RCUT" }).returning();
+  const mount = compile<(fd: FormData) => Promise<void>>(extract("src/app/inventory/knotting/page.tsx", n => ts.isFunctionDeclaration(n) && n.name?.text === "mountBeam"), {
+    ...shared, assertLoomAvailable, LoomTakenError, canKnotBeam, getSession: async () => actor, intVal: Number, redirect, revalidatePath: () => {},
+  });
+  const form = new FormData(); form.set("mount_line_id", String(line.id));
+  await assert.rejects(mount(form), (e: unknown) => e instanceof Redirect && e.url.includes("error=beam_not_loaded"));
+  assert.equal((await db.select().from(schema.beams).where(eq(schema.beams.beamNo, "REG-CUT-BEAM")))[0].loomNo, 9002);
+  await db.update(schema.intKnottingSarningLine).set({ lmHash: "9002" }).where(eq(schema.intKnottingSarningLine.id, line.id));
+  await assert.rejects(mount(form), (e: unknown) => e instanceof Redirect && e.url === `/inventory/knotting?id=${bill.id}`);
+  const [beam] = await db.select().from(schema.beams).where(eq(schema.beams.beamNo, "REG-CUT-BEAM"));
+  const [loom] = await db.select().from(schema.looms).where(and(eq(schema.looms.shed, "REG-RCUT"), eq(schema.looms.loomNo, 9002)));
+  assert.equal(beam.statusWrk, "KNOTTING");
+  assert.equal(beam.loomNo, 9002);
+  assert.equal(beam.knVno, "REG-NEW-KN");
+  assert.equal(loom.currentBeam, "REG-CUT-BEAM");
+});
+
 await test("production edits preserve despatched cloth", async t => {
   const [prod] = await db.insert(schema.intDailyProduction).values({ vNo: "REG-DP", vDate: "2026-10-28" }).returning();
   await db.insert(schema.intDailyProductionSet).values([

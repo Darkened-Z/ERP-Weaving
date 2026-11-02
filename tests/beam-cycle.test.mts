@@ -99,7 +99,7 @@ test("beam lifecycle follows entered statuses, not estimated length", async (t) 
       assert.equal(loom.status_wrk, "S");
     });
   }
-  await t.test("R-CUT remains mounted and cannot be offered for another knotting", async () => {
+  await t.test("R-CUT remains mounted and can only be re-knotted on its own loom", async () => {
     await seed();
     await production(1, "AJ-13", 9, "R-CUT", 3922.96, 3889);
     await db.transaction(tx => recomputeBeamStatus(tx, "AJ-13"));
@@ -107,9 +107,13 @@ test("beam lifecycle follows entered statuses, not estimated length", async (t) 
     assert.equal(b.status_wrk, "R-CUT");
     assert.equal(loom.current_beam, "AJ-13");
     assert.equal(canKnotBeam("R-CUT", 9), false);
+    assert.equal(canKnotBeam("R-CUT", 9, 9, "3", "3"), true);
+    assert.equal(canKnotBeam("R-CUT", 9, 17, "3", "3"), false);
+    assert.equal(canKnotBeam("R-CUT", 9, 9, "3", "2"), false);
     assert.equal(canKnotBeam("R-CUT", null), true);
     assert.equal(canKnotBeam("LOADED", null), true);
     assert.equal(canKnotBeam("RUNNING", 9), false);
+    assert.equal(canKnotBeam("RUNNING", 9, 9, "3", "3"), false);
   });
   await t.test("editing earlier production cannot overrule the later L-ROLL", async () => {
     await seed();
