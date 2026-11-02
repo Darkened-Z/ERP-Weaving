@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-process.env.NODE_ENV = "test";
+Object.assign(process.env, { NODE_ENV: "test" });
 process.env.TURSO_DATABASE_URL = "";
 process.env.TURSO_AUTH_TOKEN = "";
 process.env.DEMO_DB = "";

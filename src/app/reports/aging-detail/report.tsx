@@ -3,14 +3,16 @@ import { PrintButton } from "@/components/print-button";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { DateBox } from "@/components/date-box";
 import { HeadField } from "./head-field";
+import { AgingCalendar } from "./calendar";
 import { db, schema } from "@/db";
 import { and, eq, lte, like } from "drizzle-orm";
 import { today as todayIso } from "@/lib/time";
 import { requireSession } from "@/lib/auth";
+import { agingDueDate, agingOpenItems } from "@/lib/aging-open-items";
 
 export const dynamic = "force-dynamic";
 
-const fmt = (n: number) => new Intl.NumberFormat("en-PK").format(Math.round(n));
+const fmt = (n: number) => new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
 
 const daysBetween = (from: string, to: string) => {
   const a = Date.parse(`${from}T00:00:00Z`);
@@ -24,9 +26,8 @@ const daysBetween = (from: string, to: string) => {
  *
  * The bucket report answers "how much is 30 to 60 days old". This answers the
  * question that follows it: WHICH entries, and how old is each. Every open
- * voucher on a party is listed with its date, its narration, its age in days
- * and a running accumulation, closing on the party's balance — which is how the
- * mill's own CREDITORS ACCOUNTS AGING reads.
+ * creditor voucher is listed with its remaining amount and purchase age after
+ * settlements have been applied to the oldest charges.
  *
  * Creditors are the credit side (what the mill owes), debtors the debit side.
  * One implementation, because the two differ only in which column carries the
@@ -44,6 +45,7 @@ export async function AgingDetailReport({
     code?: string;
     short?: string;
     mode?: string;
+    month?: string;
     summary?: string;
   }>;
   side: "CR" | "DB";
@@ -58,6 +60,7 @@ export async function AgingDetailReport({
   // Summary drops the vouchers and leaves one line per account — the same
   // switch the mill's own screen carries.
   const summaryOnly = p.summary === "1";
+  const calendarView = side === "CR" && p.mode === "calendar";
 
   const accounts = await db
     .select({
@@ -125,6 +128,19 @@ export async function AgingDetailReport({
         )
     : [];
 
+  // The ledger posting does not carry the due date from a Yarn Purchase.
+  // Use the source voucher's ledger number, with the GL date as a fallback.
+  const purchaseVouchers = side === "CR"
+    ? await db.select({
+        lvNo: schema.extYarnPurVoucher.lvNo,
+        vNo: schema.extYarnPurVoucher.vNo,
+        vDate: schema.extYarnPurVoucher.vDate,
+        term: schema.extYarnPurVoucher.term,
+        dueDate: schema.extYarnPurVoucher.dueDate,
+      }).from(schema.extYarnPurVoucher).where(lte(schema.extYarnPurVoucher.vDate, asOf))
+    : [];
+  const purchaseByLedgerNo = new Map(purchaseVouchers.filter((v) => v.lvNo != null).map((v) => [v.lvNo, v]));
+
   type Line = {
     vno: number;
     vtype: string;
@@ -134,6 +150,9 @@ export async function AgingDetailReport({
     amount: number;
     accum: number;
     days: number;
+    termDays: number | null;
+    voucherLabel: string;
+    originalAmount: number;
   };
 
   const shortByCode = new Map(accounts.map((a) => [a.code, (a.descShort ?? "").trim()]));
@@ -150,47 +169,62 @@ export async function AgingDetailReport({
   const parties = Array.from(byParty.entries())
     .map(([code, all]) => {
       const sorted = [...all].sort((a, b) => (a.vdate ?? "").localeCompare(b.vdate ?? ""));
-      // The money column is the side the party's balance sits on; the other
-      // side is a settlement and reduces what is outstanding.
-      const signed = sorted.map((r) =>
-        side === "CR" ? (r.credit ?? 0) - (r.debit ?? 0) : (r.debit ?? 0) - (r.credit ?? 0),
-      );
-      const lines = sorted.reduce<Line[]>((acc, r, i) => {
-        const amount = signed[i];
-        if (amount === 0) return acc;
-        const accum = (acc[acc.length - 1]?.accum ?? 0) + amount;
-        acc.push({
-          vno: r.vno,
-          vtype: r.vtype,
-          vdate: r.vdate ?? "",
-          dueDate: r.dueDate ?? "",
-          narration: (r.narration ?? "").trim(),
-          amount,
-          accum,
-          days: daysBetween(r.vdate ?? asOf, asOf),
-        });
-        return acc;
-      }, []);
-      const closing = lines[lines.length - 1]?.accum ?? 0;
-      return { code, name: nameByCode.get(code) ?? code, lines, closing };
+      const raw = sorted.map((r) => ({
+        vno: r.vno,
+        vtype: r.vtype,
+        vdate: r.vdate ?? "",
+        dueDate: r.dueDate ?? "",
+        narration: (r.narration ?? "").trim(),
+        amount: side === "CR" ? (r.credit ?? 0) - (r.debit ?? 0) : (r.debit ?? 0) - (r.credit ?? 0),
+      })).filter((r) => Math.abs(r.amount) > 0.001);
+      const settled = side === "CR" ? agingOpenItems(raw) : null;
+      let running = 0;
+      const display = settled?.items ?? raw.map((r) => ({ ...r, originalAmount: r.amount, accum: (running += r.amount) }));
+      const lines: Line[] = display.map((r) => {
+        const source = side === "CR" && r.vtype === "YPV" ? purchaseByLedgerNo.get(r.vno) : undefined;
+        const dueDate = agingDueDate(r.vdate, source?.term, source?.dueDate, r.dueDate);
+        return {
+          ...r,
+          dueDate,
+          days: daysBetween(r.vdate || asOf, asOf),
+          termDays: dueDate && r.vdate && daysBetween(r.vdate, dueDate) >= 0 ? daysBetween(r.vdate, dueDate) : null,
+          voucherLabel: source?.vNo || `${r.vtype}-${String(r.vno).padStart(4, "0")}`,
+        };
+      });
+      const closing = settled?.closing ?? lines[lines.length - 1]?.accum ?? 0;
+      return { code, name: nameByCode.get(code) ?? code, lines, closing, unappliedCredit: settled?.unappliedCredit ?? 0 };
     })
     // A party that has settled to nothing is not aging.
-    .filter((x) => x.lines.length > 0 && Math.abs(x.closing) > 0.01)
+    .filter((x) => Math.abs(x.closing) >= 0.01)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const grand = parties.reduce((s, x) => s + x.closing, 0);
   const moneyLabel = side === "CR" ? "CR" : "DR";
+  const viewParams = new URLSearchParams({ asof: asOf, party: partyFilter, short: shortFilter, code: codeFilter });
+  if (summaryOnly) viewParams.set("summary", "1");
+  const tableHref = `?${viewParams.toString()}`;
+  viewParams.set("mode", "calendar");
+  const calendarHref = `?${viewParams.toString()}`;
+  const calendarItems = parties.flatMap((pt) => pt.lines.map((line) => ({
+    party: pt.name,
+    voucher: line.voucherLabel,
+    dueDate: line.dueDate,
+    amount: line.amount,
+  })));
 
   const excelRows = parties.flatMap((pt) =>
     pt.lines.map((l) => ({
       party: pt.name,
       vno: l.vno,
       vtype: l.vtype,
+      voucher: l.voucherLabel,
       narration: l.narration,
-      amount: Math.round(l.amount),
+      amount: Math.round(l.amount * 100) / 100,
       date: l.vdate,
       due: l.dueDate,
-      accum: Math.round(l.accum),
+      termDays: l.termDays,
+      originalAmount: Math.round(l.originalAmount * 100) / 100,
+      accum: Math.round(l.accum * 100) / 100,
       days: l.days,
     })),
   );
@@ -211,14 +245,17 @@ export async function AgingDetailReport({
               rows={excelRows}
               columns={[
                 { key: "party", label: "Account" },
+                { key: "voucher", label: "Voucher" },
                 { key: "vno", label: "V.No" },
                 { key: "vtype", label: "VT" },
+                { key: "date", label: side === "CR" ? "Purchase Date" : "Date" },
+                { key: "termDays", label: "Term Days" },
+                { key: "due", label: "Due Date" },
                 { key: "narration", label: "Narration" },
                 { key: "amount", label: moneyLabel },
-                { key: "date", label: "Date" },
-                { key: "due", label: "Due Date" },
+                { key: "originalAmount", label: "Original Amount" },
                 { key: "accum", label: "Accum. Amt" },
-                { key: "days", label: "Days" },
+                { key: "days", label: "Age Days" },
               ]}
               filename={side === "CR" ? "creditors-aging-detail" : "debtors-aging-detail"}
               title={title}
@@ -227,6 +264,8 @@ export async function AgingDetailReport({
         </div>
 
         <form method="GET" className="card p-4 mb-5 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end no-print">
+          {calendarView && <input type="hidden" name="mode" value="calendar" />}
+          {calendarView && p.month && <input type="hidden" name="month" value={p.month} />}
           <div className="sm:col-span-2">
             <label className="label block mb-1">Aging Upto Date</label>
             <DateBox name="asof" className="input-box mono" defaultValue={asOf} />
@@ -271,10 +310,17 @@ export async function AgingDetailReport({
             ))}
         </datalist>
 
+        {side === "CR" && <div className="flex gap-2 mb-4 no-print" aria-label="Aging view">
+          <a href={tableHref} aria-current={!calendarView ? "page" : undefined} className={`btn btn-sm ${!calendarView ? "" : "btn-outline"}`}>Table view</a>
+          <a href={calendarHref} aria-current={calendarView ? "page" : undefined} className={`btn btn-sm ${calendarView ? "" : "btn-outline"}`}>Calendar view</a>
+        </div>}
+
         {parties.length === 0 ? (
           <div className="card px-4 py-10 text-center text-[13px] text-[var(--muted)] italic">
             Nothing outstanding as at {asOf}.
           </div>
+        ) : calendarView ? (
+          <AgingCalendar items={calendarItems} asOf={asOf} month={p.month?.trim() || asOf.slice(0, 7)} baseHref={calendarHref} />
         ) : (
           parties.map((pt) => (
             <div key={pt.code} className="card mb-5" style={{ breakInside: "avoid" }}>
@@ -284,28 +330,42 @@ export async function AgingDetailReport({
               </div>
               {summaryOnly ? null : (
               <div className="overflow-x-auto">
-                <table className="w-full" style={{ minWidth: 900 }}>
+                <table className="w-full" style={{ minWidth: side === "CR" ? 1080 : 900 }}>
                   <thead>
                     <tr>
-                      <th style={{ width: 70 }}>V.NO</th>
+                      <th style={{ width: side === "CR" ? 115 : 70 }}>{side === "CR" ? "VOUCHER" : "V.NO"}</th>
+                      {side === "CR" && <>
+                        <th style={{ width: 105 }}>PURCHASE DATE</th>
+                        <th className="text-right" style={{ width: 85 }}>TERM DAYS</th>
+                        <th style={{ width: 105 }}>DUE DATE</th>
+                      </>}
                       <th style={{ width: 50 }}>VT</th>
                       <th>NARRATION</th>
                       <th className="text-right" style={{ width: 110 }}>{moneyLabel}</th>
-                      <th style={{ width: 90 }}>DATE</th>
-                      <th style={{ width: 90 }}>Due DATE</th>
+                      {side === "DB" && <>
+                        <th style={{ width: 90 }}>DATE</th>
+                        <th style={{ width: 90 }}>Due DATE</th>
+                      </>}
                       <th className="text-right" style={{ width: 120 }}>ACCUM. AMT</th>
-                      <th className="text-right" style={{ width: 60 }}>DAYS</th>
+                      <th className="text-right" style={{ width: 70 }}>AGE DAYS</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pt.lines.map((l, i) => (
                       <tr key={`${l.vtype}-${l.vno}-${i}`}>
-                        <td className="mono font-bold">{l.vno}</td>
+                        <td className="mono font-bold">{side === "CR" ? l.voucherLabel : l.vno}</td>
+                        {side === "CR" && <>
+                          <td className="mono text-[12px]">{l.vdate}</td>
+                          <td className="mono text-right">{l.termDays ?? "—"}</td>
+                          <td className="mono text-[12px]">{l.dueDate || "—"}</td>
+                        </>}
                         <td className="mono">{l.vtype}</td>
-                        <td className="text-[12px]">{l.narration}</td>
+                        <td className="text-[12px]">{l.narration}{side === "CR" && l.originalAmount - l.amount > 0.001 && <span className="block text-[11px] text-[var(--muted)]">Original {fmt(l.originalAmount)} · Paid {fmt(l.originalAmount - l.amount)}</span>}</td>
                         <td className="mono text-right">{fmt(l.amount)}</td>
-                        <td className="mono text-[12px]">{l.vdate}</td>
-                        <td className="mono text-[12px]">{l.dueDate}</td>
+                        {side === "DB" && <>
+                          <td className="mono text-[12px]">{l.vdate}</td>
+                          <td className="mono text-[12px]">{l.dueDate}</td>
+                        </>}
                         <td className="mono text-right">{fmt(l.accum)}</td>
                         <td className="mono text-right font-semibold">{l.days}</td>
                       </tr>
@@ -314,6 +374,7 @@ export async function AgingDetailReport({
                 </table>
               </div>
               )}
+              {pt.unappliedCredit > 0 && <div className="px-3 py-1.5 text-[12px] text-[var(--muted)]">Unapplied payment or advance: {fmt(pt.unappliedCredit)}</div>}
               {/* The closing figure is the thing anyone wants to go behind, so
                   it opens that account's full ledger rather than being a dead
                   number at the foot of a list. */}
@@ -330,6 +391,10 @@ export async function AgingDetailReport({
             </div>
           ))
         )}
+
+        {calendarView && parties.some((pt) => pt.unappliedCredit > 0) && <div className="card px-4 py-3 mt-4 text-[12px]">
+          <strong>Unapplied advances:</strong> {parties.filter((pt) => pt.unappliedCredit > 0).map((pt) => `${pt.name} ${fmt(pt.unappliedCredit)}`).join(" · ")}
+        </div>}
 
         {parties.length > 0 && (
           <div className="card px-4 py-3 flex justify-between items-baseline border-2 border-black">
