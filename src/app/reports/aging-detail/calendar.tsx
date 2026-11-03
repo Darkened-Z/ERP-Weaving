@@ -6,6 +6,7 @@ type CalendarItem = {
 };
 
 const fmt = (n: number) => new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(n);
+const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function AgingCalendar({ items, asOf, month, baseHref }: {
   items: CalendarItem[];
@@ -47,7 +48,7 @@ export function AgingCalendar({ items, asOf, month, baseHref }: {
       </div>
       <div className="card hidden sm:block overflow-x-auto">
         <div className="grid grid-cols-7 min-w-[700px]">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
+          {weekdays.map((label) => (
             <div key={label} className="p-2 text-center text-[11px] font-bold uppercase border-b">{label}</div>
           ))}
           {cells.map((day, index) => {
@@ -57,7 +58,7 @@ export function AgingCalendar({ items, asOf, month, baseHref }: {
             return (
               <div key={index} className={`min-h-28 p-2 border-b border-r ${date === asOf ? "bg-blue-50" : ""}`}>
                 {day && <>
-                  <div className="text-[12px] font-bold">{day}</div>
+                  <div className="flex justify-between text-[12px] font-bold"><span>{day}</span><span className="text-[10px] uppercase text-[var(--muted)]">{weekdays[(first.getUTCDay() + day - 1) % 7]}</span></div>
                   {due.length > 0 && <>
                     <div className={`mono text-[12px] font-bold ${date < asOf ? "text-red-700" : "text-blue-800"}`}>{fmt(total)}</div>
                     <div className="text-[10px] text-[var(--muted)]">{due.length} open item{due.length === 1 ? "" : "s"}</div>
@@ -77,7 +78,7 @@ export function AgingCalendar({ items, asOf, month, baseHref }: {
         {inMonth.length === 0 ? <p className="text-[12px] text-[var(--muted)]">No dues this month.</p> :
           Array.from(byDate.entries()).filter(([date]) => date.startsWith(`${validMonth}-`)).sort(([a], [b]) => a.localeCompare(b)).map(([date, due]) =>
             <div key={date} className="border-b py-2 last:border-b-0">
-              <div className="flex justify-between font-bold text-[12px]"><span>{date}</span><span className="mono">{fmt(due.reduce((sum, item) => sum + item.amount, 0))}</span></div>
+              <div className="flex justify-between font-bold text-[12px]"><span>{date} · {weekdays[new Date(`${date}T00:00:00Z`).getUTCDay()]}</span><span className="mono">{fmt(due.reduce((sum, item) => sum + item.amount, 0))}</span></div>
               {due.map((item, i) => <div key={`${item.party}-${item.voucher}-${i}`} className="flex justify-between gap-2 text-[11px] py-1">
                 <span>{item.party} · {item.voucher}</span><span className="mono whitespace-nowrap">{fmt(item.amount)}</span>
               </div>)}

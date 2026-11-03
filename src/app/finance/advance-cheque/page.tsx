@@ -16,6 +16,7 @@ import { redirect } from "next/navigation";
 import { num, intVal, txt, fmtMoney as formatNum } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 import { GrowRows } from "@/components/grow-rows";
+import { AdvanceChequeCalendar } from "./calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -608,7 +609,7 @@ type Chq = {
 export default async function AdvanceChequePage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string; pending?: string; upcoming?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string; pending?: string; upcoming?: string; month?: string }>;
 }) {
   const params = await searchParams;
   const session = await getSession();
@@ -844,6 +845,7 @@ export default async function AdvanceChequePage({
           </div>
           <div className="no-print flex flex-wrap gap-2">
             <a href={`${BASE}?adding=1`} className="btn btn-sm">New Advance Cheque</a>
+            <a href="#cheque-calendar" className="btn btn-outline btn-sm">Cheque Calendar</a>
             <a href="/reports/cheque-status" className="btn btn-outline btn-sm">Cheque Status</a>
             <a href={pendingOnly ? BASE : `${BASE}?pending=1`} className={`btn btn-sm ${pendingOnly ? "" : "btn-outline"}`} title="Issued cheques whose date has passed and that have not cleared">
               Pending Cheques ({overdue.length})
@@ -1062,6 +1064,14 @@ export default async function AdvanceChequePage({
             </form>
           </div>
         )}
+
+        <AdvanceChequeCalendar
+          cheques={found}
+          names={descMap}
+          asOf={todayIso}
+          month={params.month ?? todayIso.slice(0, 7)}
+          find={findFilter}
+        />
 
         {/* Find */}
         <form method="GET" action={BASE} className="mb-3 no-print flex gap-2 max-w-md">
