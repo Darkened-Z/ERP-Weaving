@@ -435,6 +435,7 @@ export default async function JournalVoucherPage({
     adding?: string;
     error?: string;
     find?: string;
+    account?: string;
     thru?: string;
   }>;
 }) {
@@ -459,7 +460,7 @@ export default async function JournalVoucherPage({
     : [];
   const selectedMain = formMainRows[0]?.vtype === VTYPE ? formMainRows[0] : null;
   const formMain = isAdding ? null : selectedMain;
-  const viewFy = formMain?.fyCode || params.fy?.trim() || currentFy;
+  const viewFy = formMain?.fyCode || (params.fy === "all" ? null : params.fy?.trim() || currentFy);
   const fyRows = await db.selectDistinct({ fyCode: schema.transMain.fyCode })
     .from(schema.transMain).where(eq(schema.transMain.vtype, VTYPE)).orderBy(desc(schema.transMain.fyCode));
   const fyOptions = [...new Set([currentFy, ...fyRows.map((r) => r.fyCode)].filter((fy): fy is string => !!fy))];
@@ -510,7 +511,8 @@ export default async function JournalVoucherPage({
           WHERE search_line.fy_code = ${schema.transMain.fyCode}
             AND search_line.vtype = ${schema.transMain.vtype}
             AND search_line.vno = ${schema.transMain.vno}
-            AND (search_line.narration LIKE ${pat} ESCAPE '\\'
+            AND (search_line.acc_code LIKE ${pat} ESCAPE '\\'
+              OR search_line.narration LIKE ${pat} ESCAPE '\\'
               OR search_account.description LIKE ${pat} ESCAPE '\\')
         ))`,
     );
@@ -554,6 +556,9 @@ export default async function JournalVoucherPage({
         )
         .orderBy(schema.transDetail.srno)
     : [];
+  const focusedLine = params.account
+    ? detailLines.find((line) => line.accCode === params.account)
+    : undefined;
 
   const initialDr = detailLines.reduce((s, l) => s + (l.debit ?? 0), 0);
   const initialCr = detailLines.reduce((s, l) => s + (l.credit ?? 0), 0);
@@ -606,13 +611,14 @@ export default async function JournalVoucherPage({
           <div>
             <h1 className="page-title">JOURNAL VOUCHERS (WVG)</h1>
             <p className="text-[13px] text-[var(--muted)] mt-2">
-              {jvCount} voucher{jvCount === 1 ? "" : "s"}
-              {viewFy ? ` · FY ${viewFy}` : ""}
+              {findFilter ? voucherList.length : jvCount} voucher{(findFilter ? voucherList.length : jvCount) === 1 ? "" : "s"}
+              {viewFy ? ` · FY ${viewFy}` : " · all fiscal years"}
               {findFilter ? ` · matching "${findFilter}"` : ""}
             </p>
           </div>
           <ExcelExportButton
             rows={voucherList.map((v) => ({
+              fyCode: v.fyCode,
               vno: v.vno,
               vdate: v.vdate,
               narration: v.narration,
@@ -621,6 +627,7 @@ export default async function JournalVoucherPage({
               balanceAmount: v.balanceAmount,
             }))}
             columns={[
+              { key: "fyCode", label: "FY" },
               { key: "vno", label: "V.No" },
               { key: "vdate", label: "Date" },
               { key: "narration", label: "Narration" },
@@ -650,16 +657,32 @@ export default async function JournalVoucherPage({
         {dateOutsideFy && <div className="border border-amber-600 bg-amber-50 px-4 py-2 mb-4 text-[12px]">
           This voucher is saved under FY {formMain!.fyCode}, but its date is {formMain!.vdate}. It remains in its original fiscal year; account balances include it by transaction date.
         </div>}
+        {focusedLine && <div className="border border-blue-700 bg-blue-50 px-4 py-2 mb-4 text-[12px]">
+          Ledger entry in this voucher: <strong>{titleMap[focusedLine.accCode]?.title ?? focusedLine.accCode}</strong>
+          {" · "}{focusedLine.debit ? `Dr ${fmtInt(focusedLine.debit)}` : `Cr ${fmtInt(focusedLine.credit)}`}
+          {" · "}<a href={`#jv-line-${focusedLine.id}`} className="underline">Go to voucher line</a>
+        </div>}
 
-        <form method="GET" action="/finance/jv" className="flex items-end gap-2 mb-4 no-print">
-          <div>
-            <label className="label block mb-1" htmlFor="jv-fy">Fiscal Year</label>
-            <select id="jv-fy" name="fy" className="input-box mono" defaultValue={viewFy ?? ""}>
-              {fyOptions.map((fy) => <option key={fy} value={fy}>FY {fy}</option>)}
-            </select>
-          </div>
-          <button type="submit" className="btn btn-sm">View</button>
-        </form>
+        <div className="flex flex-wrap items-end gap-3 mb-4 no-print">
+          <form method="GET" action="/finance/jv" className="flex items-end gap-2">
+            <div>
+              <label className="label block mb-1" htmlFor="jv-fy">Fiscal Year</label>
+              <select id="jv-fy" name="fy" className="input-box mono" defaultValue={viewFy ?? "all"}>
+                <option value="all">All fiscal years</option>
+                {fyOptions.map((fy) => <option key={fy} value={fy}>FY {fy}</option>)}
+              </select>
+            </div>
+            <button type="submit" className="btn btn-sm">View</button>
+          </form>
+          <form method="GET" action="/finance/jv" className="flex items-end gap-2 flex-1 min-w-[220px] max-w-md">
+            <input type="hidden" name="fy" value="all" />
+            <div className="flex-1">
+              <label className="label block mb-1" htmlFor="jv-find">Find voucher or account (all FY)</label>
+              <input id="jv-find" name="find" className="input-box mono w-full" defaultValue={findFilter} placeholder="V.No / Narration / Account" />
+            </div>
+            <button type="submit" className="btn btn-sm">Find</button>
+          </form>
+        </div>
 
         <datalist id="jv-acc-short">
           {pickerAccounts
@@ -690,7 +713,7 @@ export default async function JournalVoucherPage({
           method="GET"
           action="/finance/jv"
           className="hidden"
-        ><input type="hidden" name="fy" value={viewFy ?? ""} /></form>
+        ><input type="hidden" name="fy" value="all" /></form>
 
         <div className="border border-black p-4 mb-3">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -802,7 +825,7 @@ export default async function JournalVoucherPage({
                   />
                 </div>
                 <div className="lg:col-span-2">
-                  <label className="label block mb-1">Find</label>
+                  <label className="label block mb-1">Find in all FY</label>
                   <div className="flex gap-2">
                     <input
                       form="jv-find-form"
@@ -887,7 +910,7 @@ export default async function JournalVoucherPage({
                       {Array.from({ length: rowsToShow }).map((_, i) => {
                         const l = detailLines[i];
                         return (
-                          <tr key={l?.id ?? `r-${i}`}>
+                          <tr key={l?.id ?? `r-${i}`} id={l ? `jv-line-${l.id}` : undefined} className={l?.id === focusedLine?.id ? "bg-blue-50" : undefined}>
                             <td className="text-center text-[var(--muted)]">
                               {i + 1}
                             </td>
@@ -1063,6 +1086,7 @@ export default async function JournalVoucherPage({
             <table>
               <thead>
                 <tr>
+                  <th>FY</th>
                   <th>V. No</th>
                   <th>Date</th>
                   <th>Narration</th>
@@ -1086,6 +1110,9 @@ export default async function JournalVoucherPage({
                           : "cursor-pointer hover:bg-gray-50"
                       }
                     >
+                      <td className="mono text-[12px]">
+                        <a href={href} className="no-underline block" style={linkStyle}>{v.fyCode}</a>
+                      </td>
                       <td className="mono font-bold">
                         <a
                           href={href}
@@ -1137,7 +1164,7 @@ export default async function JournalVoucherPage({
                 {voucherList.length === 0 && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="text-center text-[13px] text-[var(--muted)] py-6"
                     >
                       No journal vouchers. Click <b>New</b> above to create one.

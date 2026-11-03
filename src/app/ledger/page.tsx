@@ -336,7 +336,7 @@ export default async function LedgerPage({
                           CP-986, JV-650, OPN-0 — type and number together. */}
                       <td className="mono font-bold whitespace-nowrap">
                         {entry.vtype === "JV" ? (
-                          <a href={`/finance/jv?id=${entry.mainId}&fy=${encodeURIComponent(entry.fyCode ?? "")}`} className="underline underline-offset-2 print:no-underline" title={`Open FY ${entry.fyCode} Journal Voucher #${entry.vno}`}>
+                          <a href={`/finance/jv?id=${entry.mainId}&fy=${encodeURIComponent(entry.fyCode ?? "")}&account=${encodeURIComponent(selectedAccount ?? "")}`} className="underline underline-offset-2 print:no-underline" title={`Open FY ${entry.fyCode} Journal Voucher #${entry.vno} and show this account entry`}>
                             JV-{entry.vno}<span className="block text-[10px] font-normal">FY {entry.fyCode}</span>
                           </a>
                         ) : billHref(entry) ? (
