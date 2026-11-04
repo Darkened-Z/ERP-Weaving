@@ -20,9 +20,9 @@ export function AdvanceChequeCalendar({ cheques, names, asOf, month, find }: {
   const weekday = (day: number) => WEEKDAYS[(dayOfWeek + day - 1) % 7];
   const linkMonth = (offset: number) => {
     const next = new Date(Date.UTC(year, monthNo - 1 + offset, 1));
-    const query = new URLSearchParams({ month: `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}` });
+    const query = new URLSearchParams({ view: "calendar", month: `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}` });
     if (find) query.set("find", find);
-    return `${BASE}?${query.toString()}#cheque-calendar`;
+    return `${BASE}?${query.toString()}`;
   };
   const todayFunding = bankFundingThrough(cheques, asOf);
   const monthCheques = cheques.filter((cheque) => cheque.vdate.startsWith(`${validMonth}-`) ||

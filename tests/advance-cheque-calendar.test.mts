@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { AdvanceChequeCalendar } from "../src/app/finance/advance-cheque/calendar";
 import { bankFundingThrough, chequesOnDate, type CalendarCheque } from "../src/lib/advance-cheque-calendar";
 
 const cheque = (overrides: Partial<CalendarCheque>): CalendarCheque => ({
@@ -31,4 +34,13 @@ test("future bank cover includes earlier uncleared dates and omits undated chequ
   ];
   assert.equal(bankFundingThrough(rows, "2026-11-03")[0].amount, 100000);
   assert.equal(bankFundingThrough(rows, "2026-11-05")[0].amount, 350000);
+});
+
+test("calendar month links reopen the calendar view", () => {
+  const html = renderToStaticMarkup(createElement(AdvanceChequeCalendar, {
+    cheques: [], names: new Map(), asOf: "2026-11-04", month: "2026-11", find: "",
+  }));
+  assert.match(html, /href="\/finance\/advance-cheque\?view=calendar&amp;month=2026-10"/);
+  assert.match(html, /href="\/finance\/advance-cheque\?view=calendar&amp;month=2026-12"/);
+  assert.match(html, /Advance Cheque Calendar|Cheque calendar/);
 });

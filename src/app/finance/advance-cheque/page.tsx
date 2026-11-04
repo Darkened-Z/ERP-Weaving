@@ -609,7 +609,7 @@ type Chq = {
 export default async function AdvanceChequePage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string; pending?: string; upcoming?: string; month?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; action?: string; error?: string; find?: string; thru?: string; chq?: string; pending?: string; upcoming?: string; month?: string; view?: string }>;
 }) {
   const params = await searchParams;
   const session = await getSession();
@@ -625,6 +625,7 @@ export default async function AdvanceChequePage({
   const isEditForm = action === "edit" && hasId;
   const chqParam = params.chq?.trim() ?? "";
   const findFilter = params.find?.trim() ?? "";
+  const calendarView = params.view === "calendar";
   // Pending Cheques (owner 2026-10-26): still ISSUED and the cheque date has
   // already passed — it should have been presented and has not cleared.
   const daysAhead = upcomingDays(params.upcoming);
@@ -833,6 +834,25 @@ export default async function AdvanceChequePage({
 
   const showIssueForm = isAdding || isReissue || isEditForm;
 
+  if (calendarView) {
+    return <Shell active="fin-advance-cheque"><div className="animate-in">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+        <div>
+          <h1 className="page-title">Advance Cheque Calendar (WVG)</h1>
+          <p className="text-[13px] text-[var(--muted)] mt-2">FY {fyCode || "—"} · cheque issue dates, cheque dates and bank cover needed</p>
+        </div>
+        <a href={findFilter ? `${BASE}?find=${encodeURIComponent(findFilter)}` : BASE} className="btn btn-outline btn-sm">Cheque Register</a>
+      </div>
+      <AdvanceChequeCalendar
+        cheques={found}
+        names={descMap}
+        asOf={todayIso}
+        month={params.month ?? todayIso.slice(0, 7)}
+        find={findFilter}
+      />
+    </div></Shell>;
+  }
+
   return (
     <Shell active="fin-advance-cheque">
       <div className="animate-in">
@@ -845,7 +865,7 @@ export default async function AdvanceChequePage({
           </div>
           <div className="no-print flex flex-wrap gap-2">
             <a href={`${BASE}?adding=1`} className="btn btn-sm">New Advance Cheque</a>
-            <a href="#cheque-calendar" className="btn btn-outline btn-sm">Cheque Calendar</a>
+            <a href={`${BASE}?view=calendar`} className="btn btn-outline btn-sm">Cheque Calendar</a>
             <a href="/reports/cheque-status" className="btn btn-outline btn-sm">Cheque Status</a>
             <a href={pendingOnly ? BASE : `${BASE}?pending=1`} className={`btn btn-sm ${pendingOnly ? "" : "btn-outline"}`} title="Issued cheques whose date has passed and that have not cleared">
               Pending Cheques ({overdue.length})
@@ -1064,14 +1084,6 @@ export default async function AdvanceChequePage({
             </form>
           </div>
         )}
-
-        <AdvanceChequeCalendar
-          cheques={found}
-          names={descMap}
-          asOf={todayIso}
-          month={params.month ?? todayIso.slice(0, 7)}
-          find={findFilter}
-        />
 
         {/* Find */}
         <form method="GET" action={BASE} className="mb-3 no-print flex gap-2 max-w-md">
