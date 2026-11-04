@@ -26,8 +26,8 @@ const daysBetween = (from: string, to: string) => {
  *
  * The bucket report answers "how much is 30 to 60 days old". This answers the
  * question that follows it: WHICH entries, and how old is each. Every open
- * creditor voucher is listed with its remaining amount and purchase age after
- * settlements have been applied to the oldest charges.
+ * voucher is listed with its remaining amount and age after settlements have
+ * been applied to the oldest charges.
  *
  * Creditors are the credit side (what the mill owes), debtors the debit side.
  * One implementation, because the two differ only in which column carries the
@@ -177,10 +177,8 @@ export async function AgingDetailReport({
         narration: (r.narration ?? "").trim(),
         amount: side === "CR" ? (r.credit ?? 0) - (r.debit ?? 0) : (r.debit ?? 0) - (r.credit ?? 0),
       })).filter((r) => Math.abs(r.amount) > 0.001);
-      const settled = side === "CR" ? agingOpenItems(raw) : null;
-      let running = 0;
-      const display = settled?.items ?? raw.map((r) => ({ ...r, originalAmount: r.amount, accum: (running += r.amount) }));
-      const lines: Line[] = display.map((r) => {
+      const settled = agingOpenItems(raw);
+      const lines: Line[] = settled.items.map((r) => {
         const source = side === "CR" && r.vtype === "YPV" ? purchaseByLedgerNo.get(r.vno) : undefined;
         const dueDate = agingDueDate(r.vdate, source?.term, source?.dueDate, r.dueDate);
         return {
@@ -191,8 +189,8 @@ export async function AgingDetailReport({
           voucherLabel: source?.vNo || `${r.vtype}-${String(r.vno).padStart(4, "0")}`,
         };
       });
-      const closing = settled?.closing ?? lines[lines.length - 1]?.accum ?? 0;
-      return { code, name: nameByCode.get(code) ?? code, lines, closing, unappliedCredit: settled?.unappliedCredit ?? 0 };
+      const closing = settled.closing;
+      return { code, name: nameByCode.get(code) ?? code, lines, closing, unappliedCredit: settled.unappliedCredit };
     })
     // A party that has settled to nothing is not aging.
     .filter((x) => Math.abs(x.closing) >= 0.01)
@@ -360,7 +358,7 @@ export async function AgingDetailReport({
                           <td className="mono text-[12px]">{l.dueDate || "—"}</td>
                         </>}
                         <td className="mono">{l.vtype}</td>
-                        <td className="text-[12px]">{l.narration}{side === "CR" && l.originalAmount - l.amount > 0.001 && <span className="block text-[11px] text-[var(--muted)]">Original {fmt(l.originalAmount)} · Paid {fmt(l.originalAmount - l.amount)}</span>}</td>
+                        <td className="text-[12px]">{l.narration}{l.originalAmount - l.amount > 0.001 && <span className="block text-[11px] text-[var(--muted)]">Original {fmt(l.originalAmount)} · {side === "CR" ? "Paid" : "Received"} {fmt(l.originalAmount - l.amount)}</span>}</td>
                         <td className="mono text-right">{fmt(l.amount)}</td>
                         {side === "DB" && <>
                           <td className="mono text-[12px]">{l.vdate}</td>

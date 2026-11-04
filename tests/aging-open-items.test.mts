@@ -21,6 +21,18 @@ test("cheque payment removes the oldest paid purchase and leaves the later purch
   assert.equal(result.closing, 2029900);
 });
 
+test("debtor receipts clear the oldest grey sale and leave only the unpaid sale", () => {
+  const result = agingOpenItems([
+    { ...entry(12, "2026-10-12", 200.75), vtype: "GPV" },
+    { ...entry(8, "2026-10-15", -100), vtype: "CR" },
+    { ...entry(10, "2026-10-03", 100), vtype: "GPV" },
+    { ...entry(9, "2026-10-20", -25.25), vtype: "CR" },
+  ]);
+  assert.deepEqual(result.items.map((item) => [item.vtype, item.vno, item.amount, item.accum]),
+    [["GPV", 12, 175.5, 175.5]]);
+  assert.equal(result.closing, 175.5);
+});
+
 test("partial settlement preserves original charge and exact cents", () => {
   const result = agingOpenItems([entry(1, "2026-10-01", 100.75), entry(2, "2026-10-02", -40.25)]);
   assert.equal(result.items[0].originalAmount, 100.75);

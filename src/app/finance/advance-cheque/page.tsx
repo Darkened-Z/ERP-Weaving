@@ -841,7 +841,7 @@ export default async function AdvanceChequePage({
           <h1 className="page-title">Advance Cheque Calendar (WVG)</h1>
           <p className="text-[13px] text-[var(--muted)] mt-2">FY {fyCode || "—"} · cheque issue dates, cheque dates and bank cover needed</p>
         </div>
-        <a href={findFilter ? `${BASE}?find=${encodeURIComponent(findFilter)}` : BASE} className="btn btn-outline btn-sm">Cheque Register</a>
+        <a href={findFilter ? `${BASE}?find=${encodeURIComponent(findFilter)}` : BASE} className="btn btn-outline btn-sm">Register View</a>
       </div>
       <AdvanceChequeCalendar
         cheques={found}
@@ -865,7 +865,7 @@ export default async function AdvanceChequePage({
           </div>
           <div className="no-print flex flex-wrap gap-2">
             <a href={`${BASE}?adding=1`} className="btn btn-sm">New Advance Cheque</a>
-            <a href={`${BASE}?view=calendar`} className="btn btn-outline btn-sm">Cheque Calendar</a>
+            <a href={`${BASE}?view=calendar`} className="btn btn-outline btn-sm">Calendar View</a>
             <a href="/reports/cheque-status" className="btn btn-outline btn-sm">Cheque Status</a>
             <a href={pendingOnly ? BASE : `${BASE}?pending=1`} className={`btn btn-sm ${pendingOnly ? "" : "btn-outline"}`} title="Issued cheques whose date has passed and that have not cleared">
               Pending Cheques ({overdue.length})
