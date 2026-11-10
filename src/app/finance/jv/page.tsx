@@ -81,9 +81,10 @@ async function saveVoucher(formData: FormData) {
     await assertPeriodOpen(existingMain.vdate, "FINANCE");
   }
 
-  // New vouchers go to the FY their date falls in; edits keep their own FY.
+  // A voucher belongs to the FY its date falls in — new or edited. An edit that
+  // moves the date into another year moves the voucher there (new number in that
+  // year); it used to stay behind (JV 1 & 2 dated 2026 sat in FY 2022).
   const newFy = (await fyCodeForDate(txt(formData.get("v_date")) ?? today())) || currentFy!;
-  const fyForRow = editing ? existingMain!.fyCode : newFy;
 
   const accRows = await db
     .select({
@@ -227,23 +228,32 @@ async function saveVoucher(formData: FormData) {
   const nowIso = new Date().toISOString();
 
   if (editing) {
-    const fyCode = existingMain!.fyCode;
-    const vno = existingMain!.vno;
+    const oldFy = existingMain!.fyCode;
+    const oldVno = existingMain!.vno;
+    const fyCode = newFy;
     await db.transaction(async (tx) => {
-      await tx
-        .update(schema.transMain)
-        .set({ ...header, vdateModified: nowIso })
-        .where(eq(schema.transMain.id, id));
-
       await tx
         .delete(schema.transDetail)
         .where(
           and(
-            eq(schema.transDetail.fyCode, fyCode),
+            eq(schema.transDetail.fyCode, oldFy),
             eq(schema.transDetail.vtype, VTYPE),
-            eq(schema.transDetail.vno, vno),
+            eq(schema.transDetail.vno, oldVno),
           ),
         );
+
+      let vno = oldVno;
+      if (fyCode !== oldFy) {
+        const [m] = await tx
+          .select({ m: sql<number>`coalesce(max(${schema.transMain.vno}), 0)` })
+          .from(schema.transMain)
+          .where(and(eq(schema.transMain.fyCode, fyCode), eq(schema.transMain.vtype, VTYPE)));
+        vno = (m?.m ?? 0) + 1;
+      }
+      await tx
+        .update(schema.transMain)
+        .set({ ...header, fyCode, vno, vdateModified: nowIso })
+        .where(eq(schema.transMain.id, id));
 
       await tx.insert(schema.transDetail).values(
         lines.map((l) => ({
@@ -279,7 +289,7 @@ async function saveVoucher(formData: FormData) {
         .from(schema.transMain)
         .where(
           and(
-            eq(schema.transMain.fyCode, fyForRow),
+            eq(schema.transMain.fyCode, newFy),
             eq(schema.transMain.vtype, VTYPE),
           ),
         );
@@ -288,7 +298,7 @@ async function saveVoucher(formData: FormData) {
       const inserted = await tx
         .insert(schema.transMain)
         .values({
-          fyCode: fyForRow,
+          fyCode: newFy,
           vtype: VTYPE,
           vno,
           vtime: nowTime(),
@@ -299,7 +309,7 @@ async function saveVoucher(formData: FormData) {
 
       await tx.insert(schema.transDetail).values(
         lines.map((l) => ({
-          fyCode: fyForRow,
+          fyCode: newFy,
           vtype: VTYPE,
           vno,
           srno: l.srno,
@@ -655,7 +665,7 @@ export default async function JournalVoucherPage({
           </div>
         )}
         {dateOutsideFy && <div className="border border-amber-600 bg-amber-50 px-4 py-2 mb-4 text-[12px]">
-          This voucher is saved under FY {formMain!.fyCode}, but its date is {formMain!.vdate}. It remains in its original fiscal year; account balances include it by transaction date.
+          This voucher is saved under FY {formMain!.fyCode}, but its date is {formMain!.vdate}. Saving it moves it to the fiscal year of its date (it gets the next JV number there).
         </div>}
         {focusedLine && <div className="border border-blue-700 bg-blue-50 px-4 py-2 mb-4 text-[12px]">
           Ledger entry in this voucher: <strong>{titleMap[focusedLine.accCode]?.title ?? focusedLine.accCode}</strong>
