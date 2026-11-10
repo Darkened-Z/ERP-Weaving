@@ -1,14 +1,13 @@
 import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { PrintButton } from "@/components/print-button";
-import { RowClearButton } from "@/components/row-clear-button";
 import { Combobox } from "@/components/combobox";
 import { FindingPicker } from "@/components/finding-picker";
 import { ImageAttach } from "@/components/image-attach";
 import { ImageLinks } from "@/components/image-links";
 import { PasswordGuard } from "@/components/password-guard";
 import { checkSavePasswordAction } from "@/lib/auth-actions";
-import { AutoFill, RowCalc } from "@/components/auto-fill";
+import { AutoFill } from "@/components/auto-fill";
 import { PartyCountRate } from "@/components/party-count-rate";
 import { AutoAmount } from "@/components/auto-amount";
 import { YarnReceiptCounts } from "@/components/yarn-receipt-counts";
@@ -32,7 +31,7 @@ export const dynamic = "force-dynamic";
 const ERROR_MESSAGES: Record<string, string> = {
   code_exists: "Voucher number already exists. Try again.",
   qty_required: "Enter Bags or Qty (Lbs) greater than zero.",
-  lbs_mismatch: "Header Qty Lbs does not match the carton total. Clear it to auto-fill, or fix the cartons.",
+  linked: "Cannot delete: this receipt is linked to a Yarn Sale Voucher. Unlink it first.",
   period_locked: "Period is locked. Cannot save for this date.",
   admin_only: "Only ADMIN can delete vouchers.",
   no_password: "Password is required to save.",
@@ -69,13 +68,6 @@ export default async function YarnReceiptPage({
   const selected = isEditing ? list.find((r) => r.id === idParam) ?? null : null;
   const editing = isAdding ? null : selected;
 
-  const lines = editing
-    ? await db
-        .select()
-        .from(schema.intYarnReceiptLine)
-        .where(eq(schema.intYarnReceiptLine.receiptId, editing.id))
-        .orderBy(schema.intYarnReceiptLine.srNo)
-    : [];
 
   const maxRow = await db
     .select({
@@ -194,9 +186,9 @@ export default async function YarnReceiptPage({
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
 
-  // Yarn SALE vouchers (external module) — the "Pur.Cont No" slot attaches one of
-  // these as OPTIONAL info (owner: attach the yarn-sale voucher; save works without
-  // one). Value = the YSV voucher no, stored in the same pur_cont_no column.
+  // A receipt is LINKED to the external Yarn Sale Voucher it came against (owner
+  // 2026-11-09, like Dami → Pakki Parchi). Optional; value = the YSV voucher no,
+  // stored in the pur_cont_no column.
   const saleVoucherRows0 = await db
     .select({
       id: schema.extYarnSalVoucher.id,
@@ -205,8 +197,8 @@ export default async function YarnReceiptPage({
       party: schema.extYarnSalVoucher.party,
     })
     .from(schema.extYarnSalVoucher)
-    .orderBy(desc(schema.extYarnSalVoucher.id))
-    .limit(300);
+    .orderBy(desc(schema.extYarnSalVoucher.id));
+  const saleVoucherByNo = new Map(saleVoucherRows0.map((v) => [v.vNo, v]));
   const svLineRows = saleVoucherRows0.length
     ? await db
         .select({
@@ -248,7 +240,7 @@ export default async function YarnReceiptPage({
     return {
       value: v.vNo,
       code: v.vNo,
-      description: v.party ?? "",
+      description: v.party ? `${v.vNo} · ${v.party}` : v.vNo,
       cells: {
         vno: v.vNo,
         party: v.party ?? "",
@@ -388,46 +380,7 @@ export default async function YarnReceiptPage({
         ? (warpBagsN ?? 0) + (weftBagsN ?? 0)
         : num(formData.get("bags"));
     let qtyLbs = num(formData.get("qtyLbs"));
-
-    const cartonNos = formData.getAll("cartonNo") as string[];
-    const grossKgsArr = formData.getAll("grossKgs") as string[];
-    const netKgsArr = formData.getAll("netKgs") as string[];
-    const netLbsArr = formData.getAll("netLbs") as string[];
-
-    const validLines: {
-      srNo: number;
-      cartonNo: string | null;
-      grossKgs: number | null;
-      netKgs: number | null;
-      netLbs: number | null;
-    }[] = [];
-    for (let i = 0; i < cartonNos.length; i++) {
-      const cn = (cartonNos[i] || "").trim();
-      const gk = num(grossKgsArr[i]);
-      const nk = num(netKgsArr[i]);
-      let nl = num(netLbsArr[i]);
-      if (!cn && gk == null && nk == null && nl == null) continue;
-      if (nl == null && nk != null) nl = round(nk * 2.2046, 3);
-      validLines.push({
-        srNo: validLines.length + 1,
-        cartonNo: cn || null,
-        grossKgs: gk,
-        netKgs: nk,
-        netLbs: nl,
-      });
-    }
-
-    const cartonLbsSum = validLines.reduce((s, l) => s + (l.netLbs ?? 0), 0);
-    const hasCartons = validLines.some((l) => (l.netLbs ?? 0) > 0);
-    if (hasCartons) {
-      const rounded = round(cartonLbsSum, 3);
-      if (qtyLbs != null && Math.abs(qtyLbs - rounded) > 0.01) {
-        redirect(`/inventory/yarn-receipt${backQ}&error=lbs_mismatch`);
-      }
-      qtyLbs = rounded;
-    } else if (qtyLbs == null && bags != null && bags > 0) {
-      qtyLbs = round(bags * 100, 2);
-    }
+    if (qtyLbs == null && bags != null && bags > 0) qtyLbs = round(bags * 100, 2);
 
     if (!((bags ?? 0) > 0 || (qtyLbs ?? 0) > 0)) {
       redirect(`/inventory/yarn-receipt${backQ}&error=qty_required`);
@@ -477,20 +430,10 @@ export default async function YarnReceiptPage({
 
     try {
       if (isUpdate) {
-        await db.transaction(async (tx) => {
-          await tx
-            .update(schema.intYarnReceipt)
-            .set({ ...header, modifiedDate: nowIso })
-            .where(eq(schema.intYarnReceipt.id, id));
-          await tx
-            .delete(schema.intYarnReceiptLine)
-            .where(eq(schema.intYarnReceiptLine.receiptId, id));
-          if (validLines.length) {
-            await tx
-              .insert(schema.intYarnReceiptLine)
-              .values(validLines.map((l) => ({ ...l, receiptId: id })));
-          }
-        });
+        await db
+          .update(schema.intYarnReceipt)
+          .set({ ...header, modifiedDate: nowIso })
+          .where(eq(schema.intYarnReceipt.id, id));
         revalidatePath("/inventory/yarn-receipt");
         redirect(`/inventory/yarn-receipt?id=${id}`);
       } else {
@@ -515,13 +458,7 @@ export default async function YarnReceiptPage({
             .insert(schema.intYarnReceipt)
             .values({ ...header, lvNo: header.lvNo ?? nextLv, vNo, postedDate: nowIso })
             .returning({ id: schema.intYarnReceipt.id });
-          const insertedId = inserted[0].id;
-          if (validLines.length) {
-            await tx
-              .insert(schema.intYarnReceiptLine)
-              .values(validLines.map((l) => ({ ...l, receiptId: insertedId })));
-          }
-          return insertedId;
+          return inserted[0].id;
         });
         revalidatePath("/inventory/yarn-receipt");
         redirect(`/inventory/yarn-receipt?id=${newId}`);
@@ -548,6 +485,11 @@ export default async function YarnReceiptPage({
     if (session?.roleName !== "ADMIN") redirect("/inventory/yarn-receipt?error=admin_only");
     const id = intVal(formData.get("id"));
     if (id === null) return;
+    const [cur] = await db
+      .select({ link: schema.intYarnReceipt.purContNo })
+      .from(schema.intYarnReceipt)
+      .where(eq(schema.intYarnReceipt.id, id));
+    if (cur?.link) redirect(`/inventory/yarn-receipt?id=${id}&error=linked`);
     await db.transaction(async (tx) => {
       await tx.delete(schema.intYarnReceiptLine).where(eq(schema.intYarnReceiptLine.receiptId, id));
       await tx.delete(schema.intYarnReceipt).where(eq(schema.intYarnReceipt.id, id));
@@ -556,7 +498,9 @@ export default async function YarnReceiptPage({
     redirect(`/inventory/yarn-receipt`);
   }
 
-  const ROWS = Math.max(3, lines.length + 3);
+  const linkedCount = list.filter((r) => r.purContNo).length;
+  const linkedSv = editing?.purContNo ? saleVoucherByNo.get(editing.purContNo) : undefined;
+  const linkedSvInfo = linkedSv ? saleVoucherInfo.get(linkedSv.id) : undefined;
   const showForm = !!editing || isAdding;
   const lvDisplay = editing?.lvNo ?? lastLvNo ?? "";
   const doDateDefault = editing?.doDate ?? (isAdding ? today() : "");
@@ -611,6 +555,12 @@ export default async function YarnReceiptPage({
           />
         </div>
 
+        <div className="grid grid-cols-3 gap-px bg-black border border-black mb-3 no-print">
+          <div className="bg-white p-3"><div className="mono text-xl font-bold">{list.length}</div><div className="stat-label">Total Receipts</div></div>
+          <div className="bg-white p-3"><div className="mono text-xl font-bold text-red-600">{list.length - linkedCount}</div><div className="stat-label text-red-600 font-semibold">Unlinked</div></div>
+          <div className="bg-white p-3"><div className="mono text-xl font-bold text-green-600">{linkedCount}</div><div className="stat-label text-green-600 font-semibold">Linked to Sale Voucher</div></div>
+        </div>
+
         {params.error && ERROR_MESSAGES[params.error] && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             {ERROR_MESSAGES[params.error]}
@@ -649,10 +599,20 @@ export default async function YarnReceiptPage({
               <a href="/inventory/yarn-receipt?adding=1" className="btn btn-outline btn-sm">New</a>
               <button type="submit" form="iyr-save-form" className="btn btn-sm">Save</button>
               <PrintButton label="Print" />
-              {editing ? (
+              {editing?.purContNo ? (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  disabled
+                  title="Cannot delete: this receipt is linked to a Yarn Sale Voucher. Unlink it first."
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Delete
+                </button>
+              ) : editing ? (
                 <form action={deleteAction} className="inline">
                   <input type="hidden" name="id" value={editing.id} />
-                  <ConfirmButton message="Delete this voucher and its cartons? This cannot be undone.">
+                  <ConfirmButton message="Delete this voucher? This cannot be undone.">
                     Delete
                   </ConfirmButton>
                 </form>
@@ -677,7 +637,6 @@ export default async function YarnReceiptPage({
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <input type="hidden" name="one" defaultValue="1" readOnly />
               <AutoAmount qty="qtyLbs" rate="ratePerLbs" target="amount" />
-              <RowCalc target="netLbs" a="netKgs" factor={2.2046} round={3} />
               <YarnReceiptCounts />
               <AutoFill
                 watch="purContNo"
@@ -772,7 +731,7 @@ export default async function YarnReceiptPage({
                         </select>
                       </div>
 
-                      <div className="md:col-span-6">
+                      <div className="md:col-span-12">
                         <label className="label block mb-1">Conv.Cont No (F9)</label>
                         <FindingPicker
                           name="convContNo"
@@ -781,17 +740,6 @@ export default async function YarnReceiptPage({
                           columns={convContractColumns}
                           title="GREY CONVERSION CONTRACT LIST"
                           placeholder="Select conv contract"
-                        />
-                      </div>
-                      <div className="md:col-span-6">
-                        <label className="label block mb-1">Sale Voucher (F9) <span className="text-[9px] text-[var(--muted)]">(external yarn sale — optional info)</span></label>
-                        <FindingPicker
-                          name="purContNo"
-                          defaultValue={editing?.purContNo ?? ""}
-                          rows={saleVoucherRows}
-                          columns={saleVoucherColumns}
-                          title="YARN SALE VOUCHER LIST (EXTERNAL)"
-                          placeholder="Attach sale voucher — optional"
                         />
                       </div>
                     </div>
@@ -896,43 +844,45 @@ export default async function YarnReceiptPage({
                   </div>
                 </div>
 
-                <div className="lg:col-span-4">
-                  <div className="border border-black">
-                    <div className="overflow-x-auto" style={{ maxHeight: "72vh", overflowY: "auto" }}>
-                      <table>
-                        <thead>
-                          <tr>
-                            <th style={{ width: "44px" }}>Sr.#</th>
-                            <th>Carton No</th>
-                            <th className="text-right">Gross Kgs</th>
-                            <th className="text-right">Net Kgs</th>
-                            <th className="text-right">Net Lbs</th>
-                            <th style={{ width: "22px" }}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Array.from({ length: ROWS }).map((_, i) => {
-                            const l = lines[i];
-                            return (
-                              <tr key={i}>
-                                <td className="mono text-[12px] text-center">{i + 1}</td>
-                                <td><input name="cartonNo" className="input-box mono text-[12px]" defaultValue={l?.cartonNo ?? ""} /></td>
-                                <td><input name="grossKgs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.grossKgs ?? ""} /></td>
-                                <td><input name="netKgs" type="number" step="0.01" className="input-box mono text-[12px] text-right" defaultValue={l?.netKgs ?? ""} /></td>
-                                <td><input name="netLbs" type="number" step="0.001" className="input-box mono text-[12px] text-right bg-gray-50" defaultValue={l?.netLbs ?? ""} /></td>
-                                <td className="text-center">
-                                  <RowClearButton />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="text-[10px] text-[var(--muted)] p-2 border-t border-black">
-                      Net Lbs = Net Kgs × 2.2046. Header Qty Lbs is the carton total.
+                <div className="lg:col-span-4 space-y-3">
+                  <div className="p-3 border border-[var(--accent)] bg-[#eff6ff]">
+                    <label className="label block mb-1 text-[var(--accent)] font-semibold">Link to Yarn Sale Voucher (F9)</label>
+                    <FindingPicker
+                      name="purContNo"
+                      defaultValue={editing?.purContNo ?? ""}
+                      rows={saleVoucherRows}
+                      columns={saleVoucherColumns}
+                      title="YARN SALE VOUCHER LIST (EXTERNAL)"
+                      placeholder="— No link (pick a sale voucher) —"
+                    />
+                    <div className="text-[10px] text-[var(--muted)] mt-1">
+                      The external Yarn Sale Voucher this yarn was received against. Picking one fills Count and Brand; clear it (✕) to unlink.
                     </div>
                   </div>
+
+                  {editing && (linkedSv ? (
+                    <div className="p-3 bg-green-50 border border-green-300 text-[12px]">
+                      <div className="text-green-700 font-bold text-[11px] uppercase tracking-wide mb-2">Linked to Yarn Sale Voucher</div>
+                      <a href={`/external/yarn/sale?id=${linkedSv.id}`} target="_blank" rel="noreferrer" className="mono font-bold underline text-[14px]">{linkedSv.vNo}</a>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
+                        <div><span className="text-[var(--muted)]">Date: </span><b className="mono">{linkedSv.vDate ?? "—"}</b></div>
+                        <div><span className="text-[var(--muted)]">Count: </span><b className="mono">{linkedSvInfo?.count ? `${linkedSvInfo.count} ${countDescByCode.get(linkedSvInfo.count) ?? ""}` : "—"}</b></div>
+                        <div className="col-span-2"><span className="text-[var(--muted)]">Party: </span><b>{linkedSv.party ?? "—"}</b></div>
+                        <div><span className="text-[var(--muted)]">Bags: </span><b className="mono">{fmtN(linkedSvInfo?.bags ?? null, 2) || "—"}</b></div>
+                        <div><span className="text-[var(--muted)]">Lbs: </span><b className="mono">{fmtN(linkedSvInfo?.lbs ?? null) || "—"}</b></div>
+                        <div><span className="text-[var(--muted)]">Rate: </span><b className="mono">{fmtN(linkedSvInfo?.rate ?? null, 2) || "—"}</b></div>
+                        <div><span className="text-[var(--muted)]">Brand: </span><b className="mono">{linkedSvInfo?.brand || "—"}</b></div>
+                      </div>
+                    </div>
+                  ) : editing.purContNo ? (
+                    <div className="p-2 bg-amber-50 border border-amber-300 text-[11px] text-amber-700">
+                      Linked to {editing.purContNo}, but no yarn sale voucher with that number exists any more.
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-amber-50 border border-amber-300 text-[11px] text-amber-700">
+                      Not linked to any Yarn Sale Voucher — pick one above and save.
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -977,7 +927,20 @@ export default async function YarnReceiptPage({
                   const style = { color: isSel ? "white" : "inherit" } as const;
                   return (
                     <tr key={r.id} className={isSel ? "bg-black text-white" : "cursor-pointer hover:bg-gray-50"}>
-                      <td className="mono text-[13px]"><a href={href} className="no-underline block" style={style}>{r.vNo}</a></td>
+                      <td className="mono text-[13px]">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <a href={href} className="no-underline" style={style}>{r.vNo}</a>
+                          {r.purContNo ? (
+                            saleVoucherByNo.get(r.purContNo) ? (
+                              <a href={`/external/yarn/sale?id=${saleVoucherByNo.get(r.purContNo)!.id}`} target="_blank" rel="noreferrer" title="Open the linked Yarn Sale Voucher" className="text-[10px] px-1 bg-green-100 text-green-700 rounded border border-green-300 tracking-wider underline no-print">{r.purContNo}</a>
+                            ) : (
+                              <span className="text-[10px] px-1 bg-green-100 text-green-700 rounded border border-green-300 tracking-wider no-print">{r.purContNo}</span>
+                            )
+                          ) : (
+                            <span className="text-[9px] px-1 bg-red-100 text-red-600 rounded border border-red-200 uppercase tracking-widest no-print">Unlinked</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.vDate}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.trnType ?? "-"}</a></td>
                       <td className="mono text-[12px]"><a href={href} className="no-underline block" style={style}>{r.condition ?? "-"}</a></td>
