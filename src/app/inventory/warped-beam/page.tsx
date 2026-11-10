@@ -70,6 +70,13 @@ export default async function WarpedBeamReceivingPage({
 
   const selected = isEditing ? list.find((r) => r.id === idParam) ?? null : null;
   const editing = isAdding ? null : selected;
+  const editingPosted = editing?.lvNo
+    ? (await db
+        .select({ id: schema.transMain.id })
+        .from(schema.transMain)
+        .where(and(eq(schema.transMain.vtype, "EXT"), eq(schema.transMain.vno, editing.lvNo)))
+        .limit(1)).length > 0
+    : false;
 
   const lines = editing
     ? await db
@@ -420,12 +427,20 @@ export default async function WarpedBeamReceivingPage({
       else partyCoa = codeByDesc.get(rawParty) ?? "";
     }
 
-    const glNet = Math.round((header.totalAmountFinal ?? 0) * 100) / 100;
-    const glTotalGross = Math.round((header.amtTot ?? 0) * 100) / 100;
-    const glGst = Math.max(0, Math.round((glTotalGross - glNet) * 100) / 100);
+    // The sizing bill is the beam grid's Amount (+ freight), not the Net Weight
+    // box: that box is a yarn-weight calculation and is 0 on every live bill, so
+    // posting it left all sizing charges out of the ledger (owner 2026-11-10).
+    const glNet = Math.round((header.totalAmount ?? 0) * 100) / 100;
+    const glGst = Math.max(0, Math.round(glNet * (header.gstFtx ?? 0)) / 100);
     const glFurther = 0;
     const glTotal = Math.round((glNet + glGst + glFurther) * 100) / 100;
-    const warpingSizingCoa = header.bmSaleParty?.trim() ?? "";
+    // Bm Sale Party is stored as the account NAME; the ledger needs its code.
+    const rawBmSale = header.bmSaleParty?.trim() ?? "";
+    const warpingSizingCoa = !rawBmSale
+      ? ""
+      : codeSet.has(rawBmSale) || /^\d+(\.\d+)+$/.test(rawBmSale)
+        ? rawBmSale
+        : codeByDesc.get(rawBmSale) ?? "";
     const shouldPostGl = !!partyCoa && !!warpingSizingCoa && glTotal > 0;
     const gstOutputCoa = shouldPostGl && glGst > 0 ? await acc("GST_OUTPUT") : "";
     const furtherTaxCoa = shouldPostGl && glFurther > 0 ? await acc("FURTHER_TAX") : "";
@@ -863,6 +878,17 @@ export default async function WarpedBeamReceivingPage({
             sheetName="WarpedBeamReceiving"
           />
         </div>
+
+        {editing && !editingPosted && (
+          <div className="border border-amber-500 bg-amber-50 px-4 py-2 mb-4 text-[12px] text-amber-800 no-print">
+            This bill is <b>not in the ledger</b>.
+            {!editing.beamReceivingFrom?.trim() || !editing.bmSaleParty?.trim()
+              ? " It posts once both Beam Receiving From (sizing party) and Bm Sale Party are picked and the bill is saved."
+              : (editing.totalAmount ?? 0) <= 0
+                ? " Its grid Amount is 0 — enter Beam Length, Ends and the Sizing Rate, then save."
+                : " Save it again to post it."}
+          </div>
+        )}
 
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
