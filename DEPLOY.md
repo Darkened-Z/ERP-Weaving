@@ -1,71 +1,58 @@
 # Deploy Guide
 
-Ships to Vercel + Turso. All commands run from `app/`.
+Ships to Vercel + Turso. Commands run from `app/`.
 
-## 1 · Turso database
+## Where it runs
 
-No CLI needed (the Turso CLI has no native Windows build). Use the dashboard:
+| Site | Vercel project | Data |
+|---|---|---|
+| https://sk-mills.vercel.app | `sk-mills` (account darkenedz1) | Turso `sk-mills` (live mill data) |
+| https://erp-weaving.vercel.app | `erp-weaving` (account darkenedz1) | `demo/demo.db`, made-up sample data (`DEMO_DB=1`, no DB keys) |
 
-1. [app.turso.tech](https://app.turso.tech) → **Create Database** → name `sk-mills`, pick a region near users (we use `aws-ap-south-1`, matching Vercel `bom1`).
-2. Copy the **URL** (`libsql://sk-mills-<org>.turso.io`) → `TURSO_DATABASE_URL`.
-3. **Create Token** → `TURSO_AUTH_TOKEN`.
+Both projects build from GitHub `darkenedZ1/SK-Mills`, branch `main`.
 
-Put both in `app/.env.turso` (gitignored). Keep them out of `.env.local` so local `npm run dev` stays on the local SQLite file.
-
-## 2 · Push local data to Turso
-
-```bash
-node --env-file=.env.turso push-to-turso.mjs
-```
-
-Topologically drops and recreates every table parents-first (schema + data + indexes), then verifies row counts match local. Re-push-safe. Takes ~1–2 min against a Mumbai DB.
-
-Live DB: `libsql://sk-mills-darkened-z.aws-ap-south-1.turso.io`
-
-## 3 · Vercel project
+## Ship a change
 
 ```bash
-npm i -g vercel
-vercel                                # first run: creates project, links directory
+git push skmills main
 ```
 
-In Vercel dashboard → Project → Settings → Environment Variables, add for **Production**, **Preview**, and **Development**:
+That one push deploys both sites. Also push the mirrors:
 
-| Name | Value |
-|---|---|
-| `TURSO_DATABASE_URL` | from step 1 |
-| `TURSO_AUTH_TOKEN` | from step 1 |
-| `SESSION_SECRET` | run `openssl rand -hex 32` |
-| `NEXT_PUBLIC_APP_URL` | `https://<project>.vercel.app` (Production), leave blank for Preview |
-
-Redeploy after setting env vars:
 ```bash
-vercel --prod
+git push origin main
 ```
 
-## 4 · Custom domain
+```bash
+git push demo main
+```
 
-Vercel dashboard → Project → Settings → Domains → Add. Point your DNS's A/CNAME as instructed. Update `NEXT_PUBLIC_APP_URL` to match the custom domain.
+- Vercel Hobby only builds commits **authored by the account owner**, so this repo's local git identity must stay `darkenedZ1` (GitHub noreply address).
+- `npm run build` runs the regression tests (`npm test`) first; a failing test stops the deploy.
+- Check both deployments reached READY (Vercel dashboard, or `vercel api "/v6/deployments?projectId=<id>&limit=1" -Q D:/Softwares/Weaving/.vercel-skmills`). A push event has been dropped before.
+- Fallback for production only: `bash D:/Softwares/Weaving/deploy-skmills.sh` (deploys from a clean `git archive` with the darkenedz1 CLI).
 
-## 5 · Post-deploy checks
+## Environment variables
 
-- Log in with a seeded admin account (see `src/db/seed.ts`)
-- Command palette `Ctrl+K` returns tickets/contracts/accounts
-- Live Production Board `/production/board` reads production data
-- Create a test ticket → assign to yourself → verify in Team Workload
-- QR sticker page `/weaving/beams/qr` — scan a printed sticker with your phone, confirms URL resolves to the beam detail
+| Name | sk-mills | erp-weaving |
+|---|---|---|
+| `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | set | **never set** |
+| `SESSION_SECRET` | own value | own value — must differ from sk-mills (tokens carry the role) |
+| `NEXT_PUBLIC_APP_URL` | site URL | site URL |
+| `DEMO_DB` | — | `1` |
 
-## Ongoing
+Turso credentials for local scripts live in `app/.env.turso` (gitignored). Keep them out of `.env.local` so `npm run dev` never touches production.
 
-Schema changes:
-1. Edit `src/db/schema.ts`
-2. Write a `migrate-*.mjs` script that does `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ADD COLUMN`
-3. Run once locally, once against Turso (`TURSO_DATABASE_URL=... node migrate-*.mjs`)
+## Schema changes
 
-Never run destructive migrations against Turso without a `turso db shell` backup first.
+1. Edit `src/db/schema.ts`.
+2. Write a `migrate-*.mjs` script (`CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ADD COLUMN`, idempotent).
+3. Run it locally, then once against Turso with `node --env-file=.env.turso migrate-xyz.mjs`.
+4. Rebuild the demo database (`./node_modules/.bin/tsx demo/build-demo-db.ts`) or the demo breaks; re-scan it for client names and phone numbers.
+
+Take a backup first (Settings → Backup, or `/api/backup`) before anything destructive on Turso.
 
 ## Rollback
 
-Vercel: dashboard → Deployments → previous → **Promote to Production**. Zero-downtime.
-
-Turso: no automatic rollback. Keep the last known-good `data.db` locally as a backup; re-push via `push-to-turso.mjs` if needed.
+- Vercel: dashboard → Deployments → previous → **Promote to Production**.
+- Turso: restore a backup snapshot into a NEW local file with `npm run restore-backup -- backup.json.gz NEW.db`, inspect, then decide. There is no automatic rollback.

@@ -263,8 +263,9 @@ Before considering a page done, verify in the browser:
 
 ## 12. Deployment
 
-- Local DB: `data.db` (file-based, dev only)
-- Prod DB: Turso (`TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` in `.env.turso`)
-- Migrations: `migrate-*.mjs` scripts that run both locally then with `--env-file=.env.turso`
-- Deploy: `git push origin main` then `vercel --prod --yes` (aliased to `erp-weaving.vercel.app`)
+- Local DB: `data.db` (file-based, dev only, stale). For realistic local checks run with `DEMO_DB=1` (bundled `demo/demo.db`, login demo / demo123).
+- Prod DB: Turso (`TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` in `.env.turso`, never committed). Never point the dev server at it.
+- Migrations: `migrate-*.mjs` scripts that run both locally then with `--env-file=.env.turso`. Rebuild `demo/demo.db` (`demo/build-demo-db.ts`) after a schema change.
+- Deploy: `git push skmills main` — both Vercel projects (account darkenedz1) build from `darkenedZ1/SK-Mills`: **sk-mills.vercel.app** (production, Turso) and **erp-weaving.vercel.app** (public demo, `DEMO_DB=1`, no DB keys). Also push `origin` and `demo` (mirrors). Commits must be authored by `darkenedZ1` or Hobby blocks the build. `npm run build` runs the regression tests first.
+- Fallback (production only): `bash D:/Softwares/Weaving/deploy-skmills.sh` (CLI deploy from a clean `git archive`).
 - No AI markers in commits — no `Co-Authored-By: Claude` trailers, no `.claude` dirs in repo
