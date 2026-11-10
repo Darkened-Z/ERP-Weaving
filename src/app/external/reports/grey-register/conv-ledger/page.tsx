@@ -27,7 +27,7 @@ export default async function GreyRegisterConvLedgerPage({
   const to = p.to?.trim() || todayIso();
   const party = p.party?.trim() ?? "";
 
-  const [partyRows, accounts, financePartyCodes] = await Promise.all([
+  const [partyRows, accounts, financePartyCodes, godownParties] = await Promise.all([
     db
       .selectDistinct({ party: schema.extPackiParchi.saleParty })
       .from(schema.extPackiParchi)
@@ -44,6 +44,10 @@ export default async function GreyRegisterConvLedgerPage({
           sql`${schema.transDetail.accCode} LIKE '1.01.01.%'`,
         ),
       ),
+    db
+      .selectDistinct({ party: schema.extGodownStock.purchaseParty })
+      .from(schema.extGodownStock)
+      .where(eq(schema.extGodownStock.type, "STOCK")),
   ]);
   const codeByDesc = new Map(accounts.map((a) => [(a.description ?? "").trim(), a.code]));
   const descByCode = new Map(accounts.map((a) => [a.code, (a.description ?? "").trim()]));
@@ -51,6 +55,11 @@ export default async function GreyRegisterConvLedgerPage({
   for (const r of financePartyCodes) {
     const desc = descByCode.get(r.accCode ?? "");
     if (desc && !ppParties.has(desc)) ppParties.add(desc);
+  }
+  // Creditors who supply grey (their lots come from Grey Purchase In Stock, not Pakki Parchi).
+  for (const r of godownParties) {
+    const desc = (r.party ?? "").trim();
+    if (desc && codeByDesc.get(desc)?.startsWith("3.03.")) ppParties.add(desc);
   }
   const partyOpts = Array.from(ppParties).sort().map((v) => ({ value: v, label: v }));
   const partyCoa = party
@@ -85,6 +94,32 @@ export default async function GreyRegisterConvLedgerPage({
         })
         .from(schema.extPackiParchi)
         .where(and(...parchiConds))
+    : [];
+
+  // A creditor's lots are its grey purchases into stock (each posts GDN: Cr supplier = net meter × rate).
+  const godownLots = partyCoa.startsWith("3.03.")
+    ? await db
+        .select({
+          vNo: schema.extGodownStock.vNo,
+          vDate: schema.extGodownStock.vDate,
+          contNo: schema.extGodownStock.contNo,
+          dspQuality: schema.extGodownStock.dspQuality,
+          contactQuality: schema.extGodownStock.contactQuality,
+          than: schema.extGodownStock.than,
+          netMeter: schema.extGodownStock.netMeter,
+          meter: schema.extGodownStock.meter,
+          rate: schema.extGodownStock.rate,
+          total: schema.extGodownStock.total,
+        })
+        .from(schema.extGodownStock)
+        .where(
+          and(
+            eq(schema.extGodownStock.type, "STOCK"),
+            sql`trim(${schema.extGodownStock.purchaseParty}) = ${party}`,
+            gte(schema.extGodownStock.vDate, from),
+            lte(schema.extGodownStock.vDate, to),
+          ),
+        )
     : [];
 
   const contractNos = Array.from(
@@ -176,7 +211,7 @@ export default async function GreyRegisterConvLedgerPage({
     rate: number;
     dr: number;
     cr: number;
-    kind: "PP" | "FIN";
+    kind: "PP" | "GDN" | "FIN";
   };
 
   const lines: Line[] = [
@@ -200,6 +235,23 @@ export default async function GreyRegisterConvLedgerPage({
         dr,
         cr: 0,
         kind: "PP" as const,
+      };
+    }),
+    ...godownLots.map((r) => {
+      const mtr = r.netMeter ?? r.meter ?? 0;
+      const rate = r.rate ?? 0;
+      return {
+        date: r.vDate ?? "",
+        vno: r.vNo ?? "",
+        narration: constrByCode.get(String(r.dspQuality ?? "")) ?? r.contactQuality ?? r.dspQuality ?? "",
+        convCont: (r.contNo ?? "").trim(),
+        saleCont: "",
+        than: r.than ?? 0,
+        mtr,
+        rate,
+        dr: 0,
+        cr: r.total ?? Math.round(mtr * rate),
+        kind: "GDN" as const,
       };
     }),
     ...finance.map((r) => ({
@@ -328,7 +380,7 @@ export default async function GreyRegisterConvLedgerPage({
                     <td className="hidden sm:table-cell mono text-[12px]">{r.saleCont}</td>
                     <td className="text-[11px] sm:text-[12px] max-w-[120px] sm:max-w-none truncate">{r.narration}</td>
                     <td className="hidden sm:table-cell mono text-right">{r.than ? fmt(r.than) : ""}</td>
-                    <td className="mono text-right whitespace-nowrap text-[11px] sm:text-[13px]">{r.kind === "PP" ? fmt2(r.mtr) : ""}</td>
+                    <td className="mono text-right whitespace-nowrap text-[11px] sm:text-[13px]">{r.kind !== "FIN" ? fmt2(r.mtr) : ""}</td>
                     <td className="mono text-right whitespace-nowrap text-[11px] sm:text-[13px]">{r.rate ? fmt2(r.rate) : ""}</td>
                     <td className="mono text-right text-[11px] sm:text-[13px]">{r.dr ? fmt(r.dr) : ""}</td>
                     <td className="mono text-right text-[11px] sm:text-[13px]">{r.cr ? fmt(r.cr) : ""}</td>

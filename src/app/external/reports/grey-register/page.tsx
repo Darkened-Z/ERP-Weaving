@@ -6,6 +6,8 @@ import { db, schema } from "@/db";
 import { and, gte, lte, eq, sql, or } from "drizzle-orm";
 import { today as todayFn, monthsAgo } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
+import { Combobox } from "@/components/combobox";
+import { countLabelMap, richConstruction } from "@/lib/grey-quality";
 
 export const dynamic = "force-dynamic";
 
@@ -151,12 +153,32 @@ export default async function GreyRegisterPage({
     salConditions.push(sql`${schema.extGreySalContract.remarks} LIKE ${pat} ESCAPE '\\'`);
   }
 
-  const [accountRows, greyRows] = await Promise.all([
+  const [accountRows, greyRows, yarnCountList, contractParties] = await Promise.all([
     db.select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description }).from(schema.chartOfAccounts),
-    db.select({ code: schema.greyConstruction.code, description: schema.greyConstruction.description }).from(schema.greyConstruction),
+    db.select({
+      code: schema.greyConstruction.code,
+      description: schema.greyConstruction.description,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+    }).from(schema.greyConstruction).orderBy(schema.greyConstruction.code),
+    db.select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type }).from(schema.yarnCounts),
+    db.all<{ party: string }>(sql`SELECT party FROM ext_grey_pur_contract WHERE party IS NOT NULL AND party <> ''
+      UNION SELECT party FROM ext_grey_sal_contract WHERE party IS NOT NULL AND party <> '' ORDER BY party`),
   ]);
   const partyCodeByName = new Map(accountRows.map((r) => [r.description, r.code]));
   const greyDescMap = new Map(greyRows.map((r) => [r.code, r.description]));
+  const countLabels = countLabelMap(yarnCountList);
+  const partyOpts = contractParties.map((p) => {
+    const c = partyCodeByName.get(p.party);
+    return { value: p.party, label: c ? `${p.party} (${c})` : p.party };
+  });
+  const qualityOpts = greyRows
+    .filter((g) => g.code)
+    .map((g) => ({ value: g.code!, label: `${g.code} — ${richConstruction(g, countLabels) || g.description || ""}` }));
 
   
   const despatchDetailRows = await db
@@ -329,11 +351,11 @@ export default async function GreyRegisterPage({
             </div>
             <div>
               <label className="label block mb-1">Short Tittle</label>
-              <input type="text" name="shortTittle" defaultValue={shortTittle} className="input-box mono" placeholder="Grey Code" />
+              <Combobox name="shortTittle" options={qualityOpts} defaultValue={shortTittle} placeholder="Grey Code" />
             </div>
             <div>
               <label className="label block mb-1">Tittle</label>
-              <input type="text" name="tittle" defaultValue={tittle} className="input-box" placeholder="Party" />
+              <Combobox name="tittle" options={partyOpts} defaultValue={tittle} placeholder="Party" className="input-box" />
             </div>
             <div>
               <label className="label block mb-1">Code</label>
@@ -352,7 +374,7 @@ export default async function GreyRegisterPage({
           <div className="border border-black p-4 mb-3 grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <label className="label block mb-1">Code</label>
-              <input type="text" name="reg2_code" defaultValue={reg2Code} className="input-box mono" placeholder="Grey Code" />
+              <Combobox name="reg2_code" options={qualityOpts} defaultValue={reg2Code} placeholder="Grey Code (quality)" />
             </div>
             <div>
               <label className="label block mb-1">Description</label>
