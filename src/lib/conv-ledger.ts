@@ -132,7 +132,13 @@ export async function loadConvLedger(party: string, partyCoa: string, from: stri
           .where(
             and(
               eq(schema.transDetail.accCode, partyCoa),
-              inArray(schema.transDetail.vtype, [...CONV_LEDGER_FINANCE_TYPES]),
+              // A creditor who weaves for us also buys our yarn (YSV, Dr party); without it
+              // its balance never matched the account (owner 2026-11-10). Debtors' yarn
+              // lives in the Weaving Counts report, so it stays out of theirs.
+              inArray(
+                schema.transDetail.vtype,
+                partyCoa.startsWith("3.03.") ? [...CONV_LEDGER_FINANCE_TYPES, "YSV"] : [...CONV_LEDGER_FINANCE_TYPES],
+              ),
               gte(schema.transMain.vdate, from),
               lte(schema.transMain.vdate, to),
               sql`COALESCE(${schema.transDetail.trnType}, ${schema.transMain.trnType}, '') != 'ADJUSTMENT'`,
