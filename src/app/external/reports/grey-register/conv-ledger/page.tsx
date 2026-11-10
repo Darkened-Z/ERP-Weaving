@@ -100,6 +100,7 @@ export default async function GreyRegisterConvLedgerPage({
   const godownLots = partyCoa.startsWith("3.03.")
     ? await db
         .select({
+          id: schema.extGodownStock.id,
           vNo: schema.extGodownStock.vNo,
           vDate: schema.extGodownStock.vDate,
           contNo: schema.extGodownStock.contNo,
@@ -108,8 +109,6 @@ export default async function GreyRegisterConvLedgerPage({
           than: schema.extGodownStock.than,
           netMeter: schema.extGodownStock.netMeter,
           meter: schema.extGodownStock.meter,
-          rate: schema.extGodownStock.rate,
-          total: schema.extGodownStock.total,
         })
         .from(schema.extGodownStock)
         .where(
@@ -123,7 +122,10 @@ export default async function GreyRegisterConvLedgerPage({
     : [];
 
   const contractNos = Array.from(
-    new Set(parchis.flatMap((r) => [r.convContNo, r.convContNoSale, r.convContSale2].filter(Boolean) as string[])),
+    new Set([
+      ...parchis.flatMap((r) => [r.convContNo, r.convContNoSale, r.convContSale2].filter(Boolean) as string[]),
+      ...godownLots.map((r) => (r.contNo ?? "").trim()).filter(Boolean),
+    ]),
   );
   const [convContracts, salContracts, constructions, counts] = await Promise.all([
     contractNos.length
@@ -132,6 +134,7 @@ export default async function GreyRegisterConvLedgerPage({
             contNo: schema.extGreyConvContract.contNo,
             grayQltyCode: schema.extGreyConvContract.grayQltyCode,
             grayCode: schema.extGreyConvContract.grayCode,
+            convRate: schema.extGreyConvContract.convRatePerMtr,
           })
           .from(schema.extGreyConvContract)
           .where(inArray(schema.extGreyConvContract.contNo, contractNos))
@@ -160,6 +163,7 @@ export default async function GreyRegisterConvLedgerPage({
     constructions.map((g) => [String(g.code), fullConstruction(g, countLabels) || g.description || String(g.code)]),
   );
   const qualityOfContract = new Map<string, string>();
+  const convRateOfContract = new Map(convContracts.map((c) => [c.contNo, c.convRate ?? 0]));
   for (const c of convContracts) {
     const code = c.grayQltyCode ?? c.grayCode ?? "";
     if (c.contNo) qualityOfContract.set(c.contNo, constrByCode.get(String(code)) ?? String(code));
@@ -212,6 +216,7 @@ export default async function GreyRegisterConvLedgerPage({
     dr: number;
     cr: number;
     kind: "PP" | "GDN" | "FIN";
+    href?: string;
   };
 
   const lines: Line[] = [
@@ -235,12 +240,16 @@ export default async function GreyRegisterConvLedgerPage({
         dr,
         cr: 0,
         kind: "PP" as const,
+        href: `/external/grey/packi-parchi/${r.id}/conv-bill`,
       };
     }),
+    // The creditor is owed conversion: net metres × the conv rate of the lot's Pur Conv Contract.
+    // A lot with no contract (or a contract with no conv rate) shows without an amount.
     ...godownLots.map((r) => {
       const mtr = r.netMeter ?? r.meter ?? 0;
-      const rate = r.rate ?? 0;
+      const rate = convRateOfContract.get((r.contNo ?? "").trim()) ?? 0;
       return {
+        href: `/external/grey/godown-stock?id=${r.id}`,
         date: r.vDate ?? "",
         vno: r.vNo ?? "",
         narration: constrByCode.get(String(r.dspQuality ?? "")) ?? r.contactQuality ?? r.dspQuality ?? "",
@@ -250,7 +259,7 @@ export default async function GreyRegisterConvLedgerPage({
         mtr,
         rate,
         dr: 0,
-        cr: r.total ?? Math.round(mtr * rate),
+        cr: Math.round(mtr * rate * 100) / 100,
         kind: "GDN" as const,
       };
     }),
@@ -375,7 +384,11 @@ export default async function GreyRegisterConvLedgerPage({
                 rows.map((r, i) => (
                   <tr key={`${r.vno}-${i}`}>
                     <td className="mono text-[11px] sm:text-[12px]">{r.date}</td>
-                    <td className="mono text-[11px] sm:text-[12px] font-bold">{r.vno}</td>
+                    <td className="mono text-[11px] sm:text-[12px] font-bold">
+                      {r.href ? (
+                        <a href={r.href} target="_blank" rel="noreferrer" className="underline underline-offset-2 print:no-underline" title={r.kind === "PP" ? "Open the conversion bill" : "Open the grey purchase voucher"}>{r.vno}</a>
+                      ) : r.vno}
+                    </td>
                     <td className="hidden sm:table-cell mono text-[12px]">{r.convCont}</td>
                     <td className="hidden sm:table-cell mono text-[12px]">{r.saleCont}</td>
                     <td className="text-[11px] sm:text-[12px] max-w-[120px] sm:max-w-none truncate">{r.narration}</td>
