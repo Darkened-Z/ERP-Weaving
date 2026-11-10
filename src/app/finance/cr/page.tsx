@@ -817,6 +817,17 @@ export default async function CashReceiptPage({
                       );
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={5}></td>
+                      <td className="align-top"><PartyBalance balances={partyBalances} /></td>
+                      <td className="align-top">
+                        <div className="label mb-1 text-right">Balance Amount</div>
+                        <VoucherBalance initial={formVoucher?.balanceAmount ?? 0} fieldName="line_amount" />
+                      </td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
               <div className="text-[10px] text-[var(--muted)] mt-2">
@@ -853,16 +864,6 @@ export default async function CashReceiptPage({
               <a href={BASE} className="btn btn-outline btn-sm">
                 Exit
               </a>
-              <div className="ml-auto flex items-end gap-3">
-                <PartyBalance balances={partyBalances} />
-                <div className="w-44">
-                  <label className="label block mb-1 text-right">Balance Amount</label>
-                  <VoucherBalance
-                    initial={formVoucher?.balanceAmount ?? 0}
-                    fieldName="line_amount"
-                  />
-                </div>
-              </div>
             </div>
           </form>
         </div>

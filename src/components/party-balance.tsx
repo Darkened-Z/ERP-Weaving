@@ -42,7 +42,7 @@ export function PartyBalance({ balances, fieldName = "line_acc" }: { balances: R
   return (
     <div className="text-right">
       <div className="label mb-1">Party Balance</div>
-      <div className="input-box mono text-right font-bold whitespace-nowrap" style={{ minWidth: 160 }} title={code || "Pick an account on a line"}>
+      <div className="input-box mono text-right font-bold whitespace-nowrap" style={{ color: "#1d4ed8", borderColor: "#1d4ed8" }} title={code || "Pick an account on a line"}>
         {bal == null ? "—" : `${fmt(Math.abs(bal))} ${bal >= 0 ? "Dr" : "Cr"}`}
       </div>
       {code && <div className="text-[10px] text-[var(--muted)] mono mt-0.5">{code}</div>}

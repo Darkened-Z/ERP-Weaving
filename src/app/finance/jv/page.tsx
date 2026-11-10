@@ -1013,6 +1013,13 @@ export default async function JournalVoucherPage({
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={5}></td>
+                        <td className="align-top"><PartyBalance balances={partyBalances} fieldName="title" /></td>
+                        <td colSpan={5}></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
                 <div className="text-[10px] text-[var(--muted)] mt-2">
@@ -1057,7 +1064,6 @@ export default async function JournalVoucherPage({
                   </a>
                 </div>
                 <div className="ml-auto">
-                  <PartyBalance balances={partyBalances} fieldName="title" />
                   <JvBalanceBar initialDr={initialDr} initialCr={initialCr} />
                 </div>
               </div>

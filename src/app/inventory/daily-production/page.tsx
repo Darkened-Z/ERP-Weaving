@@ -65,6 +65,16 @@ export default async function DailyProductionPage({
 
   const selected = isEditing ? list.find((r) => r.id === idParam) ?? null : null;
   const editing = isAdding ? null : selected;
+  // Production is entered the next day, so a new voucher starts on the date of
+  // the voucher entered last, not today (owner 2026-11-09).
+  const [lastEntered] = editing
+    ? []
+    : await db
+        .select({ vDate: schema.intDailyProduction.vDate })
+        .from(schema.intDailyProduction)
+        .orderBy(desc(schema.intDailyProduction.id))
+        .limit(1);
+  const newVDate = lastEntered?.vDate || today();
 
   const setRows = editing
     ? await db
@@ -1593,7 +1603,7 @@ export default async function DailyProductionPage({
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-x-3 gap-y-3 gform">
                   <div className="md:col-span-2">
                     <label className="label block mb-1">Date</label>
-                    <DateBox name="vDate" className="input-box mono" defaultValue={editing?.vDate ?? today()} required />
+                    <DateBox name="vDate" className="input-box mono" defaultValue={editing?.vDate ?? newVDate} required />
                   </div>
                   <div className="md:col-span-2">
                     <label className="label block mb-1">No.</label>

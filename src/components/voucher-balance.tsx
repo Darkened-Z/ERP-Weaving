@@ -39,6 +39,7 @@ export function VoucherBalance({
       tabIndex={-1}
       value={new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(val)}
       className="input-box mono text-right bg-gray-100 font-bold"
+      style={{ color: "#dc2626", borderColor: "#dc2626" }}
     />
   );
 }

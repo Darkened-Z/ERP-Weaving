@@ -921,6 +921,17 @@ export default async function BankPaymentPage({
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={5}></td>
+                        <td className="align-top"><PartyBalance balances={partyBalances} /></td>
+                        <td className="align-top">
+                          <div className="label mb-1 text-right">Balance Amount</div>
+                          <VoucherBalance initial={headVoucher?.balanceAmount ?? 0} />
+                        </td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
@@ -964,13 +975,6 @@ export default async function BankPaymentPage({
                 <a href={BASE} className="btn btn-outline btn-sm">
                   Exit
                 </a>
-                <div className="ml-auto flex items-end gap-4">
-                  <PartyBalance balances={partyBalances} />
-                  <div>
-                    <label className="label block mb-1">Balance Amount</label>
-                    <VoucherBalance initial={headVoucher?.balanceAmount ?? 0} />
-                  </div>
-                </div>
               </div>
 
               <RowAutoFill watch="line_acc" map={lineTitleMap} />

@@ -6,6 +6,7 @@ import { db, schema } from "@/db";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { today as todayFn, monthsAgo } from "@/lib/time";
 import { DateBox } from "@/components/date-box";
+import { countLabelMap, normQuality, richConstruction } from "@/lib/grey-quality";
 
 export const dynamic = "force-dynamic";
 
@@ -48,18 +49,47 @@ export default async function GreyPartyRegisterPage({
     conditions.push(sql`${schema.extGodownStock.contactQuality} LIKE ${pat} ESCAPE '\\'`);
   }
 
-  const [stockRows, salContracts, convContracts, accountRows] = await Promise.all([
+  const [stockRows, salContracts, convContracts, accountRows, constructions, yarnCountList] = await Promise.all([
     db.select().from(schema.extGodownStock).where(and(...conditions)).orderBy(sql`purchase_party, v_date, id`),
     db.select({ contractNo: schema.extGreySalContract.contractNo, party: schema.extGreySalContract.party }).from(schema.extGreySalContract),
-    db.select({ contNo: schema.extGreyConvContract.contNo, party: schema.extGreyConvContract.party }).from(schema.extGreyConvContract),
+    db.select({
+      contNo: schema.extGreyConvContract.contNo,
+      party: schema.extGreyConvContract.party,
+      convRate: schema.extGreyConvContract.convRatePerMtr,
+      grayRate: schema.extGreyConvContract.grayRatePerMtr,
+      rateMtr: schema.extGreyConvContract.rateMtr,
+    }).from(schema.extGreyConvContract),
     db.select({ description: schema.chartOfAccounts.description, code: schema.chartOfAccounts.code }).from(schema.chartOfAccounts),
+    db.select({
+      code: schema.greyConstruction.code,
+      reed: schema.greyConstruction.reed,
+      pick: schema.greyConstruction.pick,
+      warpCount: schema.greyConstruction.warpCount,
+      warp2: schema.greyConstruction.warp2,
+      weftCount: schema.greyConstruction.weftCount,
+      weft2: schema.greyConstruction.weft2,
+    }).from(schema.greyConstruction),
+    db.select({ countCode: schema.yarnCounts.countCode, description: schema.yarnCounts.description, type: schema.yarnCounts.type }).from(schema.yarnCounts),
   ]);
 
   // Sale party for a stock line = the party on its sale contract (sal cont # or grey sale cont).
   const salPartyByContract = new Map<string, string>();
   for (const c of salContracts) if (c.contractNo && c.party) salPartyByContract.set(c.contractNo, c.party);
   for (const c of convContracts) if (c.contNo && c.party && !salPartyByContract.has(c.contNo)) salPartyByContract.set(c.contNo, c.party);
+  // A line sold on a conversion contract (GCC-) has no sale rate of its own: its rate is the contract's conversion rate.
+  const convRateByContract = new Map<string, number>();
+  for (const c of convContracts) {
+    const r = c.convRate || c.grayRate || c.rateMtr || 0;
+    if (c.contNo && r > 0) convRateByContract.set(c.contNo, r);
+  }
   const partyCodeByName = new Map(accountRows.map((r) => [r.description, r.code]));
+  const constrByCode = new Map(constructions.map((c) => [c.code, c]));
+  const countLabels = countLabelMap(yarnCountList);
+  const qualityText = (s: typeof stockRows[number]) => {
+    const code = normQuality(s.dspQuality || s.contactQuality, new Set(constrByCode.keys()));
+    const c = constrByCode.get(code);
+    return c ? richConstruction(c, countLabels) : s.contactQuality || s.dspQuality || "";
+  };
 
   type Line = {
     date: string;
@@ -77,14 +107,14 @@ export default async function GreyPartyRegisterPage({
 
   const line = (s: typeof stockRows[number]): Line => {
     const mtr = s.netMeter ?? s.meter ?? 0;
-    const rate = s.rateSal ?? 0;
     const cost = s.rate ?? 0;
     const commPct = s.commission ?? 0;
     const salCont = s.salContNo || s.greySaleCont || "";
+    const rate = s.rateSal || (salCont && convRateByContract.get(salCont)) || 0;
     return {
       date: s.vDate ?? "",
       vNo: s.vNo ?? "",
-      quality: s.contactQuality || s.dspQuality || "",
+      quality: qualityText(s),
       remarks: s.remarks ?? "",
       salCont,
       salParty: (salCont && salPartyByContract.get(salCont)) || "",
