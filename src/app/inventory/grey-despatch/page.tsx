@@ -35,7 +35,7 @@ const COUNT_ROWS = 5;
 export default async function GreyDespatchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; pending?: string; contract?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; pending?: string; contract?: string; thru?: string; thans?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -580,6 +580,20 @@ export default async function GreyDespatchPage({
         }
       }
     }
+    // A than cannot leave before it was woven (IGD-0011 / IGD-0015 carried thans
+    // produced after their despatch date).
+    if (prodSerials.length && data.vDate) {
+      const late = await db
+        .select({ mm: schema.intDailyProductionSet.mmThanSrNo, made: schema.intDailyProduction.vDate })
+        .from(schema.intDailyProductionSet)
+        .innerJoin(schema.intDailyProduction, eq(schema.intDailyProduction.id, schema.intDailyProductionSet.productionId))
+        .where(and(inArray(schema.intDailyProductionSet.mmThanSrNo, prodSerials), sql`${schema.intDailyProduction.vDate} > ${data.vDate}`));
+      if (late.length) {
+        const list = late.map((r) => `${r.mm} (woven ${r.made})`).join(", ");
+        const q = isUpdate ? `?id=${id}&error=than_after_date` : `?adding=1&error=than_after_date`;
+        redirect("/inventory/grey-despatch" + q + `&thans=${encodeURIComponent(list)}`);
+      }
+    }
     if (opnIds.length) {
       const existing = await db
         .select({ id: schema.inventoryOpening.id, dlv: schema.inventoryOpening.dlvStatus })
@@ -1024,6 +1038,11 @@ export default async function GreyDespatchPage({
         {params.error === "than_used" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             One of the entered mm/Than Sr No values is already delivered on another despatch.
+          </div>
+        )}
+        {params.error === "than_after_date" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Not saved: {params.thans ?? "a than"} was woven after this despatch date. Change the despatch date or remove that than.
           </div>
         )}
         {params.error === "than_count" && (
