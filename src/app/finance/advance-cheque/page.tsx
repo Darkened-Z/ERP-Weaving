@@ -614,6 +614,13 @@ export default async function AdvanceChequePage({
   const params = await searchParams;
   const session = await getSession();
   const fyCode = await currentFy();
+  // Shown on the issue form so the operator knows the number before saving.
+  const issueFy = (await fyCodeForDate(today())) || fyCode;
+  const [issueMax] = await db
+    .select({ max: sql<number>`coalesce(max(vno), 0)` })
+    .from(schema.transMain)
+    .where(and(eq(schema.transMain.fyCode, issueFy), eq(schema.transMain.vtype, VTYPE)));
+  const nextIssueVno = (issueMax?.max ?? 0) + 1;
 
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
   const hasId = Number.isFinite(idParam) && idParam > 0;
@@ -924,6 +931,11 @@ export default async function AdvanceChequePage({
                 : isReissue
                 ? "Re-issue Advance Cheque — prefilled from the bounced cheque, same cheque no. Change the no if the bank gave a new leaf."
                 : "New Advance Cheque — Issue (one party, any number of cheques + cash)"}
+              {!isEditForm && (
+                <span className="ml-3 normal-case tracking-normal font-bold mono text-[13px] text-[var(--accent)]">
+                  Next voucher: #{nextIssueVno}{issueFy ? ` · FY ${issueFy}` : ""}
+                </span>
+              )}
             </div>
             <form action={issueCheques}>
               {isEditForm && <input type="hidden" name="edit_id" value={idParam} />}
