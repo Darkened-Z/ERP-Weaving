@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 export default async function WarpedBeamReceivingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string }>;
+  searchParams: Promise<{ id?: string; adding?: string; error?: string; find?: string; thru?: string; beams?: string }>;
 }) {
   const params = await searchParams;
   const idParam = params.id ? parseInt(params.id, 10) : NaN;
@@ -392,6 +392,26 @@ export default async function WarpedBeamReceivingPage({
         ? `/inventory/warped-beam?id=${id}&`
         : `/inventory/warped-beam?adding=1&`;
     if (totalLength <= 0) redirect(errBase + "error=beam_length_required");
+
+    // A beam still mounted on a loom cannot be received again: the save used to
+    // skip it silently, so the bill showed it LOADED while the beam kept weaving
+    // its old cycle (AJ-40 on SET-0016, AJ-13 on SET-0025). Refuse instead.
+    const yesBeams = validLines.filter((l) => l.beamNo && l.beamStatus === "LOADED").map((l) => l.beamNo!);
+    if (yesBeams.length) {
+      const [thisBill] = Number.isFinite(id) && id > 0
+        ? await db.select({ vNo: schema.intWarpedBeamReceiving.vNo }).from(schema.intWarpedBeamReceiving).where(eq(schema.intWarpedBeamReceiving.id, id))
+        : [];
+      const MOUNTED = new Set(["KNOTTING", "PRODUCTION", "RUNNING", "F-ROLL", "R-CUT", "RE-KNOT"]);
+      const onLoom = (await db
+        .select({ beamNo: schema.beams.beamNo, statusWrk: schema.beams.statusWrk, brVno: schema.beams.brVno, shed: schema.beams.shed, loomNo: schema.beams.loomNo })
+        .from(schema.beams)
+        .where(inArray(schema.beams.beamNo, yesBeams)))
+        .filter((b) => MOUNTED.has((b.statusWrk ?? "").toUpperCase()) && b.brVno !== (thisBill?.vNo ?? null));
+      if (onLoom.length) {
+        const list = onLoom.map((b) => `${b.beamNo}${b.loomNo != null ? ` (Shed ${b.shed ?? "?"} Loom ${b.loomNo})` : ""}`).join(", ");
+        redirect(errBase + `error=beam_on_loom&beams=${encodeURIComponent(list)}`);
+      }
+    }
 
     header.totalAmount =
       Math.round(
@@ -890,6 +910,11 @@ export default async function WarpedBeamReceivingPage({
           </div>
         )}
 
+        {params.error === "beam_on_loom" && (
+          <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
+            Not saved: {params.beams ?? "a beam"} is still mounted on a loom. Mark its last roll (L-ROLL) or EMPTY in Daily Production first, or set its Load to NO on this bill.
+          </div>
+        )}
         {params.error === "code_exists" && (
           <div className="border-2 border-[var(--danger)] px-4 py-2 mb-4 text-[12px] text-[var(--danger)] font-semibold mono">
             Voucher number already exists. Try again.
