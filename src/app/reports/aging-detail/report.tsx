@@ -332,6 +332,7 @@ export async function AgingDetailReport({
                   <thead>
                     <tr>
                       <th style={{ width: side === "CR" ? 115 : 70 }}>{side === "CR" ? "VOUCHER" : "V.NO"}</th>
+                      {side === "DB" && <th style={{ width: 95 }}>DATE</th>}
                       {side === "CR" && <>
                         <th style={{ width: 105 }}>PURCHASE DATE</th>
                         <th className="text-right" style={{ width: 85 }}>TERM DAYS</th>
@@ -340,10 +341,7 @@ export async function AgingDetailReport({
                       <th style={{ width: 50 }}>VT</th>
                       <th>NARRATION</th>
                       <th className="text-right" style={{ width: 110 }}>{moneyLabel}</th>
-                      {side === "DB" && <>
-                        <th style={{ width: 90 }}>DATE</th>
-                        <th style={{ width: 90 }}>Due DATE</th>
-                      </>}
+                      {side === "DB" && <th style={{ width: 90 }}>Due DATE</th>}
                       <th className="text-right" style={{ width: 120 }}>ACCUM. AMT</th>
                       <th className="text-right" style={{ width: 70 }}>AGE DAYS</th>
                     </tr>
@@ -352,6 +350,7 @@ export async function AgingDetailReport({
                     {pt.lines.map((l, i) => (
                       <tr key={`${l.vtype}-${l.vno}-${i}`}>
                         <td className="mono font-bold">{side === "CR" ? l.voucherLabel : l.vno}</td>
+                        {side === "DB" && <td className="mono text-[12px] whitespace-nowrap">{l.vdate}</td>}
                         {side === "CR" && <>
                           <td className="mono text-[12px]">{l.vdate}</td>
                           <td className="mono text-right">{l.termDays ?? "—"}</td>
@@ -360,10 +359,7 @@ export async function AgingDetailReport({
                         <td className="mono">{l.vtype}</td>
                         <td className="text-[12px]">{l.narration}{l.originalAmount - l.amount > 0.001 && <span className="block text-[11px] text-[var(--muted)]">Original {fmt(l.originalAmount)} · {side === "CR" ? "Paid" : "Received"} {fmt(l.originalAmount - l.amount)}</span>}</td>
                         <td className="mono text-right">{fmt(l.amount)}</td>
-                        {side === "DB" && <>
-                          <td className="mono text-[12px]">{l.vdate}</td>
-                          <td className="mono text-[12px]">{l.dueDate}</td>
-                        </>}
+                        {side === "DB" && <td className="mono text-[12px]">{l.dueDate}</td>}
                         <td className="mono text-right">{fmt(l.accum)}</td>
                         <td className="mono text-right font-semibold">{l.days}</td>
                       </tr>

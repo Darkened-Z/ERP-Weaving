@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
 import { ExportPdfButton, WaPdfButton } from "@/components/wa-pdf-button";
@@ -10,6 +10,7 @@ import { numberToWords } from "@/lib/number-to-words";
 import { countLabelMap, fullConstruction, normQuality } from "@/lib/grey-quality";
 import { QrImage } from "@/app/weaving/beams/qr/qr-image";
 import { BRAND } from "@/lib/brand";
+import { loadConvLedger } from "@/lib/conv-ledger";
 
 export const dynamic = "force-dynamic";
 
@@ -171,24 +172,15 @@ export default async function PackiConvBillPage({
         .limit(1)
     : [];
 
+  // Previous = the party's Grey Register conversion-ledger balance just before
+  // this parchi (owner 2026-11-09), not its general-ledger balance: the GL also
+  // carries grey sale bills, so it overstated what is owed for conversion.
   let previous = 0;
-  if (partyAcc?.code && pp.vDate) {
-    const [row] = await db
-      .select({
-        dr: sql<number>`COALESCE(SUM(${schema.transDetail.debit}),0)`,
-        cr: sql<number>`COALESCE(SUM(${schema.transDetail.credit}),0)`,
-      })
-      .from(schema.transDetail)
-      .innerJoin(
-        schema.transMain,
-        and(
-          eq(schema.transMain.fyCode, schema.transDetail.fyCode),
-          eq(schema.transMain.vtype, schema.transDetail.vtype),
-          eq(schema.transMain.vno, schema.transDetail.vno),
-        ),
-      )
-      .where(and(eq(schema.transDetail.accCode, partyAcc.code), lt(schema.transMain.vdate, pp.vDate)));
-    previous = rnd(Number(row?.dr ?? 0) - Number(row?.cr ?? 0));
+  if (partyName && pp.vDate) {
+    const ledger = await loadConvLedger(partyName, partyAcc?.code ?? "", "0000-01-01", pp.vDate);
+    const at = ledger.findIndex((l) => l.kind === "PP" && l.refId === pp.id);
+    const before = at >= 0 ? ledger.slice(0, at) : ledger;
+    previous = rnd(before[before.length - 1]?.balance ?? 0);
   }
   const remaining = rnd(previous + netAmount);
 
