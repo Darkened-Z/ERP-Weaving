@@ -17,6 +17,7 @@ import { num, intVal, txt, fmtMoney as formatNum } from "@/lib/form";
 import { DateBox } from "@/components/date-box";
 import { GrowRows } from "@/components/grow-rows";
 import { AdvanceChequeCalendar } from "./calendar";
+import { issueLegNarration, issueLegNote } from "@/lib/advance-cheque-narration";
 
 export const dynamic = "force-dynamic";
 
@@ -226,6 +227,14 @@ async function issueCheques(formData: FormData) {
       `#${lines.map((l) => l.chqNo).join(", #")}` +
       `${cash > 0 ? ` + CASH ${cash}` : ""}` +
       `${lines.map((l) => l.narration).filter(Boolean).join("; ") ? ` — ${lines.map((l) => l.narration).filter(Boolean).join("; ")}` : ""}`;
+    const titles = new Map(
+      (
+        await db
+          .select({ code: schema.chartOfAccounts.code, description: schema.chartOfAccounts.description })
+          .from(schema.chartOfAccounts)
+          .where(inArray(schema.chartOfAccounts.code, [party, ...lines.map((l) => l.adv)]))
+      ).map((a) => [a.code, (a.description ?? "").trim() || a.code]),
+    );
 
     await db.transaction(async (tx) => {
       // Re-posting an edit: clear the old rows first, then write the voucher
@@ -256,7 +265,15 @@ async function issueCheques(formData: FormData) {
       for (const l of lines) {
         dets.push({
           fyCode: fy, vtype: VTYPE, vno, srno: srno++, accCode: l.adv, partyCode: party,
-          narration: `${narr}`, debit: 0, credit: l.amount, chqNo: l.chqNo, chqDate: l.chqDate,
+          narration: issueLegNarration({
+            party: titles.get(party) ?? party,
+            bankAdv: titles.get(l.adv) ?? l.adv,
+            chqNo: l.chqNo,
+            chqDate: l.chqDate,
+            amount: l.amount,
+            note: l.narration,
+          }),
+          debit: 0, credit: l.amount, chqNo: l.chqNo, chqDate: l.chqDate,
         });
       }
       if (cash > 0 && cashAcc) {
@@ -596,6 +613,7 @@ type Chq = {
   party: string;
   bankAdv: string;
   amount: number;
+  note?: string;
   cash: number;
   /** How many cheques share this voucher — >1 means the payment was split. */
   chqCount?: number;
@@ -740,6 +758,7 @@ export default async function AdvanceChequePage({
           party: it.dr?.accCode ?? "",
           bankAdv: leg.accCode ?? "",
           amount: leg.credit ?? 0,
+          note: issueLegNote(leg.narration, chqNo, leg.credit ?? 0, li, legs.length),
           cash: li === 0 ? it.cash : 0,
           chqCount: legs.length,
           status,
@@ -1017,7 +1036,7 @@ export default async function AdvanceChequePage({
                           <td><input name="line_chq_no" className="input-box mono text-[12px]" defaultValue={pf?.chqNo ?? ""} /></td>
                           <td><DateBox name="line_chq_date" className="input-box mono text-[12px]" defaultValue={pf?.chqDate ?? ""} /></td>
                           <td><input name="line_amt" type="number" step="any" min="0" className="input-box mono text-[12px] text-right" defaultValue={pf?.amount ?? ""} /></td>
-                          <td><input name="line_narr" className="input-box text-[12px]" /></td>
+                          <td><input name="line_narr" className="input-box text-[12px]" defaultValue={isEditForm ? editRows[i]?.note ?? "" : ""} /></td>
                           <td className="text-center"><RowClearButton /></td>
                         </tr>
                       );
