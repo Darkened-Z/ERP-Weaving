@@ -4,8 +4,9 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { Combobox } from "@/components/combobox";
 import { requireSession } from "@/lib/auth";
 import { db, schema } from "@/db";
-import { and, gte, lte, sql, eq } from "drizzle-orm";
+import { and, sql, eq } from "drizzle-orm";
 import { DateBox } from "@/components/date-box";
+import { splitBeamRuns, setOfBeamSetNo } from "@/lib/beam-runs";
 import {
   fmt,
   fmt2,
@@ -202,24 +203,19 @@ export default async function GreyShrinkagePage({
   const shedOpts = [...shedSet].sort().map((s) => ({ value: s, label: s }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conds: any[] = [
-    gte(schema.intDailyProduction.vDate, from),
-    lte(schema.intDailyProduction.vDate, to),
-  ];
+  const conds: any[] = [];
   if (party) {
     const pat = `%${escLike(party)}%`;
     conds.push(
       sql`(${schema.intDailyProduction.szgParty} LIKE ${pat} ESCAPE '\\' OR ${schema.intDailyProduction.convContParty} LIKE ${pat} ESCAPE '\\')`,
     );
   }
-  if (setFilter) conds.push(eq(schema.intDailyProduction.setNo, setFilter));
   if (beamFilter) {
     const pat = `%${escLike(beamFilter)}%`;
     conds.push(
       sql`${schema.intDailyProductionSet.beamNo} LIKE ${pat} ESCAPE '\\'`,
     );
   }
-  if (loomFilter) conds.push(eq(schema.intDailyProductionSet.loomNo, parseInt(loomFilter, 10)));
   if (shedFilter) conds.push(eq(schema.beams.shed, shedFilter));
 
   const raw = await db
@@ -270,7 +266,7 @@ export default async function GreyShrinkagePage({
       schema.beams,
       eq(schema.intDailyProductionSet.beamNo, schema.beams.beamNo),
     )
-    .where(and(...conds))
+    .where(conds.length ? and(...conds) : undefined)
     .orderBy(
       schema.intDailyProductionSet.beamNo,
       schema.intDailyProduction.designNo,
@@ -310,6 +306,8 @@ export default async function GreyShrinkagePage({
     totalAmt: number;
   };
   type Block = {
+    key: string;
+    done: boolean;
     beamNo: string;
     beamSetNo: string;
     setNo: string;
@@ -345,9 +343,26 @@ export default async function GreyShrinkagePage({
     beamMap.get(k)!.push(r);
   }
 
+  const vnoBySet = new Map<string, string>();
+  for (const r of setRaw) if (r.setNo && r.vNo) vnoBySet.set(r.setNo, r.vNo);
+
   let blocks: Block[] = [];
-  for (const [beamNo, rows] of beamMap) {
-    const f = rows.find((r) => r.bLen != null) ?? rows[0];
+  for (const [beamNo, beamRows] of beamMap) {
+   const runs = splitBeamRuns(beamRows);
+   for (const [ri, run] of runs.entries()) {
+    const rows = run.rows;
+    const m = rows.find((r) => r.bLen != null) ?? rows[0];
+    const latest = ri === runs.length - 1;
+    const runSet = run.beamSetNo ? setOfBeamSetNo(run.beamSetNo) : rows.find((r) => r.setNo?.trim())?.setNo?.trim() ?? (latest ? m.bSetNo?.trim() ?? "" : "");
+    if (setFilter && runSet !== setFilter) continue;
+    if (!rows.some((r) => (r.vDate ?? "") >= from && (r.vDate ?? "") <= to)) continue;
+    const runLoom = rows[rows.length - 1].loomNo || 0;
+    if (loomFilter && runLoom !== parseInt(loomFilter, 10)) continue;
+    const masterRun = latest && (!m.bSetNo || runSet === m.bSetNo.trim());
+    const f0 = rows.find((r) => r.lineBLen != null && r.bLen != null) ?? m;
+    const f = masterRun
+      ? f0
+      : { ...f0, brVno: vnoBySet.get(runSet) ?? null, brDate: null, knVno: null, knDate: null, bStatusWrk: null, bBeamSetNo: null, bSetNo: runSet, bLoomNo: null };
     const ends = f.lineEnds ?? f.bEnds ?? 0;
     const beamLength = f.lineBLen ?? f.bLen ?? 0;
     const szg = f.bSzg ?? f.szgParty ?? "";
@@ -400,8 +415,8 @@ export default async function GreyShrinkagePage({
     const loomNo = f.loomNo || f.bLoomNo || 0;
     const dates = rows.map((r) => r.vDate ?? "").filter(Boolean);
     const lastDate = dates.length ? dates.sort().pop()! : "";
-    const lastStatus = rows[rows.length - 1]?.beamStatus ?? "";
-    const rCut = (f.bStatusWrk ?? "").toUpperCase() === "EMPTY" ? "L-ROLL" : lastStatus;
+    const done = run.done || (masterRun && (f.bStatusWrk ?? "").toUpperCase() === "EMPTY");
+    const rCut = done ? "L-ROLL" : "RUNNING";
 
     const bContNo = f.bContractNo ?? rows[0]?.contNo ?? "";
     const sizCont = iwbSizingCont.get(f.brVno ?? "") ?? "";
@@ -414,9 +429,11 @@ export default async function GreyShrinkagePage({
     const brand = contBrand.get(bContNo) ?? designs[0]?.brand ?? "";
 
     blocks.push({
+      key: `${beamNo}|${run.beamSetNo || ri}`,
+      done,
       beamNo,
-      beamSetNo: (f.pBeamSetNo?.trim() || f.bBeamSetNo?.trim() || ""),
-      setNo: (f.setNo?.trim() || f.bSetNo?.trim() || ""),
+      beamSetNo: (run.beamSetNo || f.bBeamSetNo?.trim() || ""),
+      setNo: runSet,
       ends: ends || f.bEnds || 0,
       beamLength: beamLength || f.bLen || 0,
       shed: (f.bShed?.trim() || f.shedNo?.trim() || ""),
@@ -441,18 +458,20 @@ export default async function GreyShrinkagePage({
       brand,
       setStatus: iwbStatusByVno.get(f.brVno ?? "") ?? "",
     });
+   }
   }
 
   // Add beams that belong to a set but have no production data yet.
   // Only include beams that have an IWB voucher (received) and are RUNNING/CLOSE.
-  const existingBeams = new Set(blocks.map((b) => b.beamNo));
+  const existingRuns = new Set(blocks.map((b) => `${b.beamNo}|${b.setNo}`));
   for (const ab of allSetBeams) {
-    if (!ab.beamNo || existingBeams.has(ab.beamNo)) continue;
+    if (!ab.beamNo || existingRuns.has(`${ab.beamNo}|${ab.setNo}`)) continue;
     if (!ab.brVno) continue;
     const st = (ab.statusWrk ?? "").toUpperCase();
     if (st !== "RUNNING" && st !== "CLOSE" && st !== "L-ROLL") continue;
     if (ab.beamSetNo && ab.setNo && !ab.beamSetNo.startsWith(`${ab.setNo}-`)) continue;
     if (setFilter && ab.setNo !== setFilter) continue;
+    if (beamFilter && !ab.beamNo.toLowerCase().includes(beamFilter.toLowerCase())) continue;
     if (shedFilter && ab.shed !== shedFilter) continue;
     if (loomFilter && ab.loomNo !== parseInt(loomFilter, 10)) continue;
     const bLen = ab.length ?? 0;
@@ -464,6 +483,8 @@ export default async function GreyShrinkagePage({
     if (abGc?.reed) abQ.push(String(abGc.reed));
     if (abGc?.warpCount) abQ.push(yarnCountLabel.get(abGc.warpCount) ?? abGc.warpCount);
     blocks.push({
+      key: `${ab.beamNo}|${ab.beamSetNo ?? ab.setNo}`,
+      done: false,
       beamNo: ab.beamNo,
       beamSetNo: ab.beamSetNo ?? "",
       setNo: ab.setNo ?? "",
@@ -498,10 +519,13 @@ export default async function GreyShrinkagePage({
     blocks = blocks.filter((b) => (b.setStatus || "RUNNING").toUpperCase() === sf);
   }
 
-  const grandMtr = blocks.reduce((s, b) => s + b.totalMtr, 0);
-  const grandBLen = blocks.reduce((s, b) => s + b.beamLength, 0);
-  const grandBal = grandBLen - grandMtr;
-  const grandShrink = grandBLen > 0 ? (grandBal / grandBLen) * 100 : 0;
+  const shrinkOf = (bs: Block[]) => {
+    const done = bs.filter((b) => b.done && b.beamLength > 0);
+    const len = done.reduce((s, b) => s + b.beamLength, 0);
+    const diff = len - done.reduce((s, b) => s + b.totalMtr, 0);
+    return { done: done.length, diff, pct: len > 0 ? (diff / len) * 100 : null };
+  };
+  const grand = shrinkOf(blocks);
 
   const excelRows = blocks.flatMap((b) =>
     b.designs.flatMap((d) =>
@@ -537,7 +561,7 @@ export default async function GreyShrinkagePage({
             <p className="text-[13px] text-[var(--muted)] mt-2">
               {blocks.length} beam{blocks.length !== 1 ? "s" : ""} &middot;{" "}
               {from} to {to} &middot; avg shrinkage{" "}
-              <span className="mono">{fmt2(grandShrink)}%</span>
+              <span className="mono">{grand.pct == null ? "—" : `${fmt2(grand.pct)}%`}</span> ({grand.done} finished beam{grand.done !== 1 ? "s" : ""})
             </p>
           </div>
           <div className="flex gap-2">
@@ -688,8 +712,8 @@ export default async function GreyShrinkagePage({
               .map(([sNo, sBlocks]) => {
               const sMtr = sBlocks.reduce((s, b) => s + b.totalMtr, 0);
               const sLen = sBlocks.reduce((s, b) => s + b.beamLength, 0);
-              const sBal = sLen - sMtr;
-              const sShr = sLen > 0 ? (sBal / sLen) * 100 : 0;
+              const sShrink = shrinkOf(sBlocks);
+              const sRemain = sBlocks.filter((b) => !b.done).reduce((s, b) => s + b.balMtr, 0);
               const sFirst = sBlocks[0];
               const sDate = sFirst?.brDate || sFirst?.knDate || "";
               const sSzg = sFirst?.szgName || "";
@@ -699,8 +723,8 @@ export default async function GreyShrinkagePage({
               const sWarp = sFirst?.warpInfo || "";
               const sTotalRej = sBlocks.reduce((s, b) => s + b.totalRej, 0);
               const sSetStatus = sFirst?.setStatus || "RUNNING";
-              const sRunning = sBlocks.filter((b) => b.rCut.toUpperCase() === "RUNNING").length;
-              const sDone = sBlocks.filter((b) => { const st = b.rCut.toUpperCase(); return st === "L-ROLL" || st === "CLOSE"; }).length;
+              const sRunning = sBlocks.filter((b) => !b.done).length;
+              const sDone = sBlocks.filter((b) => b.done).length;
               const sVnos = new Set(sBlocks.map((b) => b.brVno).filter(Boolean));
               const sNetWtLbs = [...sVnos].reduce((s, v) => s + (iwbNetWtLbs.get(v) ?? 0), 0);
               const sResultedCount =
@@ -732,24 +756,25 @@ export default async function GreyShrinkagePage({
                       <span>Mtr {fmt2(sMtr)}</span>
                     </div>
                     <div className="flex items-center gap-4 flex-wrap mono text-[12px] mt-1">
-                      <span>Diff {fmt2(sBal)}</span>
+                      <span>Diff {sShrink.done ? fmt2(sShrink.diff) : "—"}</span>
+                      {sRunning > 0 && <span className="text-[11px] text-[var(--muted)]">On loom {fmt2(sRemain)}</span>}
                       {sResultedCount != null && <span>RC <b>{fmt2(sResultedCount)}</b></span>}
                       {sNetWtLbs > 0 && <span className="text-[11px] text-[var(--muted)]">Wt {fmt2(sNetWtLbs)} lbs</span>}
                       {sTotalRej > 0 && <span className="text-[11px]" style={{ color: "#b91c1c" }}>Rej {fmt(sTotalRej)}</span>}
-                      <span className="ml-auto font-bold">{fmt2(sShr)}%</span>
+                      <span className="ml-auto font-bold" title="Shrinkage of finished beams only">{sShrink.pct == null ? "—" : `${fmt2(sShrink.pct)}%`}</span>
                     </div>
                   </summary>
                   <div className="border-t-2 border-black">
                     {sBlocks.map((b) => (
-                      <details key={b.beamNo} className="border-b border-gray-300 last:border-b-0">
+                      <details key={b.key} className="border-b border-gray-300 last:border-b-0">
                         <summary className="cursor-pointer px-3 py-1.5 flex items-center gap-3 flex-wrap text-[12px] mono select-none list-none [&::-webkit-details-marker]:hidden hover:bg-gray-50">
                           <span className="font-bold">{b.beamNo}</span>
                           <span>{b.loomNo ? `S${b.shed || "?"}.L${b.loomNo}` : "-"}</span>
                           <span>{b.beamSetNo || "-"}</span>
                           <span>Len {fmt(b.beamLength)}</span>
                           <span>Mtr {fmt2(b.totalMtr)}</span>
-                          <span>Diff {fmt2(b.balMtr)}</span>
-                          <span>{fmt2(b.shrinkPct)}%</span>
+                          <span>{b.done ? "Diff" : "Bal"} {fmt2(b.balMtr)}</span>
+                          <span>{b.done ? `${fmt2(b.shrinkPct)}%` : "—"}</span>
                           {b.knDate && <span>{b.knDate}</span>}
                           {b.rCut && (() => {
                             const st = b.rCut.toUpperCase();
@@ -807,9 +832,9 @@ export default async function GreyShrinkagePage({
                       <span>Set Total ({sBlocks.length})</span>
                       <span>Len {fmt(sLen)}</span>
                       <span>Mtr {fmt2(sMtr)}</span>
-                      <span>Diff {fmt2(sBal)}</span>
+                      <span>Diff {sShrink.done ? fmt2(sShrink.diff) : "—"}</span>
                       {sResultedCount != null && <span>RC {fmt2(sResultedCount)}</span>}
-                      <span>{fmt2(sShr)}%</span>
+                      <span>{sShrink.pct == null ? "—" : `${fmt2(sShrink.pct)}%`}</span>
                     </div>
                   </div>
                 </details>
@@ -818,7 +843,7 @@ export default async function GreyShrinkagePage({
           })()
         ) : (
           blocks.map((b) => (
-            <div key={b.beamNo} className="mb-10 break-inside-avoid">
+            <div key={b.key} className="mb-10 break-inside-avoid">
               <div className="border-2 border-black">
                 <div className="grid grid-cols-2 sm:grid-cols-6 gap-x-6 gap-y-1 p-3 bg-[#f5f5f5] text-[13px]">
                   <div>
@@ -974,7 +999,7 @@ export default async function GreyShrinkagePage({
                       </td>
                       <td colSpan={2}></td>
                       <td className="mono font-bold" colSpan={3}>
-                        {fmt2(b.shrinkPct)}%
+                        {b.done ? `${fmt2(b.shrinkPct)}%` : "—"}
                       </td>
                     </tr>
                   </tfoot>

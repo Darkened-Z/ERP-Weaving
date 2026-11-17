@@ -238,6 +238,11 @@ Client-facing summaries are Roman Urdu; the freelancer works in English. Deploy 
 - Nav: Weaving reports → Daily Folding Stock (`w-folding-stock`).
 
 
+## Reports — Grey Shrinkage (`reports/grey/shrinkage`) — one block per beam RUN (owner 2026-11-17)
+- **Beams are reused set after set** (AJ-1 ran in sets 18 and 44; 64 of 94 beams have more than one run). The report used to group production by `beam_no` only, so every old run landed under the beam's current set (Set 44 showed 30,096 m woven on 23,603 m of beam, -27.51%). Now `lib/beam-runs.ts` `splitBeamRuns` splits a beam's rows into runs: a new run after an L-ROLL or when the row's `beam_set_no` changes ("18-3" → "44-5"); blank set-beam rows stay in their run. A run's set = the `beam_set_no` prefix, else the voucher `set_no`, else (latest run only) the beam master's `set_no`. Older runs take their bill from the set's IWB voucher and drop the master's knotting/status.
+- **Set, date and loom filters work on runs** (date = any row in range; loom = the run's last loom). `int_daily_production.set_no` is null in live data, so the old SQL set filter matched nothing.
+- **Shrinkage % = finished runs only** (L-ROLL, or the latest run of an EMPTY beam). A running beam shows **Bal** (metres still on the beam) and "—"; the set header shows Diff / % over its finished beams plus "On loom" for running ones. Regression: `tests/beam-runs.test.mts`.
+
 ## Reports — Fabric Production & Billing (`reports/weaving/fabric-production`)
 - **The Oracle DAILY_FOLDING_FABRIC_WOS sheet (owner 2026-10)**: per conversion contract, metres woven FROM–TO (Σ `int_daily_production_set.totalCount`, contract = `set.cont_no`, beam contract as fallback — same production figure as Daily Folding Stock) × the contract's **Rate/Mtr** = **Amount** (the conversion billing). Rate/Mtr = `conv_rate_per_mtr`, else pick × rate/pick (every live contract has conv rate = pick × rate/pick, no lakhai).
 - Columns: Quality (product name, construction underneath = warp descr BY weft descr) · Contract · Design # · Production · Pick · R/Pick · Rate/Mtr · Amount. Sorted smallest production first, as Oracle prints it. TOTAL row: Σ production, **production-weighted** avg pick and R/Pick, Rate/Mtr = Σ amount ÷ Σ production, Σ amount. Oracle's S.Rate / Total Amt columns were blank on the sample and are left off.
