@@ -1,303 +1,126 @@
+import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { addDays, today } from "@/lib/time";
 import {
-  TICKET_STATUSES,
-  getPriorityChipClass,
-  getPriorityShort,
-  getStatusLabel,
-  getTypeShort,
-} from "../tickets/constants";
+  FINISHED,
+  categoryLabel,
+  ensureTaskTables,
+  materializeRepeats,
+  priorityClass,
+  priorityLabel,
+  priorityRank,
+  statusLabel,
+} from "@/lib/tasks";
 
 export const dynamic = "force-dynamic";
 
-type SP = {
-  view?: string;
-  status?: string;
-};
+type Row = typeof schema.tasks.$inferSelect;
 
-const PRIORITY_RANK: Record<string, number> = {
-  P1_URGENT: 1,
-  P2_HIGH: 2,
-  P3_NORMAL: 3,
-  P4_LOW: 4,
-};
-
-function daysBetween(a: string, b: string): number {
-  const [ay, am, ad] = a.split("-").map((n) => parseInt(n, 10));
-  const [by, bm, bd] = b.split("-").map((n) => parseInt(n, 10));
-  const da = Date.UTC(ay, am - 1, ad);
-  const db_ = Date.UTC(by, bm - 1, bd);
-  return Math.round((da - db_) / 86400000);
-}
-
-function dueLabel(dueDate: string | null, today: string): {
-  text: string;
-  color: string;
-} {
-  if (!dueDate) return { text: "—", color: "text-[var(--muted)]" };
-  const d = dueDate.slice(0, 10);
-  const diff = daysBetween(d, today);
-  if (diff < 0)
-    return {
-      text: `OVERDUE by ${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"}`,
-      color: "text-[var(--danger)] font-bold",
-    };
-  if (diff === 0) return { text: "Today", color: "font-bold" };
-  return {
-    text: `${diff} day${diff === 1 ? "" : "s"} left`,
-    color: "text-black",
-  };
-}
-
-export default async function MyTasksPage({
-  searchParams,
-}: {
-  searchParams: Promise<SP>;
-}) {
+export default async function MyTasksPage() {
   const session = await requireSession();
-  const params = await searchParams;
-  const view = params.view === "reported" ? "reported" : "assigned";
+  await ensureTaskTables();
+  await materializeRepeats();
 
-  const assignedAll = await db
-    .select()
-    .from(schema.tickets)
-    .where(eq(schema.tickets.assigneeUserId, session.userId));
+  async function markDone(formData: FormData) {
+    "use server";
+    const s = await requireSession();
+    const id = parseInt(String(formData.get("id") ?? ""), 10);
+    const [mine] = await db.select().from(schema.taskUsers)
+      .where(and(eq(schema.taskUsers.taskId, id), eq(schema.taskUsers.userId, s.userId), eq(schema.taskUsers.role, "ASSIGNEE")));
+    if (!mine) return;
+    const [cur] = await db.select({ status: schema.tasks.status }).from(schema.tasks).where(eq(schema.tasks.id, id));
+    if (!cur || FINISHED.includes(cur.status)) return;
+    const now = new Date().toISOString();
+    await db.transaction(async (tx) => {
+      await tx.update(schema.tasks).set({ status: "DONE", doneAt: now, updatedAt: now }).where(eq(schema.tasks.id, id));
+      await tx.insert(schema.taskHistory).values({ taskId: id, actorUserId: s.userId, action: "STATUS", fromValue: cur.status, toValue: "DONE", createdAt: now });
+    });
+    revalidatePath("/my-tasks");
+  }
 
-  const reportedAll = await db
-    .select()
-    .from(schema.tickets)
-    .where(eq(schema.tickets.reporterUserId, session.userId));
+  const links = await db.select().from(schema.taskUsers).where(eq(schema.taskUsers.userId, session.userId));
+  const assignedIds = links.filter((l) => l.role === "ASSIGNEE").map((l) => l.taskId);
+  const loopIds = links.filter((l) => l.role === "LOOP").map((l) => l.taskId);
+  const ids = Array.from(new Set([...assignedIds, ...loopIds]));
+  const tasks = ids.length ? await db.select().from(schema.tasks).where(inArray(schema.tasks.id, ids)) : [];
+  const checklist = ids.length ? await db.select({ taskId: schema.taskChecklist.taskId, done: schema.taskChecklist.done }).from(schema.taskChecklist).where(inArray(schema.taskChecklist.taskId, ids)) : [];
 
-  const pktFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" });
-  const today = pktFmt.format(new Date());
-  const weekAgoD = new Date();
-  weekAgoD.setDate(weekAgoD.getDate() - 7);
-  const weekAgo = pktFmt.format(weekAgoD);
-
-  const stats = {
-    open: assignedAll.filter((t) => t.status === "OPEN").length,
-    inProgress: assignedAll.filter((t) => t.status === "IN_PROGRESS").length,
-    overdue: assignedAll.filter(
-      (t) =>
-        t.dueDate &&
-        t.dueDate.slice(0, 10) < today &&
-        t.status !== "RESOLVED" &&
-        t.status !== "CLOSED"
-    ).length,
-    resolvedWeek: assignedAll.filter(
-      (t) => t.resolvedAt && t.resolvedAt >= weekAgo
-    ).length,
-  };
-
-  const base = view === "assigned" ? assignedAll : reportedAll;
-  const filtered = params.status
-    ? base.filter((t) => t.status === params.status)
-    : base;
-
-  const sorted = [...filtered].sort((a, b) => {
-    const aOverdue =
-      a.dueDate &&
-      a.dueDate.slice(0, 10) < today &&
-      a.status !== "RESOLVED" &&
-      a.status !== "CLOSED"
-        ? 0
-        : 1;
-    const bOverdue =
-      b.dueDate &&
-      b.dueDate.slice(0, 10) < today &&
-      b.status !== "RESOLVED" &&
-      b.status !== "CLOSED"
-        ? 0
-        : 1;
-    if (aOverdue !== bOverdue) return aOverdue - bOverdue;
-    const pa = PRIORITY_RANK[a.priority] ?? 5;
-    const pb = PRIORITY_RANK[b.priority] ?? 5;
-    if (pa !== pb) return pa - pb;
-    const da = a.dueDate ? a.dueDate.slice(0, 10) : "9999-99-99";
-    const db_ = b.dueDate ? b.dueDate.slice(0, 10) : "9999-99-99";
-    return da.localeCompare(db_);
-  });
-
-  const fmt = new Intl.NumberFormat("en-PK");
-  const currentQS = `view=${view}${params.status ? `&status=${encodeURIComponent(params.status)}` : ""}`;
-  const fromParam = `?from=${encodeURIComponent(currentQS)}`;
+  const asOf = today();
+  const weekAgo = addDays(asOf, -7);
+  const order = (a: Row, b: Row) =>
+    (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999") || (a.startTime ?? "").localeCompare(b.startTime ?? "") || priorityRank(a.priority) - priorityRank(b.priority);
+  const open = tasks.filter((t) => assignedIds.includes(t.id) && !FINISHED.includes(t.status)).sort(order);
+  const groups = [
+    { title: "Overdue", rows: open.filter((t) => t.startDate && t.startDate < asOf), danger: true },
+    { title: "Today", rows: open.filter((t) => t.startDate === asOf) },
+    { title: "Upcoming", rows: open.filter((t) => t.startDate && t.startDate > asOf) },
+    { title: "No date", rows: open.filter((t) => !t.startDate) },
+    { title: "In loop", rows: tasks.filter((t) => loopIds.includes(t.id) && !FINISHED.includes(t.status)).sort(order), watch: true },
+  ];
+  const doneWeek = tasks.filter((t) => assignedIds.includes(t.id) && t.doneAt && t.doneAt.slice(0, 10) >= weekAgo).length;
 
   return (
     <Shell active="my-tasks">
-      <div className="animate-in">
-        <div className="mb-6">
-          <h1 className="page-title">My Tasks · {session.fullName}</h1>
-          <p className="text-[12px] text-[var(--muted)] mt-2 uppercase tracking-[0.1em]">
-            {session.roleName}
-          </p>
+      <div className="animate-in max-w-[760px]">
+        <div className="flex items-baseline justify-between gap-3 mb-4">
+          <h1 className="page-title">My Tasks</h1>
+          <Link href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border border-black mb-6">
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">{fmt.format(stats.open)}</div>
-            <div className="stat-label">My Open</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">
-              {fmt.format(stats.inProgress)}
+        <div className="grid grid-cols-4 gap-px bg-black border border-black mb-5">
+          {[
+            { l: "Overdue", n: groups[0].rows.length },
+            { l: "Today", n: groups[1].rows.length },
+            { l: "Open", n: open.length },
+            { l: "Done 7d", n: doneWeek },
+          ].map((s) => (
+            <div key={s.l} className="bg-white p-3">
+              <div className={`mono text-xl font-bold ${s.l === "Overdue" && s.n ? "text-[var(--danger)]" : ""}`}>{s.n}</div>
+              <div className="stat-label">{s.l}</div>
             </div>
-            <div className="stat-label">My In Progress</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">
-              {fmt.format(stats.overdue)}
-            </div>
-            <div className="stat-label">My Overdue</div>
-          </div>
-          <div className="bg-white p-4">
-            <div className="mono text-xl font-bold">
-              {fmt.format(stats.resolvedWeek)}
-            </div>
-            <div className="stat-label">My Resolved 7d</div>
-          </div>
+          ))}
         </div>
 
-        <div className="flex border border-black mb-6">
-          <a
-            href={`/my-tasks?view=assigned${params.status ? `&status=${encodeURIComponent(params.status)}` : ""}`}
-            className="no-underline px-4 py-2 text-[11px] uppercase tracking-[0.1em] font-semibold flex-1 text-center"
-            style={{
-              background: view === "assigned" ? "black" : "transparent",
-              color: view === "assigned" ? "white" : "black",
-            }}
-          >
-            Assigned to Me ({fmt.format(assignedAll.length)})
-          </a>
-          <a
-            href={`/my-tasks?view=reported${params.status ? `&status=${encodeURIComponent(params.status)}` : ""}`}
-            className="no-underline px-4 py-2 text-[11px] uppercase tracking-[0.1em] font-semibold flex-1 text-center border-l border-black"
-            style={{
-              background: view === "reported" ? "black" : "transparent",
-              color: view === "reported" ? "white" : "black",
-            }}
-          >
-            Reported by Me ({fmt.format(reportedAll.length)})
-          </a>
-        </div>
+        {open.length === 0 && groups[4].rows.length === 0 && (
+          <div className="border border-[var(--border)] p-8 text-center text-[13px] text-[var(--muted)]">Nothing on your list.</div>
+        )}
 
-        <form
-          method="GET"
-          action="/my-tasks"
-          className="border border-black p-4 mb-6"
-        >
-          <input type="hidden" name="view" value={view} />
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="label block mb-1">Status</label>
-              <select
-                name="status"
-                className="input-box"
-                defaultValue={params.status ?? ""}
-              >
-                <option value="">All</option>
-                {TICKET_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <button type="submit" className="btn btn-sm">
-              Apply
-            </button>
-            <a href={`/my-tasks?view=${view}`} className="btn btn-outline btn-sm">
-              Clear
-            </a>
-          </div>
-        </form>
-
-        <div className="overflow-x-auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Ticket #</th>
-                <th>Title</th>
-                <th>Type</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Due Date</th>
-                <th>Days Left</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((t) => {
-                const due = dueLabel(t.dueDate ?? null, today);
-                const rowHref = `/tickets/${t.id}${fromParam}`;
-                const linkStyle = { color: "inherit" };
+        {groups.filter((g) => g.rows.length).map((g) => (
+          <div key={g.title} className="mb-5">
+            <div className={`label mb-1 ${g.danger ? "!text-[var(--danger)]" : ""}`}>{g.title} ({g.rows.length})</div>
+            <div className="border border-black bg-white divide-y divide-[var(--border-light)]">
+              {g.rows.map((t) => {
+                const items = checklist.filter((c) => c.taskId === t.id);
+                const ticked = items.filter((c) => c.done).length;
                 return (
-                  <tr key={t.id} className="cursor-pointer hover:bg-gray-50">
-                    <td className="mono text-[12px] p-0">
-                      <a
-                        href={rowHref}
-                        className="no-underline block px-2 py-1"
-                        style={linkStyle}
-                      >
-                        {t.ticketNo}
-                      </a>
-                    </td>
-                    <td className="text-[13px] p-0">
-                      <a
-                        href={rowHref}
-                        className="no-underline block px-2 py-1"
-                        style={linkStyle}
-                      >
-                        {t.title}
-                      </a>
-                    </td>
-                    <td className="text-[12px] p-0">
-                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
-                        {getTypeShort(t.type)}
-                      </a>
-                    </td>
-                    <td className="p-0">
-                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
-                        <span
-                          className={`mono text-[10px] px-1.5 py-0.5 ${getPriorityChipClass(t.priority)}`}
-                        >
-                          {getPriorityShort(t.priority)}
-                        </span>
-                      </a>
-                    </td>
-                    <td className="text-[12px] p-0">
-                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
-                        {getStatusLabel(t.status)}
-                      </a>
-                    </td>
-                    <td className="mono text-[12px] p-0">
-                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
-                        {t.dueDate ? t.dueDate.slice(0, 10) : "—"}
-                      </a>
-                    </td>
-                    <td className={`text-[12px] p-0 ${due.color}`}>
-                      <a href={rowHref} className="no-underline block px-2 py-1" style={linkStyle}>
-                        {due.text}
-                      </a>
-                    </td>
-                  </tr>
+                  <div key={t.id} className="flex items-center gap-3 px-3 py-3">
+                    {!g.watch && (
+                      <form action={markDone}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <button className="w-6 h-6 border-2 border-black hover:bg-[var(--success)]" title="Mark done" aria-label={`Mark ${t.taskNo} done`} />
+                      </form>
+                    )}
+                    <Link href={`/tasks/${t.id}`} className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[10px] px-1.5 py-0.5 font-semibold ${priorityClass(t.priority)}`}>{priorityLabel(t.priority)}</span>
+                        <span className="text-[11px] text-[var(--muted)]">{categoryLabel(t.category)}</span>
+                        {items.length > 0 && <span className="mono text-[11px]">{ticked}/{items.length}</span>}
+                      </div>
+                      <div className="font-semibold text-[14px] truncate">{t.title}</div>
+                      <div className="text-[12px] text-[var(--muted)]">
+                        {t.startDate ? `${t.startDate.slice(8, 10)}/${t.startDate.slice(5, 7)}${t.startTime ? ` ${t.startTime}` : ""}` : "No date"} · {statusLabel(t.status)} · {t.taskNo}
+                      </div>
+                    </Link>
+                  </div>
                 );
               })}
-              {sorted.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="text-center text-[12px] text-[var(--muted)] py-6"
-                  >
-                    No tasks in this view.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+        ))}
       </div>
     </Shell>
   );

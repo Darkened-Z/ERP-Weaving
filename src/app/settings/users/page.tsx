@@ -3,12 +3,21 @@ import { SECTIONS } from "@/lib/nav";
 import { ModuleSelector } from "./module-selector";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSession, requireAdmin, verifySavePassword } from "@/lib/auth";
 import { isUniqueViolation } from "@/lib/db-errors";
 import bcrypt from "bcryptjs";
+import { contactsFor, ensureTaskTables } from "@/lib/tasks";
+
+async function saveContact(userId: number, formData: FormData) {
+  await ensureTaskTables();
+  const phone = String(formData.get("phone") ?? "").replace(/[^d+]/g, "") || null;
+  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
+  await db.run(sql`INSERT INTO user_contacts (user_id, phone, email) VALUES (${userId}, ${phone}, ${email})
+    ON CONFLICT(user_id) DO UPDATE SET phone = excluded.phone, email = excluded.email`);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +48,7 @@ async function save(formData: FormData) {
       const set: any = { login, fullName, roleName, status, allowedModules };
       if (password) set.password = await bcrypt.hash(password, 10);
       await db.update(schema.users).set(set).where(eq(schema.users.id, Number(id)));
+      await saveContact(Number(id), formData);
       revalidatePath(BASE);
       redirect(`${BASE}?id=${id}`);
     } else {
@@ -48,10 +58,12 @@ async function save(formData: FormData) {
         .insert(schema.users)
         .values({ login, password: hashed, fullName, roleName, status, allowedModules })
         .returning();
+      await saveContact(row.id, formData);
       revalidatePath(BASE);
       redirect(`${BASE}?id=${row.id}`);
     }
   } catch (e) {
+    if (String((e as { digest?: string })?.digest ?? "").startsWith("NEXT_REDIRECT")) throw e;
     if (isUniqueViolation(e)) redirect(`${BASE}?${id ? `id=${id}&` : ""}error=exists`);
     redirect(BASE + "?error=" + encodeURIComponent((e as any).message || "Unknown error"));
   }
@@ -97,6 +109,8 @@ export default async function UsersPage({
   const selected = params.id
     ? users.find((u) => u.id === Number(params.id)) ?? null
     : null;
+
+  const contact = selected ? (await contactsFor([selected.id])).get(selected.id) : undefined;
 
   const total = users.length;
   const active = users.filter((u) => u.status === "A").length;
@@ -171,7 +185,7 @@ export default async function UsersPage({
               )}
               {params.error === "in_use" && (
                 <div className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 mb-4 text-[13px]">
-                  Cannot delete user because they have created or interacted with records (tickets, vouchers, etc).
+                  Cannot delete user because they have created or interacted with records (tasks, vouchers, etc).
                 </div>
               )}
               {params.error && !["in_use", "self_delete", "admin_only", "pw_required", "exists"].includes(params.error) && (
@@ -256,6 +270,14 @@ export default async function UsersPage({
                       <option value="A">A - Active</option>
                       <option value="B">B - Blocked</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Phone (WhatsApp)</label>
+                    <input name="phone" className="input-box mono" inputMode="tel" placeholder="923001234567" defaultValue={contact?.phone ?? ""} />
+                  </div>
+                  <div>
+                    <label className="label block mb-1">Email</label>
+                    <input name="email" type="email" className="input-box" defaultValue={contact?.email ?? ""} />
                   </div>
                   <div className="sm:col-span-2">
                     <ModuleSelector sections={SECTIONS} initialAllowed={selected?.allowedModules ?? null} />

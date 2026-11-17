@@ -227,7 +227,7 @@ export default async function LoomsPage({
               <a href="/weaving/looms?adding=1" className="btn btn-outline btn-sm">New</a>
               {formItem ? (
                 <a
-                  href={`/tickets/new?loom=${encodeURIComponent(`${formItem.shed}|${formItem.loomNo}`)}`}
+                  href={`/tasks/new?loom=${encodeURIComponent(`${formItem.shed}|${formItem.loomNo}`)}`}
                   className="btn btn-outline btn-sm"
                 >
                   Report Issue

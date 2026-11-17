@@ -832,6 +832,85 @@ export const ticketHistory = sqliteTable("ticket_history", {
   ixTicket: index("ix_ticket_history_ticket").on(t.ticketId),
 }));
 
+// Task management (replaces tickets, 2026-11-17). Tables are also created at
+// runtime by `ensureTaskTables` (lib/tasks.ts), so no manual migration is needed.
+export const tasks = sqliteTable("tasks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  taskNo: text("task_no").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("GENERAL"),
+  priority: text("priority").notNull().default("NORMAL"),
+  status: text("status").notNull().default("OPEN"),
+  creatorUserId: integer("creator_user_id").notNull().references(() => users.id),
+  startDate: text("start_date"),
+  startTime: text("start_time"),
+  repeatRule: text("repeat_rule").notNull().default("NONE"),
+  repeatEvery: integer("repeat_every"),
+  repeatDays: text("repeat_days"),
+  repeatUnit: text("repeat_unit"),
+  repeatDates: text("repeat_dates"),
+  repeatEnd: text("repeat_end"),
+  seriesId: integer("series_id"),
+  shed: text("shed"),
+  loomNo: integer("loom_no"),
+  img: text("img"),
+  voice: text("voice"),
+  legacyTicketId: integer("legacy_ticket_id"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  doneAt: text("done_at"),
+}, (t) => ({
+  ixStatus: index("ix_tasks_status").on(t.status),
+  uxSeries: uniqueIndex("ux_tasks_series_start").on(t.seriesId, t.startDate),
+}));
+
+export const taskUsers = sqliteTable("task_users", {
+  taskId: integer("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+}, (t) => ({
+  ux: uniqueIndex("ux_task_users").on(t.taskId, t.userId, t.role),
+  ixUser: index("ix_task_users_user").on(t.userId),
+}));
+
+export const taskChecklist = sqliteTable("task_checklist", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  taskId: integer("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  srno: integer("srno").notNull(),
+  text: text("text").notNull(),
+  done: integer("done").notNull().default(0),
+  doneBy: integer("done_by"),
+  doneAt: text("done_at"),
+});
+
+export const taskReminders = sqliteTable("task_reminders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  taskId: integer("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  amount: integer("amount").notNull(),
+  unit: text("unit").notNull(),
+  timing: text("timing").notNull(),
+});
+
+export const taskComments = sqliteTable("task_comments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  taskId: integer("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  authorUserId: integer("author_user_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const taskHistory = sqliteTable("task_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  taskId: integer("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  actorUserId: integer("actor_user_id").notNull().references(() => users.id),
+  action: text("action").notNull(),
+  fromValue: text("from_value"),
+  toValue: text("to_value"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const greyPakiParchi = sqliteTable("grey_paki_parchi", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ppNo: integer("pp_no").notNull(),

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { or, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { ensureTaskTables, statusLabel } from "@/lib/tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,8 @@ export async function GET(req: Request) {
   const escQ = q.replace(/[\\%_]/g, (m) => "\\" + m);
   const pat = `%${escQ}%`;
 
-  const [accounts, contracts, beams, greyCons, products, looms, invOpen, ticketRows] = await Promise.all([
+  await ensureTaskTables();
+  const [accounts, contracts, beams, greyCons, products, looms, invOpen, taskRows] = await Promise.all([
     db
       .select({
         code: schema.chartOfAccounts.code,
@@ -127,17 +129,17 @@ export async function GET(req: Request) {
       .limit(limit),
     db
       .select({
-        id: schema.tickets.id,
-        ticketNo: schema.tickets.ticketNo,
-        title: schema.tickets.title,
-        status: schema.tickets.status,
+        id: schema.tasks.id,
+        taskNo: schema.tasks.taskNo,
+        title: schema.tasks.title,
+        status: schema.tasks.status,
       })
-      .from(schema.tickets)
+      .from(schema.tasks)
       .where(
         or(
-          sql`${schema.tickets.ticketNo} LIKE ${pat} ESCAPE '\\'`,
-          sql`${schema.tickets.title} LIKE ${pat} ESCAPE '\\'`,
-          sql`${schema.tickets.description} LIKE ${pat} ESCAPE '\\'`
+          sql`${schema.tasks.taskNo} LIKE ${pat} ESCAPE '\\'`,
+          sql`${schema.tasks.title} LIKE ${pat} ESCAPE '\\'`,
+          sql`${schema.tasks.description} LIKE ${pat} ESCAPE '\\'`
         )
       )
       .limit(limit),
@@ -193,12 +195,12 @@ export async function GET(req: Request) {
       subtitle: [i.itemCode, i.voucherNo].filter(Boolean).join(" - "),
       href: `/define/inv-opening?tab=${INV_TAB_MAP[i.itemType] ?? "yarn"}&id=${i.id}`,
     })),
-    ...ticketRows.map((t) => ({
-      type: "Ticket",
+    ...taskRows.map((t) => ({
+      type: "Task",
       id: String(t.id),
       title: t.title,
-      subtitle: `${t.ticketNo} · ${t.status}`,
-      href: `/tickets/${t.id}`,
+      subtitle: `${t.taskNo} · ${statusLabel(t.status)}`,
+      href: `/tasks/${t.id}`,
     })),
   ].slice(0, 30);
 

@@ -17,7 +17,7 @@ export const SECTIONS = [
   {
     label: "Task Management",
     items: [
-      { href: "/tickets", label: "Tickets", key: "tickets" },
+      { href: "/tasks", label: "Tasks", key: "tickets" },
       { href: "/my-tasks", label: "My Tasks", key: "my-tasks" },
       { href: "/my-queue", label: "My Queue", key: "my-queue" },
       { href: "/team/workload", label: "Team Workload", key: "team-workload" },
@@ -309,7 +309,8 @@ export function canAccess(s: { roleName: string; allowedModules?: string[] | nul
 
 /** Pages a module links into that sit under another menu item. */
 const ALSO_OPENS: Record<string, string[]> = {
-  // A task row opens its ticket.
-  "my-tasks": ["/tickets/"],
-  "my-queue": ["/tickets/"],
+  // A task row opens the task; My Tasks can also assign one.
+  "my-tasks": ["/tasks/"],
+  "my-queue": ["/tasks/"],
+  "team-workload": ["/tasks/"],
 };

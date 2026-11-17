@@ -2,9 +2,7 @@ import { Shell } from "@/components/shell";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import {
-  getPriorityShort,
-} from "../../tickets/constants";
+import { FINISHED, ensureTaskTables, peopleFor, priorityLabel, priorityRank } from "@/lib/tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +11,7 @@ type SP = {
   sort?: string;
 };
 
-const PRIORITY_RANK: Record<string, number> = {
-  P1_URGENT: 1,
-  P2_HIGH: 2,
-  P3_NORMAL: 3,
-  P4_LOW: 4,
-};
-
-type TicketRow = typeof schema.tickets.$inferSelect;
+type TaskRow = typeof schema.tasks.$inferSelect;
 type UserRow = typeof schema.users.$inferSelect;
 
 type UserWorkload = {
@@ -33,7 +24,7 @@ type UserWorkload = {
   totalActive: number;
   completionRate: number;
   nextDueDate: string | null;
-  tickets: TicketRow[];
+  tasks: TaskRow[];
 };
 
 function daysBetween(a: string, b: string): number {
@@ -97,7 +88,9 @@ export default async function TeamWorkloadPage({
     ? activeUsers.filter((u) => u.roleName === params.role)
     : activeUsers;
 
-  const allTickets = await db.select().from(schema.tickets);
+  await ensureTaskTables();
+  const allTasks = await db.select().from(schema.tasks);
+  const people = await peopleFor(allTasks.map((t) => t.id));
 
   const pktFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" });
   const today = pktFmt.format(new Date());
@@ -106,9 +99,9 @@ export default async function TeamWorkloadPage({
   const weekAgo = pktFmt.format(weekAgoD);
 
   const workloads: UserWorkload[] = usersFiltered.map((user) => {
-    const mine = allTickets.filter((t) => t.assigneeUserId === user.id);
+    const mine = allTasks.filter((t) => people.get(t.id)?.assignees.includes(user.id));
     const active = mine.filter(
-      (t) => t.status !== "RESOLVED" && t.status !== "CLOSED"
+      (t) => !FINISHED.includes(t.status)
     );
     const openCount = mine.filter((t) => t.status === "OPEN").length;
     const inProgressCount = mine.filter(
@@ -116,27 +109,27 @@ export default async function TeamWorkloadPage({
     ).length;
     const blockedCount = mine.filter((t) => t.status === "BLOCKED").length;
     const overdueCount = active.filter(
-      (t) => t.dueDate && t.dueDate.slice(0, 10) < today
+      (t) => t.startDate && t.startDate.slice(0, 10) < today
     ).length;
     const resolvedWeek = mine.filter(
-      (t) => t.resolvedAt && t.resolvedAt >= weekAgo
+      (t) => t.doneAt && t.doneAt.slice(0, 10) >= weekAgo
     ).length;
     const totalActive = openCount + inProgressCount + blockedCount;
     const denom = resolvedWeek + totalActive;
     const completionRate = denom > 0 ? resolvedWeek / denom : 0;
 
     const sortedActive = [...active].sort((a, b) => {
-      const pa = PRIORITY_RANK[a.priority] ?? 5;
-      const pb = PRIORITY_RANK[b.priority] ?? 5;
+      const pa = priorityRank(a.priority);
+      const pb = priorityRank(b.priority);
       if (pa !== pb) return pa - pb;
-      const da = a.dueDate ? a.dueDate.slice(0, 10) : "9999-99-99";
-      const db_ = b.dueDate ? b.dueDate.slice(0, 10) : "9999-99-99";
+      const da = a.startDate ? a.startDate.slice(0, 10) : "9999-99-99";
+      const db_ = b.startDate ? b.startDate.slice(0, 10) : "9999-99-99";
       return da.localeCompare(db_);
     });
 
     const nextDueDate = sortedActive
-      .filter((t) => t.dueDate)
-      .map((t) => t.dueDate!.slice(0, 10))
+      .filter((t) => t.startDate)
+      .map((t) => t.startDate!.slice(0, 10))
       .sort((a, b) => a.localeCompare(b))[0] ?? null;
 
     return {
@@ -149,7 +142,7 @@ export default async function TeamWorkloadPage({
       totalActive,
       completionRate,
       nextDueDate,
-      tickets: sortedActive,
+      tasks: sortedActive,
     };
   });
 
@@ -163,7 +156,7 @@ export default async function TeamWorkloadPage({
     teamMembers: workloads.length,
     withOverdue: workloads.filter((w) => w.overdueCount > 0).length,
     totalOpen: workloads.reduce((s, w) => s + w.totalActive, 0),
-    overdueTickets: workloads.reduce((s, w) => s + w.overdueCount, 0),
+    overdueTasks: workloads.reduce((s, w) => s + w.overdueCount, 0),
   };
 
   const fmt = new Intl.NumberFormat("en-PK");
@@ -229,13 +222,13 @@ export default async function TeamWorkloadPage({
             <div className="mono text-xl font-bold">
               {fmt.format(stats.totalOpen)}
             </div>
-            <div className="stat-label">Total Open Tickets</div>
+            <div className="stat-label">Total Open Tasks</div>
           </div>
           <div className="bg-white p-4">
             <div className="mono text-xl font-bold">
-              {fmt.format(stats.overdueTickets)}
+              {fmt.format(stats.overdueTasks)}
             </div>
-            <div className="stat-label">Overdue Tickets</div>
+            <div className="stat-label">Overdue Tasks</div>
           </div>
         </div>
 
@@ -287,8 +280,8 @@ export default async function TeamWorkloadPage({
           {workloads.map((w) => {
             const initials = getInitials(w.user.fullName);
             const nextDL = nextDeadlineText(w.nextDueDate, today);
-            const shownTickets = w.tickets.slice(0, 5);
-            const remaining = w.tickets.length - shownTickets.length;
+            const shownTasks = w.tasks.slice(0, 5);
+            const remaining = w.tasks.length - shownTasks.length;
             const pct = Math.round(w.completionRate * 100);
             return (
               <div key={w.user.id} className="border border-black p-6">
@@ -381,37 +374,37 @@ export default async function TeamWorkloadPage({
 
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.08em] font-semibold text-[var(--muted)] mb-2">
-                    Active Tickets
+                    Active Tasks
                   </div>
-                  {shownTickets.length === 0 ? (
+                  {shownTasks.length === 0 ? (
                     <div className="text-[12px] italic text-[var(--muted)]">
-                      No active tickets
+                      No active tasks
                     </div>
                   ) : (
                     <div>
-                      {shownTickets.map((t) => {
+                      {shownTasks.map((t) => {
                         const title =
                           t.title.length > 40
                             ? t.title.slice(0, 40) + "…"
                             : t.title;
-                        const due = t.dueDate
-                          ? dueDiffText(t.dueDate.slice(0, 10), today)
+                        const due = t.startDate
+                          ? dueDiffText(t.startDate.slice(0, 10), today)
                           : "No due";
                         const isOverdue =
-                          t.dueDate && t.dueDate.slice(0, 10) < today;
+                          t.startDate && t.startDate.slice(0, 10) < today;
                         return (
                           <a
                             key={t.id}
-                            href={`/tickets/${t.id}?from=${encodeURIComponent("view=workload")}`}
+                            href={`/tasks/${t.id}`}
                             className="no-underline block text-[12px] py-1 border-b border-[var(--border-light)] hover:bg-gray-50"
                             style={{ color: "inherit" }}
                           >
-                            <span className="mono">{t.ticketNo}</span>
+                            <span className="mono">{t.taskNo}</span>
                             <span className="text-[var(--muted)]"> · </span>
                             <span>{title}</span>
                             <span className="text-[var(--muted)]"> · </span>
                             <span className="mono">
-                              {getPriorityShort(t.priority)}
+                              {priorityLabel(t.priority)}
                             </span>
                             <span className="text-[var(--muted)]"> · </span>
                             <span
@@ -434,10 +427,10 @@ export default async function TeamWorkloadPage({
                     </div>
                   )}
                   <a
-                    href={`/tickets?assignee=${w.user.id}&view=list`}
+                    href={`/tasks?user=${w.user.id}`}
                     className="no-underline text-[11px] uppercase tracking-[0.08em] font-semibold mt-3 inline-block border-b border-black"
                   >
-                    View all in Tickets →
+                    View all in Tasks →
                   </a>
                 </div>
               </div>

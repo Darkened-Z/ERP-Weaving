@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SidebarNav } from "./sidebar-nav";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { FormKeyboard } from "./form-keyboard";
+import { TaskReminders } from "./task-reminders";
 import { FormPersist } from "./form-persist";
 import { BRAND } from "@/lib/brand";
 
@@ -101,6 +102,7 @@ export function ShellLayout({
 
       <CommandPalette sections={sections} />
       <FormKeyboard />
+      <TaskReminders />
       <FormPersist />
     </div>
   );
