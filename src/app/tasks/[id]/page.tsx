@@ -18,6 +18,8 @@ import {
   priorityClass,
   priorityLabel,
   statusLabel,
+  isTaskAdmin,
+  visibleTaskIds,
 } from "@/lib/tasks";
 import { REMINDER_CHANNELS, parseMonthDates, parseWeekdays, reminderAt, reminderLabel, repeatLabel, type ReminderTiming, type ReminderUnit, type RepeatRule, type RepeatUnit } from "@/lib/task-schedule";
 
@@ -29,7 +31,7 @@ const stamp = (iso: string) =>
 
 /** Assignees, the creator and admins act on a task; people in the loop only watch and comment. */
 async function canAct(taskId: number, userId: number, roleName: string) {
-  if (roleName === "ADMIN" || roleName === "superadmin") return true;
+  if (isTaskAdmin(roleName)) return true;
   const [t] = await db.select({ c: schema.tasks.creatorUserId }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
   if (!t) return false;
   if (t.c === userId) return true;
@@ -47,6 +49,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
 
   const [task] = await db.select().from(schema.tasks).where(eq(schema.tasks.id, taskId));
   if (!task) notFound();
+  if (!isTaskAdmin(session.roleName) && !(await visibleTaskIds(session.userId)).has(taskId)) notFound();
 
   async function setStatus(formData: FormData) {
     "use server";
@@ -91,7 +94,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
     const s = await requireSession();
     const [t] = await db.select({ c: schema.tasks.creatorUserId }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
     if (!t) redirect("/tasks");
-    if (t.c !== s.userId && s.roleName !== "ADMIN" && s.roleName !== "superadmin") redirect(`/tasks/${taskId}?error=not_yours`);
+    if (!isTaskAdmin(s.roleName)) redirect(`/tasks/${taskId}?error=not_yours`);
     await db.delete(schema.tasks).where(eq(schema.tasks.id, taskId));
     revalidatePath("/tasks");
     redirect("/tasks");
@@ -109,7 +112,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
     ? await db.select({ id: schema.tasks.id, taskNo: schema.tasks.taskNo }).from(schema.tasks).where(eq(schema.tasks.id, task.seriesId))
     : [];
   const mayAct = await canAct(taskId, session.userId, session.roleName);
-  const mayDelete = task.creatorUserId === session.userId || session.roleName === "ADMIN" || session.roleName === "superadmin";
+  const mayEdit = isTaskAdmin(session.roleName);
   const images = parseImages(task.img);
   const doneCount = items.filter((i) => i.done).length;
   const rep = repeatLabel({ rule: task.repeatRule as RepeatRule, every: task.repeatEvery, unit: task.repeatUnit as RepeatUnit | null, days: parseWeekdays(task.repeatDays), dates: parseMonthDates(task.repeatDates), end: task.repeatEnd });
@@ -155,8 +158,8 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
                 <button className={`btn btn-sm ${n.primary ? "" : "btn-outline"}`} style={n.primary && n.to === "DONE" ? { background: "var(--success)", borderColor: "var(--success)" } : undefined}>{n.label}</button>
               </form>
             ))}
-            {mayAct && <Link href={`/tasks/new?id=${task.id}`} className="btn btn-outline btn-sm">Edit</Link>}
-            {mayDelete && (
+            {mayEdit && <Link href={`/tasks/new?id=${task.id}`} className="btn btn-outline btn-sm">Edit</Link>}
+            {mayEdit && (
               <form action={deleteTask}>
                 <ConfirmButton message={`Delete ${task.taskNo}? This cannot be undone.`} className="btn btn-danger btn-sm">Delete</ConfirmButton>
               </form>

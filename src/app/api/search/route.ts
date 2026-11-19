@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { or, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
-import { ensureTaskTables, statusLabel } from "@/lib/tasks";
+import { ensureTaskTables, isTaskAdmin, statusLabel, visibleTaskIds } from "@/lib/tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,7 @@ export async function GET(req: Request) {
   const pat = `%${escQ}%`;
 
   await ensureTaskTables();
+  const seeable = isTaskAdmin(session.roleName) ? new Set<number>() : await visibleTaskIds(session.userId);
   const [accounts, contracts, beams, greyCons, products, looms, invOpen, taskRows] = await Promise.all([
     db
       .select({
@@ -195,7 +196,7 @@ export async function GET(req: Request) {
       subtitle: [i.itemCode, i.voucherNo].filter(Boolean).join(" - "),
       href: `/define/inv-opening?tab=${INV_TAB_MAP[i.itemType] ?? "yarn"}&id=${i.id}`,
     })),
-    ...taskRows.map((t) => ({
+    ...(isTaskAdmin(session.roleName) ? taskRows : taskRows.filter((t) => seeable.has(t.id))).map((t) => ({
       type: "Task",
       id: String(t.id),
       title: t.title,

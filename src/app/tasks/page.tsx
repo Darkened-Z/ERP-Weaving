@@ -19,6 +19,8 @@ import {
   priorityLabel,
   priorityRank,
   statusLabel,
+  isTaskAdmin,
+  visibleTaskIds,
 } from "@/lib/tasks";
 import { parseMonthDates, parseWeekdays, repeatLabel, type RepeatRule, type RepeatUnit } from "@/lib/task-schedule";
 
@@ -48,14 +50,17 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const asOf = today();
   const users = await db.select({ id: schema.users.id, fullName: schema.users.fullName }).from(schema.users);
   const uname = new Map(users.map((u) => [u.id, u.fullName]));
-  const all = await db.select({
+  const allRows = db.select({
     id: schema.tasks.id, taskNo: schema.tasks.taskNo, title: schema.tasks.title, category: schema.tasks.category,
     priority: schema.tasks.priority, status: schema.tasks.status, creatorUserId: schema.tasks.creatorUserId,
     startDate: schema.tasks.startDate, startTime: schema.tasks.startTime, repeatRule: schema.tasks.repeatRule,
     repeatEvery: schema.tasks.repeatEvery, seriesId: schema.tasks.seriesId, repeatDays: schema.tasks.repeatDays, repeatUnit: schema.tasks.repeatUnit, repeatDates: schema.tasks.repeatDates, loomNo: schema.tasks.loomNo, shed: schema.tasks.shed,
   }).from(schema.tasks).orderBy(desc(schema.tasks.id));
-  const people = await peopleFor(all.map((t) => t.id));
   const me = session.userId;
+  const admin = isTaskAdmin(session.roleName);
+  const seeable = admin ? null : await visibleTaskIds(me);
+  const all = (await allRows).filter((t) => !seeable || seeable.has(t.id));
+  const people = await peopleFor(all.map((t) => t.id));
   const userId = p.user && /^\d+$/.test(p.user) ? parseInt(p.user, 10) : null;
   const q = (p.q ?? "").trim().toLowerCase();
 

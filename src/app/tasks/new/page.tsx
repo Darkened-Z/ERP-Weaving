@@ -12,6 +12,7 @@ import {
   ensureTaskTables,
   nextTaskNo,
   peopleFor,
+  isTaskAdmin,
 } from "@/lib/tasks";
 import { REPEAT_RULES, parseMonthDates, parseWeekdays, type RepeatRule } from "@/lib/task-schedule";
 
@@ -25,12 +26,13 @@ const CHANNELS = ["APP", "WHATSAPP", "EMAIL"];
 
 export default async function AssignTaskPage({ searchParams }: { searchParams: Promise<SP> }) {
   const params = await searchParams;
-  await requireSession();
+  const me = await requireSession();
   await ensureTaskTables();
 
   const editId = params.id && /^\d+$/.test(params.id) ? parseInt(params.id, 10) : null;
   const [task] = editId ? await db.select().from(schema.tasks).where(eq(schema.tasks.id, editId)) : [];
   if (editId && !task) notFound();
+  if (editId && !isTaskAdmin(me.roleName)) redirect(`/tasks/${editId}`);
 
   const users = (await db.select().from(schema.users))
     .filter((u) => u.roleName !== "superadmin" && u.status === "A")
@@ -44,6 +46,7 @@ export default async function AssignTaskPage({ searchParams }: { searchParams: P
     const s = (k: string) => String(formData.get(k) ?? "").trim();
     const id = parseInt(s("edit_id"), 10);
     const isEdit = Number.isFinite(id) && id > 0;
+    if (isEdit && !isTaskAdmin(session.roleName)) redirect(`/tasks/${id}`);
     const back = isEdit ? `/tasks/new?id=${id}` : "/tasks/new";
 
     const title = s("title");

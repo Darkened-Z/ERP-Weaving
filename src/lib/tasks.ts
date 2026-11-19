@@ -232,3 +232,15 @@ export async function contactsFor(userIds: number[]): Promise<Map<number, { phon
 export function priorityClass(v: string): string {
   return v === "URGENT" ? "bg-[var(--danger)] text-white" : v === "HIGH" ? "border border-[var(--danger)] text-[var(--danger)]" : v === "LOW" ? "text-[var(--muted)]" : "border border-[var(--border)]";
 }
+
+/** Admins see and edit every task; everyone else only works on what is theirs. */
+export const isTaskAdmin = (roleName: string | null | undefined) => ["ADMIN", "SUPERADMIN"].includes((roleName ?? "").toUpperCase());
+
+/** Tasks a non-admin may see: assigned to them, in their loop, or created by them. */
+export async function visibleTaskIds(userId: number): Promise<Set<number>> {
+  const [links, created] = await Promise.all([
+    db.select({ id: schema.taskUsers.taskId }).from(schema.taskUsers).where(eq(schema.taskUsers.userId, userId)),
+    db.select({ id: schema.tasks.id }).from(schema.tasks).where(eq(schema.tasks.creatorUserId, userId)),
+  ]);
+  return new Set([...links, ...created].map((r) => r.id));
+}
