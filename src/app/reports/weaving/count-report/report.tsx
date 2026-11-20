@@ -6,6 +6,7 @@ import { db, schema } from "@/db";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
 import { fmt, fmt2, escLike, sixMonthsAgo, todayIso, partyByNameOptions, yarnCountOptions } from "../../_shared";
 import { DateBox } from "@/components/date-box";
+import { closedPartyCounts } from "@/lib/closed-party-counts";
 
 // WEAVING COUNTS ACCOUNTS — party × count. Seed = yarn sold to the party
 // (ext_yarn_sal_voucher, the "Yarn Sale Register"); Consumed = the yarn the
@@ -40,10 +41,11 @@ export async function CountsAccountsReport({
   const party = p.party?.trim() ?? "";
   const count = p.count?.trim() ?? "";
 
-  const [partyOpts, countOpts, allCounts] = await Promise.all([
+  const [partyOpts, countOpts, allCounts, closed] = await Promise.all([
     partyByNameOptions(),
     yarnCountOptions(),
     db.select().from(schema.yarnCounts),
+    closedPartyCounts(),
   ]);
   const descByCode = new Map(
     allCounts.map((c) => [c.countCode, c.description ?? ""]),
@@ -208,6 +210,9 @@ export async function CountsAccountsReport({
   // to move yarn.
   const rows = Array.from(map.values())
     .filter((r) => !scopedParties || scopedParties.has(r.party))
+    // Closed in the masters = gone from the report: a party closed in the Chart
+    // of Accounts, or one count of a party closed in Party Count.
+    .filter((r) => !closed.isClosed(r.party, r.count))
     // A Party Count row whose count code does not resolve shows as "— — —" with
     // zeros the whole way across; it is a broken master row, not a figure.
     .filter((r) => r.count && r.count !== "—")
