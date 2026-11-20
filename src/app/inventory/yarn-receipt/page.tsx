@@ -183,6 +183,10 @@ export default async function YarnReceiptPage({
     filterKeys: [...(partiesByCount.get(c.code) ?? []), ...unconfiguredParties],
   }));
   const countDescByCode = new Map(countList.map((c) => [c.code, c.description]));
+  const yarnQuality = (code: string | null | undefined) => {
+    const c = code ? countList.find((x) => x.code === code) : null;
+    return c ? `${c.description}${c.type ? ` ${c.type}` : ""}` : code ?? "";
+  };
   const fmtN = (n: number | null | undefined, d = 0) =>
     n == null ? "" : (Math.round(n * 10 ** d) / 10 ** d).toLocaleString("en-US");
 
@@ -229,7 +233,7 @@ export default async function YarnReceiptPage({
   const saleVoucherColumns = [
     { key: "vno", label: "V.No", width: 92 },
     { key: "party", label: "Party" },
-    { key: "count", label: "Count", width: 110 },
+    { key: "count", label: "Quality", width: 150 },
     { key: "bags", label: "Bags", width: 70, align: "right" as const },
     { key: "lbs", label: "Lbs", width: 90, align: "right" as const },
     { key: "rate", label: "Rate", width: 70, align: "right" as const },
@@ -244,7 +248,7 @@ export default async function YarnReceiptPage({
       cells: {
         vno: v.vNo,
         party: v.party ?? "",
-        count: info?.count ?? "",
+        count: yarnQuality(info?.count),
         bags: fmtN(info?.bags ?? null, 2),
         lbs: fmtN(info?.lbs ?? null),
         rate: fmtN(info?.rate ?? null, 2),
@@ -866,7 +870,7 @@ export default async function YarnReceiptPage({
                       <a href={`/external/yarn/sale?id=${linkedSv.id}`} target="_blank" rel="noreferrer" className="mono font-bold underline text-[14px]">{linkedSv.vNo}</a>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
                         <div><span className="text-[var(--muted)]">Date: </span><b className="mono">{linkedSv.vDate ?? "—"}</b></div>
-                        <div><span className="text-[var(--muted)]">Count: </span><b className="mono">{linkedSvInfo?.count ? `${linkedSvInfo.count} ${countDescByCode.get(linkedSvInfo.count) ?? ""}` : "—"}</b></div>
+                        <div><span className="text-[var(--muted)]">Quality: </span><b className="mono">{linkedSvInfo?.count ? yarnQuality(linkedSvInfo.count) : "—"}</b></div>
                         <div className="col-span-2"><span className="text-[var(--muted)]">Party: </span><b>{linkedSv.party ?? "—"}</b></div>
                         <div><span className="text-[var(--muted)]">Bags: </span><b className="mono">{fmtN(linkedSvInfo?.bags ?? null, 2) || "—"}</b></div>
                         <div><span className="text-[var(--muted)]">Lbs: </span><b className="mono">{fmtN(linkedSvInfo?.lbs ?? null) || "—"}</b></div>
