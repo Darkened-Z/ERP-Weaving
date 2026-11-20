@@ -688,6 +688,9 @@ export default async function BankPaymentPage({
                   >
                     Cheque
                   </a>
+                  <a href={`${BASE}/receipt?id=${formVoucher.id}`} className="btn btn-outline btn-sm" target="_blank" rel="noreferrer">
+                    Receipts
+                  </a>
                 </>
               ) : null}
               {formVoucher && session?.roleName === "ADMIN" && (
@@ -845,7 +848,7 @@ export default async function BankPaymentPage({
                           {AMOUNT_LABEL}
                         </th>
                         <th style={{ width: 170 }}>Cost Center / Jobs (F9)</th>
-                        <th style={{ width: 40 }}></th>
+                        <th style={{ width: 76 }}></th>
                       </tr>
                     </thead>
                     <tbody id="line-rows">
@@ -914,7 +917,18 @@ export default async function BankPaymentPage({
                                 defaultValue={l?.ccCode ?? ""}
                               />
                             </td>
-                            <td className="text-center">
+                            <td className="text-center whitespace-nowrap">
+                              {formVoucher && l && !IS_RECEIPT && (
+                                <a
+                                  href={`${BASE}/receipt?id=${formVoucher.id}&sr=${l.srno}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="no-print inline-block border border-black px-1 mr-1 text-[10px] leading-[16px] hover:bg-black hover:text-white"
+                                  title="Print payment receipt for this line"
+                                >
+                                  RCPT
+                                </a>
+                              )}
                               <RowClearButton />
                             </td>
                           </tr>

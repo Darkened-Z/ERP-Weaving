@@ -607,6 +607,11 @@ export default async function CashPaymentPage({
                   Print
                 </a>
               ) : null}
+              {formVoucher?.id ? (
+                <a href={`${BASE}/receipt?id=${formVoucher.id}`} className="btn btn-outline btn-sm" target="_blank" rel="noreferrer">
+                  Receipts
+                </a>
+              ) : null}
               {formVoucher && (
                 <form action={deleteVoucher} className="inline">
                   <input type="hidden" name="id" value={formVoucher.id} />
@@ -729,7 +734,7 @@ export default async function CashPaymentPage({
                       <th style={{ width: 130 }}>Chq.Date</th>
                       <th style={{ width: 120 }}>Dr</th>
                       <th style={{ width: 180 }}>Cost Center / Jobs (F9)</th>
-                      <th style={{ width: 40 }}></th>
+                      <th style={{ width: 76 }}></th>
                     </tr>
                   </thead>
                   <tbody id="line-rows">
@@ -802,7 +807,18 @@ export default async function CashPaymentPage({
                               defaultValue={l && l.ccCode != null ? ccCodeToDesc.get(l.ccCode) ?? "" : ""}
                             />
                           </td>
-                          <td className="text-center">
+                          <td className="text-center whitespace-nowrap">
+                            {formVoucher && l && (
+                              <a
+                                href={`${BASE}/receipt?id=${formVoucher.id}&sr=${l.srno}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="no-print inline-block border border-black px-1 mr-1 text-[10px] leading-[16px] hover:bg-black hover:text-white"
+                                title="Print payment receipt for this line"
+                              >
+                                RCPT
+                              </a>
+                            )}
                             <RowClearButton />
                           </td>
                         </tr>
