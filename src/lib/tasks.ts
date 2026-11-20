@@ -90,6 +90,9 @@ export function ensureTaskTables(): Promise<void> {
         task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
         actor_user_id INTEGER NOT NULL REFERENCES users(id),
         action TEXT NOT NULL, from_value TEXT, to_value TEXT, created_at TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS task_repeat_skips (
+        series_id INTEGER NOT NULL, start_date TEXT NOT NULL,
+        PRIMARY KEY (series_id, start_date))`,
       `CREATE TABLE IF NOT EXISTS user_contacts (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         phone TEXT, email TEXT)`,
@@ -177,6 +180,8 @@ export async function materializeRepeats(asOf = today()): Promise<number> {
     // Copies start from the day the series was assigned — a back-dated start
     // must not flood the list with overdue copies from before it existed.
     const since = toKarachiDate(new Date(root.createdAt));
+    // A copy someone deleted stays deleted.
+    for (const s of await db.select({ d: schema.taskRepeatSkips.startDate }).from(schema.taskRepeatSkips).where(eq(schema.taskRepeatSkips.seriesId, root.id))) have.add(s.d);
     const missing = dates.filter((d) => d >= since && !have.has(d)).slice(-60);
     if (!missing.length) continue;
     const people = await db.select().from(schema.taskUsers).where(eq(schema.taskUsers.taskId, root.id));

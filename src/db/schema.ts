@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -910,6 +910,14 @@ export const taskHistory = sqliteTable("task_history", {
   toValue: text("to_value"),
   createdAt: text("created_at").notNull(),
 });
+
+/** Repeat dates whose copy was deleted: the series must not create them again. */
+export const taskRepeatSkips = sqliteTable("task_repeat_skips", {
+  seriesId: integer("series_id").notNull(),
+  startDate: text("start_date").notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.seriesId, t.startDate] }),
+}));
 
 export const greyPakiParchi = sqliteTable("grey_paki_parchi", {
   id: integer("id").primaryKey({ autoIncrement: true }),

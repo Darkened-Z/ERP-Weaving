@@ -92,10 +92,17 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   async function deleteTask() {
     "use server";
     const s = await requireSession();
-    const [t] = await db.select({ c: schema.tasks.creatorUserId }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
+    const [t] = await db.select({ seriesId: schema.tasks.seriesId, startDate: schema.tasks.startDate }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
     if (!t) redirect("/tasks");
     if (!isTaskAdmin(s.roleName)) redirect(`/tasks/${taskId}?error=not_yours`);
-    await db.delete(schema.tasks).where(eq(schema.tasks.id, taskId));
+    await db.transaction(async (tx) => {
+      // Deleting one repeat copy removes that date only; the series must not
+      // recreate it on the next load.
+      if (t.seriesId && t.seriesId !== taskId && t.startDate) {
+        await tx.insert(schema.taskRepeatSkips).values({ seriesId: t.seriesId, startDate: t.startDate }).onConflictDoNothing();
+      }
+      await tx.delete(schema.tasks).where(eq(schema.tasks.id, taskId));
+    });
     revalidatePath("/tasks");
     redirect("/tasks");
   }
