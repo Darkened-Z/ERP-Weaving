@@ -68,7 +68,10 @@ export default async function MyTasksPage() {
       <div className="animate-in max-w-[760px]">
         <div className="flex items-baseline justify-between gap-3 mb-4">
           <h1 className="page-title">My Tasks</h1>
-          <Link href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
+          <div className="flex gap-2">
+            <Link href="/tasks/report" className="btn btn-outline btn-sm">My report</Link>
+            <Link href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-px bg-black border border-black mb-5">

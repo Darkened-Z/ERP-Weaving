@@ -112,6 +112,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
               filename="tasks"
               title="Tasks"
             />
+            <Link href="/tasks/report" className="btn btn-outline btn-sm">Report</Link>
             <Link href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
           </div>
         </div>
