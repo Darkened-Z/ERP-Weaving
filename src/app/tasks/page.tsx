@@ -71,6 +71,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     if (p.tab === "loop") return pp?.loop.includes(me);
     return true;
   });
+  const hiddenDone = inTab.filter((t) => FINISHED.includes(t.status)).length;
   const rows = inTab
     .filter((t) => (p.status ? t.status === p.status : p.done === "1" || !FINISHED.includes(t.status)))
     .filter((t) => !p.category || t.category === p.category)
@@ -160,7 +161,11 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
 
         {rows.length === 0 ? (
           <div className="border border-[var(--border)] p-8 text-center text-[13px] text-[var(--muted)]">
-            No tasks here. <Link href="/tasks/new" className="underline">Assign one</Link>.
+            {!p.status && p.done !== "1" && hiddenDone > 0 ? (
+              <>No open tasks. {hiddenDone} done task{hiddenDone !== 1 ? "s are" : " is"} hidden — <Link href={`/tasks${qs(p, { done: "1" })}`} className="underline">show done</Link>.</>
+            ) : (
+              <>No tasks here. <Link href="/tasks/new" className="underline">Assign one</Link>.</>
+            )}
           </div>
         ) : (
           <div className="flex flex-col border border-black divide-y divide-[var(--border-light)] bg-white">
