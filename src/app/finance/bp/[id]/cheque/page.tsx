@@ -185,7 +185,7 @@ export default async function BpChequePrint({
 
       <div className="cheque-wrap">
         <div className="cheque-toolbar no-print">
-          <Link href={`/finance/bp?id=${vid}`} className="btn btn-outline btn-sm">
+          <Link prefetch={false} href={`/finance/bp?id=${vid}`} className="btn btn-outline btn-sm">
             Back
           </Link>
           <PrintButton label="Print Cheque" />

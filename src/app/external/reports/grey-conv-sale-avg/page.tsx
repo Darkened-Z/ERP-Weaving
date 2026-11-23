@@ -373,7 +373,7 @@ export default async function GreyConvSaleAvgPage({
                 {rows.map((r, i) => (
                   <tr key={r.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-2 py-1.5 border-r border-[var(--border-light)] mono font-bold">
-                      <Link href={`/external/contracts/grey-conversion?id=${r.id}`} className="no-underline" style={{ color: "inherit" }}>
+                      <Link prefetch={false} href={`/external/contracts/grey-conversion?id=${r.id}`} className="no-underline" style={{ color: "inherit" }}>
                         {r.contNo}
                       </Link>
                     </td>

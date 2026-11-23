@@ -86,7 +86,7 @@ export default async function InventoryReportsPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {reports.map((r) => (
-            <Link
+            <Link prefetch={false}
               key={r.label}
               href={r.href}
               className="card group transition-colors block"

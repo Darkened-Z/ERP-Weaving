@@ -200,12 +200,12 @@ export default async function AssignTaskPage({ searchParams }: { searchParams: P
                 <input type="checkbox" name="assign_more" value="1" defaultChecked={params.more === "1"} /> Assign More Task
               </label>
             ) : (
-              <Link href={`/tasks/${task.id}`} className="btn btn-outline btn-sm">Cancel</Link>
+              <Link prefetch={false} href={`/tasks/${task.id}`} className="btn btn-outline btn-sm">Cancel</Link>
             )}
           </div>
           {savedTask && (
             <div className="mx-4 mt-3 border border-[var(--success)] px-3 py-2 text-[12px]">
-              Assigned <Link href={`/tasks/${savedTask.id}`} className="underline mono">{savedTask.taskNo}</Link> — {savedTask.title}. Add the next one.
+              Assigned <Link prefetch={false} href={`/tasks/${savedTask.id}`} className="underline mono">{savedTask.taskNo}</Link> — {savedTask.title}. Add the next one.
             </div>
           )}
           {params.error === "title" && <div className="mx-4 mt-3 border-2 border-[var(--danger)] px-3 py-2 text-[12px] text-[var(--danger)]">A title is required.</div>}
@@ -224,7 +224,7 @@ export default async function AssignTaskPage({ searchParams }: { searchParams: P
         </form>
         {!task && (
           <div className="mt-3">
-            <Link href="/tasks" className="text-[13px] underline">← All tasks</Link>
+            <Link prefetch={false} href="/tasks" className="text-[13px] underline">← All tasks</Link>
           </div>
         )}
       </div>

@@ -135,7 +135,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   return (
     <Shell active="tickets">
       <div className="animate-in max-w-[860px]">
-        <div className="mb-3"><Link href="/tasks" className="text-[13px] underline">← Tasks</Link></div>
+        <div className="mb-3"><Link prefetch={false} href="/tasks" className="text-[13px] underline">← Tasks</Link></div>
         {sp.error === "not_yours" && <div className="border-2 border-[var(--danger)] px-3 py-2 mb-3 text-[12px] text-[var(--danger)]">Only the people assigned, the person who assigned it, or an admin can change this task.</div>}
 
         <div className="border border-black bg-white p-4 mb-4">
@@ -155,7 +155,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
             <div><span className="text-[var(--muted)]">Users:</span> {people.assignees.map((i) => uname.get(i)).join(", ") || "Unassigned"}</div>
             <div><span className="text-[var(--muted)]">In loop:</span> {people.loop.map((i) => uname.get(i)).join(", ") || "—"}</div>
             {task.loomNo != null && <div><span className="text-[var(--muted)]">Loom:</span> Shed {task.shed} · Loom {task.loomNo}</div>}
-            {series && <div><span className="text-[var(--muted)]">Series:</span> <Link href={`/tasks/${series.id}`} className="underline mono">{series.taskNo}</Link></div>}
+            {series && <div><span className="text-[var(--muted)]">Series:</span> <Link prefetch={false} href={`/tasks/${series.id}`} className="underline mono">{series.taskNo}</Link></div>}
           </div>
 
           <div className="flex flex-wrap gap-2 mt-4">
@@ -165,7 +165,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
                 <button className={`btn btn-sm ${n.primary ? "" : "btn-outline"}`} style={n.primary && n.to === "DONE" ? { background: "var(--success)", borderColor: "var(--success)" } : undefined}>{n.label}</button>
               </form>
             ))}
-            {mayEdit && <Link href={`/tasks/new?id=${task.id}`} className="btn btn-outline btn-sm">Edit</Link>}
+            {mayEdit && <Link prefetch={false} href={`/tasks/new?id=${task.id}`} className="btn btn-outline btn-sm">Edit</Link>}
             {mayEdit && (
               <form action={deleteTask}>
                 <ConfirmButton message={`Delete ${task.taskNo}? This cannot be undone.`} className="btn btn-danger btn-sm">Delete</ConfirmButton>

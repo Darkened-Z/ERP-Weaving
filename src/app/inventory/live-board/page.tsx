@@ -146,9 +146,9 @@ export default async function LiveBoardPage({ searchParams }: { searchParams: Pr
         </div>
 
         <div className="flex gap-2 flex-wrap mb-5">
-          <Link href="/inventory/live-board" className={`btn btn-sm ${shedFilter ? "btn-outline" : ""}`}>All sheds</Link>
+          <Link prefetch={false} href="/inventory/live-board" className={`btn btn-sm ${shedFilter ? "btn-outline" : ""}`}>All sheds</Link>
           {sheds.map((s) => (
-            <Link key={s} href={`/inventory/live-board?shed=${encodeURIComponent(s)}`} className={`btn btn-sm ${shedFilter === s ? "" : "btn-outline"}`}>
+            <Link prefetch={false} key={s} href={`/inventory/live-board?shed=${encodeURIComponent(s)}`} className={`btn btn-sm ${shedFilter === s ? "" : "btn-outline"}`}>
               Shed {s}
             </Link>
           ))}

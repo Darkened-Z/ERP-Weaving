@@ -100,7 +100,7 @@ export default async function TaskReportPage({ searchParams }: { searchParams: P
               filename="task-report"
               title="Task Report"
             />
-            <Link href="/tasks" className="btn btn-outline btn-sm">Tasks</Link>
+            <Link prefetch={false} href="/tasks" className="btn btn-outline btn-sm">Tasks</Link>
           </div>
         </div>
 
@@ -117,7 +117,7 @@ export default async function TaskReportPage({ searchParams }: { searchParams: P
             </div>
           )}
           <button className="btn btn-sm">Apply</button>
-          <Link href="/tasks/report" className="btn btn-outline btn-sm">Clear</Link>
+          <Link prefetch={false} href="/tasks/report" className="btn btn-outline btn-sm">Clear</Link>
         </form>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-black border border-black mb-5">
@@ -157,7 +157,7 @@ export default async function TaskReportPage({ searchParams }: { searchParams: P
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.userId} className={detail?.userId === r.userId ? "bg-[#f5f5f5]" : ""}>
-                    <td className="font-semibold"><Link href={qs(r.userId)} className="underline">{r.name}</Link></td>
+                    <td className="font-semibold"><Link prefetch={false} href={qs(r.userId)} className="underline">{r.name}</Link></td>
                     <td className="mono text-right">{r.s.total}</td>
                     <td className="mono text-right text-[var(--success)]">{r.s.onTime}</td>
                     <td className="mono text-right text-[#b45309]">{r.s.late}</td>
@@ -178,7 +178,7 @@ export default async function TaskReportPage({ searchParams }: { searchParams: P
           <div>
             <div className="flex items-baseline justify-between mb-2">
               <div className="label">{detail.name} — {detail.items.length} task{detail.items.length !== 1 ? "s" : ""}</div>
-              {admin && <Link href={qs()} className="text-[12px] underline no-print">All users</Link>}
+              {admin && <Link prefetch={false} href={qs()} className="text-[12px] underline no-print">All users</Link>}
             </div>
             <div className="overflow-x-auto border border-black bg-white">
               <table className="w-full text-[13px]">
@@ -195,7 +195,7 @@ export default async function TaskReportPage({ searchParams }: { searchParams: P
                 <tbody>
                   {[...detail.items].sort((a, b) => (b.task.startDate ?? "").localeCompare(a.task.startDate ?? "")).map((i) => (
                     <tr key={i.task.id}>
-                      <td className="mono"><Link href={`/tasks/${i.task.id}`} className="underline">{i.task.taskNo}</Link></td>
+                      <td className="mono"><Link prefetch={false} href={`/tasks/${i.task.id}`} className="underline">{i.task.taskNo}</Link></td>
                       <td>{i.task.title}</td>
                       <td className="mono">{dmy(i.task.startDate)}{i.task.startTime ? ` ${i.task.startTime}` : ""}</td>
                       <td className="mono">{dmy(i.doneOn)}</td>

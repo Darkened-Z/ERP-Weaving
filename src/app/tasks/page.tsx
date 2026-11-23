@@ -113,14 +113,14 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
               filename="tasks"
               title="Tasks"
             />
-            <Link href="/tasks/report" className="btn btn-outline btn-sm">Report</Link>
-            <Link href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
+            <Link prefetch={false} href="/tasks/report" className="btn btn-outline btn-sm">Report</Link>
+            <Link prefetch={false} href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
           </div>
         </div>
 
         <div className="flex gap-0 border-b border-black mb-4 overflow-x-auto">
           {TABS.map((t) => (
-            <Link key={t.value} href={`/tasks${qs(p, { tab: t.value || undefined })}`} className={`px-4 py-2 text-[13px] whitespace-nowrap ${(p.tab ?? "") === t.value ? "bg-black text-white font-semibold" : ""}`}>
+            <Link prefetch={false} key={t.value} href={`/tasks${qs(p, { tab: t.value || undefined })}`} className={`px-4 py-2 text-[13px] whitespace-nowrap ${(p.tab ?? "") === t.value ? "bg-black text-white font-semibold" : ""}`}>
               {t.label}
             </Link>
           ))}
@@ -156,15 +156,15 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
           </select>
           <label className="flex items-center gap-1 text-[12px]"><input type="checkbox" name="done" value="1" defaultChecked={p.done === "1"} /> include done</label>
           <button className="btn btn-sm">Apply</button>
-          <Link href={`/tasks${p.tab ? `?tab=${p.tab}` : ""}`} className="btn btn-outline btn-sm">Clear</Link>
+          <Link prefetch={false} href={`/tasks${p.tab ? `?tab=${p.tab}` : ""}`} className="btn btn-outline btn-sm">Clear</Link>
         </form>
 
         {rows.length === 0 ? (
           <div className="border border-[var(--border)] p-8 text-center text-[13px] text-[var(--muted)]">
             {!p.status && p.done !== "1" && hiddenDone > 0 ? (
-              <>No open tasks. {hiddenDone} done task{hiddenDone !== 1 ? "s are" : " is"} hidden — <Link href={`/tasks${qs(p, { done: "1" })}`} className="underline">show done</Link>.</>
+              <>No open tasks. {hiddenDone} done task{hiddenDone !== 1 ? "s are" : " is"} hidden — <Link prefetch={false} href={`/tasks${qs(p, { done: "1" })}`} className="underline">show done</Link>.</>
             ) : (
-              <>No tasks here. <Link href="/tasks/new" className="underline">Assign one</Link>.</>
+              <>No tasks here. <Link prefetch={false} href="/tasks/new" className="underline">Assign one</Link>.</>
             )}
           </div>
         ) : (
@@ -174,7 +174,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
               const late = isOverdue(t, asOf);
               const rep = repeatLabel({ rule: t.repeatRule as RepeatRule, every: t.repeatEvery, unit: t.repeatUnit as RepeatUnit | null, days: parseWeekdays(t.repeatDays), dates: parseMonthDates(t.repeatDates) });
               return (
-                <Link key={t.id} href={`/tasks/${t.id}`} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 px-4 py-3 hover:bg-[var(--surface)]">
+                <Link prefetch={false} key={t.id} href={`/tasks/${t.id}`} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 px-4 py-3 hover:bg-[var(--surface)]">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="mono text-[11px] text-[var(--muted)]">{t.taskNo}</span>

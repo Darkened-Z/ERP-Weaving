@@ -295,7 +295,7 @@ export default async function GreyDespatchChalanPage({
 
       <div className="chalan-wrap">
         <div className="chalan-toolbar no-print">
-          <Link href="/inventory/grey-despatch" className="btn btn-outline btn-sm no-print">
+          <Link prefetch={false} href="/inventory/grey-despatch" className="btn btn-outline btn-sm no-print">
             Back
           </Link>
           <div className="flex gap-2">

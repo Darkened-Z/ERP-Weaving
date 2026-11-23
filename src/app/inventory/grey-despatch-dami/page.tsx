@@ -591,7 +591,7 @@ export default async function GreyDespatchDamiPage({
 
                 {/* Link to print/voucher page */}
                 <div className="mt-3 no-print">
-                  <Link
+                  <Link prefetch={false}
                     href={`/inventory/grey-despatch-dami/${formItem.id}/voucher`}
                     target="_blank"
                     className="btn btn-sm"
@@ -642,7 +642,7 @@ export default async function GreyDespatchDamiPage({
                 <div className="text-[10px] text-[var(--muted)] mt-1">
                   {existingLines.length} piece row{existingLines.length === 1 ? "" : "s"} saved
                 </div>
-                <Link
+                <Link prefetch={false}
                   href={`/inventory/grey-despatch-dami/${formItem.id}/voucher`}
                   target="_blank"
                   className="btn btn-outline btn-sm w-full mt-2 no-print"

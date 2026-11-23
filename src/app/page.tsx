@@ -152,7 +152,7 @@ export default async function Dashboard() {
             <div className="section-title" style={{ color: GROUP_COLORS[group.label], borderColor: GROUP_COLORS[group.label] }}>{group.label}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {group.items.map((m) => (
-                <Link key={m.href} href={m.href} className="card group transition-colors block" style={{ borderLeft: `3px solid ${GROUP_COLORS[group.label] ?? "transparent"}` }}>
+                <Link prefetch={false} key={m.href} href={m.href} className="card group transition-colors block" style={{ borderLeft: `3px solid ${GROUP_COLORS[group.label] ?? "transparent"}` }}>
                   <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--muted)] mb-2">
                     {m.label}
                   </div>

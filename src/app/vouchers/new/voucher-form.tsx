@@ -135,7 +135,7 @@ export default function NewVoucherForm({ accounts }: { accounts: Account[] }) {
           </button>
         </div>
         <nav className="flex-1 py-4 px-5">
-          <Link
+          <Link prefetch={false}
             href="/vouchers"
             onClick={() => setSidebarOpen(false)}
             className="block text-[12px] text-white/50 hover:text-white transition-colors mb-2"

@@ -69,8 +69,8 @@ export default async function MyTasksPage() {
         <div className="flex items-baseline justify-between gap-3 mb-4">
           <h1 className="page-title">My Tasks</h1>
           <div className="flex gap-2">
-            <Link href="/tasks/report" className="btn btn-outline btn-sm">My report</Link>
-            <Link href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
+            <Link prefetch={false} href="/tasks/report" className="btn btn-outline btn-sm">My report</Link>
+            <Link prefetch={false} href="/tasks/new" className="btn btn-sm">+ Assign Task</Link>
           </div>
         </div>
 
@@ -107,7 +107,7 @@ export default async function MyTasksPage() {
                         <button className="w-6 h-6 border-2 border-black hover:bg-[var(--success)]" title="Mark done" aria-label={`Mark ${t.taskNo} done`} />
                       </form>
                     )}
-                    <Link href={`/tasks/${t.id}`} className="flex-1 min-w-0">
+                    <Link prefetch={false} href={`/tasks/${t.id}`} className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-[10px] px-1.5 py-0.5 font-semibold ${priorityClass(t.priority)}`}>{priorityLabel(t.priority)}</span>
                         <span className="text-[11px] text-[var(--muted)]">{categoryLabel(t.category)}</span>

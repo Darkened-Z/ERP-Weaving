@@ -250,7 +250,7 @@ export default async function YarnRegisterPage({
                 <button type="submit" form="yr-filter" formAction="/external/reports/yarn-register/register-party" formTarget="_blank" className="btn btn-outline btn-sm text-center">Register/Party</button>
                 <button type="submit" form="yr-filter" formAction="/external/reports/yarn-register/do-no" formTarget="_blank" className="btn btn-outline btn-sm text-center">DO No</button>
               </div>
-              <Link href="/" className="btn btn-sm text-center">Exit</Link>
+              <Link prefetch={false} href="/" className="btn btn-sm text-center">Exit</Link>
             </div>
           </div>
         </div>

@@ -77,7 +77,7 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
           return (
             <div key={si}>
               {section.items?.map((item) => (
-                <Link
+                <Link prefetch={false}
                   key={item.key}
                   href={item.href}
                   onClick={onNavigate}
@@ -176,7 +176,7 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                           const isActive = active === item.key;
                           const bg = item.bg ?? sub.itemBg ?? section.itemBg;
                           return (
-                            <Link
+                            <Link prefetch={false}
                               key={item.key}
                               href={item.href}
                               onClick={onNavigate}
@@ -209,7 +209,7 @@ export function SidebarNav({ sections, active, onNavigate }: { sections: Section
                   const isActive = active === item.key;
                   const bg = item.bg ?? section.itemBg;
                   return (
-                    <Link
+                    <Link prefetch={false}
                       key={item.key}
                       href={item.href}
                       onClick={onNavigate}

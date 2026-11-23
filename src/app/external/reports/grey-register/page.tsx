@@ -430,7 +430,7 @@ export default async function GreyRegisterPage({
           >
             Register / Print
           </a>
-          <Link href="/" className="btn btn-outline btn-sm">Exit</Link>
+          <Link prefetch={false} href="/" className="btn btn-outline btn-sm">Exit</Link>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border-2 border-black mb-8 no-print">

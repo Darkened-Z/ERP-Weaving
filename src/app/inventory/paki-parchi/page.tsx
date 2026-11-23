@@ -102,7 +102,7 @@ export default async function PakiParchiPage() {
                           <div className="flex flex-col gap-1">
                             {ds.map((d) => (
                               <div key={d.id} className="flex items-center gap-2">
-                                <Link
+                                <Link prefetch={false}
                                   href={`/inventory/grey-despatch?id=${d.id}`}
                                   className="text-[var(--accent)] font-bold text-[12px] mono hover:underline"
                                 >
@@ -114,7 +114,7 @@ export default async function PakiParchiPage() {
                                 )}
                               </div>
                             ))}
-                            <Link
+                            <Link prefetch={false}
                               href={`/reports/weaving/delivery-order-partywise?party=${encodeURIComponent(r.party ?? "")}`}
                               className="text-[10px] px-2 py-0.5 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white w-fit"
                             >

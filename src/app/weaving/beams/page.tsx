@@ -246,7 +246,7 @@ export default async function BeamsPage({
           <div className="flex items-center gap-2">
             <a href="/weaving/beams?adding=1" className="btn btn-sm">Add Beam</a>
             <a href="/weaving/beams/qr" className="btn btn-outline btn-sm">Print QR Stickers</a>
-            <Link href="/tasks/new" className="btn btn-outline btn-sm">New Task</Link>
+            <Link prefetch={false} href="/tasks/new" className="btn btn-outline btn-sm">New Task</Link>
             <ExcelExportButton
             rows={exportRows}
             columns={[
@@ -316,7 +316,7 @@ export default async function BeamsPage({
             <div className="flex items-end gap-2">
               <button type="submit" className="btn btn-sm">Find</button>
               <a href="/weaving/beams" className="btn btn-outline btn-sm">Clear</a>
-              <Link href="/" className="btn btn-outline btn-sm">Exit</Link>
+              <Link prefetch={false} href="/" className="btn btn-outline btn-sm">Exit</Link>
             </div>
           </div>
         </form>

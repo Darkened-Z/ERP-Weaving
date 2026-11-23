@@ -95,7 +95,7 @@ export default async function GPVPage({
                     <td className="mono">{r.vno}</td>
                     <td className="text-[13px]">{r.narration}</td>
                     <td>
-                      <Link
+                      <Link prefetch={false}
                         href={`/reports/gpv?v=${r.vtype}&n=${r.vno}&fy=${encodeURIComponent(r.fyCode)}`}
                         className="btn btn-outline btn-sm"
                       >
@@ -142,7 +142,7 @@ export default async function GPVPage({
           <p className="text-[13px] text-[var(--muted)] mt-2 mb-4">
             {vtype} #{vno}{fyParam ? ` in FY ${fyParam}` : ""}
           </p>
-          <Link href="/reports/gpv" className="btn btn-outline btn-sm">Back to list</Link>
+          <Link prefetch={false} href="/reports/gpv" className="btn btn-outline btn-sm">Back to list</Link>
         </div>
       </Shell>
     );
@@ -388,7 +388,7 @@ export default async function GPVPage({
 
       <div className="gpv-wrap">
         <div className="gpv-toolbar no-print">
-          <Link href="/reports/gpv" className="btn btn-outline btn-sm">Back</Link>
+          <Link prefetch={false} href="/reports/gpv" className="btn btn-outline btn-sm">Back</Link>
           <PrintButton label="Print Voucher" />
         </div>
 

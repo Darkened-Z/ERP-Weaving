@@ -74,7 +74,7 @@ export default async function GreyDeliveryOrderPage({
                   <td className="mono text-right">{r.thanQty ?? "-"}</td>
                   <td className="mono">{r.gpNo ?? "-"}</td>
                   <td>
-                    <Link href={`/reports/grey/delivery-order?v=${encodeURIComponent(r.vNo)}`} className="btn btn-outline btn-sm">
+                    <Link prefetch={false} href={`/reports/grey/delivery-order?v=${encodeURIComponent(r.vNo)}`} className="btn btn-outline btn-sm">
                       Open
                     </Link>
                   </td>
@@ -98,7 +98,7 @@ export default async function GreyDeliveryOrderPage({
       <div className="max-w-4xl mx-auto p-8">
         <h1 className="page-title mb-4">Not Found</h1>
         <p>No despatch with V.No <span className="mono">{vNo}</span></p>
-        <Link href="/reports/grey/delivery-order" className="btn btn-outline btn-sm mt-4">Back</Link>
+        <Link prefetch={false} href="/reports/grey/delivery-order" className="btn btn-outline btn-sm mt-4">Back</Link>
       </div>
     );
   }
@@ -176,7 +176,7 @@ export default async function GreyDeliveryOrderPage({
 
       <div className="do-wrap">
         <div className="do-toolbar no-print">
-          <Link href="/reports/grey/delivery-order" className="btn btn-outline btn-sm">Back</Link>
+          <Link prefetch={false} href="/reports/grey/delivery-order" className="btn btn-outline btn-sm">Back</Link>
           <PrintButton label="Print Delivery Order" size="lg" />
         </div>
 

@@ -69,7 +69,7 @@ export default async function GreyDeliveryOrderTaxPage({
                   <td className="mono text-right">{r.thanQty ?? "-"}</td>
                   <td className="mono text-right">{fmt(r.amtTot)}</td>
                   <td>
-                    <Link href={`/reports/grey/delivery-order-tax?v=${encodeURIComponent(r.vNo)}`} className="btn btn-outline btn-sm">
+                    <Link prefetch={false} href={`/reports/grey/delivery-order-tax?v=${encodeURIComponent(r.vNo)}`} className="btn btn-outline btn-sm">
                       Open Tax DO
                     </Link>
                   </td>
@@ -93,7 +93,7 @@ export default async function GreyDeliveryOrderTaxPage({
       <div className="max-w-4xl mx-auto p-8">
         <h1 className="page-title mb-4">Not Found</h1>
         <p>No despatch with V.No <span className="mono">{vNo}</span></p>
-        <Link href="/reports/grey/delivery-order-tax" className="btn btn-outline btn-sm mt-4">Back</Link>
+        <Link prefetch={false} href="/reports/grey/delivery-order-tax" className="btn btn-outline btn-sm mt-4">Back</Link>
       </div>
     );
   }
@@ -136,7 +136,7 @@ export default async function GreyDeliveryOrderTaxPage({
       <PrintStyles />
       <div className="max-w-[210mm] mx-auto p-6">
         <div className="no-print flex justify-between items-center mb-4">
-          <Link href="/reports/grey/delivery-order-tax" className="btn btn-outline btn-sm">Back</Link>
+          <Link prefetch={false} href="/reports/grey/delivery-order-tax" className="btn btn-outline btn-sm">Back</Link>
           <PrintButton label="Print Tax DO" />
         </div>
 

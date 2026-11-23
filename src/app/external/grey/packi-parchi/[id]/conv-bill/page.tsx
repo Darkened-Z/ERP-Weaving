@@ -343,7 +343,7 @@ export default async function PackiConvBillPage({
 
       <div className="bv-wrap">
         <div className="bv-toolbar no-print">
-          <Link href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Back</Link>
+          <Link prefetch={false} href="/external/grey/packi-parchi" className="btn btn-outline btn-sm">Back</Link>
           <div className="flex gap-2">
             <ExportPdfButton contentId="packi-conv-bill" filename={`Conversion-Bill-${pp.vNo ?? pid}.pdf`} />
             <WaPdfButton contentId="packi-conv-bill" filename={`Conversion-Bill-${pp.vNo ?? pid}.jpg`} as="jpg" />

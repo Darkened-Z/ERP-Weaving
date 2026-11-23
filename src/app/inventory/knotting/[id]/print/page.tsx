@@ -51,7 +51,7 @@ export default async function KnottingBillPrint({
       <PrintStyles />
       <div className="max-w-[210mm] mx-auto p-6">
         <div className="no-print flex justify-between items-center mb-4">
-          <Link href={`/inventory/knotting?id=${vid}`} className="btn btn-outline btn-sm">
+          <Link prefetch={false} href={`/inventory/knotting?id=${vid}`} className="btn btn-outline btn-sm">
             Back
           </Link>
           <div className="flex gap-2">

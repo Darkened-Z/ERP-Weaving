@@ -28,6 +28,9 @@ function remember(keys: string[]) {
  * the installed app's notification) and always shows a banner in the app.
  * Works while the app is open; nothing runs when it is closed.
  */
+const POLL = 5 * 60000;
+const CACHE = "task-reminders";
+
 export function TaskReminders() {
   const [due, setDue] = useState<Reminder[]>([]);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("unsupported");
@@ -61,22 +64,38 @@ export function TaskReminders() {
       setDue((d) => [...d, ...fresh]);
     };
 
+    // Shell remounts on every page, so the list is shared across pages for
+    // POLL ms instead of being refetched on each navigation (Vercel CPU).
     const load = async () => {
+      if (document.hidden) return;
+      try {
+        const c = JSON.parse(sessionStorage.getItem(CACHE) ?? "null");
+        if (c && Date.now() - c.t < POLL && Array.isArray(c.reminders)) {
+          all = c.reminders;
+          if (!stop) fire();
+          return;
+        }
+      } catch {
+        /* no storage: fetch */
+      }
       try {
         const res = await fetch("/tasks/reminders", { cache: "no-store" });
         if (!res.ok || !(res.headers.get("content-type") ?? "").includes("json")) return;
         const j = await res.json();
         all = Array.isArray(j.reminders) ? j.reminders : [];
+        try { sessionStorage.setItem(CACHE, JSON.stringify({ t: Date.now(), reminders: all })); } catch { /* full */ }
         if (!stop) fire();
       } catch {
         /* offline: try again next minute */
       }
     };
 
+    const onShow = () => { if (!document.hidden) load(); };
     load();
-    const poll = setInterval(load, 5 * 60000);
+    const poll = setInterval(load, POLL);
     const tick = setInterval(fire, 30000);
-    return () => { stop = true; clearTimeout(init); clearInterval(poll); clearInterval(tick); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { stop = true; clearTimeout(init); clearInterval(poll); clearInterval(tick); document.removeEventListener("visibilitychange", onShow); };
   }, []);
 
   const ask = perm === "default" && onTasks;

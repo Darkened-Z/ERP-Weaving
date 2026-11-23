@@ -210,7 +210,7 @@ export default async function GreyStockPage({
                 {b.label}
               </a>
             ))}
-            <Link href="/" className="btn btn-sm">Exit</Link>
+            <Link prefetch={false} href="/" className="btn btn-sm">Exit</Link>
           </div>
         </div>
 

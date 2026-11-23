@@ -114,7 +114,7 @@ export async function DespatchDetailReport({ kind, contNo, backHref, active }: {
             </p>
           </div>
           <div className="flex gap-2 no-print">
-            <Link href={backHref} className="btn btn-outline btn-sm">Back</Link>
+            <Link prefetch={false} href={backHref} className="btn btn-outline btn-sm">Back</Link>
             <ExcelExportButton
               rows={excelRows}
               columns={[
@@ -211,7 +211,7 @@ function PartyBlock({
       {lines.map((l) => (
         <tr key={l.id}>
           <td className="px-2 py-1.5 mono font-bold whitespace-nowrap">
-            <Link href={`/external/grey/packi-parchi?id=${l.id}`} className="underline underline-offset-2 print:no-underline">{l.vNo}</Link>
+            <Link prefetch={false} href={`/external/grey/packi-parchi?id=${l.id}`} className="underline underline-offset-2 print:no-underline">{l.vNo}</Link>
           </td>
           <td className="px-2 py-1.5 mono whitespace-nowrap">{l.vDate}</td>
           <td className="px-2 py-1.5 mono whitespace-nowrap">{contNo}</td>

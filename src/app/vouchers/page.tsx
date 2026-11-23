@@ -74,7 +74,7 @@ export default async function VouchersPage({
               {currentFy ? ` · FY ${currentFy}` : ""}
             </p>
           </div>
-          <Link href="/vouchers/new" className="btn btn-sm">
+          <Link prefetch={false} href="/vouchers/new" className="btn btn-sm">
             + New Voucher
           </Link>
         </div>
@@ -86,7 +86,7 @@ export default async function VouchersPage({
         )}
 
         <div className="flex flex-wrap gap-2 mb-8">
-          <Link
+          <Link prefetch={false}
             href="/vouchers"
             className={`text-[11px] uppercase tracking-[0.06em] font-semibold px-3 py-1.5 border transition-colors ${
               !activeType ? "bg-black text-white border-black" : "border-[var(--border-light)] hover:border-black"
@@ -95,7 +95,7 @@ export default async function VouchersPage({
             All
           </Link>
           {voucherTypes.map((vt) => (
-            <Link
+            <Link prefetch={false}
               key={vt.vtype}
               href={`/vouchers?type=${vt.vtype}`}
               className={`text-[11px] uppercase tracking-[0.06em] font-semibold px-3 py-1.5 border transition-colors ${
@@ -159,7 +159,7 @@ export default async function VouchersPage({
                 {voucherTypes.map((vt) => (
                   <tr key={vt.vtype}>
                     <td>
-                      <Link
+                      <Link prefetch={false}
                         href={`/vouchers?type=${vt.vtype}`}
                         className="inline-block border border-black px-2 py-0.5 text-[11px] font-bold uppercase hover:bg-black hover:text-white transition-colors"
                       >

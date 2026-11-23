@@ -67,7 +67,7 @@ export default async function YarnSaleVoucherPrint({
       <PrintStyles />
       <div className="max-w-[210mm] mx-auto p-6">
         <div className="no-print flex justify-between items-center mb-4">
-          <Link href={`/external/yarn/sale?id=${vid}`} className="btn btn-outline btn-sm">
+          <Link prefetch={false} href={`/external/yarn/sale?id=${vid}`} className="btn btn-outline btn-sm">
             Back
           </Link>
           <div className="flex gap-2">
