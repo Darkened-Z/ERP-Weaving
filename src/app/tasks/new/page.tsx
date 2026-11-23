@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { TaskForm, type TaskFormInitial } from "../task-form";
+import { announceNewTask } from "@/lib/task-actions";
 import {
   TASK_CATEGORIES,
   TASK_PRIORITIES,
@@ -154,6 +155,7 @@ export default async function AssignTaskPage({ searchParams }: { searchParams: P
       return tid;
     });
     if (!taskId) notFound();
+    if (!isEdit) await announceNewTask(taskId, session);
 
     revalidatePath("/tasks");
     if (!isEdit && s("assign_more") === "1") redirect(`/tasks/new?more=1&saved=${taskId}`);

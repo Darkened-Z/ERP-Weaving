@@ -42,7 +42,8 @@ function noteFailure(key: string) {
   else f.count++;
 }
 
-export async function login(loginId: string, password: string, remember: boolean = false): Promise<Session | null | "throttled"> {
+/** Password check shared by the web login and the phone app's token login. */
+export async function checkCredentials(loginId: string, password: string): Promise<Session | null | "throttled"> {
   const key = (loginId ?? "").trim().toLowerCase();
   if (isThrottled(key)) return "throttled";
 
@@ -65,6 +66,12 @@ export async function login(loginId: string, password: string, remember: boolean
     roleName: user.roleName,
     allowedModules: user.allowedModules ? user.allowedModules.split(",").map(s => s.trim()).filter(Boolean) : null,
   };
+  return session;
+}
+
+export async function login(loginId: string, password: string, remember: boolean = false): Promise<Session | null | "throttled"> {
+  const session = await checkCredentials(loginId, password);
+  if (!session || session === "throttled") return session;
 
   const ttl = remember ? SESSION_LONG_TTL : SESSION_SHORT_TTL;
   const signed = createToken(session, ttl);

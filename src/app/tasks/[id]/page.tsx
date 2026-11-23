@@ -2,14 +2,13 @@ import Link from "next/link";
 import { Shell } from "@/components/shell";
 import { ConfirmButton } from "@/components/confirm-button";
 import { db, schema } from "@/db";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
+import { addTaskComment, canActOnTask, setTaskStatus, toggleChecklistItem } from "@/lib/task-actions";
 import { requireSession } from "@/lib/auth";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { parseImages } from "@/lib/attachments";
 import {
-  FINISHED,
-  TASK_STATUSES,
   categoryLabel,
   contactsFor,
   ensureTaskTables,
@@ -29,16 +28,6 @@ const dmy = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7
 const stamp = (iso: string) =>
   new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Karachi", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 
-/** Assignees, the creator and admins act on a task; people in the loop only watch and comment. */
-async function canAct(taskId: number, userId: number, roleName: string) {
-  if (isTaskAdmin(roleName)) return true;
-  const [t] = await db.select({ c: schema.tasks.creatorUserId }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
-  if (!t) return false;
-  if (t.c === userId) return true;
-  const [a] = await db.select().from(schema.taskUsers).where(and(eq(schema.taskUsers.taskId, taskId), eq(schema.taskUsers.userId, userId), eq(schema.taskUsers.role, "ASSIGNEE")));
-  return !!a;
-}
-
 export default async function TaskPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -54,38 +43,21 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   async function setStatus(formData: FormData) {
     "use server";
     const s = await requireSession();
-    const to = String(formData.get("to") ?? "");
-    if (!TASK_STATUSES.some((x) => x.value === to)) return;
-    if (!(await canAct(taskId, s.userId, s.roleName))) redirect(`/tasks/${taskId}?error=not_yours`);
-    const [cur] = await db.select({ status: schema.tasks.status }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
-    if (!cur || cur.status === to) return;
-    const now = new Date().toISOString();
-    await db.transaction(async (tx) => {
-      await tx.update(schema.tasks).set({ status: to, updatedAt: now, doneAt: FINISHED.includes(to) ? now : null }).where(eq(schema.tasks.id, taskId));
-      await tx.insert(schema.taskHistory).values({ taskId, actorUserId: s.userId, action: "STATUS", fromValue: cur.status, toValue: to, createdAt: now });
-    });
+    if ((await setTaskStatus(taskId, s, String(formData.get("to") ?? ""))) === "forbidden") redirect(`/tasks/${taskId}?error=not_yours`);
     revalidatePath(`/tasks/${taskId}`);
   }
 
   async function toggleItem(formData: FormData) {
     "use server";
     const s = await requireSession();
-    if (!(await canAct(taskId, s.userId, s.roleName))) redirect(`/tasks/${taskId}?error=not_yours`);
-    const itemId = parseInt(String(formData.get("item") ?? ""), 10);
-    const [it] = await db.select().from(schema.taskChecklist).where(and(eq(schema.taskChecklist.id, itemId), eq(schema.taskChecklist.taskId, taskId)));
-    if (!it) return;
-    const now = new Date().toISOString();
-    await db.update(schema.taskChecklist).set(it.done ? { done: 0, doneBy: null, doneAt: null } : { done: 1, doneBy: s.userId, doneAt: now }).where(eq(schema.taskChecklist.id, itemId));
-    await db.insert(schema.taskHistory).values({ taskId, actorUserId: s.userId, action: it.done ? "UNCHECKED" : "CHECKED", toValue: it.text, createdAt: now });
+    if ((await toggleChecklistItem(taskId, s, parseInt(String(formData.get("item") ?? ""), 10))) === "forbidden") redirect(`/tasks/${taskId}?error=not_yours`);
     revalidatePath(`/tasks/${taskId}`);
   }
 
   async function addComment(formData: FormData) {
     "use server";
     const s = await requireSession();
-    const body = String(formData.get("body") ?? "").trim();
-    if (!body) return;
-    await db.insert(schema.taskComments).values({ taskId, authorUserId: s.userId, body: body.slice(0, 4000), createdAt: new Date().toISOString() });
+    await addTaskComment(taskId, s, String(formData.get("body") ?? ""));
     revalidatePath(`/tasks/${taskId}`);
   }
 
@@ -118,7 +90,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   const [series] = task.seriesId && task.seriesId !== task.id
     ? await db.select({ id: schema.tasks.id, taskNo: schema.tasks.taskNo }).from(schema.tasks).where(eq(schema.tasks.id, task.seriesId))
     : [];
-  const mayAct = await canAct(taskId, session.userId, session.roleName);
+  const mayAct = await canActOnTask(taskId, session);
   const mayEdit = isTaskAdmin(session.roleName);
   const images = parseImages(task.img);
   const doneCount = items.filter((i) => i.done).length;

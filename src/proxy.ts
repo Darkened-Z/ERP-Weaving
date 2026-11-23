@@ -21,6 +21,19 @@ function withSecurityHeaders(res: NextResponse) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname === "/login") return withSecurityHeaders(NextResponse.next());
+  // The phone app signs in with a bearer token, not the cookie; every
+  // /api/m route checks it itself (mobileSession).
+  if (pathname.startsWith("/api/m/")) {
+    // Dev only: lets the app's web preview (expo, port 8081) call a local server.
+    if (process.env.NODE_ENV !== "production" && request.headers.get("origin") === "http://localhost:8081") {
+      const cors = { "Access-Control-Allow-Origin": "http://localhost:8081", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, DELETE" };
+      if (request.method === "OPTIONS") return new NextResponse(null, { status: 204, headers: cors });
+      const res = NextResponse.next();
+      for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
+      return res;
+    }
+    return withSecurityHeaders(NextResponse.next());
+  }
 
   const session = await activeSession(request.cookies.get("session")?.value);
   if (session) {

@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { setTaskStatus } from "@/lib/task-actions";
 import { addDays, today } from "@/lib/time";
 import {
   FINISHED,
@@ -34,11 +35,7 @@ export default async function MyTasksPage() {
     if (!mine) return;
     const [cur] = await db.select({ status: schema.tasks.status }).from(schema.tasks).where(eq(schema.tasks.id, id));
     if (!cur || FINISHED.includes(cur.status)) return;
-    const now = new Date().toISOString();
-    await db.transaction(async (tx) => {
-      await tx.update(schema.tasks).set({ status: "DONE", doneAt: now, updatedAt: now }).where(eq(schema.tasks.id, id));
-      await tx.insert(schema.taskHistory).values({ taskId: id, actorUserId: s.userId, action: "STATUS", fromValue: cur.status, toValue: "DONE", createdAt: now });
-    });
+    await setTaskStatus(id, s, "DONE");
     revalidatePath("/my-tasks");
   }
 

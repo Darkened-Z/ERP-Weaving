@@ -93,6 +93,10 @@ export function ensureTaskTables(): Promise<void> {
       `CREATE TABLE IF NOT EXISTS task_repeat_skips (
         series_id INTEGER NOT NULL, start_date TEXT NOT NULL,
         PRIMARY KEY (series_id, start_date))`,
+      `CREATE TABLE IF NOT EXISTS mobile_devices (
+        push_token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        updated_at TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS user_contacts (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         phone TEXT, email TEXT)`,
@@ -210,6 +214,15 @@ export async function materializeRepeats(asOf = today()): Promise<number> {
     }
   }
   return made;
+}
+
+let lastMaterialized = 0;
+
+/** materializeRepeats at most every 10 minutes per server instance (phone list refreshes are frequent). */
+export async function materializeRepeatsSometimes() {
+  if (Date.now() - lastMaterialized < 10 * 60000) return;
+  lastMaterialized = Date.now();
+  await materializeRepeats();
 }
 
 export type TaskPeople = Map<number, { assignees: number[]; loop: number[] }>;
