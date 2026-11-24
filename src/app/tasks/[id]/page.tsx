@@ -64,7 +64,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   async function deleteTask() {
     "use server";
     const s = await requireSession();
-    const [t] = await db.select({ seriesId: schema.tasks.seriesId, startDate: schema.tasks.startDate }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
+    const [t] = await db.select({ seriesId: schema.tasks.seriesId, startDate: schema.tasks.startDate, legacyTicketId: schema.tasks.legacyTicketId }).from(schema.tasks).where(eq(schema.tasks.id, taskId));
     if (!t) redirect("/tasks");
     if (!isTaskAdmin(s.roleName)) redirect(`/tasks/${taskId}?error=not_yours`);
     await db.transaction(async (tx) => {
@@ -73,6 +73,8 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
       if (t.seriesId && t.seriesId !== taskId && t.startDate) {
         await tx.insert(schema.taskRepeatSkips).values({ seriesId: t.seriesId, startDate: t.startDate }).onConflictDoNothing();
       }
+      // An imported task's old ticket would be imported again on the next cold start.
+      if (t.legacyTicketId) await tx.delete(schema.tickets).where(eq(schema.tickets.id, t.legacyTicketId));
       await tx.delete(schema.tasks).where(eq(schema.tasks.id, taskId));
     });
     revalidatePath("/tasks");
