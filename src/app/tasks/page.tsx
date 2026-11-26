@@ -4,7 +4,9 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { db, schema } from "@/db";
 import { desc } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
-import { today } from "@/lib/time";
+import { addDays, today } from "@/lib/time";
+import { taskDashboard } from "@/lib/task-dashboard";
+import { BoardColumns, DashboardView, type BoardTask } from "./task-views";
 import {
   FINISHED,
   TASK_CATEGORIES,
@@ -26,7 +28,13 @@ import { parseMonthDates, parseWeekdays, repeatLabel, type RepeatRule, type Repe
 
 export const dynamic = "force-dynamic";
 
-type SP = { tab?: string; status?: string; category?: string; priority?: string; user?: string; q?: string; done?: string };
+type SP = { view?: string; mine?: string; tab?: string; status?: string; category?: string; priority?: string; user?: string; q?: string; done?: string };
+
+const VIEWS = [
+  { value: "dashboard", label: "Dashboard" },
+  { value: "list", label: "List" },
+  { value: "board", label: "Board" },
+];
 
 const TABS = [
   { value: "", label: "All" },
@@ -54,7 +62,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     id: schema.tasks.id, taskNo: schema.tasks.taskNo, title: schema.tasks.title, category: schema.tasks.category,
     priority: schema.tasks.priority, status: schema.tasks.status, creatorUserId: schema.tasks.creatorUserId,
     startDate: schema.tasks.startDate, startTime: schema.tasks.startTime, repeatRule: schema.tasks.repeatRule,
-    repeatEvery: schema.tasks.repeatEvery, seriesId: schema.tasks.seriesId, repeatDays: schema.tasks.repeatDays, repeatUnit: schema.tasks.repeatUnit, repeatDates: schema.tasks.repeatDates, loomNo: schema.tasks.loomNo, shed: schema.tasks.shed,
+    repeatEvery: schema.tasks.repeatEvery, seriesId: schema.tasks.seriesId, repeatDays: schema.tasks.repeatDays, repeatUnit: schema.tasks.repeatUnit, repeatDates: schema.tasks.repeatDates, loomNo: schema.tasks.loomNo, shed: schema.tasks.shed, doneAt: schema.tasks.doneAt,
   }).from(schema.tasks).orderBy(desc(schema.tasks.id));
   const me = session.userId;
   const admin = isTaskAdmin(session.roleName);
@@ -93,6 +101,16 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   ];
   const names = (ids: number[] = []) => ids.map((i) => uname.get(i) ?? `#${i}`).join(", ");
 
+  // Old links (team workload, filters) carry list parameters and land on the list.
+  const view = VIEWS.some((v) => v.value === p.view) ? p.view! : p.tab || p.status || p.category || p.priority || p.user || p.q || p.done ? "list" : "dashboard";
+  const weekAgo = new Date(Date.parse(`${addDays(asOf, -7)}T00:00:00+05:00`)).toISOString();
+  const board = (list: typeof all): BoardTask[] => list
+    .filter((t) => !FINISHED.includes(t.status) || (t.doneAt ?? "") >= weekAgo)
+    .map((t) => ({ ...t, assignees: (people.get(t.id)?.assignees ?? []).map((i) => uname.get(i) ?? `#${i}`) }));
+  const mineOnly = !admin || p.mine === "1";
+  const dash = view === "dashboard" ? await taskDashboard(me, !mineOnly) : null;
+  const dashTasks = mineOnly ? all.filter((t) => t.creatorUserId === me || people.get(t.id)?.assignees.includes(me)) : all;
+
   return (
     <Shell active="tickets">
       <div className="animate-in">
@@ -118,6 +136,20 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
           </div>
         </div>
 
+        <div className="flex border border-black w-fit mb-4">
+          {VIEWS.map((v) => (
+            <Link prefetch={false} key={v.value} href={`/tasks?view=${v.value}`} className={`px-4 py-1.5 text-[13px] ${view === v.value ? "bg-[var(--accent)] text-white font-semibold" : "hover:bg-[var(--bg)]"}`}>
+              {v.label}
+            </Link>
+          ))}
+        </div>
+
+        {view === "dashboard" && dash && (
+          <DashboardView dash={dash} open={board(dashTasks)} asOf={asOf} admin={admin} mine={mineOnly}
+            teamHref="/tasks?view=dashboard" mineHref="/tasks?view=dashboard&mine=1" />
+        )}
+
+        {view !== "dashboard" && (
         <div className="flex gap-0 border-b border-black mb-4 overflow-x-auto">
           {TABS.map((t) => (
             <Link prefetch={false} key={t.value} href={`/tasks${qs(p, { tab: t.value || undefined })}`} className={`px-4 py-2 text-[13px] whitespace-nowrap ${(p.tab ?? "") === t.value ? "bg-black text-white font-semibold" : ""}`}>
@@ -125,7 +157,11 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
+        )}
 
+        {view === "board" && <BoardColumns tasks={board(inTab)} asOf={asOf} />}
+
+        {view === "list" && (<>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-black border border-black mb-4">
           {stats.map((s) => (
             <div key={s.label} className="bg-white p-3">
@@ -136,6 +172,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         </div>
 
         <form method="GET" action="/tasks" className="flex flex-wrap gap-2 items-end mb-4">
+          <input type="hidden" name="view" value="list" />
           {p.tab && <input type="hidden" name="tab" value={p.tab} />}
           <input name="q" defaultValue={p.q} placeholder="Search title / task #" className="input-box !w-[200px]" />
           <select name="status" defaultValue={p.status ?? ""} className="input-box !w-[140px]">
@@ -156,7 +193,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
           </select>
           <label className="flex items-center gap-1 text-[12px]"><input type="checkbox" name="done" value="1" defaultChecked={p.done === "1"} /> include done</label>
           <button className="btn btn-sm">Apply</button>
-          <Link prefetch={false} href={`/tasks${p.tab ? `?tab=${p.tab}` : ""}`} className="btn btn-outline btn-sm">Clear</Link>
+          <Link prefetch={false} href={`/tasks?view=list${p.tab ? `&tab=${p.tab}` : ""}`} className="btn btn-outline btn-sm">Clear</Link>
         </form>
 
         {rows.length === 0 ? (
@@ -200,6 +237,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
             })}
           </div>
         )}
+        </>)}
       </div>
     </Shell>
   );
